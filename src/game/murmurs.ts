@@ -34,7 +34,8 @@ export type MurmurTag =
   | "crater" // reaching the caldera lake at the island's heart
   | "confluence" // standing where two rivers become one
   | "rain" // out in a real shower
-  | "bloom"; // the fungi answering yesterday's rain
+  | "bloom" // the fungi answering yesterday's rain
+  | "skerries"; // wandering an archipelago where every islet drifts alone
 
 export const MURMURS: Murmur[] = [
   {
@@ -271,6 +272,11 @@ export const MURMURS: Murmur[] = [
     text: "the mushroom is the elf of plants, at evening it is not; at morning in a truffled hut it stops upon a spot.",
     attribution: "— emily dickinson (c. 1874)",
     tag: "bloom",
+  },
+  {
+    text: "we seem to be brought somewhat near to that great fact — that mystery of mysteries — the first appearance of new beings on this earth.",
+    attribution: "— charles darwin, voyage of the beagle (1839)",
+    tag: "skerries",
   },
 ];
 

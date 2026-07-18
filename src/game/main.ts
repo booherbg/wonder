@@ -9,9 +9,11 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { Flora } from "../life/flora";
-import { PlantForm, hsl } from "../life/genome";
+import { PlantForm, driftDistance, hsl } from "../life/genome";
+import { loadJournal, recordSighting } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
+import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, rainAt } from "./daynight";
@@ -90,7 +92,7 @@ function renderHud(): void {
   const seeds =
     inventory.seeds.length > 0
       ? `seeds ${dots} · G sow · Q toss · E inspect`
-      : "E inspect · F gather · G sow · H home · M murmurs";
+      : "E inspect · F gather · G sow · H home · J journal · M murmurs";
   hud.innerHTML = `${msg}${seeds}`;
 }
 
@@ -277,13 +279,22 @@ function openInspectAtPlayer(): void {
   ].map((id) => critterSpecies[id]);
   const beastNear =
     beast && Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE ? beast : null;
-  openInspect(
-    [...groups.values()].slice(0, 10),
-    species,
-    inventory.seeds,
-    companySpecies,
-    beastNear,
-  );
+  const shown = [...groups.values()].slice(0, 10);
+  // leaning close is how the journal writes itself
+  for (const g of shown) {
+    const sp = species[g.plant.species];
+    recordSighting({
+      seed: currentSeed,
+      island: islandName(currentSeed),
+      speciesId: sp.id,
+      speciesName: sp.name,
+      genome: g.plant.genome,
+      aquatic: sp.habitat === Tile.ShallowWater,
+      drift: driftDistance(g.plant.genome, sp.archetype) * 100,
+      at: Date.now(),
+    });
+  }
+  openInspect(shown, species, inventory.seeds, companySpecies, beastNear);
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -335,11 +346,21 @@ window.addEventListener("keydown", (e) => {
       closeAnthology();
     } else {
       closeInspect();
+      closeJournal();
       openAnthology(loadAnthology());
+    }
+  } else if (k === "j") {
+    if (isJournalOpen()) {
+      closeJournal();
+    } else {
+      closeInspect();
+      closeAnthology();
+      openJournal(loadJournal());
     }
   } else if (k === "escape") {
     closeInspect();
     closeAnthology();
+    closeJournal();
   } else if (k === "p") {
     // a postcard: the canvas as it stands, named for the island
     canvas.toBlob((blob) => {
@@ -488,6 +509,9 @@ function offerMurmurMoments(dt: number): void {
     }
     if (rainMurmurArmed) {
       murmurs.offer("rain");
+    }
+    if (map.shape === "skerries") {
+      murmurs.offer("skerries");
     }
     if (
       isBloomDay(performance.now(), currentSeed) &&
