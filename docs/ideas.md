@@ -142,6 +142,12 @@ checklist — the journal is a *memoir*, not a todo list. It also solves
   each night; purely collectible, maybe cairn-building material.
 - **Crater lakes**: rarely, the island's heart is water — a caldera with
   an inner shore only reachable by one river-cut.
+- **Murmur echoes**: a page (in the future journal) holding every murmur
+  you've ever been given, in the order the world offered them — your
+  wandering, retold as an anthology.
+- **Weather memory**: islands remember their rare events — revisit a seed
+  and the label whispers "an aurora passed here once." Small histories
+  accreting onto places.
 
 ## Small polish anytime
 
