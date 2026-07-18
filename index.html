@@ -40,6 +40,16 @@
       #inspect .inspect-name { margin-top: 4px; color: #ffffff; }
       #inspect .inspect-traits { opacity: 0.65; margin-top: 2px; line-height: 1.5; }
       #inspect .inspect-hint { opacity: 0.45; margin-top: 12px; text-align: center; }
+      #murmur {
+        position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
+        max-width: min(640px, 84vw); text-align: center;
+        font: italic 14px Georgia, serif; color: rgba(255, 255, 255, 0.82);
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        opacity: 0; transition: opacity 2.2s ease; pointer-events: none;
+        line-height: 1.5;
+      }
+      #murmur.visible { opacity: 1; }
+      #murmur .murmur-attr { font-size: 11px; opacity: 0.6; margin-top: 4px; }
     </style>
   </head>
   <body>
@@ -47,6 +57,7 @@
     <div id="seed-label"></div>
     <div id="hud"></div>
     <div id="inspect"></div>
+    <div id="murmur"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

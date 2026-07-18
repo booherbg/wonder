@@ -12,9 +12,10 @@ import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
+import { MurmurEngine } from "./murmurs";
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
-import { WorldMap } from "../world/types";
+import { Tile, WorldMap, tileAt } from "../world/types";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
 
@@ -44,6 +45,8 @@ const GATHER_RANGE = 24; // px
 const INSPECT_RANGE = 2.5 * TILE_SIZE;
 
 let inventory: Inventory = emptyInventory();
+const murmurs = new MurmurEngine();
+let stillTime = 0;
 let hudMsg = "";
 let hudMsgTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -95,6 +98,7 @@ function loadWorld(seed: number): void {
   history.replaceState(null, "", url);
   seedLabel.textContent = `seed ${seed} — R for a new island`;
   renderHud();
+  murmurs.offer("island");
 }
 
 function openInspectAtPlayer(): void {
@@ -150,6 +154,7 @@ window.addEventListener("keydown", (e) => {
       } else {
         inventory = next;
         flashHud(`a seed of ${species[plant.species].name}`);
+        murmurs.offer("gather");
       }
     }
   } else if (k === "g") {
@@ -168,6 +173,7 @@ window.addEventListener("keydown", (e) => {
       if (planted) {
         inventory = rest;
         flashHud(`${species[seedToPlant.species].name} takes root`);
+        murmurs.offer("sow");
       } else {
         flashHud("it will not grow here");
       }
@@ -204,6 +210,44 @@ function drawOverview(): void {
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
 }
 
+let slowCheckAcc = 0;
+function offerMurmurMoments(dt: number): void {
+  const inp = input();
+  if (inp.up || inp.down || inp.left || inp.right) {
+    stillTime = 0;
+  } else {
+    stillTime += dt;
+    if (stillTime > 25) {
+      murmurs.offer("still");
+      stillTime = 0;
+    }
+  }
+  const tx = Math.floor(player.x / TILE_SIZE);
+  const ty = Math.floor(player.y / TILE_SIZE);
+  const here = tileAt(map, tx, ty);
+  if (here === Tile.Forest) murmurs.offer("forest");
+  else if (here === Tile.ShallowWater) murmurs.offer("water");
+  else if (here === Tile.Sand) murmurs.offer("sand");
+  else if (here === Tile.Grass) murmurs.offer("meadow");
+  slowCheckAcc += dt;
+  if (slowCheckAcc >= 1) {
+    slowCheckAcc = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const t = tileAt(map, tx + dx, ty + dy);
+      if (t === Tile.Rock || t === Tile.Snow) {
+        murmurs.offer("heights");
+        break;
+      }
+    }
+    if (flora.plantsNear(player.x, player.y, 40).some((p) => species[p.species].sport)) {
+      murmurs.offer("sport");
+    }
+    if (critters.some((c) => Math.hypot(c.x - player.x, c.y - player.y) < 2.5 * TILE_SIZE)) {
+      murmurs.offer("critter");
+    }
+  }
+}
+
 let last = performance.now();
 function frame(now: number): void {
   if (new URL(location.href).searchParams.has("overview")) {
@@ -220,6 +264,7 @@ function frame(now: number): void {
     simAcc -= SIM_MS;
   }
   for (const c of critters) updateCritter(c, dt, map, flora, critterSpecies, player, critterRng);
+  offerMurmurMoments(dt);
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
     0,
