@@ -4,6 +4,7 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
+import { Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -43,6 +44,7 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private atlas: HTMLCanvasElement;
   private playerSprite: HTMLCanvasElement;
+  private pollinators = new Pollinators();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -205,7 +207,31 @@ export class Renderer {
       }
     }
 
+    drawClouds(
+      ctx,
+      camX,
+      camY,
+      this.viewWidth,
+      this.viewHeight,
+      map.width * TILE_SIZE,
+      map.height * TILE_SIZE,
+      darkness,
+      timeMs,
+    );
+
     if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
+
+    // butterflies and moths ride above everything, even the dark
+    this.pollinators.update(
+      scene.flora,
+      camX,
+      camY,
+      this.viewWidth,
+      this.viewHeight,
+      darkness,
+      timeMs,
+    );
+    this.pollinators.draw(ctx, camX, camY, darkness);
   }
 
   // Night falls over everything already drawn; then the things that make

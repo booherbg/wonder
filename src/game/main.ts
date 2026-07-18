@@ -86,8 +86,10 @@ let critters!: Critter[];
 let critterRng!: Rng;
 let beast: Beast | null = null;
 let simAcc = 0;
+let currentSeed = 0;
 
 function loadWorld(seed: number): void {
+  currentSeed = seed;
   map = generate(seed, DEFAULT_CONFIG);
   species = generatePlantSpecies(seed);
   flora = new Flora(map, species, seed);
@@ -143,6 +145,17 @@ window.addEventListener("keydown", (e) => {
     renderer.setMap(map);
   } else if (k === "escape") {
     closeInspect();
+  } else if (k === "p") {
+    // a postcard: the canvas as it stands, named for the island
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${islandName(currentSeed).toLowerCase().replace(" ", "-")}-${currentSeed}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    flashHud("postcard saved");
   } else if (k === "e") {
     if (isInspectOpen()) {
       closeInspect();

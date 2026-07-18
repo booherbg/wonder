@@ -18,6 +18,7 @@ Open http://localhost:5173.
 - **E** — inspect the plants at your feet, up close (names, traits, drift)
 - **F** — gather a seed from the nearest plant
 - **G** — sow your oldest seed where you stand
+- **P** — save a postcard PNG of the current view
 - **R** — new island
 - **?seed=N** in the URL — revisit a specific island (the URL always shows
   the current seed, so copy it to share an island)
