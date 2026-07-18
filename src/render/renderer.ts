@@ -1,7 +1,9 @@
 import { hash2d } from "../core/rng";
+import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
+import { getCritterSprites } from "./critterSprites";
 import { PALETTE } from "./palette";
 import { PLANT_ANCHOR_X, PLANT_ANCHOR_Y, getPlantSprite } from "./plantSprites";
 import { SCALE, VARIANTS, buildTileAtlas, drawPlayerSprite } from "./tiles";
@@ -12,6 +14,8 @@ const WATER_FRAME_SEQUENCE = [0, 1, 2, 1]; // gentle back-and-forth drift
 export interface Scene {
   player: { x: number; y: number } | null;
   flora: Flora | null;
+  critters?: Critter[] | null;
+  critterSpecies?: CritterSpecies[] | null;
 }
 
 export class Renderer {
@@ -85,6 +89,17 @@ export class Renderer {
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
     for (let ty = y0; ty <= Math.min(map.height - 1, y1 + yPad); ty++) {
+      if (scene.critterSpecies) {
+        for (const sp of scene.critterSpecies) {
+          if (sp.den.y === ty && sp.den.x >= x0 - 1 && sp.den.x <= x1 + 1) {
+            ctx.drawImage(
+              getCritterSprites(sp).den,
+              Math.round(sp.den.x * TILE_SIZE - camX),
+              Math.round(sp.den.y * TILE_SIZE - camY),
+            );
+          }
+        }
+      }
       if (scene.flora) {
         for (let tx = x0; tx <= x1; tx++) {
           for (const p of scene.flora.plantsInTile(tx, ty)) {
@@ -95,6 +110,19 @@ export class Renderer {
               Math.round(p.y - PLANT_ANCHOR_Y - camY),
             );
           }
+        }
+      }
+      if (scene.critters && scene.critterSpecies) {
+        for (const c of scene.critters) {
+          if (Math.floor(c.y / TILE_SIZE) !== ty) continue;
+          const cx = c.x - camX;
+          if (cx < -16 || cx > this.viewWidth + 16) continue;
+          const set = getCritterSprites(scene.critterSpecies[c.species]);
+          const hopping = Math.sin(c.hopPhase) > 0;
+          const sprite =
+            c.facing === 1 ? (hopping ? set.hop : set.rest) : hopping ? set.hopFlip : set.restFlip;
+          const bounce = Math.round(Math.abs(Math.sin(c.hopPhase)) * 2);
+          ctx.drawImage(sprite, Math.round(cx - 8), Math.round(c.y - 14 - camY - bounce));
         }
       }
       if (scene.player && ty === playerRow) {

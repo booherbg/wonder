@@ -1,5 +1,14 @@
+import { makeRng, Rng } from "../core/rng";
+import {
+  Critter,
+  CritterSpecies,
+  generateCritterSpecies,
+  spawnCritters,
+  updateCritter,
+} from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
+import { clearCritterSpriteCache } from "../render/critterSprites";
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { WorldMap } from "../world/types";
@@ -31,12 +40,19 @@ let map!: WorldMap;
 let player!: Player;
 let species!: PlantSpecies[];
 let flora!: Flora;
+let critterSpecies!: CritterSpecies[];
+let critters!: Critter[];
+let critterRng!: Rng;
 let simAcc = 0;
 
 function loadWorld(seed: number): void {
   map = generate(seed, DEFAULT_CONFIG);
   species = generatePlantSpecies(seed);
   flora = new Flora(map, species, seed);
+  critterSpecies = generateCritterSpecies(seed, map, flora, species);
+  critters = spawnCritters(critterSpecies, map, seed);
+  critterRng = makeRng(seed ^ 0xcafe);
+  clearCritterSpriteCache();
   simAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
   const url = new URL(location.href);
@@ -110,6 +126,7 @@ function frame(now: number): void {
     flora.simTick();
     simAcc -= SIM_MS;
   }
+  for (const c of critters) updateCritter(c, dt, map, flora, critterSpecies, player, critterRng);
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
     0,
@@ -120,7 +137,7 @@ function frame(now: number): void {
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
-  renderer.draw(camX, camY, { player, flora }, now);
+  renderer.draw(camX, camY, { player, flora, critters, critterSpecies }, now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
