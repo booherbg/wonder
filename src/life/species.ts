@@ -18,6 +18,7 @@ const HABITAT_FORMS: ReadonlyArray<readonly [Tile, readonly PlantForm[]]> = [
   [Tile.Sand, [PlantForm.Shrub, PlantForm.Shrub, PlantForm.Flower]],
   [Tile.ShallowWater, [PlantForm.Flower, PlantForm.Shrub]],
   [Tile.Rock, [PlantForm.Fungus, PlantForm.Fungus, PlantForm.Shrub]],
+  [Tile.Marsh, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus, PlantForm.Fungus]],
 ];
 
 // per-form archetype trait ranges: [heightLo, heightHi, glowHi]
@@ -44,7 +45,7 @@ function sampleArchetype(form: PlantForm, rng: Rng): Genome {
   };
 }
 
-const SYLLABLES = [
+export const SYLLABLES = [
   "lu", "mi", "ra", "vel", "tho", "ka", "sil", "fen", "or", "ash",
   "bel", "cyn", "du", "ma", "ri", "zel", "qui", "nor", "pol", "ith",
   "ova", "yl", "tris", "hum", "sae",

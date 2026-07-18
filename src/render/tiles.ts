@@ -5,7 +5,7 @@ import { PALETTE } from "./palette";
 
 export const VARIANTS = 4; // variant columns per tile row (water uses them as animation frames)
 export const SCALE = 3; // screen pixels per art pixel
-const TILE_TYPES = 7;
+const TILE_TYPES = 8;
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -102,6 +102,25 @@ function drawSnow(ctx: Ctx, ox: number, oy: number, v: number): void {
   speckle(ctx, ox, oy, 600 + v, PALETTE.snowSpeckle, 10);
 }
 
+// Squelchy wet ground: dark greens, standing-water pools, reed stubble.
+function drawMarsh(ctx: Ctx, ox: number, oy: number, v: number): void {
+  fill(ctx, ox, oy, PALETTE.marshBase);
+  speckle(ctx, ox, oy, 1000 + v, PALETTE.marshSpeckle, 16);
+  const rng = makeRng(1100 + v);
+  for (let i = 0; i < 2; i++) {
+    const x = Math.floor(rng() * (TILE_SIZE - 3));
+    const y = Math.floor(rng() * (TILE_SIZE - 1));
+    ctx.fillStyle = PALETTE.marshPool;
+    ctx.fillRect(ox + x, oy + y, 2 + Math.floor(rng() * 2), 1);
+  }
+  ctx.fillStyle = PALETTE.marshReed;
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(rng() * TILE_SIZE);
+    const y = 2 + Math.floor(rng() * (TILE_SIZE - 4));
+    ctx.fillRect(ox + x, oy + y, 1, 2);
+  }
+}
+
 export function buildTileAtlas(): HTMLCanvasElement {
   const atlas = document.createElement("canvas");
   atlas.width = VARIANTS * TILE_SIZE;
@@ -116,6 +135,7 @@ export function buildTileAtlas(): HTMLCanvasElement {
     drawForest(ctx, ox, Tile.Forest * TILE_SIZE, v);
     drawRock(ctx, ox, Tile.Rock * TILE_SIZE, v);
     drawSnow(ctx, ox, Tile.Snow * TILE_SIZE, v);
+    drawMarsh(ctx, ox, Tile.Marsh * TILE_SIZE, v);
   }
   return atlas;
 }

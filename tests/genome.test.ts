@@ -72,7 +72,7 @@ test("species generation is deterministic and habitat-complete", () => {
   const b = generatePlantSpecies(42);
   expect(a).toEqual(b);
   const habitats = new Set(a.map((s) => s.habitat));
-  for (const h of [Tile.Grass, Tile.Forest, Tile.Sand, Tile.ShallowWater, Tile.Rock]) {
+  for (const h of [Tile.Grass, Tile.Forest, Tile.Sand, Tile.ShallowWater, Tile.Rock, Tile.Marsh]) {
     expect(habitats.has(h)).toBe(true);
   }
 });

@@ -6,6 +6,7 @@ export enum Tile {
   Forest = 4,
   Rock = 5,
   Snow = 6,
+  Marsh = 7, // wet lowland: river endings, moist shores
 }
 
 export interface River {
@@ -28,6 +29,7 @@ export const WALKABLE: ReadonlySet<Tile> = new Set([
   Tile.Sand,
   Tile.Grass,
   Tile.Forest,
+  Tile.Marsh,
 ]);
 
 export function tileAt(map: WorldMap, x: number, y: number): Tile {

@@ -13,6 +13,7 @@ export type MurmurTag =
   | "forest"
   | "water" // wading a river or shallows
   | "sand"
+  | "marsh"
   | "heights" // rock and snow at the interior
   | "meadow"
   | "still" // standing quietly a while
@@ -56,6 +57,11 @@ export const MURMURS: Murmur[] = [
     text: "to see a world in a grain of sand, and a heaven in a wild flower.",
     attribution: "— william blake, auguries of innocence (c. 1803)",
     tag: "sand",
+  },
+  {
+    text: "as the marsh-hen secretly builds on the watery sod, behold i will build me a nest on the greatness of god.",
+    attribution: "— sidney lanier, the marshes of glynn (1878)",
+    tag: "marsh",
   },
   {
     text: "the everlasting universe of things flows through the mind.",

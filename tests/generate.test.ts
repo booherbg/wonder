@@ -92,7 +92,7 @@ test("all tiles are valid Tile values and every biome band can occur", () => {
   const present = new Set<number>();
   for (const t of map.tiles) {
     expect(t).toBeGreaterThanOrEqual(Tile.DeepWater);
-    expect(t).toBeLessThanOrEqual(Tile.Snow);
+    expect(t).toBeLessThanOrEqual(Tile.Marsh);
     present.add(t);
   }
   // a healthy island has water, shore, and living land

@@ -14,6 +14,7 @@ export interface WorldConfig {
   rockLevel: number; // at/above this: bare rock (impassable)
   snowLevel: number; // at/above this: snow cap (impassable)
   forestMoisture: number; // moisture at/above this turns grass to forest
+  marshMoisture: number; // low wet land at/above this moisture becomes marsh
   riverCount: number; // springs attempted per island
   riverMinSpringElevation: number; // springs only above this elevation
   riverMaxSteps: number; // hard safety limit per river
@@ -36,6 +37,7 @@ export const DEFAULT_CONFIG: WorldConfig = {
   rockLevel: 0.58,
   snowLevel: 0.68,
   forestMoisture: 0.55,
+  marshMoisture: 0.62,
   riverCount: 7,
   riverMinSpringElevation: 0.55,
   riverMaxSteps: 4000,

@@ -26,6 +26,8 @@ test("classify maps elevation/moisture bands to tiles", () => {
   expect(classify(0.1, 0.5, cfg)).toBe(Tile.DeepWater);
   expect(classify(0.32, 0.5, cfg)).toBe(Tile.ShallowWater);
   expect(classify(0.36, 0.5, cfg)).toBe(Tile.Sand);
+  expect(classify(0.36, 0.9, cfg)).toBe(Tile.Marsh); // wet lowland
+  expect(classify(0.41, 0.9, cfg)).toBe(Tile.Marsh); // marsh creeps past the beach line
   expect(classify(0.5, 0.9, cfg)).toBe(Tile.Forest);
   expect(classify(0.5, 0.2, cfg)).toBe(Tile.Grass);
   expect(classify(0.65, 0.5, cfg)).toBe(Tile.Rock);

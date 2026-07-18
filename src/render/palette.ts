@@ -26,6 +26,11 @@ export const PALETTE = {
   snowBase: "#e9eef4",
   snowSpeckle: ["#dbe3ec", "#f4f7fb", "#cfd9e5"],
 
+  marshBase: "#4d7355",
+  marshSpeckle: ["#405f47", "#5a8163", "#3a5540"],
+  marshPool: "#4a7dbd",
+  marshReed: "#324f39",
+
   playerCloak: "#c94f43",
   playerSkin: "#f0c8a0",
   playerHair: "#4a3225",

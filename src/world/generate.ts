@@ -41,6 +41,7 @@ export function buildElevation(seed: number, cfg: WorldConfig): Float32Array {
 export function classify(e: number, m: number, cfg: WorldConfig): Tile {
   if (e < cfg.seaLevel) return Tile.DeepWater;
   if (e < cfg.shoreLevel) return Tile.ShallowWater;
+  if (e < cfg.beachLevel + 0.04 && m >= cfg.marshMoisture) return Tile.Marsh; // wet lowland
   if (e < cfg.beachLevel) return Tile.Sand;
   if (e >= cfg.snowLevel) return Tile.Snow;
   if (e >= cfg.rockLevel) return Tile.Rock;
@@ -102,18 +103,24 @@ export function traceRiver(
   return { path, reachedSea };
 }
 
-// A river that dies inland pools into a little pond instead of a one-tile stub.
+// A river that dies inland pools into a little pond ringed with marsh.
 function carvePond(tiles: Uint8Array, center: number, cfg: WorldConfig): void {
   const { width, height } = cfg;
   const x = center % width;
   const y = (center / width) | 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
       const nx = x + dx;
       const ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
       const j = ny * width + nx;
-      if (tiles[j] !== Tile.DeepWater) tiles[j] = Tile.ShallowWater;
+      if (tiles[j] === Tile.DeepWater) continue;
+      const ring = Math.max(Math.abs(dx), Math.abs(dy)) === 2;
+      if (ring) {
+        if (tiles[j] !== Tile.ShallowWater) tiles[j] = Tile.Marsh;
+      } else {
+        tiles[j] = Tile.ShallowWater;
+      }
     }
   }
 }

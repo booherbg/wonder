@@ -15,6 +15,7 @@ import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine } from "./murmurs";
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
+import { islandName } from "../world/name";
 import { Tile, WorldMap, tileAt } from "../world/types";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
@@ -96,7 +97,7 @@ function loadWorld(seed: number): void {
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
-  seedLabel.textContent = `seed ${seed} — R for a new island`;
+  seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
   renderHud();
   murmurs.offer("island");
 }
@@ -194,7 +195,7 @@ function input(): InputState {
 }
 
 // dev aid: ?overview=1 renders the whole island at a glance (worldgen tuning)
-const OVERVIEW_COLORS = ["#22467c", "#4a7dbd", "#e3d29c", "#68a557", "#3e7a40", "#8b8e93", "#e9eef4"];
+const OVERVIEW_COLORS = ["#22467c", "#4a7dbd", "#e3d29c", "#68a557", "#3e7a40", "#8b8e93", "#e9eef4", "#4d7355"];
 function drawOverview(): void {
   const ctx = canvas.getContext("2d")!;
   canvas.width = window.innerWidth;
@@ -228,6 +229,7 @@ function offerMurmurMoments(dt: number): void {
   if (here === Tile.Forest) murmurs.offer("forest");
   else if (here === Tile.ShallowWater) murmurs.offer("water");
   else if (here === Tile.Sand) murmurs.offer("sand");
+  else if (here === Tile.Marsh) murmurs.offer("marsh");
   else if (here === Tile.Grass) murmurs.offer("meadow");
   slowCheckAcc += dt;
   if (slowCheckAcc >= 1) {
