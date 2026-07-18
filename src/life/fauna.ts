@@ -54,7 +54,9 @@ export function generateCritterSpecies(
   plants: PlantSpecies[],
 ): CritterSpecies[] {
   const rng = makeRng(seed ^ 0xc417);
-  const nibblable = plants.filter((p) => p.archetype.form !== PlantForm.Tree);
+  const nibblable = plants.filter(
+    (p) => p.archetype.form !== PlantForm.Tree && p.archetype.form !== PlantForm.Coral,
+  );
   const pool = (nibblable.length >= 3 ? nibblable : plants).map((p) => p.id);
   const favorites: number[] = [];
   while (favorites.length < 3 && favorites.length < pool.length) {

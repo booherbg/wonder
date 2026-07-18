@@ -254,10 +254,52 @@ function drawFern(ctx: Ctx, g: Genome): void {
   }
 }
 
+// Coral: a colony of branching arms reaching up from a holdfast, each tipped
+// with polyps in the accent hue. Glow corals carry the biolume tide nights.
+function drawCoral(ctx: Ctx, g: Genome): void {
+  const baseX = PLANT_ANCHOR_X + g.lean * 1.5;
+  const baseY = PLANT_ANCHOR_Y;
+  const arms = Math.max(2, Math.round(g.petals * 0.5));
+  const len = 4 + g.height * 9;
+  const dark = hsl(g.hue, g.sat * 0.85, 0.32);
+  const mid = hsl(g.hue, g.sat, 0.44);
+  const light = hsl(g.hue, g.sat, 0.56);
+  const polyp = hsl(g.hue2, Math.min(1, g.sat + 0.2), g.glow > 0.8 ? 0.78 : 0.62);
+  rect(ctx, baseX - 2, baseY - 1, 4, 2, dark); // holdfast on the seabed
+  for (let i = 0; i < arms; i++) {
+    const t = arms === 1 ? 0.5 : i / (arms - 1);
+    const a = (t - 0.5) * (0.7 + g.spread * 1.1); // fan angle from vertical
+    const armLen = len * (0.75 + 0.25 * Math.sin(i * 2.7 + g.hue * 9));
+    let x = baseX;
+    let y = baseY - 1;
+    for (let s = 1; s <= armLen; s++) {
+      const f = s / armLen;
+      x = baseX + Math.sin(a) * s * (0.5 + f * 0.5) + Math.sin(f * 2.2) * g.lean;
+      y = baseY - 1 - Math.cos(a * 0.6) * s;
+      const color = f > 0.66 ? light : f > 0.33 ? mid : dark;
+      px(ctx, x, y, color);
+      if (f < 0.6) px(ctx, x + (a < 0 ? -1 : 1), y, color, 0.55); // thick lower arm
+      if (i % 2 === 0 && armLen > 6 && s === Math.floor(armLen * 0.55)) {
+        for (let q = 1; q <= 3; q++) px(ctx, x - Math.cos(a) - q * 0.6, y - q, mid, 0.9);
+        px(ctx, x - Math.cos(a) - 2.4, y - 4, polyp); // side branch, tipped
+      }
+    }
+    px(ctx, x, y, polyp);
+    px(ctx, x, y - 1, polyp, 0.9);
+  }
+  if (g.glow > 0.8) {
+    const halo = hsl(g.hue2, 0.9, 0.8);
+    px(ctx, baseX - 3, baseY - len * 0.8, halo, 0.5);
+    px(ctx, baseX + 3, baseY - len * 0.9, halo, 0.5);
+    px(ctx, baseX, baseY - len - 2, halo, 0.5);
+  }
+}
+
 const DRAWERS: Record<PlantForm, (ctx: Ctx, g: Genome) => void> = {
   [PlantForm.Flower]: drawFlower,
   [PlantForm.Shrub]: drawShrub,
   [PlantForm.Tree]: drawTree,
   [PlantForm.Fungus]: drawFungus,
   [PlantForm.Fern]: drawFern,
+  [PlantForm.Coral]: drawCoral,
 };
