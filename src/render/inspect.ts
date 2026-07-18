@@ -11,6 +11,7 @@ const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Shrub]: "shrub",
   [PlantForm.Tree]: "tree",
   [PlantForm.Fungus]: "fungus",
+  [PlantForm.Fern]: "fern",
 };
 
 function heightWord(h: number): string {
@@ -74,7 +75,9 @@ export function openInspect(plants: Plant[], speciesList: PlantSpecies[]): void 
         ? `${Math.round(g.petals)} petals`
         : g.form === PlantForm.Fungus
           ? `${Math.round(g.petals / 2)} spots`
-          : `${Math.round(g.petals / 2)} berries`,
+          : g.form === PlantForm.Fern
+            ? `${Math.max(3, Math.round(g.petals * 0.8))} fronds`
+            : `${Math.round(g.petals / 2)} berries`,
     ];
     if (g.glow > 0.8) bits.push("luminous");
     const drift = Math.round(driftDistance(g, sp.archetype) * 100);

@@ -5,6 +5,7 @@ export enum PlantForm {
   Shrub = 1,
   Tree = 2,
   Fungus = 3,
+  Fern = 4,
 }
 
 // Every numeric trait a plant carries. `form` is structural and never mutates;
@@ -57,6 +58,28 @@ export function mutate(g: Genome, rng: Rng, amount = 0.05): Genome {
     const [lo, hi] = GENOME_BOUNDS[key];
     const jitter = (rng() * 2 - 1) * amount * (hi - lo);
     out[key] = clampTrait(key, g[key] + jitter);
+  }
+  return out;
+}
+
+// Two parents make a child: traits meet in the middle (hues along the
+// shorter arc of the color wheel), plus a small jitter of drift.
+export function cross(a: Genome, b: Genome, rng: Rng, amount = 0.04): Genome {
+  const out: Genome = { ...a };
+  for (const key of NUMERIC_TRAITS) {
+    const [lo, hi] = GENOME_BOUNDS[key];
+    const span = hi - lo;
+    let mid: number;
+    if (WRAP_TRAITS.has(key)) {
+      const ta = (a[key] - lo) / span;
+      const tb = (b[key] - lo) / span;
+      const d = ((tb - ta + 1.5) % 1) - 0.5;
+      mid = lo + ((((ta + d / 2) % 1) + 1) % 1) * span;
+    } else {
+      mid = (a[key] + b[key]) / 2;
+    }
+    const jitter = (rng() * 2 - 1) * amount * span;
+    out[key] = clampTrait(key, mid + jitter);
   }
   return out;
 }

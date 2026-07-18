@@ -14,11 +14,11 @@ export interface PlantSpecies {
 // which forms can appear in each habitat, roughly weighted by repetition
 const HABITAT_FORMS: ReadonlyArray<readonly [Tile, readonly PlantForm[]]> = [
   [Tile.Grass, [PlantForm.Flower, PlantForm.Flower, PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus]],
-  [Tile.Forest, [PlantForm.Tree, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Flower]],
+  [Tile.Forest, [PlantForm.Tree, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Flower, PlantForm.Fern, PlantForm.Fern]],
   [Tile.Sand, [PlantForm.Shrub, PlantForm.Shrub, PlantForm.Flower]],
   [Tile.ShallowWater, [PlantForm.Flower, PlantForm.Shrub]],
   [Tile.Rock, [PlantForm.Fungus, PlantForm.Fungus, PlantForm.Shrub]],
-  [Tile.Marsh, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus, PlantForm.Fungus]],
+  [Tile.Marsh, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus, PlantForm.Fungus, PlantForm.Fern]],
 ];
 
 // per-form archetype trait ranges: [heightLo, heightHi, glowHi]
@@ -27,6 +27,7 @@ const FORM_RANGES: Record<PlantForm, { height: [number, number]; glowMax: number
   [PlantForm.Shrub]: { height: [0.2, 0.6], glowMax: 0.4 },
   [PlantForm.Tree]: { height: [0.55, 1], glowMax: 0.3 },
   [PlantForm.Fungus]: { height: [0.1, 0.45], glowMax: 0.9 },
+  [PlantForm.Fern]: { height: [0.2, 0.6], glowMax: 0.5 },
 };
 
 function sampleArchetype(form: PlantForm, rng: Rng): Genome {
@@ -56,6 +57,7 @@ const FORM_EPITHETS: Record<PlantForm, readonly string[]> = {
   [PlantForm.Shrub]: ["bush", "tuft", "sprawl", "briar", "knot"],
   [PlantForm.Tree]: ["wood", "crown", "reach", "spire", "bough"],
   [PlantForm.Fungus]: ["cap", "veil", "lantern", "spore", "gill"],
+  [PlantForm.Fern]: ["frond", "curl", "feather", "fan", "lace"],
 };
 
 function cap(s: string): string {

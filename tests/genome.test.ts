@@ -5,6 +5,7 @@ import {
   Genome,
   NUMERIC_TRAITS,
   PlantForm,
+  cross,
   driftDistance,
   hsl,
   mutate,
@@ -45,6 +46,31 @@ test("form never mutates", () => {
   let g = baseGenome();
   for (let i = 0; i < 100; i++) g = mutate(g, rng);
   expect(g.form).toBe(PlantForm.Flower);
+});
+
+test("cross averages traits and takes the short way around the color wheel", () => {
+  const a = { ...baseGenome(), hue: 0.9, height: 0.2 };
+  const b = { ...baseGenome(), hue: 0.1, height: 0.6 };
+  const kid = cross(a, b, makeRng(3), 0); // zero jitter: pure midpoint
+  expect(kid.height).toBeCloseTo(0.4, 5);
+  // circular midpoint of 0.9 and 0.1 is 0.0 (magenta-red), never 0.5 (cyan)
+  expect(Math.min(kid.hue, 1 - kid.hue)).toBeLessThan(0.001);
+});
+
+test("cross is deterministic, respects bounds, and keeps the form", () => {
+  const a = { ...baseGenome(), petals: 10, glow: 1 };
+  const b = { ...baseGenome(), petals: 3, glow: 0 };
+  expect(cross(a, b, makeRng(9))).toEqual(cross(a, b, makeRng(9)));
+  const rng = makeRng(4);
+  for (let i = 0; i < 100; i++) {
+    const kid = cross(a, b, rng, 0.2);
+    expect(kid.form).toBe(a.form);
+    for (const key of NUMERIC_TRAITS) {
+      const [lo, hi] = GENOME_BOUNDS[key];
+      expect(kid[key]).toBeGreaterThanOrEqual(lo);
+      expect(kid[key]).toBeLessThanOrEqual(hi);
+    }
+  }
 });
 
 test("driftDistance is zero for identical genomes and grows with drift", () => {

@@ -2,7 +2,7 @@ import { fbm } from "../core/noise";
 import { hash2d, makeRng, Rng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap, pocketAt } from "../world/types";
-import { Genome, NUMERIC_TRAITS, GENOME_BOUNDS, PlantForm, clampTrait, mutate } from "./genome";
+import { Genome, NUMERIC_TRAITS, GENOME_BOUNDS, PlantForm, clampTrait, cross, mutate } from "./genome";
 import { PlantSpecies } from "./species";
 
 export interface Plant {
@@ -23,6 +23,7 @@ export interface FloraTuning {
   reproChance: number; // per examination once mature
   reseedRadius: number; // tiles
   mutationAmount: number; // drift per generation
+  pollinationRadius: number; // tiles within which same-species neighbors cross
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
@@ -34,6 +35,7 @@ export const DEFAULT_TUNING: FloraTuning = {
   reproChance: 0.06,
   reseedRadius: 3,
   mutationAmount: 0.06,
+  pollinationRadius: 2,
 };
 
 // The island's plant life: a per-tile spatial index of genome-bearing
@@ -134,7 +136,21 @@ export class Flora {
         const ty = Math.floor(p.y / TILE_SIZE) + dty;
         const x = tx * TILE_SIZE + 3 + this.rng() * (TILE_SIZE - 6);
         const y = ty * TILE_SIZE + 5 + this.rng() * (TILE_SIZE - 6);
-        this.addPlant(p.species, mutate(p.genome, this.rng, t.mutationAmount), x, y, this.tick);
+        // a same-species neighbor in range means the child is a true cross;
+        // a lone plant self-seeds with plain drift
+        const partners = this.plantsNear(p.x, p.y, t.pollinationRadius * TILE_SIZE).filter(
+          (q) => q !== p && q.species === p.species,
+        );
+        const genome =
+          partners.length > 0
+            ? cross(
+                p.genome,
+                partners[Math.floor(this.rng() * partners.length)].genome,
+                this.rng,
+                t.mutationAmount,
+              )
+            : mutate(p.genome, this.rng, t.mutationAmount);
+        this.addPlant(p.species, genome, x, y, this.tick);
       }
     }
   }

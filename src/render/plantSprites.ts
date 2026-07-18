@@ -225,9 +225,39 @@ function drawFungus(ctx: Ctx, g: Genome): void {
   }
 }
 
+// Fronds fan out from a rootstock and droop at the tips, leaflets along
+// each rib — and nothing says a fern must be green.
+function drawFern(ctx: Ctx, g: Genome): void {
+  const baseX = PLANT_ANCHOR_X + g.lean;
+  const baseY = PLANT_ANCHOR_Y;
+  const fronds = Math.max(3, Math.round(g.petals * 0.8));
+  const len = 4 + g.height * 9;
+  const dark = hsl(g.hue, g.sat * 0.9, 0.3);
+  const mid = hsl(g.hue, g.sat, 0.42);
+  const light = hsl(g.hue, g.sat, g.glow > 0.8 ? 0.68 : 0.55);
+  ctx.fillStyle = stemColor(g);
+  ctx.fillRect(Math.round(baseX) - 1, baseY - 2, 2, 3); // rootstock
+  for (let i = 0; i < fronds; i++) {
+    const t = fronds === 1 ? 0.5 : i / (fronds - 1);
+    const a = (t - 0.5) * (1.0 + g.spread * 1.2); // fan angle from vertical
+    for (let s = 2; s < len; s++) {
+      const f = s / len;
+      const x = baseX + Math.sin(a) * s;
+      const y = baseY - 2 - Math.cos(a) * s + f * f * 3; // tips droop
+      const color = f > 0.7 ? light : f > 0.35 ? mid : dark;
+      px(ctx, x, y, color);
+      if (s % 2 === 0 && s > 3 && Math.round(g.leaves) > 0) {
+        px(ctx, x - Math.cos(a), y + Math.sin(a), mid, 0.85);
+        px(ctx, x + Math.cos(a), y - Math.sin(a), mid, 0.85);
+      }
+    }
+  }
+}
+
 const DRAWERS: Record<PlantForm, (ctx: Ctx, g: Genome) => void> = {
   [PlantForm.Flower]: drawFlower,
   [PlantForm.Shrub]: drawShrub,
   [PlantForm.Tree]: drawTree,
   [PlantForm.Fungus]: drawFungus,
+  [PlantForm.Fern]: drawFern,
 };

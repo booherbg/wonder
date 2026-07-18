@@ -130,6 +130,24 @@ test("every species whose habitat exists gets at least a small colony", () => {
   }
 });
 
+test("same-species neighbors cross-pollinate: children blend their parents", () => {
+  const flora = new Flora(grassPatchMap(), grassSpecies(), 3, {
+    reproChance: 1,
+    simBudget: 50,
+    mutationAmount: 0.02,
+    maxPlants: 40,
+  });
+  for (const p of [...flora.all]) flora.removePlant(p);
+  const g = grassSpecies()[0].archetype;
+  flora.addPlant(0, { ...g, hue: 0.9 }, 40, 40, -100);
+  flora.addPlant(0, { ...g, hue: 0.1 }, 44, 40, -100);
+  for (let i = 0; i < 20; i++) flora.simTick();
+  const kids = flora.all.filter((p) => p.born > 0);
+  expect(kids.length).toBeGreaterThan(0);
+  // crossed children sit near the circular midpoint (hue ~0), not near 0.5
+  expect(kids.some((k) => Math.min(k.genome.hue, 1 - k.genome.hue) < 0.1)).toBe(true);
+});
+
 test("plants inside pockets are amplified - full saturation, strong glow", () => {
   let checked = 0;
   for (const seed of [1, 42, 777, 12345, 555]) {
