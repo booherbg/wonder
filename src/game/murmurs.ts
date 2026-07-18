@@ -49,6 +49,16 @@ export const MURMURS: Murmur[] = [
     tag: "forest",
   },
   {
+    text: "in the woods, we return to reason and faith.",
+    attribution: "— ralph waldo emerson, nature (1836)",
+    tag: "forest",
+  },
+  {
+    text: "the poetry of earth is never dead.",
+    attribution: "— john keats (1816)",
+    tag: "island",
+  },
+  {
     text: "no man ever steps in the same river twice, for it is not the same river and he is not the same man.",
     attribution: "— heraclitus, fragment (c. 500 bce)",
     tag: "water",
@@ -56,6 +66,11 @@ export const MURMURS: Murmur[] = [
   {
     text: "an old pond — a frog jumps in, the sound of water.",
     attribution: "— matsuo bashō (1686), tr. w. g. aston",
+    tag: "water",
+  },
+  {
+    text: "in rivers, the water that you touch is the last of what has passed and the first of that which comes.",
+    attribution: "— leonardo da vinci, notebooks",
     tag: "water",
   },
   {
@@ -84,6 +99,11 @@ export const MURMURS: Murmur[] = [
     tag: "meadow",
   },
   {
+    text: "to make a prairie it takes a clover and one bee, — one clover, and a bee, and revery.",
+    attribution: "— emily dickinson (c. 1875)",
+    tag: "meadow",
+  },
+  {
     text: "come forth into the light of things, let nature be your teacher.",
     attribution: "— william wordsworth, the tables turned (1798)",
     tag: "still",
@@ -97,6 +117,21 @@ export const MURMURS: Murmur[] = [
     text: "the force that through the green fuse drives the flower drives my green age.",
     attribution: "— dylan thomas (1933)",
     tag: "gather",
+  },
+  {
+    text: "i have great faith in a seed. convince me that you have a seed there, and i am prepared to expect wonders.",
+    attribution: "— henry david thoreau, the dispersion of seeds",
+    tag: "sow",
+  },
+  {
+    text: "though my soul may set in darkness, it will rise in perfect light; i have loved the stars too fondly to be fearful of the night.",
+    attribution: "— sarah williams, the old astronomer (1868)",
+    tag: "night",
+  },
+  {
+    text: "with an eye made quiet by the power of harmony, we see into the life of things.",
+    attribution: "— william wordsworth, tintern abbey (1798)",
+    tag: "still",
   },
   {
     text: "all the flowers of all the tomorrows are in the seeds of today.",
