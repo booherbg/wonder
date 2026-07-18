@@ -21,6 +21,14 @@ export interface Pocket {
   deep: boolean; // one island in five hides a single deep pocket: larger, stranger
 }
 
+export interface Waterfall {
+  x: number; // tile of the upper lip
+  y: number;
+  dx: number; // unit step toward the lower tile (the flow direction)
+  dy: number;
+  drop: number; // elevation lost over the step
+}
+
 export interface WorldMap {
   width: number;
   height: number;
@@ -31,6 +39,7 @@ export interface WorldMap {
   spawn: { x: number; y: number }; // tile coordinates
   pockets?: Pocket[]; // rare hidden clearings where everything runs strange
   springs?: { x: number; y: number }[]; // warm pools steaming at the rock's edge
+  falls?: Waterfall[]; // white water where steep islands' rivers drop hardest
 }
 
 export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {

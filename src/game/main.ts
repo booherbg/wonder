@@ -408,6 +408,9 @@ function offerMurmurMoments(dt: number): void {
     if ((map.springs ?? []).some((s) => Math.hypot(s.x - tx, s.y - ty) < 2)) {
       murmurs.offer("spring");
     }
+    if ((map.falls ?? []).some((f) => Math.hypot(f.x - tx, f.y - ty) < 3)) {
+      murmurs.offer("falls");
+    }
   }
 }
 

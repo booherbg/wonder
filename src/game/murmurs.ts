@@ -28,7 +28,8 @@ export type MurmurTag =
   | "tide" // wading a glowing sea on a lucky night
   | "birds" // flushing a flock into the air
   | "home" // founding a garden
-  | "speciation"; // witnessing a lineage become its own kind
+  | "speciation" // witnessing a lineage become its own kind
+  | "falls"; // standing in the mist of a waterfall
 
 export const MURMURS: Murmur[] = [
   {
@@ -210,6 +211,16 @@ export const MURMURS: Murmur[] = [
     text: "it is interesting to contemplate a tangled bank, clothed with many plants of many kinds… these elaborately constructed forms have all been produced by laws acting around us.",
     attribution: "— charles darwin, on the origin of species (1859)",
     tag: "speciation",
+  },
+  {
+    text: "this darksome burn, horseback brown, his rollrock highroad roaring down.",
+    attribution: "— gerard manley hopkins, inversnaid (1881)",
+    tag: "falls",
+  },
+  {
+    text: "its torrent dashes down three thousand feet from high, as if the silver river fell from azure sky.",
+    attribution: "— li bai, viewing the waterfall at mount lu (c. 730)",
+    tag: "falls",
   },
 ];
 

@@ -18,6 +18,9 @@ export interface WorldConfig {
   riverCount: number; // springs attempted per island
   riverMinSpringElevation: number; // springs only above this elevation
   riverMaxSteps: number; // hard safety limit per river
+  fallMinDrop: number; // river steps losing at least this much elevation become waterfalls
+  fallMaxCount: number; // steepest few only; gentle islands get none
+  fallMinSpacing: number; // tiles between falls
   minLandFraction: number; // reroll islands with less land than this
   minWalkableRegion: number; // reroll if the largest walkable region is smaller (tiles)
   maxGenerationAttempts: number; // deterministic rerolls (seed+1, seed+2, ...)
@@ -41,6 +44,9 @@ export const DEFAULT_CONFIG: WorldConfig = {
   riverCount: 7,
   riverMinSpringElevation: 0.55,
   riverMaxSteps: 4000,
+  fallMinDrop: 0.013, // measured: steep islands peak ~0.02, gentle ones ~0.011
+  fallMaxCount: 3,
+  fallMinSpacing: 10,
   minLandFraction: 0.12,
   minWalkableRegion: 3000,
   maxGenerationAttempts: 16,

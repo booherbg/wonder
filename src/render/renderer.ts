@@ -192,6 +192,44 @@ export class Renderer {
       }
     }
 
+    // waterfalls: white water sliding down the drop, churn and mist at the base
+    if (map.falls) {
+      for (const f of map.falls) {
+        const cx = (f.x + 0.5) * TILE_SIZE - camX;
+        const cy = (f.y + 0.5) * TILE_SIZE - camY;
+        if (cx < -40 || cx > this.viewWidth + 40 || cy < -40 || cy > this.viewHeight + 40) continue;
+        const bx = cx + f.dx * TILE_SIZE;
+        const by = cy + f.dy * TILE_SIZE;
+        for (let k = 0; k < 4; k++) {
+          const phase = (timeMs / 650 + k * 0.27 + ((f.x * 7 + f.y * 13) % 5) / 5) % 1;
+          const along = phase * TILE_SIZE;
+          const px = cx + f.dx * along + (f.dy !== 0 ? (k - 1.5) * 3 : 0);
+          const py = cy + f.dy * along + (f.dx !== 0 ? (k - 1.5) * 3 : 0);
+          ctx.fillStyle = `rgba(235, 248, 255, ${(0.7 - 0.4 * phase).toFixed(3)})`;
+          ctx.fillRect(Math.round(px), Math.round(py), f.dy !== 0 ? 1 : 2, f.dx !== 0 ? 1 : 2);
+        }
+        for (let k = 0; k < 3; k++) {
+          ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+          ctx.fillRect(
+            Math.round(bx + Math.sin(timeMs / 310 + k * 2.1 + f.x) * 3),
+            Math.round(by + Math.cos(timeMs / 350 + k * 1.3 + f.y) * 2),
+            1,
+            1,
+          );
+        }
+        for (let k = 0; k < 2; k++) {
+          const phase = (timeMs / 2300 + k / 2 + (f.y % 7) / 7) % 1;
+          ctx.fillStyle = `rgba(255, 255, 255, ${(0.26 * (1 - phase)).toFixed(3)})`;
+          ctx.fillRect(
+            Math.round(bx + Math.sin(phase * 4 + k * 3) * 4),
+            Math.round(by - 2 - phase * 10),
+            2,
+            1,
+          );
+        }
+      }
+    }
+
     // entity pass, top row to bottom so taller things overlap what's behind them
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it

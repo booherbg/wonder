@@ -1,7 +1,7 @@
 import { fbm } from "../core/noise";
 import { hash2d, makeRng } from "../core/rng";
 import { DEFAULT_CONFIG, WorldConfig } from "./config";
-import { Pocket, River, Tile, WALKABLE, WorldMap } from "./types";
+import { Pocket, River, Tile, WALKABLE, Waterfall, WorldMap } from "./types";
 
 const NEIGHBORS4: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
@@ -190,7 +190,45 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
 
   const pockets = placePockets(tiles, spawn, genSeed, cfg);
   const springs = placeSprings(tiles, genSeed, cfg);
-  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets, springs };
+  const falls = placeFalls(elevation, rivers, cfg);
+  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets, springs, falls };
+}
+
+// Where a river loses the most height in a single step, the water shows it:
+// a waterfall. Only steep islands clear the bar — gentle ones have none,
+// so white water is a thing an island can be known for.
+export function placeFalls(
+  elevation: Float32Array,
+  rivers: River[],
+  cfg: WorldConfig,
+): Waterfall[] {
+  const { width } = cfg;
+  const seen = new Set<number>();
+  const candidates: Waterfall[] = [];
+  for (const r of rivers) {
+    for (let k = 0; k + 1 < r.path.length; k++) {
+      const i = r.path[k];
+      const j = r.path[k + 1];
+      const drop = elevation[i] - elevation[j];
+      if (drop < cfg.fallMinDrop || seen.has(i)) continue;
+      seen.add(i);
+      candidates.push({
+        x: i % width,
+        y: (i / width) | 0,
+        dx: (j % width) - (i % width),
+        dy: ((j / width) | 0) - ((i / width) | 0),
+        drop,
+      });
+    }
+  }
+  candidates.sort((a, b) => b.drop - a.drop);
+  const out: Waterfall[] = [];
+  for (const c of candidates) {
+    if (out.length >= cfg.fallMaxCount) break;
+    if (out.some((f) => Math.hypot(f.x - c.x, f.y - c.y) < cfg.fallMinSpacing)) continue;
+    out.push(c);
+  }
+  return out;
 }
 
 // Where the rock meets walkable ground, some islands keep a warm pool —
