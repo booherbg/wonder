@@ -42,6 +42,11 @@ export const DEFAULT_TUNING: FloraTuning = {
 
 // The island's plant life: a per-tile spatial index of genome-bearing
 // individuals, seeded in patches at worldgen and drifting ever after.
+export interface RestoredFlora {
+  tick: number;
+  plants: { species: number; genome: Genome; x: number; y: number; born: number }[];
+}
+
 export class Flora {
   all: Plant[] = [];
   byTile = new Map<number, Plant[]>();
@@ -49,16 +54,39 @@ export class Flora {
   tick = 0;
   readonly tuning: FloraTuning;
   private rng: Rng;
+  private home: { tx: number; ty: number } | null = null;
 
   constructor(
     private map: WorldMap,
     private speciesList: PlantSpecies[],
     seed: number,
     tuning: Partial<FloraTuning> = {},
+    restored?: RestoredFlora,
   ) {
     this.tuning = { ...DEFAULT_TUNING, ...tuning };
     this.rng = makeRng(seed ^ 0xf10a);
-    this.scatter(seed);
+    if (restored) {
+      this.tick = restored.tick;
+      for (const p of restored.plants) this.addPlant(p.species, p.genome, p.x, p.y, p.born);
+    } else {
+      this.scatter(seed);
+    }
+  }
+
+  // The wanderer's garden: a 3x3 bed where plants are tended — safe from
+  // crowding and quick to breed.
+  setHome(tx: number, ty: number): void;
+  setHome(none: null): void;
+  setHome(txOrNull: number | null, ty?: number): void {
+    this.home = txOrNull === null ? null : { tx: txOrNull, ty: ty! };
+  }
+
+  inGarden(x: number, y: number): boolean {
+    if (!this.home) return false;
+    return (
+      Math.abs(Math.floor(x / TILE_SIZE) - this.home.tx) <= 1 &&
+      Math.abs(Math.floor(y / TILE_SIZE) - this.home.ty) <= 1
+    );
   }
 
   get count(): number {
@@ -132,9 +160,14 @@ export class Flora {
       const age = this.tick - p.born;
       // crowding: past the comfortable density, the island quietly thins
       // itself — keeps late islands lush without filling every tile.
-      // Rare species are spared: they are not the crowd.
+      // Rare species and tended garden plants are spared.
       const crowd = this.all.length / t.maxPlants - t.comfortFraction;
-      if (crowd > 0 && (this.speciesCounts.get(p.species) ?? 0) > 12 && this.rng() < crowd * 0.6) {
+      if (
+        crowd > 0 &&
+        (this.speciesCounts.get(p.species) ?? 0) > 12 &&
+        !this.inGarden(p.x, p.y) &&
+        this.rng() < crowd * 0.6
+      ) {
         this.removePlant(p);
         continue;
       }
@@ -142,7 +175,8 @@ export class Flora {
         this.removePlant(p);
         continue;
       }
-      if (age >= t.matureAge && this.rng() < t.reproChance) {
+      const repro = t.reproChance * (this.inGarden(p.x, p.y) ? 2 : 1); // gardens breed eagerly
+      if (age >= t.matureAge && this.rng() < repro) {
         const dtx = Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
         const dty = Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
         const tx = Math.floor(p.x / TILE_SIZE) + dtx;
@@ -190,7 +224,7 @@ export class Flora {
               ? sp.density * (0.15 + 0.45 * patch)
               : sp.density * (0.025 + Math.max(0, patch - 0.5) * 1.5); // clusters + sparse loners
           const pocket = pocketAt(this.map, tx, ty);
-          if (pocket) p = Math.min(0.9, p * 3 + 0.15); // pockets grow lush
+          if (pocket) p = Math.min(0.9, p * (pocket.deep ? 4 : 3) + 0.15); // pockets grow lush
           if (hash2d(tx, ty, seed ^ (sp.id * 977 + 13)) >= p) continue;
           const jx = hash2d(tx, ty, seed ^ (sp.id * 331 + 7));
           const jy = hash2d(tx, ty, seed ^ (sp.id * 613 + 29));
@@ -198,14 +232,15 @@ export class Flora {
           const y = ty * TILE_SIZE + 5 + jy * (TILE_SIZE - 6);
           let genome = this.spatialGenome(sp, tx, ty, seed);
           if (pocket) {
-            // in a pocket, every trait runs toward its extreme
+            // in a pocket, every trait runs toward its extreme; deep
+            // pockets push further still
             const prng = makeRng(Math.floor(hash2d(tx, ty, seed ^ 0x0c4e7) * 0xffffffff));
             genome = {
               ...genome,
               sat: 1,
-              height: clampTrait("height", genome.height * 1.4),
-              petals: clampTrait("petals", genome.petals + 2),
-              glow: Math.max(genome.glow, 0.7 + prng() * 0.3),
+              height: clampTrait("height", genome.height * (pocket.deep ? 1.7 : 1.4)),
+              petals: clampTrait("petals", genome.petals + (pocket.deep ? 4 : 2)),
+              glow: Math.max(genome.glow, (pocket.deep ? 0.85 : 0.7) + prng() * 0.15),
             };
           }
           this.addPlant(sp.id, genome, x, y, -this.tuning.matureAge);

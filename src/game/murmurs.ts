@@ -26,7 +26,8 @@ export type MurmurTag =
   | "beast" // first sighting of the island's long quiet one
   | "spring" // warming yourself at a hot spring
   | "tide" // wading a glowing sea on a lucky night
-  | "birds"; // flushing a flock into the air
+  | "birds" // flushing a flock into the air
+  | "home"; // founding a garden
 
 export const MURMURS: Murmur[] = [
   {
@@ -188,6 +189,11 @@ export const MURMURS: Murmur[] = [
     text: "my heart in hiding stirred for a bird, — the achieve of, the mastery of the thing!",
     attribution: "— gerard manley hopkins, the windhover (1877)",
     tag: "birds",
+  },
+  {
+    text: "home is the place where, when you have to go there, they have to take you in.",
+    attribution: "— robert frost, the death of the hired man (1914)",
+    tag: "home",
   },
 ];
 

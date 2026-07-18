@@ -18,6 +18,7 @@ export interface Pocket {
   x: number; // tile coords of the center
   y: number;
   radius: number; // tiles
+  deep: boolean; // one island in five hides a single deep pocket: larger, stranger
 }
 
 export interface WorldMap {

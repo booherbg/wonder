@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wander — morning report</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 48px 20px 90px;
+    background: #0a0e14;
+    color: #cfd8e3;
+    font: 16px/1.65 Georgia, "Times New Roman", serif;
+  }
+  main { max-width: 700px; margin: 0 auto; }
+  h1, h2 {
+    font-family: ui-monospace, Menlo, monospace;
+    color: #8fc07e; font-weight: 600; letter-spacing: 0.02em;
+  }
+  h1 { font-size: 26px; border-bottom: 1px solid #24435f; padding-bottom: 12px; }
+  h2 { font-size: 17px; margin-top: 44px; color: #77b364; }
+  a { color: #6f9fd8; }
+  strong { color: #eef2f5; }
+  em { color: #b8a9d9; font-style: italic; }
+  code, pre {
+    font-family: ui-monospace, Menlo, monospace; font-size: 13.5px;
+    background: #11202f; border-radius: 4px; color: #a8d2f0;
+  }
+  code { padding: 1px 5px; }
+  pre { padding: 10px 14px; overflow-x: auto; border: 1px solid #1b3350; }
+  ul { padding-left: 22px; }
+  li { margin: 7px 0; }
+  li::marker { color: #4a7dbd; }
+  figure { margin: 26px 0; }
+  figure img {
+    width: 100%; border-radius: 6px; border: 1px solid #24435f;
+    image-rendering: pixelated; display: block;
+  }
+  figcaption {
+    font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    color: #5f7793; margin-top: 6px; text-align: center;
+  }
+  .murmur {
+    text-align: center; font-style: italic; color: #93a7bd;
+    margin: 36px 0;
+  }
+  .tide {
+    margin-top: 70px; text-align: center; font-size: 13px;
+    color: #43607f; font-family: ui-monospace, Menlo, monospace;
+  }
+</style>
+</head>
+<body>
+<main>
+<h1>Good morning ☀️</h1>
+<p>While you slept, the island came alive. Here's what's waiting for you.</p>
+<h2>First, play</h2>
+<pre>npm run dev        # probably still running from last night</pre>
+<p>Open http://localhost:5173 — you'll land on a random island. <strong>WASD</strong> walk · <strong>E</strong> inspect · <strong>F</strong> gather · <strong>G</strong> sow · <strong>H</strong> found a home · <strong>P</strong> postcard · <strong>R</strong> new island (double-press; your world is saved). Days last ~4 minutes; stay out after dusk.</p>
+<p>This page in its evening clothes: <code>npm run report</code> regenerates <code>docs/morning-report.html</code> from this markdown.</p>
+<p>Worth visiting: <code>?seed=99</code> (the blue forest below), <code>?seed=12345</code> (two pockets, two springs, and Lulu), <code>?seed=555</code> (fenland island).</p>
+<h2>The tour</h2>
+<p><strong>Dusil Skerry (seed 99)</strong> — no one chose these colors; the island's tree species just rolled indigo and orchid, and drift did the rest:</p>
+<figure><img src="shots/dusil-skerry-forest.png" alt="indigo and magenta forest" loading="lazy"><figcaption>indigo and magenta forest</figcaption></figure>
+<p><strong>A pocket biome igniting at night</strong> (seed 12345, hidden between two rivers — ~60% of islands hide one, nothing marks them, you just find them):</p>
+<figure><img src="shots/pocket-ignites-at-night.png" alt="pocket clearing glowing at night" loading="lazy"><figcaption>pocket clearing glowing at night</figcaption></figure>
+<p><strong>The glow forest after dark</strong> — fungi light the understory and join into faint mycelium threads; the wanderer carries a small lantern:</p>
+<figure><img src="shots/glow-forest-at-night.png" alt="bioluminescent forest at night" loading="lazy"><figcaption>bioluminescent forest at night</figcaption></figure>
+<p><strong>A hot spring at the rock's edge</strong> — steam, a warm teal pool, and a water flower that colonized it on its own (shallow water is valid habitat; the systems compose):</p>
+<figure><img src="shots/hot-spring.png" alt="hot spring with resident flower" loading="lazy"><figcaption>hot spring with resident flower</figcaption></figure>
+<p><strong>Sanpo Tumbles at their den</strong> — every critter species loves one plant and dens where it grows:</p>
+<figure><img src="shots/critter-den.png" alt="critters near their burrow" loading="lazy"><figcaption>critters near their burrow</figcaption></figure>
+<p><strong>Lulu, the old wanderer</strong> — seed 12345's beast. No den, no appetite, just an endless slow crossing. She glows at night. She will sometimes stop and look at you:</p>
+<figure><img src="shots/lulu-the-old-wanderer.png" alt="the beast crossing the dunes" loading="lazy"><figcaption>the beast crossing the dunes</figcaption></figure>
+<p><strong>A fenland coast</strong> (seed 555) and <strong>an island overview</strong> (dev view, <code>?overview=1</code>):</p>
+<figure><img src="shots/marsh-coast.png" alt="marsh coastline" loading="lazy"><figcaption>marsh coastline</figcaption></figure>
+<figure><img src="shots/overview-dusil-skerry.png" alt="island overview" loading="lazy"><figcaption>island overview</figcaption></figure>
+<h2>What shipped overnight</h2>
+<p>Everything is committed to <code>master</code>, 76 unit tests green, zero runtime dependencies, ~13 kB gzipped.</p>
+<ul>
+<li><strong>World</strong>: named islands, per-seed silhouettes, rivers with deltas and pond-ring marshes, marsh biome, hot springs, hidden pocket biomes — <strong>every island now holds at least one pocket</strong>, and one island in five hides a single <em>deep pocket</em> instead: larger, denser, traits pushed further, faster shimmer, more spore motes</li>
+<li><strong>Flora</strong>: 5 forms (flower/shrub/tree/fungus/fern, plus lily &amp; reed aquatic forms), ~15 named species per island, genome drift in real time, <strong>cross-pollination</strong> (neighbors breed; planting is breeding), pocket amplification, one ✶ sport per island</li>
+<li><strong>Fauna</strong>: 3 critter species with dens/foraging/curiosity/blinks; the beast; butterflies by day, moths by night; <strong>birds</strong> that wheel over the island, perch, roost at night, and flush when you walk in among them (Hopkins murmur); <strong>fish</strong> gliding in the shallows that scatter from your wading steps; <strong>frogs</strong> on the banksides that plop into the water with spreading rings when you come close</li>
+<li><strong>Light</strong>: 4-minute days, glow genomes shining after dark, mycelium threads, cloud shadows, the lantern</li>
+<li><strong>You</strong>: inspect panel with drift readings, seed pouch, sowing, postcards</li>
+<li><strong>Murmurs</strong>: 20 gathered voices (Thoreau, Darwin, Bashō, Dickinson, Whitman, van Gogh…) surfacing at first-times: new biome, stillness, night, the sport, the beast, the spring</li>
+</ul>
+<p>The full design record is in <code>docs/superpowers/</code> (specs + plans) and the idea backlog in <code>docs/ideas.md</code>.</p>
+<h2>Your worlds are safe now</h2>
+<ul>
+<li><strong>Autosave.</strong> Every world saves itself (each 10s, on leaving, and before sailing): all the drifted genomes, your position, your seed pouch, your home. The last 8 worlds you visited are kept; revisit any via <code>?seed=N</code>.</li>
+<li><strong>R asks first.</strong> Press R once and the island tells you it's saved and asks for a second press before sailing.</li>
+<li><strong>Worlds live while you're away.</strong> When you return to a saved island, the time you were gone is simulated forward (up to ~4 hours of island time) — plants have reseeded, crossed, and drifted without you. This is the browser-only version of "keep a world running." If you want more, two honest roads: a small export/import of save files plus a headless node runner that ages a world on a schedule (the sim is pure TypeScript, so this is easy), or eventually a tiny server. Say which appeals.</li>
+<li><strong>H founds a home.</strong> Press H on good ground: a 3×3 garden bed takes shape — corner stones, turned earth, a Frost murmur. Plants sown inside are <em>tended</em>: never thinned by crowding, and they breed twice as fast (with cross-pollination, your garden is a breeding bench). Genetics nudging — pick two parents, bias their cross — is sketched and waiting for you to go deep with me.</li>
+</ul>
+<h2>How this works (the fun version)</h2>
+<p>The whole game is one number growing consequences.</p>
+<p>1. <strong>The seed</strong> feeds a hash; the hash feeds layered noise; the noise,    shaped by a per-seed lopsided falloff, becomes elevation. Where water    sits in it becomes sea, shore, marsh; where it rises becomes rock and    snow. Rivers are just water obeying "step downhill" until it can't. 2. <strong>Species are rolled, not drawn.</strong> Each island generates ~15 plant    species: a form (flower, shrub, tree, fungus, fern), a habitat, and an    archetype genome — ten numbers (hue, height, petals, glow…). The pixel    art is <em>painted from the numbers</em> at runtime; no sprite sheet exists. 3. <strong>Every individual drifts.</strong> Plants reseed with small mutations; nearby    same-species plants cross, meeting in the middle of their traits (hues    travel the short way round the color wheel). Geography plus time equals    gradients you can walk through. Glow past a threshold and the plant    literally lights up at night. 4. <strong>The island self-regulates.</strong> Past a comfortable density it quietly    thins the commonest plants (never the rare ones, never your garden), so    an old world stays composed instead of becoming jungle wallpaper. 5. <strong>Everything else listens.</strong> Critters den where their favorite plant    thrives; birds flush from your footsteps; moths follow the glow;    murmurs surface when a moment matches their tag. Nothing is scripted to    happen <em>at</em> you — things happen <em>near</em> you, which is why it feels alive.</p>
+<p>Same seed, same island, forever — your saves just remember what time and you did to it.</p>
+<h2>Decisions waiting for your taste</h2>
+<p>1. <strong>Field journal</strong> (J) — my top pick for the next step: a self-writing    memoir of every species you've met, renameable, per-seed memory. 2. <strong>The wanderer's home</strong> — where does it live, what is it for? (My    instinct: a porch, a garden bed, a place the camera rests — not a base.) 3. <strong>Critter trust</strong> — feeding favorites → follow → they lead you to    secrets. How tame should wild things get? 4. <strong>Sound</strong> — generative wind/footsteps/critter motifs. Big mood win,    real scope. 5. <strong>Cross-island seeds</strong> — should one pouch slot survive <code>R</code>? (Invasive    species as gameplay.) 6. Anything on the island that made you feel something — tell me what, and    that's the direction.</p>
+<p class="murmur">— written at the end of the night shift, with the loop still ticking</p>
+<p class="tide">seas the color of #22467c · generated from docs/morning-report.md · npm run report</p>
+</main>
+</body>
+</html>

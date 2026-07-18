@@ -18,8 +18,12 @@ Open http://localhost:5173.
 - **E** — inspect the plants at your feet, up close (names, traits, drift)
 - **F** — gather a seed from the nearest plant
 - **G** — sow your oldest seed where you stand
+- **H** — found a home: a 3×3 garden bed where plants are tended
+  (never thinned, twice the breeding rate)
 - **P** — save a postcard PNG of the current view
-- **R** — new island
+- **R** — new island (press twice — and don't worry, worlds autosave;
+  your last 8 islands restore via `?seed=N`, aged for the time you
+  were away)
 - **?seed=N** in the URL — revisit a specific island (the URL always shows
   the current seed, so copy it to share an island)
 - **?overview=1** — bird's-eye view of the whole island (dev aid);

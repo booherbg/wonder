@@ -8,6 +8,7 @@
     "build": "vite build",
     "check": "tsc",
     "test": "vitest run",
+    "report": "node scripts/report.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

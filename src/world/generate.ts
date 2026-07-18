@@ -245,17 +245,21 @@ function placePockets(
   // the has-a-pocket decision is genuinely independent per island
   const rng = makeRng(Math.floor(hash2d(seed, 77, 0x90c4e7) * 0xffffffff));
   const roll = rng();
-  const count = roll < 0.6 ? 1 : roll < 0.8 ? 2 : 0;
+  // every island holds at least one strangeness: usually one pocket,
+  // sometimes two — and one island in five hides a single DEEP pocket,
+  // larger and stranger, instead
+  const deep = roll < 0.2;
+  const count = deep ? 1 : roll < 0.8 ? 1 : 2;
   const out: Pocket[] = [];
   for (let i = 0; i < count; i++) {
-    for (let attempt = 0; attempt < 80; attempt++) {
+    for (let attempt = 0; attempt < 120; attempt++) {
       const x = 15 + Math.floor(rng() * (cfg.width - 30));
       const y = 15 + Math.floor(rng() * (cfg.height - 30));
       const t = tiles[y * cfg.width + x];
       if (t !== Tile.Grass && t !== Tile.Forest) continue;
       if (Math.hypot(x - spawn.x, y - spawn.y) < 25) continue;
       if (out.some((p) => Math.hypot(x - p.x, y - p.y) < 20)) continue;
-      out.push({ x, y, radius: 2 + Math.floor(rng() * 2) });
+      out.push({ x, y, radius: deep ? 4 + Math.floor(rng() * 2) : 2 + Math.floor(rng() * 2), deep });
       break;
     }
   }

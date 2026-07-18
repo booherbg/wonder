@@ -16,12 +16,21 @@ import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isBiolumeNight } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine } from "./murmurs";
+import {
+  MAX_SAVED_WORLDS,
+  SavedWorld,
+  WORLD_INDEX_KEY,
+  packWorld,
+  restoreInventory,
+  restorePlants,
+  worldKey,
+} from "./save";
 
 const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { islandName } from "../world/name";
-import { Tile, WorldMap, pocketAt, tileAt } from "../world/types";
+import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
 
@@ -74,7 +83,8 @@ function renderHud(): void {
     )
     .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
-  const seeds = inventory.seeds.length > 0 ? `seeds ${dots}` : "E inspect · F gather · G sow";
+  const seeds =
+    inventory.seeds.length > 0 ? `seeds ${dots}` : "E inspect · F gather · G sow · H home";
   hud.innerHTML = `${msg}${seeds}`;
 }
 
@@ -90,6 +100,37 @@ let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
+let home: { x: number; y: number } | null = null;
+let saveAcc = 0;
+let rArmed = false;
+
+const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
+
+function persist(): void {
+  try {
+    const s = packWorld(currentSeed, flora.tick, player, home, inventory, flora.all, Date.now());
+    localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
+    const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
+    const next = [currentSeed, ...index.filter((x) => x !== currentSeed)];
+    for (const evicted of next.slice(MAX_SAVED_WORLDS)) {
+      localStorage.removeItem(worldKey(evicted));
+    }
+    localStorage.setItem(WORLD_INDEX_KEY, JSON.stringify(next.slice(0, MAX_SAVED_WORLDS)));
+  } catch {
+    // storage full or unavailable: the world still lives, just unsaved
+  }
+}
+
+function loadSave(seed: number): SavedWorld | null {
+  try {
+    const raw = localStorage.getItem(worldKey(seed));
+    if (!raw) return null;
+    const s = JSON.parse(raw) as SavedWorld;
+    return s.v === 1 && s.seed === seed ? s : null;
+  } catch {
+    return null;
+  }
+}
 
 function loadWorld(seed: number): void {
   // a seed with no viable island is nearly impossible, but the sea is
@@ -106,7 +147,25 @@ function loadWorld(seed: number): void {
   }
   currentSeed = seed;
   species = generatePlantSpecies(seed);
-  flora = new Flora(map, species, seed);
+  const saved = loadSave(seed);
+  let catchUp = 0;
+  if (saved) {
+    flora = new Flora(map, species, seed, {}, {
+      tick: saved.tick,
+      plants: restorePlants(saved, species),
+    });
+    // the island lived while you were away
+    catchUp = Math.min(
+      MAX_CATCHUP_TICKS,
+      Math.floor(Math.max(0, Date.now() - saved.savedAt) / SIM_MS),
+    );
+    for (let i = 0; i < catchUp; i++) flora.simTick();
+    home = saved.home ? { x: saved.home[0], y: saved.home[1] } : null;
+    if (home) flora.setHome(home.x, home.y);
+  } else {
+    flora = new Flora(map, species, seed);
+    home = null;
+  }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
@@ -115,14 +174,26 @@ function loadWorld(seed: number): void {
   birdRng = makeRng(seed ^ 0xb12d);
   clearCritterSpriteCache();
   simAcc = 0;
+  saveAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
   inventory = emptyInventory();
+  if (saved) {
+    const [px, py] = saved.player;
+    if (isWalkable(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE))) {
+      player.x = px;
+      player.y = py;
+    }
+    inventory = restoreInventory(saved, species);
+  }
   closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
   seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
   renderHud();
+  if (saved) {
+    flashHud(catchUp > 0 ? "the island lived while you were away" : "welcome back");
+  }
   murmurs.offer("island");
 }
 
@@ -157,8 +228,31 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   if (k === "r") {
-    loadWorld(randomSeed());
-    renderer.setMap(map);
+    if (!rArmed) {
+      rArmed = true;
+      flashHud("press R again to sail for a new island (this one is saved)");
+      setTimeout(() => {
+        rArmed = false;
+      }, 3000);
+    } else {
+      rArmed = false;
+      persist();
+      loadWorld(randomSeed());
+      renderer.setMap(map);
+    }
+  } else if (k === "h") {
+    const tx = Math.floor(player.x / TILE_SIZE);
+    const ty = Math.floor(player.y / TILE_SIZE);
+    const here = tileAt(map, tx, ty);
+    if (here === Tile.Grass || here === Tile.Sand || here === Tile.Marsh || here === Tile.Forest) {
+      home = { x: tx, y: ty };
+      flora.setHome(tx, ty);
+      flashHud("home — a garden bed takes shape");
+      murmurs.offer("home");
+      persist();
+    } else {
+      flashHud("no ground here to settle on");
+    }
   } else if (k === "escape") {
     closeInspect();
   } else if (k === "p") {
@@ -219,6 +313,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("resize", () => renderer.resize());
+window.addEventListener("beforeunload", persist);
 
 function input(): InputState {
   return {
@@ -304,6 +399,11 @@ function frame(now: number): void {
     flora.simTick();
     simAcc -= SIM_MS;
   }
+  saveAcc += dt;
+  if (saveAcc >= 10) {
+    saveAcc = 0;
+    persist();
+  }
   for (const c of critters) updateCritter(c, dt, map, flora, critterSpecies, player, critterRng);
   if (beast) {
     updateBeast(beast, dt, map, player, critterRng);
@@ -344,7 +444,7 @@ function frame(now: number): void {
   renderer.draw(
     camX,
     camY,
-    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, darkness },
+    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness },
     now,
   );
   requestAnimationFrame(frame);

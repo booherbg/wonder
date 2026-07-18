@@ -32,6 +32,7 @@ export interface Scene {
   critterSpecies?: CritterSpecies[] | null;
   beast?: Beast | null;
   flocks?: Flock[] | null;
+  home?: { x: number; y: number } | null; // garden bed center, tile coords
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
 }
 
@@ -120,14 +121,14 @@ export class Renderer {
         const cy = (p.y + 0.5) * TILE_SIZE - camY;
         const r = (p.radius + 1.5) * TILE_SIZE;
         if (cx < -r || cx > this.viewWidth + r || cy < -r || cy > this.viewHeight + r) continue;
-        const hue = Math.round((timeMs / 55) % 360);
+        const hue = Math.round((timeMs / (p.deep ? 40 : 55)) % 360);
         const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, r);
-        grad.addColorStop(0, `hsla(${hue}, 85%, 65%, 0.17)`);
+        grad.addColorStop(0, `hsla(${hue}, 85%, 65%, ${p.deep ? 0.24 : 0.17})`);
         grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
         ctx.fillStyle = grad;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
         // spore motes on slow drifting orbits
-        for (let k = 0; k < 5; k++) {
+        for (let k = 0; k < (p.deep ? 9 : 5); k++) {
           const mx = cx + Math.sin(timeMs / 4700 + k * 1.7) * r * 0.55;
           const my = cy + Math.cos(timeMs / 6100 + k * 2.3) * r * 0.45;
           const pulse = 0.3 + 0.25 * Math.sin(timeMs / 900 + k * 2.1);
@@ -142,6 +143,26 @@ export class Renderer {
     this.fishes.draw(ctx, camX, camY);
     this.frogs.update(map, camX, camY, this.viewWidth, this.viewHeight, scene.player, timeMs);
     this.frogs.draw(ctx, camX, camY);
+
+    // the wanderer's garden bed: tilled soil and corner stones, 3x3
+    if (scene.home) {
+      const gx = (scene.home.x - 1) * TILE_SIZE - camX;
+      const gy = (scene.home.y - 1) * TILE_SIZE - camY;
+      const size = 3 * TILE_SIZE;
+      ctx.fillStyle = "rgba(70, 46, 26, 0.22)"; // turned earth
+      ctx.fillRect(Math.round(gx), Math.round(gy), size, size);
+      ctx.fillStyle = "hsl(28, 32%, 34%)";
+      for (const [ox, oy] of [[0, 0], [size - 2, 0], [0, size - 2], [size - 2, size - 2]]) {
+        ctx.fillRect(Math.round(gx + ox), Math.round(gy + oy), 2, 2); // corner stones
+      }
+      ctx.fillStyle = "hsla(28, 32%, 34%, 0.6)";
+      for (let d = 6; d < size - 4; d += 8) {
+        ctx.fillRect(Math.round(gx + d), Math.round(gy), 2, 1); // fence dashes
+        ctx.fillRect(Math.round(gx + d), Math.round(gy + size - 1), 2, 1);
+        ctx.fillRect(Math.round(gx), Math.round(gy + d), 1, 2);
+        ctx.fillRect(Math.round(gx + size - 1), Math.round(gy + d), 1, 2);
+      }
+    }
 
     // the beast's trail: pressed grass, fading over a minute
     if (scene.beast) {
