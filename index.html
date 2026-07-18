@@ -50,6 +50,29 @@
       }
       #murmur.visible { opacity: 1; }
       #murmur .murmur-attr { font-size: 11px; opacity: 0.6; margin-top: 4px; }
+      #anthology {
+        display: none;
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(560px, 88vw); max-height: 72vh; overflow-y: auto;
+        background: rgba(8, 12, 18, 0.94);
+        border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+        padding: 18px 22px; color: #dfe7ef;
+      }
+      #anthology .anth-title { font: 12px monospace; opacity: 0.7; }
+      #anthology .anth-epigraph {
+        font: italic 12px Georgia, serif; opacity: 0.5;
+        margin: 4px 0 16px; padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #anthology .anth-entry { margin-bottom: 14px; }
+      #anthology .anth-text {
+        font: italic 13px Georgia, serif; line-height: 1.5;
+        color: rgba(255, 255, 255, 0.85);
+      }
+      #anthology .anth-attr { font: 11px Georgia, serif; opacity: 0.6; margin-top: 2px; }
+      #anthology .anth-place { font: 10px monospace; opacity: 0.38; margin-top: 1px; }
+      #anthology .anth-empty { font: italic 13px Georgia, serif; opacity: 0.6; }
+      #anthology .anth-hint { font: 11px monospace; opacity: 0.45; margin-top: 12px; text-align: center; }
     </style>
   </head>
   <body>
@@ -58,6 +81,7 @@
     <div id="hud"></div>
     <div id="inspect"></div>
     <div id="murmur"></div>
+    <div id="anthology"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

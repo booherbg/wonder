@@ -11,11 +11,12 @@ import {
 import { Flora } from "../life/flora";
 import { hsl } from "../life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
+import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isBiolumeNight } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
-import { MurmurEngine } from "./murmurs";
+import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
   SavedWorld,
@@ -85,7 +86,9 @@ function renderHud(): void {
     .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
   const seeds =
-    inventory.seeds.length > 0 ? `seeds ${dots}` : "E inspect · F gather · G sow · H home";
+    inventory.seeds.length > 0
+      ? `seeds ${dots}`
+      : "E inspect · F gather · G sow · H home · M murmurs";
   hud.innerHTML = `${msg}${seeds}`;
 }
 
@@ -210,6 +213,7 @@ function loadWorld(seed: number): void {
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
   seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
+  murmurs.setPlace(islandName(seed));
   renderHud();
   if (saved) {
     flashHud(
@@ -280,8 +284,16 @@ window.addEventListener("keydown", (e) => {
     } else {
       flashHud("no ground here to settle on");
     }
+  } else if (k === "m") {
+    if (isAnthologyOpen()) {
+      closeAnthology();
+    } else {
+      closeInspect();
+      openAnthology(loadAnthology());
+    }
   } else if (k === "escape") {
     closeInspect();
+    closeAnthology();
   } else if (k === "p") {
     // a postcard: the canvas as it stands, named for the island
     canvas.toBlob((blob) => {

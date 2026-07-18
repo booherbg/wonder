@@ -227,6 +227,58 @@ export const MURMURS: Murmur[] = [
 const COOLDOWN_MS = 45_000;
 const SHOW_MS = 10_000;
 
+// The murmur echoes: every murmur the world has ever offered, kept in the
+// order of the offering, across every island and every sitting — the
+// wandering, retold as an anthology.
+export interface AnthologyEntry {
+  text: string;
+  attribution: string;
+  place: string; // the island that offered it
+  at: number; // epoch ms
+}
+
+export interface KV {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+export const ANTHOLOGY_KEY = "wander.anthology";
+export const ANTHOLOGY_CAP = 400;
+
+function defaultKV(): KV | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function loadAnthology(kv: KV | null = defaultKV()): AnthologyEntry[] {
+  try {
+    const raw = kv?.getItem(ANTHOLOGY_KEY);
+    const arr = raw ? (JSON.parse(raw) as AnthologyEntry[]) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export function recordInAnthology(
+  m: Murmur,
+  place: string,
+  at: number,
+  kv: KV | null = defaultKV(),
+): void {
+  if (!kv) return;
+  try {
+    const all = loadAnthology(kv);
+    all.push({ text: m.text, attribution: m.attribution, place, at });
+    kv.setItem(ANTHOLOGY_KEY, JSON.stringify(all.slice(-ANTHOLOGY_CAP)));
+  } catch {
+    // storage full or unavailable: the words were still given
+  }
+}
+
 // Pure selection logic (unit-tested); the DOM display lives in show().
 export function pickMurmur(
   tag: MurmurTag,
@@ -242,6 +294,14 @@ export class MurmurEngine {
   private shown = new Set<string>();
   private lastShownAt = -Infinity;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private place = "somewhere";
+
+  constructor(private kv: KV | null = defaultKV()) {}
+
+  // The island whose name the anthology will remember.
+  setPlace(name: string): void {
+    this.place = name;
+  }
 
   // Offer a moment; the engine decides whether a murmur surfaces.
   offer(tag: MurmurTag, now = performance.now()): void {
@@ -249,11 +309,12 @@ export class MurmurEngine {
     if (!m) return;
     this.shown.add(m.text);
     this.lastShownAt = now;
+    recordInAnthology(m, this.place, Date.now(), this.kv);
     this.show(m);
   }
 
   private show(m: Murmur): void {
-    const el = document.getElementById("murmur");
+    const el = typeof document === "undefined" ? null : document.getElementById("murmur");
     if (!el) return;
     el.innerHTML = "";
     const text = document.createElement("div");
