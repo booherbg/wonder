@@ -38,7 +38,8 @@ export type MurmurTag =
   | "skerries" // wandering an archipelago where every islet drifts alone
   | "fire" // the first fire at your own camp
   | "rest" // a bedroll of woven rushes beside the fire
-  | "dawn"; // waking into first light
+  | "dawn" // waking into first light
+  | "tidepool"; // the sea drawn back, its small gardens bared
 
 export const MURMURS: Murmur[] = [
   {
@@ -320,6 +321,21 @@ export const MURMURS: Murmur[] = [
     text: "morning is when i am awake and there is a dawn in me. the sun is but a morning star.",
     attribution: "— henry david thoreau, walden (1854)",
     tag: "dawn",
+  },
+  {
+    text: "it is advisable to look from the tide pool to the stars and then back to the tide pool again.",
+    attribution: "— john steinbeck, the log from the sea of cortez (1951)",
+    tag: "tidepool",
+  },
+  {
+    text: "in every outthrust headland, in every curving beach, in every grain of sand there is the story of the earth.",
+    attribution: "— rachel carson, the edge of the sea (1955)",
+    tag: "tidepool",
+  },
+  {
+    text: "the tide rises, the tide falls, the twilight darkens, the curlew calls.",
+    attribution: "— henry wadsworth longfellow, the tide rises, the tide falls (1879)",
+    tag: "tidepool",
   },
 ];
 

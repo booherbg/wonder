@@ -6,6 +6,7 @@ import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight } from "../game/daynight";
+import { TidePool, exposureAt } from "../game/tide";
 import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
@@ -39,6 +40,8 @@ export interface Scene {
   materials?: { x: number; y: number; kind: string }[]; // ungathered driftwood/stones
   fire?: boolean; // the camp fire is built (burns beside the garden)
   bedroll?: boolean; // the woven bedroll on the garden's far side
+  tide?: number; // 0 = full sea .. 1 = the sea drawn all the way back
+  pools?: TidePool[]; // small gardens the low tide bares along the sand
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -120,6 +123,88 @@ export class Renderer {
           TILE_SIZE,
           TILE_SIZE,
         );
+      }
+    }
+
+    // low water: the sea pulls back from the sand and the flats stand bare,
+    // still wet enough to hold a darker sheen
+    const exposure = exposureAt(scene.tide ?? 0);
+    if (exposure > 0.02) {
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          if (map.tiles[ty * map.width + tx] !== Tile.ShallowWater) continue;
+          const nearSand =
+            map.tiles[ty * map.width + Math.min(map.width - 1, tx + 1)] === Tile.Sand ||
+            map.tiles[ty * map.width + Math.max(0, tx - 1)] === Tile.Sand ||
+            map.tiles[Math.min(map.height - 1, ty + 1) * map.width + tx] === Tile.Sand ||
+            map.tiles[Math.max(0, ty - 1) * map.width + tx] === Tile.Sand;
+          if (!nearSand) continue;
+          const h = Math.floor(hash2d(tx, ty, map.seed) * VARIANTS);
+          const dx = Math.round(tx * TILE_SIZE - camX);
+          const dy = Math.round(ty * TILE_SIZE - camY);
+          ctx.globalAlpha = exposure;
+          ctx.drawImage(
+            this.atlas,
+            h * TILE_SIZE,
+            Tile.Sand * TILE_SIZE,
+            TILE_SIZE,
+            TILE_SIZE,
+            dx,
+            dy,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = `rgba(52, 66, 74, ${(0.2 * exposure).toFixed(3)})`;
+          ctx.fillRect(dx, dy, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+
+    // tide pools: what the sea forgets when it leaves — a puddle, a dweller
+    if (scene.pools && exposure > 0.35) {
+      const poolAlpha = Math.min(1, (exposure - 0.35) / 0.4);
+      for (const p of scene.pools) {
+        const px = p.x * TILE_SIZE - camX;
+        const py = p.y * TILE_SIZE - camY;
+        if (px < -16 || px > this.viewWidth || py < -16 || py > this.viewHeight) continue;
+        ctx.globalAlpha = poolAlpha;
+        ctx.fillStyle = "hsl(192, 45%, 28%)";
+        ctx.fillRect(Math.round(px + 4), Math.round(py + 6), 8, 5);
+        ctx.fillRect(Math.round(px + 5), Math.round(py + 5), 6, 7);
+        ctx.fillStyle = "hsl(186, 50%, 40%)";
+        ctx.fillRect(Math.round(px + 6), Math.round(py + 7), 4, 3);
+        const glint = Math.sin(timeMs / 800 + p.x * 3.1 + p.y * 1.7);
+        if (glint > 0.55) {
+          ctx.fillStyle = `rgba(235, 250, 255, ${(0.5 * (glint - 0.55)).toFixed(3)})`;
+          ctx.fillRect(Math.round(px + 6 + (p.x % 3)), Math.round(py + 7), 1, 1);
+        }
+        if (p.dweller === "star") {
+          ctx.fillStyle = `hsl(${Math.round(340 + p.hue * 65) % 360}, 62%, 56%)`;
+          ctx.fillRect(Math.round(px + 6), Math.round(py + 8), 3, 1); // arms across
+          ctx.fillRect(Math.round(px + 7), Math.round(py + 7), 1, 3); // arms down
+        } else if (p.dweller === "anemone") {
+          // petals breathe: open wide, then folded nearly shut
+          const open = Math.sin(timeMs / 1600 + p.hue * 6.28) > -0.35;
+          ctx.fillStyle = `hsl(${Math.round(290 + p.hue * 60)}, 55%, 58%)`;
+          ctx.fillRect(Math.round(px + 7), Math.round(py + 8), 1, 1);
+          if (open) {
+            ctx.fillStyle = "hsl(168, 55%, 52%)";
+            ctx.fillRect(Math.round(px + 6), Math.round(py + 7), 1, 1);
+            ctx.fillRect(Math.round(px + 8), Math.round(py + 7), 1, 1);
+            ctx.fillRect(Math.round(px + 6), Math.round(py + 9), 1, 1);
+            ctx.fillRect(Math.round(px + 8), Math.round(py + 9), 1, 1);
+          }
+        } else {
+          ctx.fillStyle = "hsl(272, 32%, 24%)";
+          ctx.fillRect(Math.round(px + 6), Math.round(py + 8), 2, 2); // the dome
+          ctx.fillStyle = "hsl(272, 24%, 38%)";
+          ctx.fillRect(Math.round(px + 5), Math.round(py + 7), 1, 1);
+          ctx.fillRect(Math.round(px + 8), Math.round(py + 7), 1, 1);
+          ctx.fillRect(Math.round(px + 5), Math.round(py + 10), 1, 1);
+          ctx.fillRect(Math.round(px + 8), Math.round(py + 10), 1, 1);
+        }
+        ctx.globalAlpha = 1;
       }
     }
 
@@ -610,6 +695,24 @@ export class Renderer {
               1,
             );
           }
+        }
+      }
+    }
+
+    // at low water on a glowing night, the pools keep what the sea spilled
+    if (scene.pools && isBiolumeNight(timeMs, this.map.seed)) {
+      const poolExposure = exposureAt(scene.tide ?? 0);
+      if (poolExposure > 0.35) {
+        for (const p of scene.pools) {
+          const px = p.x * TILE_SIZE + 8 - camX;
+          const py = p.y * TILE_SIZE + 8 - camY;
+          if (px < -20 || px > this.viewWidth + 20 || py < -20 || py > this.viewHeight + 20)
+            continue;
+          const tw = 0.5 + 0.5 * Math.sin(timeMs / 900 + p.hue * 6.28);
+          ctx.globalAlpha = darkness * 0.5 * tw * poolExposure;
+          ctx.fillStyle = "rgb(110, 255, 215)";
+          ctx.fillRect(Math.round(px - 1), Math.round(py), 2, 1);
+          ctx.fillRect(Math.round(px), Math.round(py - 1), 1, 3);
         }
       }
     }

@@ -19,6 +19,7 @@ import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
 import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
+import { TIDE_LOW, TidePool, placeTidePools, tideAt } from "./tide";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
@@ -34,6 +35,7 @@ import {
 const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev aid
 const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
+const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate } from "../world/generate";
 import { islandName } from "../world/name";
@@ -119,6 +121,7 @@ let rainMurmurArmed = false; // true while a shower is really coming down
 let home: { x: number; y: number } | null = null;
 let materials: MaterialNode[] = []; // driftwood, loose stones, marsh rushes, per seed
 let taken = new Set<number>(); // material nodes already gathered
+let pools: TidePool[] = []; // the shore's small gardens, bared at low water
 let mat = { wood: 0, stone: 0, rush: 0 }; // what the wanderer carries
 let fire = false; // the camp fire, once built
 let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
@@ -194,6 +197,7 @@ function loadWorld(seed: number): void {
   const saved = loadSave(seed);
   memories = saved?.memories ? [...saved.memories] : [];
   materials = placeMaterials(map, seed);
+  pools = placeTidePools(map, seed);
   taken = new Set(saved?.camp?.taken ?? []);
   mat = {
     wood: saved?.camp?.wood ?? 0,
@@ -618,6 +622,13 @@ function offerMurmurMoments(dt: number): void {
     if ((map.confluences ?? []).some((c) => Math.hypot(c.x - tx, c.y - ty) < 3)) {
       murmurs.offer("confluence");
     }
+    if (
+      (FORCE_LOWTIDE || tideAt(performance.now() + skyOffset) > TIDE_LOW) &&
+      pools.some((p) => Math.hypot(p.x - tx, p.y - ty) < 2.5)
+    ) {
+      murmurs.offer("tidepool");
+      remember("the sea drew back and showed its small gardens once");
+    }
     if (rainMurmurArmed) {
       murmurs.offer("rain");
     }
@@ -718,6 +729,7 @@ function frame(now: number): void {
       player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home,
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
+      tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools,
     },
     sky,
   );
