@@ -21,6 +21,13 @@ export interface Pocket {
   deep: boolean; // one island in five hides a single deep pocket: larger, stranger
 }
 
+export interface Crater {
+  x: number; // tile coords of the caldera center
+  y: number;
+  lakeRadius: number; // water + inner shore within this
+  rimRadius: number; // rock rim out to this, pierced by one river-cut
+}
+
 export interface Waterfall {
   x: number; // tile of the upper lip
   y: number;
@@ -40,6 +47,7 @@ export interface WorldMap {
   pockets?: Pocket[]; // rare hidden clearings where everything runs strange
   springs?: { x: number; y: number }[]; // warm pools steaming at the rock's edge
   falls?: Waterfall[]; // white water where steep islands' rivers drop hardest
+  crater?: Crater; // rarely, the island's heart is water
 }
 
 export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {

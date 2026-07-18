@@ -441,6 +441,10 @@ function offerMurmurMoments(dt: number): void {
     if ((map.falls ?? []).some((f) => Math.hypot(f.x - tx, f.y - ty) < 3)) {
       murmurs.offer("falls");
     }
+    if (map.crater && Math.hypot(map.crater.x - tx, map.crater.y - ty) <= map.crater.lakeRadius + 1) {
+      murmurs.offer("crater");
+      remember("you reached the earth's eye at the island's heart");
+    }
   }
 }
 

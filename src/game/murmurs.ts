@@ -30,7 +30,8 @@ export type MurmurTag =
   | "home" // founding a garden
   | "speciation" // witnessing a lineage become its own kind
   | "falls" // standing in the mist of a waterfall
-  | "aurora"; // ribbons of light on the rarest nights
+  | "aurora" // ribbons of light on the rarest nights
+  | "crater"; // reaching the caldera lake at the island's heart
 
 export const MURMURS: Murmur[] = [
   {
@@ -232,6 +233,16 @@ export const MURMURS: Murmur[] = [
     text: "silently, one by one, in the infinite meadows of heaven, blossomed the lovely stars, the forget-me-nots of the angels.",
     attribution: "— henry wadsworth longfellow, evangeline (1847)",
     tag: "aurora",
+  },
+  {
+    text: "a lake is the landscape's most beautiful and expressive feature. it is earth's eye.",
+    attribution: "— henry david thoreau, walden (1854)",
+    tag: "crater",
+  },
+  {
+    text: "heaven is under our feet as well as over our heads.",
+    attribution: "— henry david thoreau, walden (1854)",
+    tag: "crater",
   },
 ];
 

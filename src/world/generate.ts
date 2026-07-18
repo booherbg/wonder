@@ -1,7 +1,7 @@
 import { fbm } from "../core/noise";
 import { hash2d, makeRng } from "../core/rng";
 import { DEFAULT_CONFIG, WorldConfig } from "./config";
-import { Pocket, River, Tile, WALKABLE, Waterfall, WorldMap } from "./types";
+import { Crater, Pocket, River, Tile, WALKABLE, Waterfall, WorldMap } from "./types";
 
 const NEIGHBORS4: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
@@ -177,7 +177,9 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   const { width, height } = cfg;
   const elevation = buildElevation(genSeed, cfg);
   const tiles = classifyTiles(elevation, genSeed, cfg);
+  const carved = placeCrater(elevation, tiles, genSeed, cfg);
   const rivers = carveRivers(elevation, tiles, genSeed, cfg);
+  if (carved?.outflow && carved.outflow.path.length > 0) rivers.push(carved.outflow);
 
   let land = 0;
   for (const t of tiles) {
@@ -191,7 +193,118 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   const pockets = placePockets(tiles, spawn, genSeed, cfg);
   const springs = placeSprings(tiles, genSeed, cfg);
   const falls = placeFalls(elevation, rivers, cfg);
-  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets, springs, falls };
+  return {
+    width, height, seed: displaySeed, tiles, elevation, rivers, spawn,
+    pockets, springs, falls, crater: carved?.crater,
+  };
+}
+
+// Rarely, the island's heart is water: a caldera at the highest peak — a
+// deep dark pupil, a shallow iris, a sand inner shore, a rock rim — pierced
+// once where the land outside falls away, the cut flowing on as a river.
+export function placeCrater(
+  elevation: Float32Array,
+  tiles: Uint8Array,
+  seed: number,
+  cfg: WorldConfig,
+): { crater: Crater; outflow: River } | null {
+  const rng = makeRng(Math.floor(hash2d(seed, 33, 0xc7a7e7) * 0xffffffff));
+  if (rng() >= cfg.craterChance) return null;
+  const { width, height } = cfg;
+  const MARGIN = 24;
+  let peak = -1;
+  for (let y = MARGIN; y < height - MARGIN; y++) {
+    for (let x = MARGIN; x < width - MARGIN; x++) {
+      const i = y * width + x;
+      if (peak === -1 || elevation[i] > elevation[peak]) peak = i;
+    }
+  }
+  if (peak === -1 || elevation[peak] < cfg.rockLevel) return null; // no true mountain heart
+  const cx = peak % width;
+  const cy = (peak / width) | 0;
+  const lakeR = 4 + Math.floor(rng() * 3); // 4-6
+  const rimR = lakeR + 2;
+  for (let dy = -rimR; dy <= rimR; dy++) {
+    for (let dx = -rimR; dx <= rimR; dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d > rimR) continue;
+      const j = (cy + dy) * width + (cx + dx);
+      if (d <= lakeR - 3) tiles[j] = Tile.DeepWater; // the pupil
+      else if (d <= lakeR - 1) tiles[j] = Tile.ShallowWater; // the iris
+      else if (d <= lakeR) tiles[j] = Tile.Sand; // the inner shore
+      else tiles[j] = Tile.Rock; // the rim
+    }
+  }
+  // the one cut: prefer the angle whose water provably runs to the sea,
+  // trying the lowest land outside the rim first
+  const mouthAt = (a: number) =>
+    Math.round(cy + Math.sin(a) * (rimR + 2)) * width +
+    Math.round(cx + Math.cos(a) * (rimR + 2));
+  const angles: { a: number; e: number }[] = [];
+  for (let k = 0; k < 32; k++) {
+    const a = (k / 32) * Math.PI * 2;
+    const x = Math.round(cx + Math.cos(a) * (rimR + 2));
+    const y = Math.round(cy + Math.sin(a) * (rimR + 2));
+    if (x < 1 || y < 1 || x >= width - 1 || y >= height - 1) continue;
+    angles.push({ a, e: elevation[y * width + x] });
+  }
+  angles.sort((p, q) => p.e - q.e);
+  let bestA = angles[0]?.a ?? 0;
+  for (const cand of angles) {
+    if (descentReachesSea(elevation, tiles, mouthAt(cand.a), cfg)) {
+      bestA = cand.a;
+      break;
+    }
+  }
+  // supercover carve: half-steps plus elbow cells keep the channel
+  // 4-connected the whole way from the iris to the river mouth
+  let prevX = -1;
+  let prevY = -1;
+  for (let r = lakeR - 1; r <= rimR + 2; r += 0.5) {
+    const x = Math.round(cx + Math.cos(bestA) * r);
+    const y = Math.round(cy + Math.sin(bestA) * r);
+    if (x === prevX && y === prevY) continue;
+    if (prevX !== -1 && x !== prevX && y !== prevY) {
+      tiles[prevY * width + x] = Tile.ShallowWater; // the elbow of a diagonal step
+    }
+    tiles[y * width + x] = Tile.ShallowWater;
+    prevX = x;
+    prevY = y;
+  }
+  const outflow = traceRiver(elevation, tiles, mouthAt(bestA), cfg);
+  return { crater: { x: cx, y: cy, lakeRadius: lakeR, rimRadius: rimR }, outflow };
+}
+
+// A dry run of traceRiver's steepest-descent walk: would water released
+// here reach the sea? No tiles are touched.
+function descentReachesSea(
+  elevation: Float32Array,
+  tiles: Uint8Array,
+  start: number,
+  cfg: WorldConfig,
+): boolean {
+  const { width, height } = cfg;
+  let i = start;
+  for (let step = 0; step < cfg.riverMaxSteps; step++) {
+    if (tiles[i] === Tile.DeepWater) return true;
+    const x = i % width;
+    const y = (i / width) | 0;
+    let next = -1;
+    let lowest = elevation[i];
+    for (const [dx, dy] of NEIGHBORS4) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const j = ny * width + nx;
+      if (elevation[j] < lowest) {
+        lowest = elevation[j];
+        next = j;
+      }
+    }
+    if (next === -1) return false;
+    i = next;
+  }
+  return false;
 }
 
 // Where a river loses the most height in a single step, the water shows it:

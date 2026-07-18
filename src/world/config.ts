@@ -21,6 +21,7 @@ export interface WorldConfig {
   fallMinDrop: number; // river steps losing at least this much elevation become waterfalls
   fallMaxCount: number; // steepest few only; gentle islands get none
   fallMinSpacing: number; // tiles between falls
+  craterChance: number; // rarely, the island's heart is water: a caldera lake
   minLandFraction: number; // reroll islands with less land than this
   minWalkableRegion: number; // reroll if the largest walkable region is smaller (tiles)
   maxGenerationAttempts: number; // deterministic rerolls (seed+1, seed+2, ...)
@@ -47,6 +48,7 @@ export const DEFAULT_CONFIG: WorldConfig = {
   fallMinDrop: 0.013, // measured: steep islands peak ~0.02, gentle ones ~0.011
   fallMaxCount: 3,
   fallMinSpacing: 10,
+  craterChance: 0.15,
   minLandFraction: 0.12,
   minWalkableRegion: 3000,
   maxGenerationAttempts: 16,
