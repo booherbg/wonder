@@ -284,11 +284,15 @@ export class Flora {
         const tile = this.map.tiles[ty * width + tx] as Tile;
         for (const sp of this.speciesList) {
           if (sp.habitat !== tile) continue;
+          if (sp.homeland && Math.hypot(tx - sp.homeland.x, ty - sp.homeland.y) > sp.homeland.radius) {
+            continue; // endemics scatter only in their homeland
+          }
           const patch = fbm(tx / 24, ty / 24, seed + 5000 + sp.id * 131, 3);
           let p =
             sp.archetype.form === PlantForm.Tree
               ? sp.density * (0.15 + 0.45 * patch)
               : sp.density * (0.025 + Math.max(0, patch - 0.5) * 1.5); // clusters + sparse loners
+          if (sp.homeland) p = Math.max(p, 0.5); // a small homeland grows dense
           const pocket = pocketAt(this.map, tx, ty);
           if (pocket) p = Math.min(0.9, p * (pocket.deep ? 4 : 3) + 0.15); // pockets grow lush
           if (hash2d(tx, ty, seed ^ (sp.id * 977 + 13)) >= p) continue;
@@ -323,7 +327,15 @@ export class Flora {
     const counts = new Map<number, number>();
     for (const p of this.all) counts.set(p.species, (counts.get(p.species) ?? 0) + 1);
     for (const sp of this.speciesList) {
-      const tiles = habitatTiles.get(sp.habitat);
+      let tiles = habitatTiles.get(sp.habitat);
+      if (tiles && sp.homeland) {
+        const { x, y, radius } = sp.homeland;
+        tiles = tiles.filter((i) => {
+          const tx = i % this.map.width;
+          const ty = (i / this.map.width) | 0;
+          return Math.hypot(tx - x, ty - y) <= radius;
+        });
+      }
       if (!tiles || tiles.length === 0) continue; // island truly lacks this habitat
       const rng = makeRng(seed ^ (sp.id * 7919 + 3));
       let have = counts.get(sp.id) ?? 0;

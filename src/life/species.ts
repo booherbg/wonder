@@ -11,6 +11,7 @@ export interface PlantSpecies {
   sport: boolean; // the island's one exaggerated oddball
   parent?: number; // set when this species arose here, split from another
   bornTick?: number; // flora tick of the split
+  homeland?: { x: number; y: number; radius: number }; // endemic: born only here
 }
 
 // which forms can appear in each habitat, roughly weighted by repetition
@@ -78,6 +79,39 @@ export function speciesName(rng: Rng, genome: Genome): string {
   else if (genome.height > 0.75) epithet = "tall" + epithet;
   else if (genome.petals >= 8) epithet = "many" + epithet;
   return `${cap(word)} ${cap(epithet)}`;
+}
+
+// Crater islands keep endemics: one aquatic kind for the iris, one shore
+// kind for the sand ring, glowing and saturated, born nowhere else. The
+// rock rim contains them naturally — but seeds travel in pouches, and the
+// aquatic kind can drift down the outflow river, one generation at a time.
+export function generateCraterEndemics(
+  seed: number,
+  crater: { x: number; y: number; lakeRadius: number },
+  startId: number,
+): PlantSpecies[] {
+  const rng = makeRng(seed ^ 0xe7de);
+  const homeland = { x: crater.x, y: crater.y, radius: crater.lakeRadius + 1 };
+  const kinds: ReadonlyArray<readonly [Tile, PlantForm]> = [
+    [Tile.ShallowWater, rng() < 0.5 ? PlantForm.Coral : PlantForm.Flower],
+    [Tile.Sand, rng() < 0.6 ? PlantForm.Flower : PlantForm.Fungus],
+  ];
+  const out: PlantSpecies[] = [];
+  for (const [habitat, form] of kinds) {
+    const archetype = sampleArchetype(form, rng);
+    archetype.sat = 1;
+    archetype.glow = Math.max(archetype.glow, 0.75 + rng() * 0.25);
+    out.push({
+      id: startId + out.length,
+      name: speciesName(rng, archetype) + " ⟡",
+      habitat,
+      archetype,
+      density: 0.9,
+      sport: false,
+      homeland,
+    });
+  }
+  return out;
 }
 
 // A lineage that has drifted far enough becomes its own kind: a fresh word,

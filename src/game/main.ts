@@ -10,7 +10,7 @@ import {
 } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { hsl } from "../life/genome";
-import { PlantSpecies, generatePlantSpecies } from "../life/species";
+import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
@@ -164,6 +164,7 @@ function loadWorld(seed: number): void {
   }
   currentSeed = seed;
   species = generatePlantSpecies(seed);
+  if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
   baseSpeciesCount = species.length;
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = new URL(location.href).searchParams.has("split")

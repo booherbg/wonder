@@ -88,6 +88,9 @@ export function openInspect(plants: Plant[], speciesList: PlantSpecies[]): void 
     if (sp.parent !== undefined) {
       bits.push(`arose here, from ${speciesList[sp.parent].name}`);
     }
+    if (sp.homeland) {
+      bits.push("endemic — born only at the earth's eye");
+    }
     traits.textContent = bits.join(" · ");
     card.appendChild(traits);
 
