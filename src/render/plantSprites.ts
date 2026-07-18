@@ -295,6 +295,37 @@ function drawCoral(ctx: Ctx, g: Genome): void {
   }
 }
 
+// Succulent: rings of plump leaves seen at an angle, lighter toward the
+// heart. When the genome insists (many petals or true glow) it sends up a
+// bloom spike — in a dry place, a flower is an event.
+function drawSucculent(ctx: Ctx, g: Genome): void {
+  const baseX = PLANT_ANCHOR_X + g.lean;
+  const baseY = PLANT_ANCHOR_Y;
+  const rings = Math.max(1, Math.round(g.leaves));
+  const maxR = 2 + g.spread * 4;
+  for (let ring = rings; ring >= 1; ring--) {
+    const r = (maxR * ring) / rings;
+    const dabs = Math.round(g.petals) + ring;
+    const light = 0.3 + 0.09 * (rings - ring);
+    for (let i = 0; i < dabs; i++) {
+      const a = (i / dabs) * Math.PI * 2 + ring * 0.4 + g.hue * 6;
+      const x = baseX + Math.cos(a) * r;
+      const y = baseY - 1 + Math.sin(a) * r * 0.55; // the rosette, foreshortened
+      px(ctx, x, y, hsl(g.hue, g.sat, light));
+      px(ctx, x, y - 1, hsl(g.hue, g.sat, light + 0.08), 0.9);
+    }
+  }
+  px(ctx, baseX, baseY - 2, hsl(g.hue2, g.sat, 0.6)); // the heart
+  if (g.petals >= 8 || g.glow > 0.8) {
+    const h = 4 + g.height * 8;
+    for (let i = 0; i < h; i++) px(ctx, baseX, baseY - 2 - i, stemColor(g));
+    const bloom = hsl(g.hue2, Math.min(1, g.sat + 0.2), g.glow > 0.8 ? 0.75 : 0.6);
+    px(ctx, baseX, baseY - 2 - h, bloom);
+    px(ctx, baseX - 1, baseY - 1 - h, bloom, 0.85);
+    px(ctx, baseX + 1, baseY - 1 - h, bloom, 0.85);
+  }
+}
+
 const DRAWERS: Record<PlantForm, (ctx: Ctx, g: Genome) => void> = {
   [PlantForm.Flower]: drawFlower,
   [PlantForm.Shrub]: drawShrub,
@@ -302,4 +333,5 @@ const DRAWERS: Record<PlantForm, (ctx: Ctx, g: Genome) => void> = {
   [PlantForm.Fungus]: drawFungus,
   [PlantForm.Fern]: drawFern,
   [PlantForm.Coral]: drawCoral,
+  [PlantForm.Succulent]: drawSucculent,
 };

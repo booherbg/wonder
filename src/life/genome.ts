@@ -7,6 +7,7 @@ export enum PlantForm {
   Fungus = 3,
   Fern = 4,
   Coral = 5, // shallow-water branching colonies; polyps carry the glow
+  Succulent = 6, // plump rosettes for the dry places; blooms are an event
 }
 
 // Every numeric trait a plant carries. `form` is structural and never mutates;

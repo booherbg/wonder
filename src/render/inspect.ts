@@ -24,6 +24,7 @@ const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Fungus]: "fungus",
   [PlantForm.Fern]: "fern",
   [PlantForm.Coral]: "coral",
+  [PlantForm.Succulent]: "succulent",
 };
 
 function heightWord(h: number): string {
@@ -94,7 +95,9 @@ function plantCard(
           ? `${Math.max(3, Math.round(g.petals * 0.8))} fronds`
           : g.form === PlantForm.Coral
             ? `${Math.max(2, Math.round(g.petals * 0.5))} arms`
-            : `${Math.round(g.petals / 2)} berries`,
+            : g.form === PlantForm.Succulent
+              ? `${Math.round(g.petals)} fleshy leaves`
+              : `${Math.round(g.petals / 2)} berries`,
   ];
   if (g.glow > 0.8) bits.push("luminous");
   const drift = Math.round(driftDistance(g, sp.archetype) * 100);

@@ -54,6 +54,9 @@ export class Renderer {
   private fishes = new FishSchool();
   private frogs = new FrogPatch();
   private dragonflies = new Dragonflies();
+  private prints: { x: number; y: number; at: number }[] = [];
+  private lastPrintX = -999;
+  private lastPrintY = -999;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -165,6 +168,32 @@ export class Renderer {
         ctx.fillRect(Math.round(gx), Math.round(gy + d), 1, 2);
         ctx.fillRect(Math.round(gx + size - 1), Math.round(gy + d), 1, 2);
       }
+    }
+
+    // the wanderer's own footprints press into sand and marsh, fading soon
+    const PRINT_FADE_MS = 9000;
+    if (scene.player) {
+      const p = scene.player;
+      const ptile = map.tiles[
+        Math.floor((p.y + 2) / TILE_SIZE) * map.width + Math.floor(p.x / TILE_SIZE)
+      ] as Tile;
+      if (
+        (ptile === Tile.Sand || ptile === Tile.Marsh) &&
+        Math.hypot(p.x - this.lastPrintX, p.y - this.lastPrintY) > 7
+      ) {
+        this.prints.push({ x: p.x + (this.prints.length % 2 === 0 ? -2 : 1), y: p.y + 2, at: timeMs });
+        this.lastPrintX = p.x;
+        this.lastPrintY = p.y;
+      }
+    }
+    if (this.prints.length > 0) {
+      for (const fp of this.prints) {
+        const age = (timeMs - fp.at) / PRINT_FADE_MS;
+        if (age >= 1) continue;
+        ctx.fillStyle = `rgba(58, 44, 26, ${(0.32 * (1 - age)).toFixed(3)})`;
+        ctx.fillRect(Math.round(fp.x - camX), Math.round(fp.y - camY), 2, 1);
+      }
+      this.prints = this.prints.filter((fp) => timeMs - fp.at < PRINT_FADE_MS);
     }
 
     // the beast's trail: pressed grass, fading over a minute
