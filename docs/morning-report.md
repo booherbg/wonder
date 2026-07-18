@@ -65,7 +65,10 @@ dependencies, ~13 kB gzipped.
   **cross-pollination** (neighbors breed; planting is breeding), pocket
   amplification, one ✶ sport per island
 - **Fauna**: 3 critter species with dens/foraging/curiosity/blinks; the
-  beast; butterflies by day, moths by night
+  beast; butterflies by day, moths by night; **birds** that wheel over the
+  island, perch, roost at night, and flush when you walk in among them
+  (Hopkins murmur); **fish** gliding in the shallows that scatter from
+  your wading steps
 - **Light**: 4-minute days, glow genomes shining after dark, mycelium
   threads, cloud shadows, the lantern
 - **You**: inspect panel with drift readings, seed pouch, sowing, postcards

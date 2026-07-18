@@ -25,7 +25,8 @@ export type MurmurTag =
   | "pocket" // stumbling into a hidden clearing
   | "beast" // first sighting of the island's long quiet one
   | "spring" // warming yourself at a hot spring
-  | "tide"; // wading a glowing sea on a lucky night
+  | "tide" // wading a glowing sea on a lucky night
+  | "birds"; // flushing a flock into the air
 
 export const MURMURS: Murmur[] = [
   {
@@ -182,6 +183,11 @@ export const MURMURS: Murmur[] = [
     text: "the tide rises, the tide falls, the twilight darkens, the curlew calls.",
     attribution: "— henry wadsworth longfellow (1879)",
     tag: "tide",
+  },
+  {
+    text: "my heart in hiding stirred for a bird, — the achieve of, the mastery of the thing!",
+    attribution: "— gerard manley hopkins, the windhover (1877)",
+    tag: "birds",
   },
 ];
 

@@ -2,6 +2,7 @@ import { Rng, makeRng } from "../core/rng";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { TILE_SIZE } from "../world/config";
+import { Tile, WorldMap } from "../world/types";
 
 const MAX_WISPS = 10;
 const WISP_SPEED = 26;
@@ -98,6 +99,97 @@ export class Pollinators {
       ctx.fillRect(x + 1 + flap, y, 1, 1);
       ctx.fillStyle = night ? "rgba(240, 230, 200, 0.9)" : "rgba(40, 30, 30, 0.9)";
       ctx.fillRect(x, y, 1, 1); // body
+    }
+  }
+}
+
+interface Fish {
+  x: number;
+  y: number;
+  heading: number;
+  speed: number;
+  turn: number;
+  dart: number; // seconds of fleeing left
+}
+
+const MAX_FISH = 8;
+
+// Dark little shapes gliding in the shallows; they scatter when you wade in.
+export class FishSchool {
+  private fish: Fish[] = [];
+  private rng: Rng = makeRng(0xf15f);
+  private lastMs = -1;
+
+  update(
+    map: WorldMap,
+    viewX: number,
+    viewY: number,
+    viewW: number,
+    viewH: number,
+    player: { x: number; y: number } | null,
+    timeMs: number,
+  ): void {
+    const dt = this.lastMs < 0 ? 0.016 : Math.min((timeMs - this.lastMs) / 1000, 0.1);
+    this.lastMs = timeMs;
+
+    this.fish = this.fish.filter(
+      (f) =>
+        f.x > viewX - 40 && f.x < viewX + viewW + 40 && f.y > viewY - 40 && f.y < viewY + viewH + 40,
+    );
+
+    if (this.fish.length < MAX_FISH) {
+      const tx = Math.floor((viewX + this.rng() * viewW) / TILE_SIZE);
+      const ty = Math.floor((viewY + this.rng() * viewH) / TILE_SIZE);
+      if (
+        tx >= 0 && ty >= 0 && tx < map.width && ty < map.height &&
+        map.tiles[ty * map.width + tx] === Tile.ShallowWater
+      ) {
+        this.fish.push({
+          x: (tx + 0.5) * TILE_SIZE,
+          y: (ty + 0.5) * TILE_SIZE,
+          heading: this.rng() * 6.28,
+          speed: 8 + this.rng() * 8,
+          turn: (this.rng() - 0.5) * 1.2,
+          dart: 0,
+        });
+      }
+    }
+
+    for (const f of this.fish) {
+      if (player && f.dart <= 0 && Math.hypot(player.x - f.x, player.y - f.y) < 26) {
+        f.dart = 0.6;
+        f.heading = Math.atan2(f.y - player.y, f.x - player.x);
+      }
+      f.dart -= dt;
+      if (this.rng() < 0.008) f.turn = (this.rng() - 0.5) * 1.4;
+      f.heading += f.turn * dt;
+      const sp = f.dart > 0 ? 85 : f.speed;
+      const nx = f.x + Math.cos(f.heading) * sp * dt;
+      const ny = f.y + Math.sin(f.heading) * sp * dt;
+      const t =
+        map.tiles[Math.floor(ny / TILE_SIZE) * map.width + Math.floor(nx / TILE_SIZE)];
+      if (t === Tile.ShallowWater || t === Tile.DeepWater) {
+        f.x = nx;
+        f.y = ny;
+      } else {
+        f.heading += Math.PI; // nose the bank, turn back
+      }
+    }
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camX: number, camY: number): void {
+    for (const f of this.fish) {
+      const cs = Math.cos(f.heading);
+      const sn = Math.sin(f.heading);
+      for (let k = 0; k < 3; k++) {
+        ctx.fillStyle = k === 0 ? "rgba(10, 26, 52, 0.6)" : "rgba(12, 32, 64, 0.45)";
+        ctx.fillRect(
+          Math.round(f.x - cs * k * 1.4 - camX),
+          Math.round(f.y - sn * k * 1.4 - camY),
+          1,
+          1,
+        );
+      }
     }
   }
 }

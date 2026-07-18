@@ -1,11 +1,12 @@
 import { hash2d } from "../core/rng";
 import { Beast, TRAIL_FADE_S } from "../life/beast";
+import { Flock } from "../life/birds";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
-import { PlantForm } from "../life/genome";
+import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { isBiolumeNight } from "../game/daynight";
-import { Pollinators, drawClouds } from "./ambient";
+import { FishSchool, Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -30,6 +31,7 @@ export interface Scene {
   critters?: Critter[] | null;
   critterSpecies?: CritterSpecies[] | null;
   beast?: Beast | null;
+  flocks?: Flock[] | null;
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
 }
 
@@ -46,6 +48,7 @@ export class Renderer {
   private atlas: HTMLCanvasElement;
   private playerSprite: HTMLCanvasElement;
   private pollinators = new Pollinators();
+  private fishes = new FishSchool();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -132,6 +135,10 @@ export class Renderer {
         }
       }
     }
+
+    // fish glide beneath everything that grows
+    this.fishes.update(map, camX, camY, this.viewWidth, this.viewHeight, scene.player, timeMs);
+    this.fishes.draw(ctx, camX, camY);
 
     // the beast's trail: pressed grass, fading over a minute
     if (scene.beast) {
@@ -223,6 +230,42 @@ export class Renderer {
           Math.round(scene.player.x - 8 - camX),
           Math.round(scene.player.y - 15 - camY),
         );
+      }
+    }
+
+    // birds ride above the canopy
+    if (scene.flocks) {
+      for (const f of scene.flocks) {
+        for (let i = 0; i < f.offsets.length; i++) {
+          const o = f.offsets[i];
+          let bx: number;
+          let by: number;
+          if (f.state === "perched") {
+            bx = f.x + o.px;
+            by = f.y + o.py;
+          } else {
+            const orbit = Math.min(1, f.alt * 1.2);
+            bx = f.x + Math.cos(timeMs / 900 + o.a) * o.r * orbit + o.px * (1 - orbit);
+            by = f.y + Math.sin(timeMs / 700 + o.a * 1.3) * o.r * 0.55 * orbit + o.py * (1 - orbit);
+          }
+          const sx = Math.round(bx - camX);
+          if (sx < -8 || sx > this.viewWidth + 8) continue;
+          if (f.alt > 0.05) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${(0.12 * f.alt).toFixed(3)})`;
+            ctx.fillRect(sx, Math.round(by - camY), 2, 1);
+          }
+          const sy = Math.round(by - f.alt * 14 - camY);
+          ctx.fillStyle = hsl(f.species.hue, 0.35, 0.22);
+          if (f.state === "perched") {
+            ctx.fillRect(sx - 1, sy - 2, 2, 2);
+            ctx.fillRect(sx + 1, sy - 3, 1, 1); // head up, watching
+          } else {
+            const up = Math.sin((timeMs / 1000) * f.species.wingRate * 6.28 + i * 1.7) > 0;
+            ctx.fillRect(sx, sy, 1, 1);
+            ctx.fillRect(sx - 1, sy + (up ? -1 : 0), 1, 1);
+            ctx.fillRect(sx + 1, sy + (up ? -1 : 0), 1, 1);
+          }
+        }
       }
     }
 

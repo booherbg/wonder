@@ -27,7 +27,8 @@ Open http://localhost:5173.
 
 Deep water, bare rock, and snow block your path; you can wade through
 rivers, shallows, and marshes. Stand still sometimes. Follow the critters —
-they know where the good things grow. One species on every island is a
+they know where the good things grow. Watch the shallows for fish and the
+sky for birds; walk gently near a perched flock or you'll flush it. One species on every island is a
 ✶ sport: stranger, brighter, worth finding. Days are about four minutes
 long; stay out after dusk and the glow-trait plants reveal themselves
 (`?night=1` to force night).

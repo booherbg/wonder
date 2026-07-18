@@ -1,5 +1,6 @@
 import { makeRng, Rng } from "../core/rng";
 import { Beast, generateBeast, updateBeast } from "../life/beast";
+import { Flock, generateFlocks, updateFlock } from "../life/birds";
 import {
   Critter,
   CritterSpecies,
@@ -85,6 +86,8 @@ let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
 let beast: Beast | null = null;
+let flocks: Flock[] = [];
+let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
 
@@ -108,6 +111,8 @@ function loadWorld(seed: number): void {
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
   beast = generateBeast(seed, map);
+  flocks = generateFlocks(seed, map);
+  birdRng = makeRng(seed ^ 0xb12d);
   clearCritterSpriteCache();
   simAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
@@ -308,6 +313,14 @@ function frame(now: number): void {
       murmurs.offer("beast");
     }
   }
+  const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(now);
+  for (const f of flocks) {
+    updateFlock(f, dt, map, player, darknessNow, birdRng);
+    if (f.startled) {
+      f.startled = false;
+      murmurs.offer("birds");
+    }
+  }
   offerMurmurMoments(dt);
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
@@ -319,7 +332,7 @@ function frame(now: number): void {
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
-  const darkness = FORCE_NIGHT ? 0.75 : darknessAt(now);
+  const darkness = darknessNow;
   if (darkness > 0.6) {
     murmurs.offer("night");
     const ptx = Math.floor(player.x / TILE_SIZE);
@@ -331,7 +344,7 @@ function frame(now: number): void {
   renderer.draw(
     camX,
     camY,
-    { player, flora, plantSpecies: species, critters, critterSpecies, beast, darkness },
+    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, darkness },
     now,
   );
   requestAnimationFrame(frame);
