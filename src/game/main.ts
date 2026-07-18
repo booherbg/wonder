@@ -15,7 +15,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, rainAt } from "./daynight";
-import { Inventory, emptyInventory, gather, sow } from "./inventory";
+import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
@@ -89,7 +89,7 @@ function renderHud(): void {
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
   const seeds =
     inventory.seeds.length > 0
-      ? `seeds ${dots}`
+      ? `seeds ${dots} · G sow · Q toss · E inspect`
       : "E inspect · F gather · G sow · H home · M murmurs";
   hud.innerHTML = `${msg}${seeds}`;
 }
@@ -256,9 +256,30 @@ function openInspectAtPlayer(): void {
       (a, b) =>
         (a.x - player.x) ** 2 + (a.y - player.y) ** 2 -
         ((b.x - player.x) ** 2 + (b.y - player.y) ** 2),
-    )
-    .slice(0, 8);
-  openInspect(nearby, species);
+    );
+  // one card per species: the nearest individual stands for its kind
+  const groups = new Map<number, { plant: (typeof nearby)[number]; nearby: number }>();
+  for (const p of nearby) {
+    const g = groups.get(p.species);
+    if (g) g.nearby++;
+    else groups.set(p.species, { plant: p, nearby: 1 });
+  }
+  const companySpecies = [
+    ...new Set(
+      critters
+        .filter((c) => Math.hypot(c.x - player.x, c.y - player.y) < INSPECT_RANGE)
+        .map((c) => c.species),
+    ),
+  ].map((id) => critterSpecies[id]);
+  const beastNear =
+    beast && Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE ? beast : null;
+  openInspect(
+    [...groups.values()].slice(0, 10),
+    species,
+    inventory.seeds,
+    companySpecies,
+    beastNear,
+  );
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -348,25 +369,35 @@ window.addEventListener("keydown", (e) => {
       }
     }
   } else if (k === "g") {
-    const result = sow(inventory);
+    const px = player.x + 6;
+    const py = player.y + 2;
+    const here = tileAt(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
+    const result = sow(inventory, (s) => species[s.species].habitat === here);
     if (!result) {
-      flashHud("no seeds to sow");
+      flashHud(
+        inventory.seeds.length === 0
+          ? "no seeds to sow"
+          : "nothing in the pouch would grow here",
+      );
     } else {
       const [rest, seedToPlant] = result;
-      const planted = flora.addPlant(
-        seedToPlant.species,
-        seedToPlant.genome,
-        player.x + 6,
-        player.y + 2,
-        flora.tick,
-      );
+      const planted = flora.addPlant(seedToPlant.species, seedToPlant.genome, px, py, flora.tick);
       if (planted) {
         inventory = rest;
         flashHud(`${species[seedToPlant.species].name} takes root`);
         murmurs.offer("sow");
       } else {
-        flashHud("it will not grow here");
+        flashHud("no room here for it to root");
       }
+    }
+    renderHud();
+  } else if (k === "q") {
+    const result = toss(inventory);
+    if (!result) {
+      flashHud("the pouch is empty");
+    } else {
+      inventory = result[0];
+      flashHud(`a seed of ${species[result[1].species].name}, given back to the wind`);
     }
     renderHud();
   }

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { INV_CAP, emptyInventory, gather, sow } from "../src/game/inventory";
+import { INV_CAP, emptyInventory, gather, sow, toss } from "../src/game/inventory";
 import { Genome, PlantForm } from "../src/life/genome";
 
 function seedOf(hue: number): { species: number; genome: Genome } {
@@ -38,4 +38,25 @@ test("gather does not mutate the original inventory", () => {
   const inv = emptyInventory();
   gather(inv, seedOf(0.3));
   expect(inv.seeds).toHaveLength(0);
+});
+
+test("a stubborn seed on top never blocks the pouch", () => {
+  let inv = emptyInventory();
+  inv = gather(inv, seedOf(0.1))!; // imagine this one cannot grow here
+  inv = gather(inv, seedOf(0.9))!;
+  const [after, planted] = sow(inv, (s) => s.genome.hue > 0.5)!;
+  expect(planted.genome.hue).toBe(0.9);
+  expect(after.seeds).toHaveLength(1);
+  expect(after.seeds[0].genome.hue).toBe(0.1); // the stubborn one stays, unspent
+  expect(sow(inv, () => false)).toBeNull();
+});
+
+test("toss gives the oldest seed back to the wind", () => {
+  let inv = emptyInventory();
+  inv = gather(inv, seedOf(0.2))!;
+  inv = gather(inv, seedOf(0.7))!;
+  const [after, gone] = toss(inv)!;
+  expect(gone.genome.hue).toBe(0.2);
+  expect(after.seeds).toHaveLength(1);
+  expect(toss(emptyInventory())).toBeNull();
 });

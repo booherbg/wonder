@@ -22,9 +22,20 @@ export function gather(inv: Inventory, seed: Seed): Inventory | null {
   return { seeds: [...inv.seeds, seed] };
 }
 
-// FIFO: the seed you gathered first is the one you sow first.
-export function sow(inv: Inventory): [Inventory, Seed] | null {
-  if (inv.seeds.length === 0) return null;
-  const [first, ...rest] = inv.seeds;
-  return [{ seeds: rest }, first];
+// FIFO with a fit check: the oldest seed that can grow here is the one
+// sown — a stubborn seed on top never blocks the pouch.
+export function sow(
+  inv: Inventory,
+  fits: (seed: Seed) => boolean = () => true,
+): [Inventory, Seed] | null {
+  const i = inv.seeds.findIndex(fits);
+  if (i === -1) return null;
+  const seeds = [...inv.seeds];
+  const [picked] = seeds.splice(i, 1);
+  return [{ seeds }, picked];
+}
+
+// Give the oldest seed back to the wind.
+export function toss(inv: Inventory): [Inventory, Seed] | null {
+  return sow(inv);
 }
