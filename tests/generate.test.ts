@@ -87,6 +87,24 @@ test("every river descends and ends at the sea or a local minimum", () => {
   }
 });
 
+test("pockets are deterministic, rare, on interior land, far from spawn", () => {
+  let totalPockets = 0;
+  for (const seed of [1, 42, 777, 12345, 555]) {
+    const a = generate(seed, cfg);
+    const b = generate(seed, cfg);
+    expect(a.pockets).toEqual(b.pockets);
+    expect(a.pockets!.length).toBeLessThanOrEqual(2);
+    totalPockets += a.pockets!.length;
+    for (const p of a.pockets!) {
+      expect([Tile.Grass, Tile.Forest]).toContain(tileAt(a, p.x, p.y));
+      expect(Math.hypot(p.x - a.spawn.x, p.y - a.spawn.y)).toBeGreaterThanOrEqual(25);
+      expect(p.radius).toBeGreaterThanOrEqual(2);
+      expect(p.radius).toBeLessThanOrEqual(3);
+    }
+  }
+  expect(totalPockets).toBeGreaterThan(0); // they exist somewhere
+});
+
 test("all tiles are valid Tile values and every biome band can occur", () => {
   const map = generate(12345, cfg);
   const present = new Set<number>();

@@ -1,7 +1,7 @@
 import { fbm } from "../core/noise";
 import { hash2d, makeRng, Rng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
-import { Tile, WorldMap } from "../world/types";
+import { Tile, WorldMap, pocketAt } from "../world/types";
 import { Genome, NUMERIC_TRAITS, GENOME_BOUNDS, PlantForm, clampTrait, mutate } from "./genome";
 import { PlantSpecies } from "./species";
 
@@ -156,16 +156,30 @@ export class Flora {
         for (const sp of this.speciesList) {
           if (sp.habitat !== tile) continue;
           const patch = fbm(tx / 24, ty / 24, seed + 5000 + sp.id * 131, 3);
-          const p =
+          let p =
             sp.archetype.form === PlantForm.Tree
               ? sp.density * (0.15 + 0.45 * patch)
               : sp.density * (0.025 + Math.max(0, patch - 0.5) * 1.5); // clusters + sparse loners
+          const pocket = pocketAt(this.map, tx, ty);
+          if (pocket) p = Math.min(0.9, p * 3 + 0.15); // pockets grow lush
           if (hash2d(tx, ty, seed ^ (sp.id * 977 + 13)) >= p) continue;
           const jx = hash2d(tx, ty, seed ^ (sp.id * 331 + 7));
           const jy = hash2d(tx, ty, seed ^ (sp.id * 613 + 29));
           const x = tx * TILE_SIZE + 3 + jx * (TILE_SIZE - 6);
           const y = ty * TILE_SIZE + 5 + jy * (TILE_SIZE - 6);
-          this.addPlant(sp.id, this.spatialGenome(sp, tx, ty, seed), x, y, -this.tuning.matureAge);
+          let genome = this.spatialGenome(sp, tx, ty, seed);
+          if (pocket) {
+            // in a pocket, every trait runs toward its extreme
+            const prng = makeRng(Math.floor(hash2d(tx, ty, seed ^ 0x0c4e7) * 0xffffffff));
+            genome = {
+              ...genome,
+              sat: 1,
+              height: clampTrait("height", genome.height * 1.4),
+              petals: clampTrait("petals", genome.petals + 2),
+              glow: Math.max(genome.glow, 0.7 + prng() * 0.3),
+            };
+          }
+          this.addPlant(sp.id, genome, x, y, -this.tuning.matureAge);
         }
       }
     }

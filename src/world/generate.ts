@@ -1,7 +1,7 @@
 import { fbm } from "../core/noise";
-import { makeRng } from "../core/rng";
+import { hash2d, makeRng } from "../core/rng";
 import { DEFAULT_CONFIG, WorldConfig } from "./config";
-import { River, Tile, WALKABLE, WorldMap } from "./types";
+import { Pocket, River, Tile, WALKABLE, WorldMap } from "./types";
 
 const NEIGHBORS4: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
@@ -171,7 +171,37 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   const spawn = findSpawn(tiles, elevation, cfg);
   if (!spawn) return null;
 
-  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn };
+  const pockets = placePockets(tiles, spawn, genSeed, cfg);
+  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets };
+}
+
+// Most islands hide one small clearing (sometimes two, sometimes none)
+// where everything runs strange. Far from spawn: they must be found.
+function placePockets(
+  tiles: Uint8Array,
+  spawn: { x: number; y: number },
+  seed: number,
+  cfg: WorldConfig,
+): Pocket[] {
+  // mulberry32's first draws correlate across related seeds; hash first so
+  // the has-a-pocket decision is genuinely independent per island
+  const rng = makeRng(Math.floor(hash2d(seed, 77, 0x90c4e7) * 0xffffffff));
+  const roll = rng();
+  const count = roll < 0.6 ? 1 : roll < 0.8 ? 2 : 0;
+  const out: Pocket[] = [];
+  for (let i = 0; i < count; i++) {
+    for (let attempt = 0; attempt < 80; attempt++) {
+      const x = 15 + Math.floor(rng() * (cfg.width - 30));
+      const y = 15 + Math.floor(rng() * (cfg.height - 30));
+      const t = tiles[y * cfg.width + x];
+      if (t !== Tile.Grass && t !== Tile.Forest) continue;
+      if (Math.hypot(x - spawn.x, y - spawn.y) < 25) continue;
+      if (out.some((p) => Math.hypot(x - p.x, y - p.y) < 20)) continue;
+      out.push({ x, y, radius: 2 + Math.floor(rng() * 2) });
+      break;
+    }
+  }
+  return out;
 }
 
 // Largest connected walkable region, then its lowest-elevation grass tile —

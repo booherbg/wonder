@@ -19,7 +19,7 @@ const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { islandName } from "../world/name";
-import { Tile, WorldMap, tileAt } from "../world/types";
+import { Tile, WorldMap, pocketAt, tileAt } from "../world/types";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
 
@@ -229,7 +229,8 @@ function offerMurmurMoments(dt: number): void {
   const tx = Math.floor(player.x / TILE_SIZE);
   const ty = Math.floor(player.y / TILE_SIZE);
   const here = tileAt(map, tx, ty);
-  if (here === Tile.Forest) murmurs.offer("forest");
+  if (pocketAt(map, tx, ty)) murmurs.offer("pocket");
+  else if (here === Tile.Forest) murmurs.offer("forest");
   else if (here === Tile.ShallowWater) murmurs.offer("water");
   else if (here === Tile.Sand) murmurs.offer("sand");
   else if (here === Tile.Marsh) murmurs.offer("marsh");

@@ -14,6 +14,12 @@ export interface River {
   reachedSea: boolean; // false = ended in a local-minimum lake
 }
 
+export interface Pocket {
+  x: number; // tile coords of the center
+  y: number;
+  radius: number; // tiles
+}
+
 export interface WorldMap {
   width: number;
   height: number;
@@ -22,6 +28,15 @@ export interface WorldMap {
   elevation: Float32Array; // [0, 1), kept for shading/debugging/tweaks
   rivers: River[];
   spawn: { x: number; y: number }; // tile coordinates
+  pockets?: Pocket[]; // rare hidden clearings where everything runs strange
+}
+
+export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {
+  if (!map.pockets) return null;
+  for (const p of map.pockets) {
+    if ((tx - p.x) ** 2 + (ty - p.y) ** 2 <= p.radius * p.radius) return p;
+  }
+  return null;
 }
 
 export const WALKABLE: ReadonlySet<Tile> = new Set([

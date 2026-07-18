@@ -94,6 +94,22 @@ export class Renderer {
       }
     }
 
+    // pocket shimmer: a slow hue-cycling wash breathing over hidden clearings
+    if (map.pockets) {
+      for (const p of map.pockets) {
+        const cx = (p.x + 0.5) * TILE_SIZE - camX;
+        const cy = (p.y + 0.5) * TILE_SIZE - camY;
+        const r = (p.radius + 1.5) * TILE_SIZE;
+        if (cx < -r || cx > this.viewWidth + r || cy < -r || cy > this.viewHeight + r) continue;
+        const hue = Math.round((timeMs / 55) % 360);
+        const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, r);
+        grad.addColorStop(0, `hsla(${hue}, 85%, 65%, 0.17)`);
+        grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+    }
+
     // entity pass, top row to bottom so taller things overlap what's behind them
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it

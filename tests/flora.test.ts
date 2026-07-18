@@ -5,6 +5,7 @@ import { Tile, WorldMap } from "../src/world/types";
 import { Flora } from "../src/life/flora";
 import { PlantForm } from "../src/life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../src/life/species";
+import { pocketAt } from "../src/world/types";
 
 const SEED = 42;
 
@@ -127,6 +128,24 @@ test("every species whose habitat exists gets at least a small colony", () => {
       expect(counts.get(sp.id) ?? 0).toBeGreaterThan(0);
     }
   }
+});
+
+test("plants inside pockets are amplified - full saturation, strong glow", () => {
+  let checked = 0;
+  for (const seed of [1, 42, 777, 12345, 555]) {
+    const map = generate(seed);
+    if (!map.pockets || map.pockets.length === 0) continue;
+    const flora = new Flora(map, generatePlantSpecies(seed), seed);
+    for (const p of flora.all) {
+      const tx = Math.floor(p.x / TILE_SIZE);
+      const ty = Math.floor(p.y / TILE_SIZE);
+      if (!pocketAt(map, tx, ty)) continue;
+      expect(p.genome.sat).toBe(1);
+      expect(p.genome.glow).toBeGreaterThanOrEqual(0.7);
+      checked++;
+    }
+  }
+  expect(checked).toBeGreaterThan(0); // some pocket flora actually exists
 });
 
 test("plantsNear returns exactly the plants within the radius", () => {

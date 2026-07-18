@@ -21,7 +21,8 @@ export type MurmurTag =
   | "sow"
   | "sport" // meeting the island's oddball species
   | "critter"
-  | "night";
+  | "night"
+  | "pocket"; // stumbling into a hidden clearing
 
 export const MURMURS: Murmur[] = [
   {
@@ -113,6 +114,11 @@ export const MURMURS: Murmur[] = [
     text: "life did not take over the world by combat, but by networking.",
     attribution: "— lynn margulis & dorion sagan, microcosmos (1986)",
     tag: "critter",
+  },
+  {
+    text: "the soul should always stand ajar, ready to welcome the ecstatic experience.",
+    attribution: "— emily dickinson (c. 1865)",
+    tag: "pocket",
   },
   {
     text: "for my part i know nothing with any certainty, but the sight of the stars makes me dream.",
