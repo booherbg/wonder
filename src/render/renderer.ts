@@ -34,6 +34,7 @@ export interface Scene {
   flocks?: Flock[] | null;
   home?: { x: number; y: number } | null; // garden bed center, tile coords
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
+  aurora?: boolean; // tonight the sky carries ribbons of light
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -426,6 +427,32 @@ export class Renderer {
               1,
             );
           }
+        }
+      }
+    }
+
+    // on the rarest nights, an aurora: slow ribbons of light across the sky,
+    // green shading to teal, the highest band leaning violet
+    if (scene.aurora) {
+      for (let band = 0; band < 3; band++) {
+        const baseY = this.viewHeight * (0.1 + band * 0.09);
+        const drift = Math.sin(timeMs / 9000 + band * 2.1) * 14;
+        const hueBase = band === 2 ? 230 : 150;
+        for (let x = 0; x < this.viewWidth; x += 2) {
+          const t = x / this.viewWidth;
+          const wave =
+            Math.sin(t * 6.28 * (1.1 + band * 0.35) + timeMs / (1700 + band * 500)) * 9 +
+            Math.sin(t * 6.28 * 3.7 + timeMs / 2600 + band * 4) * 3;
+          const envelope =
+            Math.sin(t * Math.PI) * (0.55 + 0.45 * Math.sin(t * 9 + timeMs / 1400 + band));
+          if (envelope <= 0.05) continue;
+          const hue = hueBase + 70 * Math.sin(t * 3.1 + timeMs / 5200 + band * 1.9);
+          const y = Math.round(baseY + drift + wave);
+          ctx.globalAlpha = darkness * 0.16 * envelope;
+          ctx.fillStyle = `hsl(${Math.round(hue)}, 90%, 65%)`;
+          ctx.fillRect(x, y, 2, 2);
+          ctx.globalAlpha = darkness * 0.07 * envelope;
+          ctx.fillRect(x, y + 2, 2, 5); // the soft skirt hanging below
         }
       }
     }

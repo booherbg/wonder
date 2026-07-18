@@ -14,7 +14,7 @@ import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
-import { darknessAt, isBiolumeNight } from "./daynight";
+import { darknessAt, isAuroraNight, isBiolumeNight } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
@@ -29,6 +29,7 @@ import {
 } from "./save";
 
 const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
+const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { islandName } from "../world/name";
@@ -105,6 +106,7 @@ let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
 let baseSpeciesCount = 0; // species beyond this index arose during play
+let memories: string[] = []; // weather memory: what this island has witnessed
 let home: { x: number; y: number } | null = null;
 let saveAcc = 0;
 let rArmed = false;
@@ -122,6 +124,7 @@ function persist(): void {
       flora.all,
       Date.now(),
       species.slice(baseSpeciesCount),
+      memories,
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -167,6 +170,7 @@ function loadWorld(seed: number): void {
     ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
     : {};
   const saved = loadSave(seed);
+  memories = saved?.memories ? [...saved.memories] : [];
   let catchUp = 0;
   let awayBorn: string | null = null; // a species that arose while you were gone
   if (saved) {
@@ -183,6 +187,9 @@ function loadWorld(seed: number): void {
     for (let i = 0; i < catchUp; i++) flora.simTick();
     const awayEvents = flora.takeEvents();
     if (awayEvents.length > 0) awayBorn = awayEvents[awayEvents.length - 1].name;
+    for (const ev of awayEvents) {
+      if (!memories.includes(`${ev.name} arose here`)) memories.push(`${ev.name} arose here`);
+    }
     home = saved.home ? { x: saved.home[0], y: saved.home[1] } : null;
     if (home) flora.setHome(home.x, home.y);
   } else {
@@ -212,7 +219,9 @@ function loadWorld(seed: number): void {
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
-  seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
+  // the island's whisper: its most recent memory rides the label
+  const whisper = memories.length > 0 ? ` · ${memories[memories.length - 1]}` : "";
+  seedLabel.textContent = `${islandName(seed)} · seed ${seed}${whisper} — R for a new island`;
   murmurs.setPlace(islandName(seed));
   renderHud();
   if (saved) {
@@ -226,6 +235,15 @@ function loadWorld(seed: number): void {
   }
   if (awayBorn) murmurs.offer("speciation");
   murmurs.offer("island");
+}
+
+// Weather memory: rare events accrete onto the island, worded once each,
+// and ride the seed label on every return.
+function remember(text: string): void {
+  if (memories.includes(text)) return;
+  memories.push(text);
+  memories = memories.slice(-12);
+  persist();
 }
 
 function openInspectAtPlayer(): void {
@@ -444,6 +462,7 @@ function frame(now: number): void {
   for (const ev of flora.takeEvents()) {
     flashHud(`${ev.name} — a new kind, arisen from ${ev.parentName}`);
     murmurs.offer("speciation");
+    remember(`${ev.name} arose here`);
   }
   saveAcc += dt;
   if (saveAcc >= 10) {
@@ -457,6 +476,7 @@ function frame(now: number): void {
       beast.seen = true;
       flashHud(`${beast.name}, passes`);
       murmurs.offer("beast");
+      remember(`${beast.name} passed this way once`);
     }
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(now);
@@ -479,18 +499,24 @@ function frame(now: number): void {
     map.height * TILE_SIZE - renderer.viewHeight,
   );
   const darkness = darknessNow;
+  const auroraTonight = FORCE_AURORA || isAuroraNight(now, currentSeed);
   if (darkness > 0.6) {
     murmurs.offer("night");
+    if (auroraTonight) {
+      murmurs.offer("aurora");
+      remember("an aurora passed here once");
+    }
     const ptx = Math.floor(player.x / TILE_SIZE);
     const pty = Math.floor(player.y / TILE_SIZE);
     if (tileAt(map, ptx, pty) === Tile.ShallowWater && isBiolumeNight(now, currentSeed)) {
       murmurs.offer("tide");
+      remember("the glowing tide rose here once");
     }
   }
   renderer.draw(
     camX,
     camY,
-    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness },
+    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness, aurora: auroraTonight },
     now,
   );
   requestAnimationFrame(frame);

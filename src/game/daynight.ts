@@ -32,3 +32,10 @@ export function isBiolumeNight(nowMs: number, seed: number): boolean {
   const nightIndex = Math.floor(nowMs / CYCLE_MS);
   return hash2d(nightIndex, 7, seed) < 0.35;
 }
+
+// One night in twelve or so, ribbons of light cross the sky — rare enough
+// that witnessing one is an event an island remembers.
+export function isAuroraNight(nowMs: number, seed: number): boolean {
+  const nightIndex = Math.floor(nowMs / CYCLE_MS);
+  return hash2d(nightIndex, 11, seed) < 0.085;
+}

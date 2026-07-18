@@ -18,6 +18,7 @@ export interface SavedWorld {
   inv: number[][]; // [species, ...traits]
   plants: number[][]; // [species, x, y, born, ...traits]
   daughters?: SavedDaughter[]; // species that arose here after worldgen
+  memories?: string[]; // weather memory: rare events this island has witnessed
 }
 
 // A daughter species is the one thing besides genomes the seed can't regrow.
@@ -55,6 +56,7 @@ export function packWorld(
   plants: readonly Plant[],
   savedAt: number,
   daughters: readonly PlantSpecies[] = [],
+  memories: readonly string[] = [],
 ): SavedWorld {
   return {
     v: 1,
@@ -74,6 +76,7 @@ export function packWorld(
       traits: packGenome(s.archetype),
       born: s.bornTick ?? 0,
     })),
+    memories: [...memories],
   };
 }
 

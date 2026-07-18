@@ -29,7 +29,8 @@ export type MurmurTag =
   | "birds" // flushing a flock into the air
   | "home" // founding a garden
   | "speciation" // witnessing a lineage become its own kind
-  | "falls"; // standing in the mist of a waterfall
+  | "falls" // standing in the mist of a waterfall
+  | "aurora"; // ribbons of light on the rarest nights
 
 export const MURMURS: Murmur[] = [
   {
@@ -221,6 +222,16 @@ export const MURMURS: Murmur[] = [
     text: "its torrent dashes down three thousand feet from high, as if the silver river fell from azure sky.",
     attribution: "— li bai, viewing the waterfall at mount lu (c. 730)",
     tag: "falls",
+  },
+  {
+    text: "and the skies of night were alive with light, with a throbbing thrilling flame.",
+    attribution: "— robert service, the ballad of the northern lights (1909)",
+    tag: "aurora",
+  },
+  {
+    text: "silently, one by one, in the infinite meadows of heaven, blossomed the lovely stars, the forget-me-nots of the angels.",
+    attribution: "— henry wadsworth longfellow, evangeline (1847)",
+    tag: "aurora",
   },
 ];
 
