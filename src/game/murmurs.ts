@@ -35,7 +35,8 @@ export type MurmurTag =
   | "confluence" // standing where two rivers become one
   | "rain" // out in a real shower
   | "bloom" // the fungi answering yesterday's rain
-  | "skerries"; // wandering an archipelago where every islet drifts alone
+  | "skerries" // wandering an archipelago where every islet drifts alone
+  | "fire"; // the first fire at your own camp
 
 export const MURMURS: Murmur[] = [
   {
@@ -277,6 +278,16 @@ export const MURMURS: Murmur[] = [
     text: "we seem to be brought somewhat near to that great fact — that mystery of mysteries — the first appearance of new beings on this earth.",
     attribution: "— charles darwin, voyage of the beagle (1839)",
     tag: "skerries",
+  },
+  {
+    text: "the fire is the main comfort of the camp, whether in summer or winter.",
+    attribution: "— henry david thoreau, journal (1853)",
+    tag: "fire",
+  },
+  {
+    text: "fire is the ultra-living element.",
+    attribution: "— gaston bachelard, the psychoanalysis of fire (1938)",
+    tag: "fire",
   },
 ];
 

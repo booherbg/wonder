@@ -19,6 +19,14 @@ export interface SavedWorld {
   plants: number[][]; // [species, x, y, born, ...traits]
   daughters?: SavedDaughter[]; // species that arose here after worldgen
   memories?: string[]; // weather memory: rare events this island has witnessed
+  camp?: SavedCamp; // the wanderer's camp: materials carried, nodes taken, fire built
+}
+
+export interface SavedCamp {
+  wood: number;
+  stone: number;
+  taken: number[]; // material node indices already gathered
+  fire: boolean;
 }
 
 // A daughter species is the one thing besides genomes the seed can't regrow.
@@ -57,6 +65,7 @@ export function packWorld(
   savedAt: number,
   daughters: readonly PlantSpecies[] = [],
   memories: readonly string[] = [],
+  camp?: SavedCamp,
 ): SavedWorld {
   return {
     v: 1,
@@ -77,6 +86,7 @@ export function packWorld(
       born: s.bornTick ?? 0,
     })),
     memories: [...memories],
+    camp,
   };
 }
 

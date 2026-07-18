@@ -18,6 +18,7 @@ import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
+import { FIRE_COST, MaterialNode, placeMaterials } from "./materials";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
@@ -89,10 +90,11 @@ function renderHud(): void {
     )
     .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
+  const carried = mat.wood + mat.stone > 0 ? `wood ${mat.wood} · stone ${mat.stone} · ` : "";
   const seeds =
     inventory.seeds.length > 0
-      ? `seeds ${dots} · G sow · Q toss · E inspect`
-      : "E inspect · F gather · G sow · H home · J journal · M murmurs";
+      ? `${carried}seeds ${dots} · G sow · Q toss · E inspect`
+      : `${carried}E inspect · F gather · G sow · H home · J journal · M murmurs`;
   hud.innerHTML = `${msg}${seeds}`;
 }
 
@@ -112,6 +114,10 @@ let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
 let home: { x: number; y: number } | null = null;
+let materials: MaterialNode[] = []; // driftwood and loose stones, per seed
+let taken = new Set<number>(); // material nodes already gathered
+let mat = { wood: 0, stone: 0 }; // what the wanderer carries
+let fire = false; // the camp fire, once built
 let saveAcc = 0;
 let rArmed = false;
 
@@ -129,6 +135,7 @@ function persist(): void {
       Date.now(),
       species.slice(baseSpeciesCount),
       memories,
+      { wood: mat.wood, stone: mat.stone, taken: [...taken], fire },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -181,6 +188,10 @@ function loadWorld(seed: number): void {
     : {};
   const saved = loadSave(seed);
   memories = saved?.memories ? [...saved.memories] : [];
+  materials = placeMaterials(map, seed);
+  taken = new Set(saved?.camp?.taken ?? []);
+  mat = { wood: saved?.camp?.wood ?? 0, stone: saved?.camp?.stone ?? 0 };
+  fire = saved?.camp?.fire ?? false;
   let catchUp = 0;
   let awayBorn: string | null = null; // a species that arose while you were gone
   if (saved) {
@@ -332,10 +343,25 @@ window.addEventListener("keydown", (e) => {
     const tx = Math.floor(player.x / TILE_SIZE);
     const ty = Math.floor(player.y / TILE_SIZE);
     const here = tileAt(map, tx, ty);
-    if (here === Tile.Grass || here === Tile.Sand || here === Tile.Marsh || here === Tile.Forest) {
+    if (home && !fire && Math.hypot(home.x - tx, home.y - ty) <= 2.5) {
+      // beside an existing home, H tends the camp: build the fire
+      if (mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
+        mat.wood -= FIRE_COST.wood;
+        mat.stone -= FIRE_COST.stone;
+        fire = true;
+        flashHud("a fire ring takes shape — it will burn every night");
+        murmurs.offer("fire");
+        persist();
+        renderHud();
+      } else {
+        flashHud(
+          `a fire wants ${FIRE_COST.wood} driftwood and ${FIRE_COST.stone} stones — you carry ${mat.wood} and ${mat.stone}`,
+        );
+      }
+    } else if (here === Tile.Grass || here === Tile.Sand || here === Tile.Marsh || here === Tile.Forest) {
       home = { x: tx, y: ty };
       flora.setHome(tx, ty);
-      flashHud("home — a garden bed takes shape");
+      flashHud(fire ? "home moves — the fire stays lit beside it" : "home — a garden bed takes shape");
       murmurs.offer("home");
       persist();
     } else {
@@ -379,6 +405,28 @@ window.addEventListener("keydown", (e) => {
       openInspectAtPlayer();
     }
   } else if (k === "f") {
+    // materials first: driftwood and stones are the plainer, nearer gift
+    const reachable = materials
+      .filter((m) => !taken.has(m.idx))
+      .map((m) => ({
+        m,
+        d: Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y),
+      }))
+      .filter(({ d }) => d < GATHER_RANGE + 8)
+      .sort((a, b) => a.d - b.d);
+    if (reachable.length > 0) {
+      const node = reachable[0].m;
+      taken.add(node.idx);
+      mat[node.kind]++;
+      if (!fire && mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
+        flashHud("you carry enough for a fire — press H beside your home");
+      } else {
+        flashHud(node.kind === "wood" ? "driftwood — salt-dried and light" : "a loose stone, sun-warm");
+      }
+      renderHud();
+      persist();
+      return;
+    }
     const near = flora.plantsNear(player.x, player.y, GATHER_RANGE);
     if (near.length === 0) {
       flashHud("nothing in reach to gather");
@@ -601,7 +649,11 @@ function frame(now: number): void {
   renderer.draw(
     camX,
     camY,
-    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness, aurora: auroraTonight, rain: rainNow },
+    {
+      player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home,
+      darkness, aurora: auroraTonight, rain: rainNow,
+      materials: materials.filter((m) => !taken.has(m.idx)), fire,
+    },
     now,
   );
   requestAnimationFrame(frame);

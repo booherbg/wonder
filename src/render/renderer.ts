@@ -36,6 +36,8 @@ export interface Scene {
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
   aurora?: boolean; // tonight the sky carries ribbons of light
   rain?: number; // 0 = dry .. 1 at the heart of a shower
+  materials?: { x: number; y: number; kind: string }[]; // ungathered driftwood/stones
+  fire?: boolean; // the camp fire is built (burns beside the garden)
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -149,6 +151,79 @@ export class Renderer {
     this.fishes.draw(ctx, camX, camY);
     this.frogs.update(map, camX, camY, this.viewWidth, this.viewHeight, scene.player, timeMs);
     this.frogs.draw(ctx, camX, camY);
+
+    // driftwood on the beaches, loose stones at the rock's edge
+    if (scene.materials) {
+      for (const m of scene.materials) {
+        const mx = m.x * TILE_SIZE - camX;
+        const my = m.y * TILE_SIZE - camY;
+        if (mx < -16 || mx > this.viewWidth || my < -16 || my > this.viewHeight) continue;
+        const h = hash2d(m.x, m.y, 7);
+        const ox = 3 + h * 8;
+        const oy = 4 + hash2d(m.y, m.x, 9) * 8;
+        if (m.kind === "wood") {
+          ctx.fillStyle = "hsl(24, 35%, 32%)";
+          if (h < 0.5) {
+            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 5, 2);
+            ctx.fillStyle = "hsl(24, 30%, 22%)";
+            ctx.fillRect(Math.round(mx + ox + 4), Math.round(my + oy), 1, 2);
+          } else {
+            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 2, 5);
+            ctx.fillStyle = "hsl(24, 30%, 22%)";
+            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy + 4), 2, 1);
+          }
+        } else {
+          ctx.fillStyle = "hsl(215, 8%, 52%)";
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 2, 2);
+          ctx.fillStyle = "hsl(215, 10%, 66%)";
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 1, 1);
+        }
+      }
+    }
+
+    // the camp fire beside the garden: stone ring, crossed wood, and after
+    // dusk a live flame with rising sparks
+    if (scene.home && scene.fire) {
+      const fx = (scene.home.x + 2) * TILE_SIZE + TILE_SIZE / 2 - camX;
+      const fy = scene.home.y * TILE_SIZE + TILE_SIZE / 2 - camY;
+      ctx.fillStyle = "hsl(220, 8%, 55%)";
+      for (const [ox, oy] of [[-3, 0], [3, 0], [0, -2], [0, 2], [-2, 2], [2, -2]]) {
+        ctx.fillRect(Math.round(fx + ox), Math.round(fy + oy), 1, 1);
+      }
+      ctx.fillStyle = "hsl(25, 40%, 30%)";
+      ctx.fillRect(Math.round(fx - 2), Math.round(fy - 1), 4, 1);
+      ctx.fillRect(Math.round(fx - 1), Math.round(fy), 2, 1);
+      const dk = scene.darkness ?? 0;
+      if (dk > 0.15) {
+        const flames = ["rgba(255, 214, 120, 0.95)", "rgba(255, 150, 60, 0.9)", "rgba(255, 90, 40, 0.85)"];
+        for (let k = 0; k < 3; k++) {
+          const h = 1 + ((Math.sin(timeMs / 130 + k * 2.1) + 1) / 2) * 3;
+          ctx.fillStyle = flames[k];
+          ctx.fillRect(Math.round(fx - 1 + k), Math.round(fy - 1 - h), 1, Math.round(h));
+        }
+        for (let k = 0; k < 2; k++) {
+          const phase = (timeMs / 1100 + k / 2) % 1;
+          ctx.fillStyle = `rgba(255, 200, 110, ${(0.7 * (1 - phase)).toFixed(3)})`;
+          ctx.fillRect(
+            Math.round(fx + Math.sin(phase * 9 + k * 3) * 2),
+            Math.round(fy - 3 - phase * 12),
+            1,
+            1,
+          );
+        }
+      } else {
+        for (let k = 0; k < 2; k++) {
+          const phase = (timeMs / 2400 + k / 2) % 1;
+          ctx.fillStyle = `rgba(190, 190, 190, ${(0.25 * (1 - phase)).toFixed(3)})`;
+          ctx.fillRect(
+            Math.round(fx + Math.sin(phase * 5 + k * 2) * 2),
+            Math.round(fy - 2 - phase * 14),
+            1,
+            1,
+          );
+        }
+      }
+    }
 
     // the wanderer's garden bed: tilled soil and corner stones, 3x3
     if (scene.home) {
@@ -582,6 +657,19 @@ export class Renderer {
       );
     }
     ctx.globalAlpha = 1;
+
+    // the camp fire throws a warm breathing circle
+    if (scene.home && scene.fire) {
+      const fx = (scene.home.x + 2) * TILE_SIZE + TILE_SIZE / 2 - camX;
+      const fy = scene.home.y * TILE_SIZE + TILE_SIZE / 2 - camY;
+      const flick = 1 + Math.sin(timeMs / 170) * 0.08 + Math.sin(timeMs / 47) * 0.04;
+      const r = 46 * flick;
+      const glow = ctx.createRadialGradient(fx, fy, 3, fx, fy, r);
+      glow.addColorStop(0, `rgba(255, 175, 90, ${(darkness * 0.5).toFixed(3)})`);
+      glow.addColorStop(1, "rgba(255, 175, 90, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(fx - r, fy - r, r * 2, r * 2);
+    }
 
     if (scene.player) {
       const px = scene.player.x - camX;
