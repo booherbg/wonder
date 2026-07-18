@@ -189,7 +189,48 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   if (!spawn) return null;
 
   const pockets = placePockets(tiles, spawn, genSeed, cfg);
-  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets };
+  const springs = placeSprings(tiles, genSeed, cfg);
+  return { width, height, seed: displaySeed, tiles, elevation, rivers, spawn, pockets, springs };
+}
+
+// Where the rock meets walkable ground, some islands keep a warm pool —
+// a spring carved into the mountain's edge with a bare stone apron.
+function placeSprings(tiles: Uint8Array, seed: number, cfg: WorldConfig): { x: number; y: number }[] {
+  const rng = makeRng(Math.floor(hash2d(seed, 55, 0x5b1a9) * 0xffffffff));
+  const roll = rng();
+  const count = roll < 0.55 ? 1 : roll < 0.75 ? 2 : 0;
+  if (count === 0) return [];
+  const { width, height } = cfg;
+  const candidates: number[] = [];
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      if (tiles[y * width + x] !== Tile.Rock) continue;
+      let touchesPath = false;
+      for (let dy = -1; dy <= 1 && !touchesPath; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (WALKABLE.has(tiles[(y + dy) * width + (x + dx)] as Tile)) {
+            touchesPath = true;
+            break;
+          }
+        }
+      }
+      if (touchesPath) candidates.push(y * width + x);
+    }
+  }
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < count * 4 && out.length < count && candidates.length > 0; i++) {
+    const idx = candidates[Math.floor(rng() * candidates.length)];
+    const x = idx % width;
+    const y = (idx / width) | 0;
+    if (out.some((s) => Math.hypot(s.x - x, s.y - y) < 12)) continue;
+    tiles[idx] = Tile.ShallowWater; // the warm pool itself
+    for (const [dx, dy] of NEIGHBORS4) {
+      const j = (y + dy) * width + (x + dx);
+      if (tiles[j] === Tile.Rock) tiles[j] = Tile.Sand; // bare warm apron
+    }
+    out.push({ x, y });
+  }
+  return out;
 }
 
 // Most islands hide one small clearing (sometimes two, sometimes none)

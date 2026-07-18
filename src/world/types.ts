@@ -29,6 +29,7 @@ export interface WorldMap {
   rivers: River[];
   spawn: { x: number; y: number }; // tile coordinates
   pockets?: Pocket[]; // rare hidden clearings where everything runs strange
+  springs?: { x: number; y: number }[]; // warm pools steaming at the rock's edge
 }
 
 export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {

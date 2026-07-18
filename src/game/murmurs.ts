@@ -23,7 +23,8 @@ export type MurmurTag =
   | "critter"
   | "night"
   | "pocket" // stumbling into a hidden clearing
-  | "beast"; // first sighting of the island's long quiet one
+  | "beast" // first sighting of the island's long quiet one
+  | "spring"; // warming yourself at a hot spring
 
 export const MURMURS: Murmur[] = [
   {
@@ -135,6 +136,11 @@ export const MURMURS: Murmur[] = [
     text: "i think i could turn and live with animals, they are so placid and self-contain'd.",
     attribution: "— walt whitman, song of myself (1855)",
     tag: "beast",
+  },
+  {
+    text: "the currents of the universal being circulate through me.",
+    attribution: "— ralph waldo emerson, nature (1836)",
+    tag: "spring",
   },
 ];
 

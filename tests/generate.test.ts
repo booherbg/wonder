@@ -105,6 +105,25 @@ test("pockets are deterministic, rare, on interior land, far from spawn", () => 
   expect(totalPockets).toBeGreaterThan(0); // they exist somewhere
 });
 
+test("hot springs are deterministic warm pools you can walk up to", () => {
+  let total = 0;
+  for (const seed of [1, 42, 777, 12345, 555]) {
+    const a = generate(seed, cfg);
+    const b = generate(seed, cfg);
+    expect(a.springs).toEqual(b.springs);
+    expect(a.springs!.length).toBeLessThanOrEqual(2);
+    total += a.springs!.length;
+    for (const s of a.springs!) {
+      expect(tileAt(a, s.x, s.y)).toBe(Tile.ShallowWater);
+      const reachable = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) =>
+        isWalkable(a, s.x + dx, s.y + dy),
+      );
+      expect(reachable).toBe(true);
+    }
+  }
+  expect(total).toBeGreaterThan(0);
+});
+
 test("all tiles are valid Tile values and every biome band can occur", () => {
   const map = generate(12345, cfg);
   const present = new Set<number>();

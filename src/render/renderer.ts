@@ -2,6 +2,7 @@ import { hash2d } from "../core/rng";
 import { Beast } from "../life/beast";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
+import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
@@ -121,6 +122,24 @@ export class Renderer {
       }
     }
 
+    // hot springs: warm-tinted water and rising steam
+    if (map.springs) {
+      for (const s of map.springs) {
+        const cx = (s.x + 0.5) * TILE_SIZE - camX;
+        const cy = (s.y + 0.5) * TILE_SIZE - camY;
+        if (cx < -40 || cx > this.viewWidth + 40 || cy < -40 || cy > this.viewHeight + 40) continue;
+        ctx.fillStyle = "rgba(120, 230, 210, 0.28)";
+        ctx.fillRect(Math.round(cx - TILE_SIZE / 2), Math.round(cy - TILE_SIZE / 2), TILE_SIZE, TILE_SIZE);
+        for (let k = 0; k < 3; k++) {
+          const phase = (timeMs / 1600 + k / 3) % 1;
+          const wy = cy - 2 - phase * 16;
+          const wx = cx - 4 + k * 4 + Math.sin(phase * 5 + k * 2.1) * 3;
+          ctx.fillStyle = `rgba(255, 255, 255, ${(0.3 * (1 - phase)).toFixed(3)})`;
+          ctx.fillRect(Math.round(wx), Math.round(wy), 2, 1);
+        }
+      }
+    }
+
     // entity pass, top row to bottom so taller things overlap what's behind them
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
@@ -186,7 +205,7 @@ export class Renderer {
       }
     }
 
-    if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers);
+    if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
   }
 
   // Night falls over everything already drawn; then the things that make
@@ -198,12 +217,46 @@ export class Renderer {
     scene: Scene,
     darkness: number,
     glowers: { x: number; y: number; hue: number; genome: Parameters<typeof getPlantSprite>[0] }[],
+    timeMs: number,
   ): void {
     const { ctx } = this;
     ctx.fillStyle = `rgba(8, 14, 34, ${(darkness * 0.62).toFixed(3)})`;
     ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
 
     ctx.globalCompositeOperation = "lighter";
+
+    // mycelium: nearby glowing fungi join in faint pulsing threads
+    const fungi = glowers.filter((g) => g.genome.form === PlantForm.Fungus);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < fungi.length; i++) {
+      for (let j = i + 1; j < fungi.length; j++) {
+        const a = fungi[i];
+        const b = fungi[j];
+        if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 > 48 * 48) continue;
+        const pulse = 0.5 + 0.5 * Math.sin(timeMs / 1300 + ((i * 13 + j * 7) % 6));
+        ctx.globalAlpha = darkness * (0.1 + 0.22 * pulse);
+        ctx.strokeStyle = `hsl(${Math.round((((a.hue + b.hue) / 2) % 1) * 360)}, 90%, 70%)`;
+        ctx.beginPath();
+        ctx.moveTo(a.x - camX, a.y - camY);
+        ctx.quadraticCurveTo(
+          (a.x + b.x) / 2 - camX + Math.sin(timeMs / 2000 + i + j) * 2,
+          (a.y + b.y) / 2 + 3 - camY,
+          b.x - camX,
+          b.y - camY,
+        );
+        ctx.stroke();
+      }
+    }
+
+    // hot springs hold a faint teal shine after dark
+    for (const s of this.map.springs ?? []) {
+      ctx.globalAlpha = darkness * 0.4;
+      ctx.drawImage(
+        getGlowHalo(0.47),
+        Math.round((s.x + 0.5) * TILE_SIZE - GLOW_R - camX),
+        Math.round((s.y + 0.5) * TILE_SIZE - GLOW_R - camY),
+      );
+    }
     for (const g of glowers) {
       ctx.globalAlpha = darkness * 0.9;
       ctx.drawImage(

@@ -254,6 +254,9 @@ function offerMurmurMoments(dt: number): void {
     if (critters.some((c) => Math.hypot(c.x - player.x, c.y - player.y) < 2.5 * TILE_SIZE)) {
       murmurs.offer("critter");
     }
+    if ((map.springs ?? []).some((s) => Math.hypot(s.x - tx, s.y - ty) < 2)) {
+      murmurs.offer("spring");
+    }
   }
 }
 
