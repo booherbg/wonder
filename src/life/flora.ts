@@ -2,8 +2,17 @@ import { fbm } from "../core/noise";
 import { hash2d, makeRng, Rng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap, pocketAt } from "../world/types";
-import { Genome, NUMERIC_TRAITS, GENOME_BOUNDS, PlantForm, clampTrait, cross, mutate } from "./genome";
-import { PlantSpecies } from "./species";
+import {
+  Genome,
+  NUMERIC_TRAITS,
+  GENOME_BOUNDS,
+  PlantForm,
+  clampTrait,
+  cross,
+  driftDistance,
+  mutate,
+} from "./genome";
+import { PlantSpecies, speciateFrom } from "./species";
 
 export interface Plant {
   species: number;
@@ -25,6 +34,12 @@ export interface FloraTuning {
   mutationAmount: number; // drift per generation
   pollinationRadius: number; // tiles within which same-species neighbors cross
   comfortFraction: number; // above this share of maxPlants, crowding thins the island
+  splitDistance: number; // drift beyond this can found a new species
+  splitKinDistance: number; // how close kin genomes must be to the founder
+  splitKinRadius: number; // tiles searched for that founding cluster
+  splitClusterMin: number; // founder + kin needed for a true split
+  splitCooldownTicks: number; // island-wide pause between splits (~2s per tick)
+  maxDaughterSpecies: number; // per island; keeps the field guide finite
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
@@ -38,7 +53,22 @@ export const DEFAULT_TUNING: FloraTuning = {
   mutationAmount: 0.06,
   pollinationRadius: 2,
   comfortFraction: 0.72,
+  splitDistance: 0.3,
+  splitKinDistance: 0.14,
+  splitKinRadius: 4,
+  splitClusterMin: 6,
+  splitCooldownTicks: 500,
+  maxDaughterSpecies: 12,
 };
+
+// A lineage split, witnessed: surfaced to the HUD and the murmur engine.
+export interface SpeciationEvent {
+  name: string;
+  parentName: string;
+  x: number;
+  y: number;
+  tick: number;
+}
 
 // The island's plant life: a per-tile spatial index of genome-bearing
 // individuals, seeded in patches at worldgen and drifting ever after.
@@ -55,6 +85,8 @@ export class Flora {
   readonly tuning: FloraTuning;
   private rng: Rng;
   private home: { tx: number; ty: number } | null = null;
+  private events: SpeciationEvent[] = [];
+  private lastSplitTick = -Infinity;
 
   constructor(
     private map: WorldMap,
@@ -91,6 +123,14 @@ export class Flora {
 
   get count(): number {
     return this.all.length;
+  }
+
+  // Hand over any speciation events since the last call (and forget them).
+  takeEvents(): SpeciationEvent[] {
+    if (this.events.length === 0) return [];
+    const out = this.events;
+    this.events = [];
+    return out;
   }
 
   plantsInTile(tx: number, ty: number): readonly Plant[] {
@@ -197,9 +237,35 @@ export class Flora {
                 t.mutationAmount,
               )
             : mutate(p.genome, this.rng, t.mutationAmount);
-        this.addPlant(p.species, genome, x, y, this.tick);
+        const child = this.addPlant(p.species, genome, x, y, this.tick);
+        if (child) this.maybeSpeciate(child);
       }
     }
+  }
+
+  // Speciation: a newborn far from its archetype, surrounded by kin drifted
+  // the same way, founds a new species — the cluster crosses over together.
+  private maybeSpeciate(child: Plant): void {
+    const t = this.tuning;
+    if (this.tick - this.lastSplitTick < t.splitCooldownTicks) return;
+    const sp = this.speciesList[child.species];
+    if (driftDistance(child.genome, sp.archetype) < t.splitDistance) return;
+    let daughters = 0;
+    for (const s of this.speciesList) if (s.parent !== undefined) daughters++;
+    if (daughters >= t.maxDaughterSpecies) return;
+    const kin = this.plantsNear(child.x, child.y, t.splitKinRadius * TILE_SIZE).filter(
+      (q) => q.species === child.species && driftDistance(q.genome, child.genome) <= t.splitKinDistance,
+    ); // includes the child itself
+    if (kin.length < t.splitClusterMin) return;
+    const next = speciateFrom(sp, this.speciesList.length, child.genome, this.rng, this.tick);
+    this.speciesList.push(next);
+    for (const q of kin) {
+      this.speciesCounts.set(q.species, (this.speciesCounts.get(q.species) ?? 1) - 1);
+      q.species = next.id;
+    }
+    this.speciesCounts.set(next.id, kin.length);
+    this.lastSplitTick = this.tick;
+    this.events.push({ name: next.name, parentName: sp.name, x: child.x, y: child.y, tick: this.tick });
   }
 
   // Initial life: noise-patched per species, genomes pre-drifted by smooth

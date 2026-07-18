@@ -27,7 +27,8 @@ export type MurmurTag =
   | "spring" // warming yourself at a hot spring
   | "tide" // wading a glowing sea on a lucky night
   | "birds" // flushing a flock into the air
-  | "home"; // founding a garden
+  | "home" // founding a garden
+  | "speciation"; // witnessing a lineage become its own kind
 
 export const MURMURS: Murmur[] = [
   {
@@ -194,6 +195,21 @@ export const MURMURS: Murmur[] = [
     text: "home is the place where, when you have to go there, they have to take you in.",
     attribution: "— robert frost, the death of the hired man (1914)",
     tag: "home",
+  },
+  {
+    text: "omnia mutantur, nihil interit — everything changes, nothing perishes.",
+    attribution: "— ovid, metamorphoses (8 ce)",
+    tag: "speciation",
+  },
+  {
+    text: "thus the sum of things is ever being renewed.",
+    attribution: "— lucretius, de rerum natura (c. 55 bce)",
+    tag: "speciation",
+  },
+  {
+    text: "it is interesting to contemplate a tangled bank, clothed with many plants of many kinds… these elaborately constructed forms have all been produced by laws acting around us.",
+    attribution: "— charles darwin, on the origin of species (1859)",
+    tag: "speciation",
   },
 ];
 

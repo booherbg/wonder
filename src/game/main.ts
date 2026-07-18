@@ -21,6 +21,7 @@ import {
   SavedWorld,
   WORLD_INDEX_KEY,
   packWorld,
+  restoreDaughters,
   restoreInventory,
   restorePlants,
   worldKey,
@@ -100,6 +101,7 @@ let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
+let baseSpeciesCount = 0; // species beyond this index arose during play
 let home: { x: number; y: number } | null = null;
 let saveAcc = 0;
 let rArmed = false;
@@ -108,7 +110,16 @@ const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
 function persist(): void {
   try {
-    const s = packWorld(currentSeed, flora.tick, player, home, inventory, flora.all, Date.now());
+    const s = packWorld(
+      currentSeed,
+      flora.tick,
+      player,
+      home,
+      inventory,
+      flora.all,
+      Date.now(),
+      species.slice(baseSpeciesCount),
+    );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
     const next = [currentSeed, ...index.filter((x) => x !== currentSeed)];
@@ -147,10 +158,17 @@ function loadWorld(seed: number): void {
   }
   currentSeed = seed;
   species = generatePlantSpecies(seed);
+  baseSpeciesCount = species.length;
+  // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
+  const floraTuning = new URL(location.href).searchParams.has("split")
+    ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
+    : {};
   const saved = loadSave(seed);
   let catchUp = 0;
+  let awayBorn: string | null = null; // a species that arose while you were gone
   if (saved) {
-    flora = new Flora(map, species, seed, {}, {
+    restoreDaughters(saved, species);
+    flora = new Flora(map, species, seed, floraTuning, {
       tick: saved.tick,
       plants: restorePlants(saved, species),
     });
@@ -160,10 +178,12 @@ function loadWorld(seed: number): void {
       Math.floor(Math.max(0, Date.now() - saved.savedAt) / SIM_MS),
     );
     for (let i = 0; i < catchUp; i++) flora.simTick();
+    const awayEvents = flora.takeEvents();
+    if (awayEvents.length > 0) awayBorn = awayEvents[awayEvents.length - 1].name;
     home = saved.home ? { x: saved.home[0], y: saved.home[1] } : null;
     if (home) flora.setHome(home.x, home.y);
   } else {
-    flora = new Flora(map, species, seed);
+    flora = new Flora(map, species, seed, floraTuning);
     home = null;
   }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
@@ -192,8 +212,15 @@ function loadWorld(seed: number): void {
   seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
   renderHud();
   if (saved) {
-    flashHud(catchUp > 0 ? "the island lived while you were away" : "welcome back");
+    flashHud(
+      awayBorn
+        ? `while you were away, ${awayBorn} arose`
+        : catchUp > 0
+          ? "the island lived while you were away"
+          : "welcome back",
+    );
   }
+  if (awayBorn) murmurs.offer("speciation");
   murmurs.offer("island");
 }
 
@@ -398,6 +425,10 @@ function frame(now: number): void {
   while (simAcc >= SIM_MS) {
     flora.simTick();
     simAcc -= SIM_MS;
+  }
+  for (const ev of flora.takeEvents()) {
+    flashHud(`${ev.name} — a new kind, arisen from ${ev.parentName}`);
+    murmurs.offer("speciation");
   }
   saveAcc += dt;
   if (saveAcc >= 10) {

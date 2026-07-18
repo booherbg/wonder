@@ -82,6 +82,9 @@ export function openInspect(plants: Plant[], speciesList: PlantSpecies[]): void 
     if (g.glow > 0.8) bits.push("luminous");
     const drift = Math.round(driftDistance(g, sp.archetype) * 100);
     bits.push(drift <= 2 ? "true to its kind" : `drifted ${drift}%`);
+    if (sp.parent !== undefined) {
+      bits.push(`arose here, from ${speciesList[sp.parent].name}`);
+    }
     traits.textContent = bits.join(" · ");
     card.appendChild(traits);
 

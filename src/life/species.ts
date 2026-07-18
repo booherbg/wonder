@@ -9,6 +9,8 @@ export interface PlantSpecies {
   archetype: Genome; // the "true" form; individuals drift away from it
   density: number; // 0..1 relative abundance within its habitat
   sport: boolean; // the island's one exaggerated oddball
+  parent?: number; // set when this species arose here, split from another
+  bornTick?: number; // flora tick of the split
 }
 
 // which forms can appear in each habitat, roughly weighted by repetition
@@ -74,6 +76,38 @@ export function speciesName(rng: Rng, genome: Genome): string {
   else if (genome.height > 0.75) epithet = "tall" + epithet;
   else if (genome.petals >= 8) epithet = "many" + epithet;
   return `${cap(word)} ${cap(epithet)}`;
+}
+
+// A lineage that has drifted far enough becomes its own kind: a fresh word,
+// the family epithet carried down, and a mark to show it arose on this island
+// rather than arriving with it.
+export function speciateFrom(
+  parent: PlantSpecies,
+  id: number,
+  archetype: Genome,
+  rng: Rng,
+  bornTick: number,
+): PlantSpecies {
+  const syl = () => SYLLABLES[Math.floor(rng() * SYLLABLES.length)];
+  let word = syl() + syl();
+  if (rng() < 0.4) word += syl();
+  let epithet = parent.name.replace(/[✶✧]/gu, "").trim().split(" ").pop()!.toLowerCase();
+  for (const pre of ["glow", "tall", "many"]) {
+    if (epithet.startsWith(pre) && epithet.length > pre.length) epithet = epithet.slice(pre.length);
+  }
+  if (archetype.glow > 0.55) epithet = "glow" + epithet;
+  else if (archetype.height > 0.75) epithet = "tall" + epithet;
+  else if (archetype.petals >= 8) epithet = "many" + epithet;
+  return {
+    id,
+    name: `${cap(word)} ${cap(epithet)} ✧`,
+    habitat: parent.habitat,
+    archetype: { ...archetype },
+    density: parent.density,
+    sport: false,
+    parent: parent.id,
+    bornTick,
+  };
 }
 
 // The island's flora: 2-4 species per habitat, exactly one "sport" oddball,
