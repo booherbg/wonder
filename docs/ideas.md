@@ -149,6 +149,15 @@ checklist — the journal is a *memoir*, not a todo list. It also solves
   and the label whispers "an aurora passed here once." Small histories
   accreting onto places.
 
+## The ecosystem dream (2026-07-18)
+
+- The full far-horizon vision — a garden that summons its fauna, a journal
+  where the food web draws itself, the bench, machines that are grown not
+  built, little factories and byproduct chains — now lives in
+  `docs/superpowers/specs/ecosystem-vision.md`, with a research brief and
+  its own dreams section. That file is the reference; point future
+  sessions at it instead of re-describing it.
+
 ## Small polish anytime
 
 - Grass sways where the wanderer walks; footprints on sand that fade.
