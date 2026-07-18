@@ -1,4 +1,5 @@
 import { makeRng, Rng } from "../core/rng";
+import { Beast, generateBeast, updateBeast } from "../life/beast";
 import {
   Critter,
   CritterSpecies,
@@ -83,6 +84,7 @@ let flora!: Flora;
 let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
+let beast: Beast | null = null;
 let simAcc = 0;
 
 function loadWorld(seed: number): void {
@@ -92,6 +94,7 @@ function loadWorld(seed: number): void {
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
+  beast = generateBeast(seed, map);
   clearCritterSpriteCache();
   simAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
@@ -270,6 +273,14 @@ function frame(now: number): void {
     simAcc -= SIM_MS;
   }
   for (const c of critters) updateCritter(c, dt, map, flora, critterSpecies, player, critterRng);
+  if (beast) {
+    updateBeast(beast, dt, map, player, critterRng);
+    if (!beast.seen && Math.hypot(beast.x - player.x, beast.y - player.y) < 5 * TILE_SIZE) {
+      beast.seen = true;
+      flashHud(`${beast.name}, passes`);
+      murmurs.offer("beast");
+    }
+  }
   offerMurmurMoments(dt);
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
@@ -283,7 +294,7 @@ function frame(now: number): void {
   );
   const darkness = FORCE_NIGHT ? 0.75 : darknessAt(now);
   if (darkness > 0.6) murmurs.offer("night");
-  renderer.draw(camX, camY, { player, flora, critters, critterSpecies, darkness }, now);
+  renderer.draw(camX, camY, { player, flora, critters, critterSpecies, beast, darkness }, now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

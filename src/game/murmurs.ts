@@ -22,7 +22,8 @@ export type MurmurTag =
   | "sport" // meeting the island's oddball species
   | "critter"
   | "night"
-  | "pocket"; // stumbling into a hidden clearing
+  | "pocket" // stumbling into a hidden clearing
+  | "beast"; // first sighting of the island's long quiet one
 
 export const MURMURS: Murmur[] = [
   {
@@ -129,6 +130,11 @@ export const MURMURS: Murmur[] = [
     text: "we are a way for the cosmos to know itself.",
     attribution: "— carl sagan, cosmos (1980)",
     tag: "night",
+  },
+  {
+    text: "i think i could turn and live with animals, they are so placid and self-contain'd.",
+    attribution: "— walt whitman, song of myself (1855)",
+    tag: "beast",
   },
 ];
 

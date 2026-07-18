@@ -1,6 +1,8 @@
 import { hash2d } from "../core/rng";
+import { Beast } from "../life/beast";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
+import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
@@ -22,6 +24,7 @@ export interface Scene {
   flora: Flora | null;
   critters?: Critter[] | null;
   critterSpecies?: CritterSpecies[] | null;
+  beast?: Beast | null;
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
 }
 
@@ -155,6 +158,9 @@ export class Renderer {
           ctx.drawImage(sprite, Math.round(cx - 8), Math.round(c.y - 14 - camY - bounce));
         }
       }
+      if (scene.beast && Math.floor(scene.beast.y / TILE_SIZE) === ty) {
+        drawBeast(ctx, scene.beast, camX, camY);
+      }
       if (scene.player && ty === playerRow) {
         ctx.drawImage(
           this.playerSprite,
@@ -190,7 +196,20 @@ export class Renderer {
         Math.round(g.y - GLOW_R - 8 - camY),
       );
     }
+    if (scene.beast?.glows) {
+      ctx.globalAlpha = darkness * 0.5;
+      ctx.drawImage(
+        getGlowHalo(scene.beast.hue),
+        Math.round(scene.beast.x - GLOW_R - camX),
+        Math.round(scene.beast.y - GLOW_R - 4 - camY),
+      );
+    }
     ctx.globalCompositeOperation = "source-over";
+    if (scene.beast?.glows) {
+      ctx.globalAlpha = darkness * 0.8;
+      drawBeast(ctx, scene.beast, camX, camY); // the beast itself stays lit
+      ctx.globalAlpha = 1;
+    }
     for (const g of glowers) {
       ctx.globalAlpha = darkness * 0.85; // the plant itself stays lit
       ctx.drawImage(
