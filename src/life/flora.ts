@@ -159,7 +159,7 @@ export class Flora {
           const p =
             sp.archetype.form === PlantForm.Tree
               ? sp.density * (0.15 + 0.45 * patch)
-              : sp.density * Math.max(0, patch - 0.5) * 1.5;
+              : sp.density * (0.025 + Math.max(0, patch - 0.5) * 1.5); // clusters + sparse loners
           if (hash2d(tx, ty, seed ^ (sp.id * 977 + 13)) >= p) continue;
           const jx = hash2d(tx, ty, seed ^ (sp.id * 331 + 7));
           const jy = hash2d(tx, ty, seed ^ (sp.id * 613 + 29));

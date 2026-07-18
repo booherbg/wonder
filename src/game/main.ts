@@ -1,8 +1,12 @@
+import { Flora } from "../life/flora";
+import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { WorldMap } from "../world/types";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
+
+const SIM_MS = 2000; // one flora heartbeat every 2s
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(v, hi));
@@ -25,9 +29,15 @@ const seedLabel = document.getElementById("seed-label")!;
 
 let map!: WorldMap;
 let player!: Player;
+let species!: PlantSpecies[];
+let flora!: Flora;
+let simAcc = 0;
 
 function loadWorld(seed: number): void {
   map = generate(seed, DEFAULT_CONFIG);
+  species = generatePlantSpecies(seed);
+  flora = new Flora(map, species, seed);
+  simAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
@@ -36,6 +46,15 @@ function loadWorld(seed: number): void {
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
+// dev aid: ?at=tx,ty drops the wanderer at a tile (screenshot tours)
+const at = new URL(location.href).searchParams.get("at");
+if (at) {
+  const [tx, ty] = at.split(",").map(Number);
+  if (Number.isFinite(tx) && Number.isFinite(ty)) {
+    player.x = (tx + 0.5) * TILE_SIZE;
+    player.y = (ty + 0.5) * TILE_SIZE;
+  }
+}
 const renderer = new Renderer(canvas, map);
 
 const keys = new Set<string>();
@@ -86,6 +105,11 @@ function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   player.update(dt, input(), map);
+  simAcc += dt * 1000;
+  while (simAcc >= SIM_MS) {
+    flora.simTick();
+    simAcc -= SIM_MS;
+  }
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
     0,
@@ -96,7 +120,7 @@ function frame(now: number): void {
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
-  renderer.draw(camX, camY, player, now);
+  renderer.draw(camX, camY, { player, flora }, now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

@@ -67,24 +67,19 @@ function drawGrass(ctx: Ctx, ox: number, oy: number, v: number): void {
   speckle(ctx, ox, oy, 100 + v, PALETTE.grassSpeckle, 14);
 }
 
+// Mossy shaded floor — actual trees are living plants placed by the flora
+// system, each with its own genome.
 function drawForest(ctx: Ctx, ox: number, oy: number, v: number): void {
   fill(ctx, ox, oy, PALETTE.forestFloor);
-  speckle(ctx, ox, oy, 200 + v, PALETTE.grassSpeckle, 6);
+  speckle(ctx, ox, oy, 200 + v, PALETTE.grassSpeckle, 8);
   const rng = makeRng(300 + v);
-  const cx = ox + 8 + (Math.floor(rng() * 3) - 1); // tree sways off-center per variant
-  ctx.fillStyle = PALETTE.treeTrunk;
-  ctx.fillRect(cx - 1, oy + 11, 2, 3);
   ctx.fillStyle = PALETTE.treeCanopyDark;
-  ctx.fillRect(cx - 3, oy + 9, 6, 2);
-  ctx.fillRect(cx - 4, oy + 6, 8, 3);
-  ctx.fillRect(cx - 3, oy + 4, 6, 2);
-  ctx.fillRect(cx - 2, oy + 2, 4, 2);
-  ctx.fillStyle = PALETTE.treeCanopy;
-  ctx.fillRect(cx - 3, oy + 5, 5, 3);
-  ctx.fillRect(cx - 2, oy + 3, 4, 2);
-  ctx.fillStyle = PALETTE.treeCanopyLight;
-  ctx.fillRect(cx - 2, oy + 4, 2, 2);
-  px(ctx, cx, oy + 3, PALETTE.treeCanopyLight);
+  for (let i = 0; i < 3; i++) {
+    const mx = Math.floor(rng() * (TILE_SIZE - 2));
+    const my = Math.floor(rng() * (TILE_SIZE - 1));
+    ctx.fillRect(ox + mx, oy + my, 2, 1); // moss clumps
+  }
+  px(ctx, ox + Math.floor(rng() * TILE_SIZE), oy + Math.floor(rng() * TILE_SIZE), PALETTE.treeTrunk);
 }
 
 function drawRock(ctx: Ctx, ox: number, oy: number, v: number): void {
