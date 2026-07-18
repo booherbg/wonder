@@ -24,6 +24,7 @@ export interface FloraTuning {
   reseedRadius: number; // tiles
   mutationAmount: number; // drift per generation
   pollinationRadius: number; // tiles within which same-species neighbors cross
+  comfortFraction: number; // above this share of maxPlants, crowding thins the island
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
@@ -36,6 +37,7 @@ export const DEFAULT_TUNING: FloraTuning = {
   reseedRadius: 3,
   mutationAmount: 0.06,
   pollinationRadius: 2,
+  comfortFraction: 0.72,
 };
 
 // The island's plant life: a per-tile spatial index of genome-bearing
@@ -43,6 +45,7 @@ export const DEFAULT_TUNING: FloraTuning = {
 export class Flora {
   all: Plant[] = [];
   byTile = new Map<number, Plant[]>();
+  speciesCounts = new Map<number, number>();
   tick = 0;
   readonly tuning: FloraTuning;
   private rng: Rng;
@@ -98,6 +101,7 @@ export class Flora {
     const plant: Plant = { species, genome, x, y, born, idx: this.all.length };
     this.all.push(plant);
     bucket.push(plant);
+    this.speciesCounts.set(species, (this.speciesCounts.get(species) ?? 0) + 1);
     return plant;
   }
 
@@ -113,6 +117,7 @@ export class Flora {
       if (i !== -1) bucket.splice(i, 1);
       if (bucket.length === 0) this.byTile.delete(key);
     }
+    this.speciesCounts.set(p.species, (this.speciesCounts.get(p.species) ?? 1) - 1);
   }
 
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
@@ -125,6 +130,14 @@ export class Flora {
       if (this.all.length === 0) break;
       const p = this.all[Math.floor(this.rng() * this.all.length)];
       const age = this.tick - p.born;
+      // crowding: past the comfortable density, the island quietly thins
+      // itself — keeps late islands lush without filling every tile.
+      // Rare species are spared: they are not the crowd.
+      const crowd = this.all.length / t.maxPlants - t.comfortFraction;
+      if (crowd > 0 && (this.speciesCounts.get(p.species) ?? 0) > 12 && this.rng() < crowd * 0.6) {
+        this.removePlant(p);
+        continue;
+      }
       if (age > t.lifespan && this.rng() < 0.15) {
         this.removePlant(p);
         continue;
