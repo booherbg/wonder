@@ -23,6 +23,9 @@ test("river flows downhill and reaches the sea", () => {
   expect(river.reachedSea).toBe(true);
   expect(river.path).toEqual([10, 11, 12, 13]); // straight east along row 2
   for (const i of river.path) expect(tiles[i]).toBe(Tile.ShallowWater);
+  // the mouth widened into a delta: rows beside the final stretch are wet too
+  expect(tiles[1 * 5 + 3]).toBe(Tile.ShallowWater);
+  expect(tiles[3 * 5 + 3]).toBe(Tile.ShallowWater);
   // elevation strictly decreases along the path
   for (let k = 1; k < river.path.length; k++) {
     expect(elevation[river.path[k]]).toBeLessThan(elevation[river.path[k - 1]]);

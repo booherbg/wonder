@@ -294,7 +294,12 @@ function frame(now: number): void {
   );
   const darkness = FORCE_NIGHT ? 0.75 : darknessAt(now);
   if (darkness > 0.6) murmurs.offer("night");
-  renderer.draw(camX, camY, { player, flora, critters, critterSpecies, beast, darkness }, now);
+  renderer.draw(
+    camX,
+    camY,
+    { player, flora, plantSpecies: species, critters, critterSpecies, beast, darkness },
+    now,
+  );
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

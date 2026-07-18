@@ -1,6 +1,7 @@
 import { Plant } from "../life/flora";
 import { PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
+import { Tile } from "../world/types";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
 
 const ZOOM = 6;
@@ -55,7 +56,8 @@ export function openInspect(plants: Plant[], speciesList: PlantSpecies[]): void 
     canvas.height = PLANT_SPRITE_H * ZOOM;
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(getPlantSprite(p.genome), 0, 0, canvas.width, canvas.height);
+    const aquatic = sp.habitat === Tile.ShallowWater;
+    ctx.drawImage(getPlantSprite(p.genome, aquatic), 0, 0, canvas.width, canvas.height);
     card.appendChild(canvas);
 
     const name = document.createElement("div");

@@ -76,6 +76,7 @@ export function traceRiver(
   for (let step = 0; step < cfg.riverMaxSteps; step++) {
     if (tiles[i] === Tile.DeepWater) {
       reachedSea = true;
+      widenMouth(tiles, path, cfg); // rivers spread into deltas as they meet the sea
       break;
     }
     tiles[i] = Tile.ShallowWater;
@@ -101,6 +102,22 @@ export function traceRiver(
     i = next;
   }
   return { path, reachedSea };
+}
+
+// The last stretch before the sea spreads sideways into an estuary.
+function widenMouth(tiles: Uint8Array, path: number[], cfg: WorldConfig): void {
+  const { width, height } = cfg;
+  for (let k = Math.max(0, path.length - 5); k < path.length; k++) {
+    const x = path[k] % width;
+    const y = (path[k] / width) | 0;
+    for (const [dx, dy] of NEIGHBORS4) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const j = ny * width + nx;
+      if (tiles[j] !== Tile.DeepWater) tiles[j] = Tile.ShallowWater;
+    }
+  }
 }
 
 // A river that dies inland pools into a little pond ringed with marsh.

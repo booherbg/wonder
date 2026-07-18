@@ -7,8 +7,10 @@ export const CRITTER_ANCHOR_Y = 14;
 export interface CritterSpriteSet {
   rest: HTMLCanvasElement;
   hop: HTMLCanvasElement;
+  blink: HTMLCanvasElement;
   restFlip: HTMLCanvasElement;
   hopFlip: HTMLCanvasElement;
+  blinkFlip: HTMLCanvasElement;
   den: HTMLCanvasElement;
 }
 
@@ -19,11 +21,14 @@ export function getCritterSprites(sp: CritterSpecies): CritterSpriteSet {
   if (hit) return hit;
   const rest = drawCritter(sp, false);
   const hop = drawCritter(sp, true);
+  const blink = drawCritter(sp, false, true);
   const set: CritterSpriteSet = {
     rest,
     hop,
+    blink,
     restFlip: flip(rest),
     hopFlip: flip(hop),
+    blinkFlip: flip(blink),
     den: drawDen(sp),
   };
   cache.set(sp.id, set);
@@ -51,7 +56,7 @@ function flip(src: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 // A round pastel friend: body, belly, ears, tail, dot eyes. Faces right.
-function drawCritter(sp: CritterSpecies, hop: boolean): HTMLCanvasElement {
+function drawCritter(sp: CritterSpecies, hop: boolean, blink = false): HTMLCanvasElement {
   const [c, ctx] = makeCanvas();
   const s = sp.size;
   const bodyW = Math.round(7 * s) + 2;
@@ -87,10 +92,12 @@ function drawCritter(sp: CritterSpecies, hop: boolean): HTMLCanvasElement {
   ctx.fillStyle = hsl(0.98, 0.5, 0.8);
   ctx.fillRect(bodyX + 2, earY + 1, 1, 1);
   ctx.fillRect(bodyX + bodyW - 4, earY + 1, 1, 1);
-  // face (right side)
-  ctx.fillStyle = dark;
-  ctx.fillRect(bodyX + bodyW - 3, bodyY + 2 - squash, 1, 1); // eye
-  ctx.fillRect(bodyX + Math.floor(bodyW / 2), bodyY + 2 - squash, 1, 1); // other eye
+  // face (right side); blinking critters close their eyes for a frame
+  if (!blink) {
+    ctx.fillStyle = dark;
+    ctx.fillRect(bodyX + bodyW - 3, bodyY + 2 - squash, 1, 1); // eye
+    ctx.fillRect(bodyX + Math.floor(bodyW / 2), bodyY + 2 - squash, 1, 1); // other eye
+  }
   ctx.fillStyle = hsl(0.98, 0.6, 0.6);
   ctx.fillRect(bodyX + bodyW - 1, bodyY + 3 - squash, 1, 1); // nose
   // feet

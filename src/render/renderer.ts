@@ -2,6 +2,7 @@ import { hash2d } from "../core/rng";
 import { Beast } from "../life/beast";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
+import { PlantSpecies } from "../life/species";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -22,6 +23,7 @@ const WATER_FRAME_SEQUENCE = [0, 1, 2, 1]; // gentle back-and-forth drift
 export interface Scene {
   player: { x: number; y: number } | null;
   flora: Flora | null;
+  plantSpecies?: PlantSpecies[] | null;
   critters?: Critter[] | null;
   critterSpecies?: CritterSpecies[] | null;
   beast?: Beast | null;
@@ -29,6 +31,12 @@ export interface Scene {
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
+
+// Taller plants lean a pixel in a slow breeze, each on its own phase.
+function swayOffset(timeMs: number, x: number, y: number): number {
+  const s = Math.sin(timeMs / 900 + ((x * 7 + y * 13) % 63) / 10);
+  return s > 0.8 ? 1 : s < -0.8 ? -1 : 0;
+}
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -133,10 +141,14 @@ export class Renderer {
       if (scene.flora) {
         for (let tx = x0; tx <= x1; tx++) {
           for (const p of scene.flora.plantsInTile(tx, ty)) {
-            const sprite = getPlantSprite(p.genome);
+            const aquatic = scene.plantSpecies
+              ? scene.plantSpecies[p.species].habitat === Tile.ShallowWater
+              : false;
+            const sprite = getPlantSprite(p.genome, aquatic);
+            const sway = p.genome.height > 0.3 ? swayOffset(timeMs, p.x, p.y) : 0;
             ctx.drawImage(
               sprite,
-              Math.round(p.x - PLANT_ANCHOR_X - camX),
+              Math.round(p.x - PLANT_ANCHOR_X - camX) + sway,
               Math.round(p.y - PLANT_ANCHOR_Y - camY),
             );
             if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
@@ -146,14 +158,18 @@ export class Renderer {
         }
       }
       if (scene.critters && scene.critterSpecies) {
-        for (const c of scene.critters) {
+        for (let ci = 0; ci < scene.critters.length; ci++) {
+          const c = scene.critters[ci];
           if (Math.floor(c.y / TILE_SIZE) !== ty) continue;
           const cx = c.x - camX;
           if (cx < -16 || cx > this.viewWidth + 16) continue;
           const set = getCritterSprites(scene.critterSpecies[c.species]);
           const hopping = Math.sin(c.hopPhase) > 0;
+          const blinking = !hopping && (Math.floor(timeMs / 130) + ci * 7) % 41 === 0;
           const sprite =
-            c.facing === 1 ? (hopping ? set.hop : set.rest) : hopping ? set.hopFlip : set.restFlip;
+            c.facing === 1
+              ? blinking ? set.blink : hopping ? set.hop : set.rest
+              : blinking ? set.blinkFlip : hopping ? set.hopFlip : set.restFlip;
           const bounce = Math.round(Math.abs(Math.sin(c.hopPhase)) * 2);
           ctx.drawImage(sprite, Math.round(cx - 8), Math.round(c.y - 14 - camY - bounce));
         }

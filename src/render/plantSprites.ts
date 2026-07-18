@@ -37,8 +37,8 @@ export function getGlowHalo(hue: number): HTMLCanvasElement {
   return c;
 }
 
-export function getPlantSprite(g: Genome): HTMLCanvasElement {
-  const key = phenoKey(g);
+export function getPlantSprite(g: Genome, aquatic = false): HTMLCanvasElement {
+  const key = (aquatic ? "w:" : "") + phenoKey(g);
   const hit = cache.get(key);
   if (hit) return hit;
   if (cache.size >= CACHE_CAP) cache.clear();
@@ -46,9 +46,37 @@ export function getPlantSprite(g: Genome): HTMLCanvasElement {
   c.width = PLANT_SPRITE_W;
   c.height = PLANT_SPRITE_H;
   const ctx = c.getContext("2d")!;
-  DRAWERS[g.form](ctx, g);
+  if (aquatic && g.form === PlantForm.Flower) drawLily(ctx, g);
+  else if (aquatic && g.form === PlantForm.Shrub) drawReeds(ctx, g);
+  else DRAWERS[g.form](ctx, g);
   cache.set(key, c);
   return c;
+}
+
+// Water flowers ride a lily pad: short stem, wide green disc at the waterline.
+function drawLily(ctx: Ctx, g: Genome): void {
+  const baseY = PLANT_ANCHOR_Y;
+  const padW = 6 + Math.round(g.spread * 4);
+  const pad = hsl(0.34, 0.5, 0.34);
+  const padLight = hsl(0.34, 0.5, 0.42);
+  rect(ctx, PLANT_ANCHOR_X - padW / 2, baseY - 1, padW, 2, pad);
+  rect(ctx, PLANT_ANCHOR_X - padW / 2 + 1, baseY - 2, padW - 2, 1, padLight);
+  const shortened: Genome = { ...g, height: g.height * 0.45, leaves: 0 };
+  drawFlower(ctx, shortened);
+}
+
+// Water shrubs become reeds: a stand of thin stalks with seed-head tips.
+function drawReeds(ctx: Ctx, g: Genome): void {
+  const baseY = PLANT_ANCHOR_Y;
+  const count = 3 + Math.round(g.spread * 3);
+  const stalk = hsl(0.28 + (g.hue - 0.28) * 0.3, g.sat * 0.6, 0.34);
+  const tip = hsl(g.hue2, Math.min(1, g.sat + 0.15), g.glow > 0.8 ? 0.7 : 0.5);
+  for (let i = 0; i < count; i++) {
+    const x = PLANT_ANCHOR_X - count + i * 2 + (i % 2);
+    const h = Math.round(6 + g.height * 9 + ((i * 5) % 4) - 2 + g.lean * i);
+    rect(ctx, x, baseY - h, 1, h + 1, stalk);
+    rect(ctx, x, baseY - h - 2, 1, 2, tip);
+  }
 }
 
 type Ctx = CanvasRenderingContext2D;
