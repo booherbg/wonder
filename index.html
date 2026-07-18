@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wander</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0a0e14; overflow: hidden; }
+      canvas { display: block; image-rendering: pixelated; }
+      #seed-label {
+        position: fixed; left: 12px; bottom: 10px;
+        font: 12px monospace; color: rgba(255, 255, 255, 0.55);
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="seed-label"></div>
+    <script type="module" src="/src/game/main.ts"></script>
+  </body>
+</html>
