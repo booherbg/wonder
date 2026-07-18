@@ -6,7 +6,7 @@ import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { isBiolumeNight } from "../game/daynight";
-import { FishSchool, Pollinators, drawClouds } from "./ambient";
+import { FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -49,6 +49,7 @@ export class Renderer {
   private playerSprite: HTMLCanvasElement;
   private pollinators = new Pollinators();
   private fishes = new FishSchool();
+  private frogs = new FrogPatch();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -139,6 +140,8 @@ export class Renderer {
     // fish glide beneath everything that grows
     this.fishes.update(map, camX, camY, this.viewWidth, this.viewHeight, scene.player, timeMs);
     this.fishes.draw(ctx, camX, camY);
+    this.frogs.update(map, camX, camY, this.viewWidth, this.viewHeight, scene.player, timeMs);
+    this.frogs.draw(ctx, camX, camY);
 
     // the beast's trail: pressed grass, fading over a minute
     if (scene.beast) {

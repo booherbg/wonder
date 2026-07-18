@@ -194,6 +194,132 @@ export class FishSchool {
   }
 }
 
+interface Frog {
+  x: number;
+  y: number;
+  hue: number; // greens mostly, the odd oddball
+  sitTime: number;
+  hop: number; // seconds left in current hop
+  hopDx: number;
+  hopDy: number;
+  plop: number; // >0: mid-escape into water; ripple countdown
+}
+
+const MAX_FROGS = 6;
+
+// Pond-edge sitters. They idle, hop a little, and plop into the water
+// when the wanderer comes too close, leaving rings behind.
+export class FrogPatch {
+  private frogs: Frog[] = [];
+  private rng: Rng = makeRng(0xf406);
+  private lastMs = -1;
+
+  update(
+    map: WorldMap,
+    viewX: number,
+    viewY: number,
+    viewW: number,
+    viewH: number,
+    player: { x: number; y: number } | null,
+    timeMs: number,
+  ): void {
+    const dt = this.lastMs < 0 ? 0.016 : Math.min((timeMs - this.lastMs) / 1000, 0.1);
+    this.lastMs = timeMs;
+
+    this.frogs = this.frogs.filter(
+      (f) =>
+        f.plop > -0.7 && // ripples done = gone
+        f.x > viewX - 40 && f.x < viewX + viewW + 40 &&
+        f.y > viewY - 40 && f.y < viewY + viewH + 40,
+    );
+
+    if (this.frogs.length < MAX_FROGS) {
+      const tx = Math.floor((viewX + this.rng() * viewW) / TILE_SIZE);
+      const ty = Math.floor((viewY + this.rng() * viewH) / TILE_SIZE);
+      if (tx > 0 && ty > 0 && tx < map.width - 1 && ty < map.height - 1) {
+        const here = map.tiles[ty * map.width + tx];
+        const bankside =
+          (here === Tile.Marsh || here === Tile.Grass || here === Tile.Sand) &&
+          [[1, 0], [-1, 0], [0, 1], [0, -1]].some(
+            ([dx, dy]) => map.tiles[(ty + dy) * map.width + (tx + dx)] === Tile.ShallowWater,
+          );
+        if (bankside) {
+          this.frogs.push({
+            x: (tx + 0.5) * TILE_SIZE,
+            y: (ty + 0.5) * TILE_SIZE,
+            hue: this.rng() < 0.85 ? 0.3 + this.rng() * 0.12 : this.rng(),
+            sitTime: 1 + this.rng() * 4,
+            hop: 0,
+            hopDx: 0,
+            hopDy: 0,
+            plop: 0,
+          });
+        }
+      }
+    }
+
+    for (const f of this.frogs) {
+      if (f.plop !== 0) {
+        f.plop -= dt;
+        if (f.plop > 0) {
+          f.x += f.hopDx * dt * 3;
+          f.y += f.hopDy * dt * 3;
+        }
+        continue;
+      }
+      if (player && Math.hypot(player.x - f.x, player.y - f.y) < 22) {
+        // find the water and leap for it
+        const tx = Math.floor(f.x / TILE_SIZE);
+        const ty = Math.floor(f.y / TILE_SIZE);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (map.tiles[(ty + dy) * map.width + (tx + dx)] === Tile.ShallowWater) {
+            f.hopDx = dx * TILE_SIZE * 0.4;
+            f.hopDy = dy * TILE_SIZE * 0.4;
+            break;
+          }
+        }
+        f.plop = 0.35; // leap, then ripples while plop in (-0.7, 0)
+        continue;
+      }
+      if (f.hop > 0) {
+        f.hop -= dt;
+        f.x += f.hopDx * dt;
+        f.y += f.hopDy * dt;
+      } else {
+        f.sitTime -= dt;
+        if (f.sitTime <= 0) {
+          const a = this.rng() * 6.28;
+          f.hopDx = Math.cos(a) * 20;
+          f.hopDy = Math.sin(a) * 20;
+          f.hop = 0.3;
+          f.sitTime = 2 + this.rng() * 5;
+        }
+      }
+    }
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camX: number, camY: number): void {
+    for (const f of this.frogs) {
+      const x = Math.round(f.x - camX);
+      const y = Math.round(f.y - camY);
+      if (f.plop < 0) {
+        // rings spreading where it went under
+        const r = Math.round((0.7 + f.plop) * 8) + 2;
+        ctx.strokeStyle = `rgba(220, 240, 255, ${(0.5 * (1 + f.plop / 0.7)).toFixed(3)})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - r, y - Math.round(r * 0.6), r * 2, Math.round(r * 1.2));
+        continue;
+      }
+      const lift = f.hop > 0 || f.plop > 0 ? 2 : 0;
+      ctx.fillStyle = hsl(f.hue, 0.55, 0.4);
+      ctx.fillRect(x - 1, y - 2 - lift, 3, 2);
+      ctx.fillStyle = hsl(f.hue, 0.55, 0.55);
+      ctx.fillRect(x - 1, y - 3 - lift, 1, 1); // eye bump
+      ctx.fillRect(x + 1, y - 3 - lift, 1, 1);
+    }
+  }
+}
+
 // A few slow cloud shadows crossing the island; they fade out toward night.
 const CLOUDS = [
   { r: 95, speed: 3.4, ox: 0, oy: 1200 },
