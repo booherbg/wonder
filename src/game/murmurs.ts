@@ -24,7 +24,8 @@ export type MurmurTag =
   | "night"
   | "pocket" // stumbling into a hidden clearing
   | "beast" // first sighting of the island's long quiet one
-  | "spring"; // warming yourself at a hot spring
+  | "spring" // warming yourself at a hot spring
+  | "tide"; // wading a glowing sea on a lucky night
 
 export const MURMURS: Murmur[] = [
   {
@@ -141,6 +142,11 @@ export const MURMURS: Murmur[] = [
     text: "the currents of the universal being circulate through me.",
     attribution: "— ralph waldo emerson, nature (1836)",
     tag: "spring",
+  },
+  {
+    text: "the tide rises, the tide falls, the twilight darkens, the curlew calls.",
+    attribution: "— henry wadsworth longfellow (1879)",
+    tag: "tide",
   },
 ];
 

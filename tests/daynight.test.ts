@@ -5,6 +5,7 @@ import {
   DUSK_MS,
   MAX_DARKNESS,
   darknessAt,
+  isBiolumeNight,
   isNight,
 } from "../src/game/daynight";
 
@@ -32,4 +33,15 @@ test("darkness is periodic and always within bounds", () => {
 test("isNight flags the dark stretch only", () => {
   expect(isNight(DAY_MS / 2)).toBe(false);
   expect(isNight(DAY_MS + DUSK_MS + 1000)).toBe(true);
+});
+
+test("biolume nights are deterministic and neither constant nor absent", () => {
+  const results = new Set<boolean>();
+  for (let night = 0; night < 30; night++) {
+    const t = night * CYCLE_MS + DAY_MS + DUSK_MS + 1000;
+    expect(isBiolumeNight(t, 42)).toBe(isBiolumeNight(t, 42));
+    results.add(isBiolumeNight(t, 42));
+  }
+  expect(results.has(true)).toBe(true);
+  expect(results.has(false)).toBe(true);
 });

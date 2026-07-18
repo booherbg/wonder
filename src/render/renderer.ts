@@ -4,6 +4,7 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
+import { isBiolumeNight } from "../game/daynight";
 import { Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
@@ -289,6 +290,38 @@ export class Renderer {
           b.y - camY,
         );
         ctx.stroke();
+      }
+    }
+
+    // on a lucky night, the sea's edge sparks blue-green where it laps the shore
+    if (isBiolumeNight(timeMs, this.map.seed)) {
+      const x0 = Math.max(0, Math.floor(camX / TILE_SIZE));
+      const y0 = Math.max(0, Math.floor(camY / TILE_SIZE));
+      const x1 = Math.min(this.map.width - 1, Math.ceil((camX + this.viewWidth) / TILE_SIZE));
+      const y1 = Math.min(this.map.height - 1, Math.ceil((camY + this.viewHeight) / TILE_SIZE));
+      for (let ty = y0; ty <= y1; ty++) {
+        for (let tx = x0; tx <= x1; tx++) {
+          if (this.map.tiles[ty * this.map.width + tx] !== Tile.ShallowWater) continue;
+          const nearSea =
+            this.map.tiles[ty * this.map.width + Math.min(this.map.width - 1, tx + 1)] === Tile.DeepWater ||
+            this.map.tiles[ty * this.map.width + Math.max(0, tx - 1)] === Tile.DeepWater ||
+            this.map.tiles[Math.min(this.map.height - 1, ty + 1) * this.map.width + tx] === Tile.DeepWater ||
+            this.map.tiles[Math.max(0, ty - 1) * this.map.width + tx] === Tile.DeepWater;
+          if (!nearSea) continue;
+          for (let k = 0; k < 2; k++) {
+            const h = hash2d(tx * 2 + k, ty, this.map.seed);
+            const tw = Math.sin(timeMs / 700 + h * 6.28);
+            if (tw < 0.2) continue;
+            ctx.globalAlpha = darkness * 0.5 * tw;
+            ctx.fillStyle = "rgb(110, 255, 215)";
+            ctx.fillRect(
+              Math.round(tx * TILE_SIZE + 2 + h * 12 - camX),
+              Math.round(ty * TILE_SIZE + 2 + hash2d(ty, tx * 2 + k, this.map.seed) * 12 - camY),
+              1,
+              1,
+            );
+          }
+        }
       }
     }
 

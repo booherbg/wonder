@@ -12,7 +12,7 @@ import { hsl } from "../life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
-import { darknessAt } from "./daynight";
+import { darknessAt, isBiolumeNight } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine } from "./murmurs";
 
@@ -309,7 +309,14 @@ function frame(now: number): void {
     map.height * TILE_SIZE - renderer.viewHeight,
   );
   const darkness = FORCE_NIGHT ? 0.75 : darknessAt(now);
-  if (darkness > 0.6) murmurs.offer("night");
+  if (darkness > 0.6) {
+    murmurs.offer("night");
+    const ptx = Math.floor(player.x / TILE_SIZE);
+    const pty = Math.floor(player.y / TILE_SIZE);
+    if (tileAt(map, ptx, pty) === Tile.ShallowWater && isBiolumeNight(now, currentSeed)) {
+      murmurs.offer("tide");
+    }
+  }
   renderer.draw(
     camX,
     camY,

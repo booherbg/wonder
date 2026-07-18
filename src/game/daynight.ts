@@ -1,3 +1,5 @@
+import { hash2d } from "../core/rng";
+
 // A slow, gentle day: ~4 minutes of light, a real night you can wait out.
 // Darkness is 0 all day, eases up through dusk, holds at MAX_DARKNESS
 // through the night, and eases back down at dawn.
@@ -23,4 +25,10 @@ export function darknessAt(nowMs: number): number {
 
 export function isNight(nowMs: number): boolean {
   return darknessAt(nowMs) > 0.6;
+}
+
+// Roughly one night in three, the sea's edge lights up where it is stirred.
+export function isBiolumeNight(nowMs: number, seed: number): boolean {
+  const nightIndex = Math.floor(nowMs / CYCLE_MS);
+  return hash2d(nightIndex, 7, seed) < 0.35;
 }
