@@ -11,18 +11,28 @@ const NEIGHBORS4: ReadonlyArray<readonly [number, number]> = [
 ];
 
 // fBm elevation shaped by radial falloff: guaranteed sea at the edges,
-// highlands only possible near the center.
+// highlands only possible inland. The falloff center and steepness are
+// jittered per seed so islands come out lopsided, stretched, or compact —
+// no two silhouettes alike.
 export function buildElevation(seed: number, cfg: WorldConfig): Float32Array {
   const { width, height } = cfg;
+  const shapeRng = makeRng(seed ^ 0x15a4d);
+  const cx = (shapeRng() - 0.5) * 0.3; // island center drifts up to ±15%
+  const cy = (shapeRng() - 0.5) * 0.3;
+  const scale = cfg.elevationScale * (0.8 + shapeRng() * 0.4);
+  const sharpness = cfg.falloffSharpness * (0.8 + shapeRng() * 0.4);
+  const BORDER_MARGIN = 12; // tiles over which land is forced down to sea at map edges
   const out = new Float32Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const nx = (2 * x) / (width - 1) - 1;
-      const ny = (2 * y) / (height - 1) - 1;
+      const nx = (2 * x) / (width - 1) - 1 - cx;
+      const ny = (2 * y) / (height - 1) - 1 - cy;
       const d = Math.sqrt(nx * nx + ny * ny);
-      const falloff = Math.max(0, 1 - Math.pow(d, cfg.falloffSharpness));
-      const raw = fbm(x / cfg.elevationScale, y / cfg.elevationScale, seed, cfg.elevationOctaves);
-      out[y * width + x] = raw * falloff;
+      const falloff = Math.max(0, 1 - Math.pow(d, sharpness));
+      const border = Math.min(x, y, width - 1 - x, height - 1 - y);
+      const borderFalloff = Math.min(1, border / BORDER_MARGIN);
+      const raw = fbm(x / scale, y / scale, seed, cfg.elevationOctaves);
+      out[y * width + x] = raw * falloff * borderFalloff;
     }
   }
   return out;
@@ -83,10 +93,29 @@ export function traceRiver(
         next = j;
       }
     }
-    if (next === -1) break; // local minimum: the carved tile is the lake
+    if (next === -1) {
+      carvePond(tiles, i, cfg); // local minimum: open the end into a small pond
+      break;
+    }
     i = next;
   }
   return { path, reachedSea };
+}
+
+// A river that dies inland pools into a little pond instead of a one-tile stub.
+function carvePond(tiles: Uint8Array, center: number, cfg: WorldConfig): void {
+  const { width, height } = cfg;
+  const x = center % width;
+  const y = (center / width) | 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const j = ny * width + nx;
+      if (tiles[j] !== Tile.DeepWater) tiles[j] = Tile.ShallowWater;
+    }
+  }
 }
 
 export function carveRivers(

@@ -1,9 +1,102 @@
+import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
+import { generate } from "../world/generate";
+import { WorldMap } from "../world/types";
+import { Renderer } from "../render/renderer";
+import { InputState, Player } from "./player";
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(v, hi));
+}
+
+function seedFromUrl(): number | null {
+  const raw = new URL(location.href).searchParams.get("seed");
+  if (raw === null) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+// the one intentional use of Math.random(): choosing a fresh seed
+function randomSeed(): number {
+  return Math.floor(Math.random() * 2 ** 31);
+}
+
 const canvas = document.getElementById("game") as HTMLCanvasElement;
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-const ctx = canvas.getContext("2d")!;
-ctx.fillStyle = "#0a0e14";
-ctx.fillRect(0, 0, canvas.width, canvas.height);
-ctx.fillStyle = "#68a557";
-ctx.font = "16px monospace";
-ctx.fillText("wander: scaffold ok", 20, 40);
+const seedLabel = document.getElementById("seed-label")!;
+
+let map!: WorldMap;
+let player!: Player;
+
+function loadWorld(seed: number): void {
+  map = generate(seed, DEFAULT_CONFIG);
+  player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
+  const url = new URL(location.href);
+  url.searchParams.set("seed", String(seed));
+  history.replaceState(null, "", url);
+  seedLabel.textContent = `seed ${seed} — R for a new island`;
+}
+
+loadWorld(seedFromUrl() ?? randomSeed());
+const renderer = new Renderer(canvas, map);
+
+const keys = new Set<string>();
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (k === "r") {
+    loadWorld(randomSeed());
+    renderer.setMap(map);
+  }
+});
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+window.addEventListener("resize", () => renderer.resize());
+
+function input(): InputState {
+  return {
+    up: keys.has("w") || keys.has("arrowup"),
+    down: keys.has("s") || keys.has("arrowdown"),
+    left: keys.has("a") || keys.has("arrowleft"),
+    right: keys.has("d") || keys.has("arrowright"),
+  };
+}
+
+// dev aid: ?overview=1 renders the whole island at a glance (worldgen tuning)
+const OVERVIEW_COLORS = ["#22467c", "#4a7dbd", "#e3d29c", "#68a557", "#3e7a40", "#8b8e93", "#e9eef4"];
+function drawOverview(): void {
+  const ctx = canvas.getContext("2d")!;
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const s = Math.max(1, Math.floor(Math.min(canvas.width / map.width, canvas.height / map.height)));
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      ctx.fillStyle = OVERVIEW_COLORS[map.tiles[y * map.width + x]];
+      ctx.fillRect(x * s, y * s, s, s);
+    }
+  }
+  ctx.fillStyle = "#ff5050";
+  ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
+}
+
+let last = performance.now();
+function frame(now: number): void {
+  if (new URL(location.href).searchParams.has("overview")) {
+    drawOverview();
+    requestAnimationFrame(frame);
+    return;
+  }
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  player.update(dt, input(), map);
+  const camX = clamp(
+    player.x - renderer.viewWidth / 2,
+    0,
+    map.width * TILE_SIZE - renderer.viewWidth,
+  );
+  const camY = clamp(
+    player.y - renderer.viewHeight / 2,
+    0,
+    map.height * TILE_SIZE - renderer.viewHeight,
+  );
+  renderer.draw(camX, camY, player, now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
