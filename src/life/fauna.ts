@@ -1,7 +1,7 @@
 import { Rng, makeRng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { WorldMap, isWalkable } from "../world/types";
-import { Flora } from "./flora";
+import { Flora, Plant } from "./flora";
 import { Genome, PlantForm } from "./genome";
 import { PlantSpecies } from "./species";
 
@@ -41,7 +41,7 @@ export function appetite(palate: Palate, g: Genome): number {
 
 export const APPETITE_MIN = 0.3; // below this a plant is just scenery
 
-export type CritterState = "idle" | "seek" | "nibble" | "home";
+export type CritterState = "idle" | "seek" | "nibble" | "home" | "sleep";
 
 export interface Critter {
   species: number;
@@ -53,12 +53,22 @@ export interface Critter {
   stateTime: number; // seconds until the next decision
   hopPhase: number;
   facing: 1 | -1;
+  energy: number; // 0..1 — the ledger: eating fills it, living drains it
+  meal?: Plant | null; // the plant it walked to and is chewing on
 }
 
 export const CRITTER_SPEED = 40; // px/s — unhurried
 const SEEK_RADIUS_PX = 8 * TILE_SIZE;
 const HOME_RANGE_TILES = 6;
 const CURIOSITY_RADIUS_PX = 3 * TILE_SIZE;
+
+// The energy ledger. Nothing starves: an empty critter sleeps at its den
+// and wakes with enough to try again — hunger is motive, never mortality.
+const ENERGY_DRAIN_PER_S = 1 / 200; // living costs; empty in ~3 min awake
+const MEAL_ENERGY = 0.35; // one good chew
+const HUNGRY = 0.35; // below this, food is all it thinks about
+const FULL = 0.85; // above this, grazing holds no interest
+const SPENT = 0.05; // below this, only the den will do
 
 const CRITTER_SYLLABLES = ["po", "mo", "ni", "bul", "tam", "wis", "ket", "ru", "fi", "dov", "san", "lop"];
 const CRITTER_EPITHETS = ["hopper", "puff", "whisk", "nibbler", "scamper", "tumble", "peep", "muncher"];
@@ -154,6 +164,7 @@ export function spawnCritters(
         stateTime: rng() * 2,
         hopPhase: rng() * 6.28,
         facing: rng() < 0.5 ? 1 : -1,
+        energy: 0.5 + rng() * 0.4,
       });
       placed++;
     }
@@ -187,10 +198,27 @@ export function updateCritter(
 ): void {
   const sp = speciesList[c.species];
   c.stateTime -= dt;
+  c.energy = Math.max(0, c.energy - dt * ENERGY_DRAIN_PER_S);
+
+  if (c.state === "sleep") {
+    // curled at the den, slowly gathering itself — never worse than this
+    c.energy = Math.min(1, c.energy + dt / 60);
+    if (c.stateTime <= 0) {
+      c.state = "idle";
+      c.stateTime = 0;
+    }
+    return;
+  }
 
   if (c.state === "nibble") {
     c.hopPhase += dt * 4; // gentle munching wiggle
     if (c.stateTime <= 0) {
+      // the bite lands: the plant really loses what the critter really gains
+      if (c.meal && flora.all[c.meal.idx] === c.meal) {
+        flora.nibble(c.meal);
+        c.energy = Math.min(1, c.energy + MEAL_ENERGY);
+      }
+      c.meal = null;
       c.state = "idle";
       c.stateTime = 0;
     }
@@ -200,30 +228,56 @@ export function updateCritter(
   const arrived = moveToward(c, dt, map);
 
   if (c.state === "seek" && arrived) {
-    c.state = "nibble";
-    c.stateTime = 1.5 + rng() * 1.5;
+    // the salad may have moved on while it walked — chew only what's here
+    const bites = flora
+      .plantsNear(c.x, c.y, 12)
+      .filter((p) => appetite(sp.palate, p.genome) > APPETITE_MIN);
+    if (bites.length > 0) {
+      c.meal = bites[0];
+      c.state = "nibble";
+      c.stateTime = 1.5 + rng() * 1.5;
+    } else {
+      c.state = "idle";
+      c.stateTime = 0.5 + rng();
+    }
     return;
   }
   if (c.state === "home" && arrived) {
-    c.state = "idle";
-    c.stateTime = 0.5 + rng();
+    if (c.energy < 0.3) {
+      c.state = "sleep";
+      c.stateTime = 12 + rng() * 10;
+    } else {
+      c.state = "idle";
+      c.stateTime = 0.5 + rng();
+    }
     return;
   }
 
   if (c.stateTime > 0) return;
 
-  // decision time
+  // decision time: the ledger leans on the dice
   const denX = (sp.den.x + 0.5) * TILE_SIZE;
   const denY = (sp.den.y + 0.5) * TILE_SIZE;
   const farFromHome = Math.hypot(c.x - denX, c.y - denY) > HOME_RANGE_TILES * TILE_SIZE;
+  const hungry = c.energy < HUNGRY;
   const roll = rng();
 
-  if (player && roll < 0.2 && Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX) {
-    // curious: sidle partway toward the wanderer
+  if (c.energy <= SPENT) {
+    // spent: only the den will do
+    c.state = "home";
+    c.targetX = denX;
+    c.targetY = denY;
+  } else if (
+    player &&
+    !hungry &&
+    roll < 0.2 &&
+    Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX
+  ) {
+    // curious: sidle partway toward the wanderer (an empty belly has no play)
     c.targetX = c.x + (player.x - c.x) * 0.5;
     c.targetY = c.y + (player.y - c.y) * 0.5;
     c.state = "idle";
-  } else if (roll < 0.5) {
+  } else if (c.energy < FULL && (hungry || roll < 0.5)) {
     // graze: the nearest plant in sniffing range that suits the palate —
     // whatever species it belongs to, however it got here
     const found = flora

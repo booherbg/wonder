@@ -188,6 +188,20 @@ export class Flora {
     this.speciesCounts.set(p.species, (this.speciesCounts.get(p.species) ?? 1) - 1);
   }
 
+  // A real bite. A young plant is eaten whole; a mature one is set back to
+  // sprout and must regrow before it can reseed again — grazing suppresses
+  // a patch before it erases it, and a rested patch comes back. Tended
+  // garden plants shrug bites off: the gardener's thumb undoes the damage.
+  nibble(p: Plant): "consumed" | "grazed" {
+    if (this.inGarden(p.x, p.y)) return "grazed";
+    if (this.tick - p.born < this.tuning.matureAge) {
+      this.removePlant(p);
+      return "consumed";
+    }
+    p.born = this.tick;
+    return "grazed";
+  }
+
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
   // dies, and reseeds nearby with drifted genomes. Rain quickens everything
   // a little; the day after rain, the fungi answer threefold; children born
