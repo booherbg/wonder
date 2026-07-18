@@ -89,8 +89,19 @@ let simAcc = 0;
 let currentSeed = 0;
 
 function loadWorld(seed: number): void {
+  // a seed with no viable island is nearly impossible, but the sea is
+  // large: quietly sail on to another seed rather than white-screen
+  let attempts = 0;
+  for (;;) {
+    try {
+      map = generate(seed, DEFAULT_CONFIG);
+      break;
+    } catch {
+      if (++attempts >= 5) throw new Error("no island found on five voyages");
+      seed = randomSeed();
+    }
+  }
   currentSeed = seed;
-  map = generate(seed, DEFAULT_CONFIG);
   species = generatePlantSpecies(seed);
   flora = new Flora(map, species, seed);
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
