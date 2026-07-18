@@ -49,6 +49,7 @@ export interface WorldMap {
   falls?: Waterfall[]; // white water where steep islands' rivers drop hardest
   crater?: Crater; // rarely, the island's heart is water
   confluences?: { x: number; y: number }[]; // pools where two rivers meet
+  shape?: string; // the island's rolled silhouette (see IslandShape)
 }
 
 export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {

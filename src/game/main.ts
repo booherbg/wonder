@@ -32,7 +32,7 @@ const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev aid
 const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
-import { generate } from "../world/generate";
+import { IslandShape, SHAPES, SHAPE_PHRASE, generate } from "../world/generate";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { Renderer } from "../render/renderer";
@@ -154,10 +154,15 @@ function loadSave(seed: number): SavedWorld | null {
 function loadWorld(seed: number): void {
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
+  // dev aid + the seed of the future terrain slider: ?shape=twin|lowland|...
+  const shapeParam = new URL(location.href).searchParams.get("shape");
+  const forcedShape = SHAPES.includes(shapeParam as IslandShape)
+    ? (shapeParam as IslandShape)
+    : undefined;
   let attempts = 0;
   for (;;) {
     try {
-      map = generate(seed, DEFAULT_CONFIG);
+      map = generate(seed, DEFAULT_CONFIG, forcedShape);
       break;
     } catch {
       if (++attempts >= 5) throw new Error("no island found on five voyages");
@@ -222,7 +227,8 @@ function loadWorld(seed: number): void {
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
-  seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
+  const shapePhrase = SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"];
+  seedLabel.textContent = `${islandName(seed)} · ${shapePhrase} · seed ${seed} — R for a new island`;
   murmurs.setPlace(islandName(seed));
   renderHud();
   if (saved) {

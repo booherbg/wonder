@@ -6,7 +6,7 @@ import { generate } from "../src/world/generate";
 import { Tile } from "../src/world/types";
 
 test("crater islands hold two endemics: iris and shore, glowing and marked", () => {
-  for (const seed of [20, 29]) {
+  for (const seed of [20, 39]) {
     const map = generate(seed);
     const base = generatePlantSpecies(seed);
     const endemics = generateCraterEndemics(seed, map.crater!, base.length);

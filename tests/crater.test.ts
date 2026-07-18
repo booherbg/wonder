@@ -3,7 +3,7 @@ import { MURMURS } from "../src/game/murmurs";
 import { generate } from "../src/world/generate";
 import { Tile, WALKABLE, WorldMap } from "../src/world/types";
 
-const CRATER_SEEDS = [20, 25, 39];
+const CRATER_SEEDS = [20, 39, 59];
 const PLAIN_SEEDS = [1, 42];
 
 function reachesLake(map: WorldMap): boolean {

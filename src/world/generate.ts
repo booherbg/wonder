@@ -10,29 +10,102 @@ const NEIGHBORS4: ReadonlyArray<readonly [number, number]> = [
   [0, -1],
 ];
 
-// fBm elevation shaped by radial falloff: guaranteed sea at the edges,
-// highlands only possible inland. The falloff center and steepness are
-// jittered per seed so islands come out lopsided, stretched, or compact —
-// no two silhouettes alike.
-export function buildElevation(seed: number, cfg: WorldConfig): Float32Array {
+// Island shapes: the falloff mask that decides an island's whole silhouette.
+// Rolled per seed so no run of islands feels like the same mountain again.
+export type IslandShape = "highland" | "twin" | "ridge" | "lowland" | "crescent" | "skerries";
+
+export const SHAPES: readonly IslandShape[] = [
+  "highland", "twin", "ridge", "lowland", "crescent", "skerries",
+];
+
+export const SHAPE_PHRASE: Record<IslandShape, string> = {
+  highland: "a highland isle",
+  twin: "a twin-peaked isle",
+  ridge: "a long ridge of an isle",
+  lowland: "a lowland weald",
+  crescent: "a crescent isle",
+  skerries: "a scatter of skerries",
+};
+
+export function rollShape(seed: number): IslandShape {
+  const r = hash2d(seed, 21, 0x54a9e);
+  if (r < 0.28) return "highland";
+  if (r < 0.44) return "twin";
+  if (r < 0.58) return "ridge";
+  if (r < 0.78) return "lowland";
+  if (r < 0.88) return "crescent";
+  return "skerries";
+}
+
+// fBm elevation shaped by the island's rolled silhouette: guaranteed sea at
+// the edges, highlands only possible inland. Center, steepness, orientation,
+// and separation all jitter per seed — no two silhouettes alike.
+export function buildElevation(
+  seed: number,
+  cfg: WorldConfig,
+  shape: IslandShape = rollShape(seed),
+): Float32Array {
   const { width, height } = cfg;
   const shapeRng = makeRng(seed ^ 0x15a4d);
   const cx = (shapeRng() - 0.5) * 0.3; // island center drifts up to ±15%
   const cy = (shapeRng() - 0.5) * 0.3;
   const scale = cfg.elevationScale * (0.8 + shapeRng() * 0.4);
   const sharpness = cfg.falloffSharpness * (0.8 + shapeRng() * 0.4);
+  const theta = shapeRng() * Math.PI; // orientation for twin / ridge / crescent
+  const off = 0.24 + shapeRng() * 0.14; // twin separation, crescent bite reach
+  const stretch = 1.9 + shapeRng() * 0.8; // ridge elongation
+  const ux = Math.cos(theta);
+  const uy = Math.sin(theta);
   const BORDER_MARGIN = 12; // tiles over which land is forced down to sea at map edges
+  const radial = (dx: number, dy: number, sh: number) => {
+    const d = Math.sqrt(dx * dx + dy * dy);
+    return Math.max(0, 1 - Math.pow(d, sh));
+  };
   const out = new Float32Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const nx = (2 * x) / (width - 1) - 1 - cx;
       const ny = (2 * y) / (height - 1) - 1 - cy;
-      const d = Math.sqrt(nx * nx + ny * ny);
-      const falloff = Math.max(0, 1 - Math.pow(d, sharpness));
+      let falloff: number;
+      switch (shape) {
+        case "twin":
+          falloff = Math.max(
+            radial(nx - ux * off, ny - uy * off, sharpness),
+            radial(nx + ux * off, ny + uy * off, sharpness),
+          );
+          break;
+        case "ridge": {
+          const rx = nx * ux + ny * uy;
+          const ry = -nx * uy + ny * ux;
+          falloff = radial(rx / stretch, ry, sharpness);
+          break;
+        }
+        case "crescent": {
+          // a broad base with a compact lens bitten from one flank: the bay
+          const bite = radial((nx - ux * 0.5) / 0.55, (ny - uy * 0.5) / 0.55, sharpness);
+          falloff = Math.max(0, radial(nx, ny, sharpness * 1.2) - 0.7 * bite);
+          break;
+        }
+        case "skerries": {
+          const broken = fbm(x / 20, y / 20, seed + 4242, 3);
+          falloff = radial(nx, ny, Math.max(1, sharpness * 0.85)) * (0.35 + 0.75 * broken);
+          break;
+        }
+        case "lowland":
+          falloff = radial(nx, ny, sharpness * 0.75); // broad and gentle
+          break;
+        default:
+          falloff = radial(nx, ny, sharpness);
+      }
       const border = Math.min(x, y, width - 1 - x, height - 1 - y);
       const borderFalloff = Math.min(1, border / BORDER_MARGIN);
       const raw = fbm(x / scale, y / scale, seed, cfg.elevationOctaves);
-      out[y * width + x] = raw * falloff * borderFalloff;
+      let e = raw * falloff * borderFalloff;
+      if (shape === "lowland") {
+        const knee = cfg.rockLevel - 0.1;
+        if (e > knee) e = knee + (e - knee) * 0.22; // the hills never become mountains
+      }
+      out[y * width + x] = e;
     }
   }
   return out;
@@ -148,9 +221,18 @@ export function carveRivers(
   seed: number,
   cfg: WorldConfig,
 ): River[] {
-  const springs: number[] = [];
+  let springs: number[] = [];
   for (let i = 0; i < elevation.length; i++) {
     if (elevation[i] >= cfg.riverMinSpringElevation) springs.push(i);
+  }
+  if (springs.length === 0) {
+    // a gentle island still gathers water on its highest ground: springs
+    // rise from the top slice of whatever elevation it actually has
+    const sorted = Array.from(elevation).sort((a, b) => b - a);
+    const threshold = Math.max(sorted[Math.floor(sorted.length * 0.015)], cfg.beachLevel + 0.02);
+    for (let i = 0; i < elevation.length; i++) {
+      if (elevation[i] >= threshold) springs.push(i);
+    }
   }
   const rivers: River[] = [];
   if (springs.length === 0) return rivers;
@@ -163,9 +245,13 @@ export function carveRivers(
   return rivers;
 }
 
-export function generate(seed: number, config: WorldConfig = DEFAULT_CONFIG): WorldMap {
+export function generate(
+  seed: number,
+  config: WorldConfig = DEFAULT_CONFIG,
+  shape?: IslandShape,
+): WorldMap {
   for (let attempt = 0; attempt < config.maxGenerationAttempts; attempt++) {
-    const map = tryGenerate(seed, seed + attempt, config);
+    const map = tryGenerate(seed, seed + attempt, config, shape);
     if (map) return map;
   }
   throw new Error(
@@ -173,9 +259,15 @@ export function generate(seed: number, config: WorldConfig = DEFAULT_CONFIG): Wo
   );
 }
 
-function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): WorldMap | null {
+function tryGenerate(
+  displaySeed: number,
+  genSeed: number,
+  cfg: WorldConfig,
+  forcedShape?: IslandShape,
+): WorldMap | null {
   const { width, height } = cfg;
-  const elevation = buildElevation(genSeed, cfg);
+  const shape = forcedShape ?? rollShape(genSeed);
+  const elevation = buildElevation(genSeed, cfg, shape);
   const tiles = classifyTiles(elevation, genSeed, cfg);
   const carved = placeCrater(elevation, tiles, genSeed, cfg);
   const rivers = carveRivers(elevation, tiles, genSeed, cfg);
@@ -190,13 +282,16 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
 
   const spawn = findSpawn(tiles, elevation, cfg);
   if (!spawn) return null;
+  // the caldera's promise is structural: if its inner shore can't be waded
+  // to from spawn, this island never existed — reroll
+  if (carved && !craterReachable(tiles, spawn, carved.crater, cfg)) return null;
 
   const pockets = placePockets(tiles, spawn, genSeed, cfg);
   const springs = placeSprings(tiles, genSeed, cfg);
   const falls = placeFalls(elevation, rivers, cfg);
   return {
     width, height, seed: displaySeed, tiles, elevation, rivers, spawn,
-    pockets, springs, falls, crater: carved?.crater, confluences,
+    pockets, springs, falls, crater: carved?.crater, confluences, shape,
   };
 }
 
@@ -310,6 +405,36 @@ export function placeCrater(
   }
   const outflow = traceRiver(elevation, tiles, mouthAt(bestA), cfg);
   return { crater: { x: cx, y: cy, lakeRadius: lakeR, rimRadius: rimR }, outflow };
+}
+
+// Can a wanderer walk (and wade) from spawn to the caldera's inner shore?
+function craterReachable(
+  tiles: Uint8Array,
+  spawn: { x: number; y: number },
+  crater: Crater,
+  cfg: WorldConfig,
+): boolean {
+  const { width, height } = cfg;
+  const seen = new Uint8Array(tiles.length);
+  const stack = [spawn.y * width + spawn.x];
+  seen[stack[0]] = 1;
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    const x = i % width;
+    const y = (i / width) | 0;
+    if (Math.hypot(x - crater.x, y - crater.y) <= crater.lakeRadius) return true;
+    for (const [dx, dy] of NEIGHBORS4) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const j = ny * width + nx;
+      if (!seen[j] && WALKABLE.has(tiles[j] as Tile)) {
+        seen[j] = 1;
+        stack.push(j);
+      }
+    }
+  }
+  return false;
 }
 
 // A dry run of traceRiver's steepest-descent walk: would water released
