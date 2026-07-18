@@ -5,7 +5,13 @@ import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
 import { PALETTE } from "./palette";
-import { PLANT_ANCHOR_X, PLANT_ANCHOR_Y, getPlantSprite } from "./plantSprites";
+import {
+  GLOW_R,
+  PLANT_ANCHOR_X,
+  PLANT_ANCHOR_Y,
+  getGlowHalo,
+  getPlantSprite,
+} from "./plantSprites";
 import { SCALE, VARIANTS, buildTileAtlas, drawPlayerSprite } from "./tiles";
 
 const WATER_FRAME_MS = 450;
@@ -16,7 +22,10 @@ export interface Scene {
   flora: Flora | null;
   critters?: Critter[] | null;
   critterSpecies?: CritterSpecies[] | null;
+  darkness?: number; // 0 = day .. MAX_DARKNESS at night
 }
+
+const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -88,6 +97,8 @@ export class Renderer {
     // entity pass, top row to bottom so taller things overlap what's behind them
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
+    const darkness = scene.darkness ?? 0;
+    const glowers: { x: number; y: number; hue: number; genome: Parameters<typeof getPlantSprite>[0] }[] = [];
     for (let ty = y0; ty <= Math.min(map.height - 1, y1 + yPad); ty++) {
       if (scene.critterSpecies) {
         for (const sp of scene.critterSpecies) {
@@ -109,6 +120,9 @@ export class Renderer {
               Math.round(p.x - PLANT_ANCHOR_X - camX),
               Math.round(p.y - PLANT_ANCHOR_Y - camY),
             );
+            if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
+              glowers.push({ x: p.x, y: p.y, hue: p.genome.hue, genome: p.genome });
+            }
           }
         }
       }
@@ -132,6 +146,53 @@ export class Renderer {
           Math.round(scene.player.y - 15 - camY),
         );
       }
+    }
+
+    if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers);
+  }
+
+  // Night falls over everything already drawn; then the things that make
+  // their own light — glow plants and the wanderer's small lantern —
+  // are painted back on top of the dark.
+  private nightPass(
+    camX: number,
+    camY: number,
+    scene: Scene,
+    darkness: number,
+    glowers: { x: number; y: number; hue: number; genome: Parameters<typeof getPlantSprite>[0] }[],
+  ): void {
+    const { ctx } = this;
+    ctx.fillStyle = `rgba(8, 14, 34, ${(darkness * 0.62).toFixed(3)})`;
+    ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
+
+    ctx.globalCompositeOperation = "lighter";
+    for (const g of glowers) {
+      ctx.globalAlpha = darkness * 0.9;
+      ctx.drawImage(
+        getGlowHalo(g.hue),
+        Math.round(g.x - GLOW_R - camX),
+        Math.round(g.y - GLOW_R - 8 - camY),
+      );
+    }
+    ctx.globalCompositeOperation = "source-over";
+    for (const g of glowers) {
+      ctx.globalAlpha = darkness * 0.85; // the plant itself stays lit
+      ctx.drawImage(
+        getPlantSprite(g.genome),
+        Math.round(g.x - PLANT_ANCHOR_X - camX),
+        Math.round(g.y - PLANT_ANCHOR_Y - camY),
+      );
+    }
+    ctx.globalAlpha = 1;
+
+    if (scene.player) {
+      const px = scene.player.x - camX;
+      const py = scene.player.y - 8 - camY;
+      const lantern = ctx.createRadialGradient(px, py, 4, px, py, 52);
+      lantern.addColorStop(0, `rgba(255, 220, 150, ${(darkness * 0.3).toFixed(3)})`);
+      lantern.addColorStop(1, "rgba(255, 220, 150, 0)");
+      ctx.fillStyle = lantern;
+      ctx.fillRect(px - 52, py - 52, 104, 104);
     }
   }
 }

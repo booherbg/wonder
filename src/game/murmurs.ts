@@ -20,7 +20,8 @@ export type MurmurTag =
   | "gather"
   | "sow"
   | "sport" // meeting the island's oddball species
-  | "critter";
+  | "critter"
+  | "night";
 
 export const MURMURS: Murmur[] = [
   {
@@ -112,6 +113,16 @@ export const MURMURS: Murmur[] = [
     text: "life did not take over the world by combat, but by networking.",
     attribution: "— lynn margulis & dorion sagan, microcosmos (1986)",
     tag: "critter",
+  },
+  {
+    text: "for my part i know nothing with any certainty, but the sight of the stars makes me dream.",
+    attribution: "— vincent van gogh, letter to theo (1888)",
+    tag: "night",
+  },
+  {
+    text: "we are a way for the cosmos to know itself.",
+    attribution: "— carl sagan, cosmos (1980)",
+    tag: "night",
   },
 ];
 

@@ -9,6 +9,33 @@ export const PLANT_ANCHOR_Y = 26;
 
 const CACHE_CAP = 512;
 const cache = new Map<string, HTMLCanvasElement>();
+const glowCache = new Map<number, HTMLCanvasElement>();
+
+// Soft diamond of colored light, drawn additively at night around glowers.
+export const GLOW_R = 12;
+export function getGlowHalo(hue: number): HTMLCanvasElement {
+  const key = Math.round(((hue % 1) + 1) % 1 * 24) % 24;
+  const hit = glowCache.get(key);
+  if (hit) return hit;
+  const size = GLOW_R * 2;
+  const c = document.createElement("canvas");
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext("2d")!;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = (Math.abs(x - GLOW_R) + Math.abs(y - GLOW_R)) / GLOW_R; // diamond falloff
+      if (d >= 1) continue;
+      const a = (1 - d) * (1 - d) * 0.5;
+      ctx.fillStyle = hsl(key / 24, 0.9, 0.7);
+      ctx.globalAlpha = a;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+  glowCache.set(key, c);
+  return c;
+}
 
 export function getPlantSprite(g: Genome): HTMLCanvasElement {
   const key = phenoKey(g);

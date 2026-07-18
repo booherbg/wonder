@@ -25,9 +25,11 @@ Open http://localhost:5173.
   **?at=tx,ty** — start at a tile (dev aid)
 
 Deep water, bare rock, and snow block your path; you can wade through
-rivers and shallows. Stand still sometimes. Follow the critters — they know
-where the good things grow. One species on every island is a ✶ sport:
-stranger, brighter, worth finding.
+rivers, shallows, and marshes. Stand still sometimes. Follow the critters —
+they know where the good things grow. One species on every island is a
+✶ sport: stranger, brighter, worth finding. Days are about four minutes
+long; stay out after dusk and the glow-trait plants reveal themselves
+(`?night=1` to force night).
 
 ## Tweak it
 

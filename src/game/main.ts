@@ -11,8 +11,11 @@ import { hsl } from "../life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
+import { darknessAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine } from "./murmurs";
+
+const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { islandName } from "../world/name";
@@ -277,7 +280,9 @@ function frame(now: number): void {
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
-  renderer.draw(camX, camY, { player, flora, critters, critterSpecies }, now);
+  const darkness = FORCE_NIGHT ? 0.75 : darknessAt(now);
+  if (darkness > 0.6) murmurs.offer("night");
+  renderer.draw(camX, camY, { player, flora, critters, critterSpecies, darkness }, now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
