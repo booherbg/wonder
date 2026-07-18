@@ -12,11 +12,41 @@
         font: 12px monospace; color: rgba(255, 255, 255, 0.55);
         user-select: none;
       }
+      #hud {
+        position: fixed; right: 12px; bottom: 10px;
+        font: 12px monospace; color: rgba(255, 255, 255, 0.75);
+        text-align: right; user-select: none;
+      }
+      #hud .dot {
+        display: inline-block; width: 10px; height: 10px;
+        border-radius: 2px; margin-left: 4px; vertical-align: middle;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+      #hud .msg { display: block; margin-bottom: 4px; color: rgba(255, 255, 255, 0.9); }
+      #inspect {
+        display: none;
+        position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);
+        max-width: min(920px, 92vw); max-height: 60vh; overflow-y: auto;
+        background: rgba(8, 12, 18, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+        padding: 14px 16px; font: 12px monospace; color: #dfe7ef;
+      }
+      #inspect .inspect-title { opacity: 0.7; margin-bottom: 10px; }
+      #inspect .inspect-grid {
+        display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
+      }
+      #inspect .inspect-card { width: 110px; text-align: center; }
+      #inspect canvas { image-rendering: pixelated; width: 96px; height: 168px; }
+      #inspect .inspect-name { margin-top: 4px; color: #ffffff; }
+      #inspect .inspect-traits { opacity: 0.65; margin-top: 2px; line-height: 1.5; }
+      #inspect .inspect-hint { opacity: 0.45; margin-top: 12px; text-align: center; }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="seed-label"></div>
+    <div id="hud"></div>
+    <div id="inspect"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

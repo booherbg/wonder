@@ -7,8 +7,11 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { Flora } from "../life/flora";
+import { hsl } from "../life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { clearCritterSpriteCache } from "../render/critterSprites";
+import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
+import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { WorldMap } from "../world/types";
@@ -35,6 +38,36 @@ function randomSeed(): number {
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const seedLabel = document.getElementById("seed-label")!;
+const hud = document.getElementById("hud")!;
+
+const GATHER_RANGE = 24; // px
+const INSPECT_RANGE = 2.5 * TILE_SIZE;
+
+let inventory: Inventory = emptyInventory();
+let hudMsg = "";
+let hudMsgTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flashHud(msg: string): void {
+  hudMsg = msg;
+  if (hudMsgTimer) clearTimeout(hudMsgTimer);
+  hudMsgTimer = setTimeout(() => {
+    hudMsg = "";
+    renderHud();
+  }, 2600);
+  renderHud();
+}
+
+function renderHud(): void {
+  const dots = inventory.seeds
+    .map(
+      (s) =>
+        `<span class="dot" style="background:${hsl(s.genome.hue, s.genome.sat, 0.55)}"></span>`,
+    )
+    .join("");
+  const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
+  const seeds = inventory.seeds.length > 0 ? `seeds ${dots}` : "E inspect · F gather · G sow";
+  hud.innerHTML = `${msg}${seeds}`;
+}
 
 let map!: WorldMap;
 let player!: Player;
@@ -55,10 +88,25 @@ function loadWorld(seed: number): void {
   clearCritterSpriteCache();
   simAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
+  inventory = emptyInventory();
+  closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
   seedLabel.textContent = `seed ${seed} — R for a new island`;
+  renderHud();
+}
+
+function openInspectAtPlayer(): void {
+  const nearby = flora
+    .plantsNear(player.x, player.y, INSPECT_RANGE)
+    .sort(
+      (a, b) =>
+        (a.x - player.x) ** 2 + (a.y - player.y) ** 2 -
+        ((b.x - player.x) ** 2 + (b.y - player.y) ** 2),
+    )
+    .slice(0, 8);
+  openInspect(nearby, species);
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -72,6 +120,8 @@ if (at) {
   }
 }
 const renderer = new Renderer(canvas, map);
+// dev aid: ?inspect=1 opens the inspect panel on load (screenshot tours)
+if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
 
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => {
@@ -80,6 +130,49 @@ window.addEventListener("keydown", (e) => {
   if (k === "r") {
     loadWorld(randomSeed());
     renderer.setMap(map);
+  } else if (k === "escape") {
+    closeInspect();
+  } else if (k === "e") {
+    if (isInspectOpen()) {
+      closeInspect();
+    } else {
+      openInspectAtPlayer();
+    }
+  } else if (k === "f") {
+    const near = flora.plantsNear(player.x, player.y, GATHER_RANGE);
+    if (near.length === 0) {
+      flashHud("nothing in reach to gather");
+    } else {
+      const plant = near[0];
+      const next = gather(inventory, { species: plant.species, genome: plant.genome });
+      if (!next) {
+        flashHud("your seed pouch is full");
+      } else {
+        inventory = next;
+        flashHud(`a seed of ${species[plant.species].name}`);
+      }
+    }
+  } else if (k === "g") {
+    const result = sow(inventory);
+    if (!result) {
+      flashHud("no seeds to sow");
+    } else {
+      const [rest, seedToPlant] = result;
+      const planted = flora.addPlant(
+        seedToPlant.species,
+        seedToPlant.genome,
+        player.x + 6,
+        player.y + 2,
+        flora.tick,
+      );
+      if (planted) {
+        inventory = rest;
+        flashHud(`${species[seedToPlant.species].name} takes root`);
+      } else {
+        flashHud("it will not grow here");
+      }
+    }
+    renderHud();
   }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
