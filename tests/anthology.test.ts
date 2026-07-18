@@ -2,9 +2,11 @@ import { expect, test } from "vitest";
 import {
   ANTHOLOGY_CAP,
   ANTHOLOGY_KEY,
+  COOLDOWN_MS,
   KV,
   MURMURS,
   MurmurEngine,
+  REHEAR_MS,
   loadAnthology,
   recordInAnthology,
 } from "../src/game/murmurs";
@@ -49,9 +51,26 @@ test("the engine records what it offers, with the place it was heard", () => {
   const kv = fakeKV();
   const engine = new MurmurEngine(kv);
   engine.setPlace("Lulu Holm");
-  engine.offer("island", 60_000);
+  engine.offer("island", COOLDOWN_MS + 1);
   const entries = loadAnthology(kv);
   expect(entries.length).toBe(1);
   expect(entries[0].place).toBe("Lulu Holm");
   expect(entries[0].attribution.startsWith("—")).toBe(true);
+});
+
+test("recently heard words stay quiet across a reload; old ones may return", () => {
+  const islandMurmurs = MURMURS.filter((m) => m.tag === "island");
+  const kv = fakeKV();
+  recordInAnthology(islandMurmurs[0], "x", Date.now() - 1000, kv); // heard just now
+  const engine = new MurmurEngine(kv); // a fresh sitting, same storage
+  engine.offer("island", COOLDOWN_MS + 1);
+  const entries = loadAnthology(kv);
+  expect(entries.length).toBe(2);
+  expect(entries[1].text).toBe(islandMurmurs[1].text); // it skipped to unheard words
+
+  const kv2 = fakeKV();
+  recordInAnthology(islandMurmurs[0], "x", Date.now() - REHEAR_MS - 60_000, kv2); // long ago
+  const engine2 = new MurmurEngine(kv2);
+  engine2.offer("island", COOLDOWN_MS + 1);
+  expect(loadAnthology(kv2)[1].text).toBe(islandMurmurs[0].text); // old words come back
 });

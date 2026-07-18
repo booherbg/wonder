@@ -5,7 +5,7 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
-import { isBiolumeNight } from "../game/daynight";
+import { CYCLE_MS, DAY_MS, isBiolumeNight } from "../game/daynight";
 import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
@@ -229,6 +229,39 @@ export class Renderer {
             2,
             1,
           );
+        }
+      }
+    }
+
+    // the morning after a glowing tide, the wet sand keeps a little of it —
+    // glints that fade as the day wears on
+    const darknessForResidue = scene.darkness ?? 0;
+    if (isBiolumeNight(timeMs - CYCLE_MS, map.seed) && darknessForResidue < 0.3) {
+      const t = ((timeMs % CYCLE_MS) + CYCLE_MS) % CYCLE_MS;
+      const fade = Math.max(0, 1 - t / DAY_MS);
+      if (fade > 0.02) {
+        for (let ty = y0; ty <= y1; ty++) {
+          for (let tx = x0; tx <= x1; tx++) {
+            if (map.tiles[ty * map.width + tx] !== Tile.Sand) continue;
+            const nearWater =
+              map.tiles[ty * map.width + Math.min(map.width - 1, tx + 1)] <= Tile.ShallowWater ||
+              map.tiles[ty * map.width + Math.max(0, tx - 1)] <= Tile.ShallowWater ||
+              map.tiles[Math.min(map.height - 1, ty + 1) * map.width + tx] <= Tile.ShallowWater ||
+              map.tiles[Math.max(0, ty - 1) * map.width + tx] <= Tile.ShallowWater;
+            if (!nearWater) continue;
+            for (let k = 0; k < 2; k++) {
+              const h = hash2d(tx * 3 + k, ty, map.seed ^ 0x71de);
+              const tw = Math.sin(timeMs / 900 + h * 6.28);
+              if (tw < 0.35) continue;
+              ctx.fillStyle = `rgba(140, 245, 215, ${(0.3 * fade * tw).toFixed(3)})`;
+              ctx.fillRect(
+                Math.round(tx * TILE_SIZE + 2 + h * 12 - camX),
+                Math.round(ty * TILE_SIZE + 2 + hash2d(ty, tx * 3 + k, map.seed) * 12 - camY),
+                1,
+                1,
+              );
+            }
+          }
         }
       }
     }

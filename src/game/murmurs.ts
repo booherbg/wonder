@@ -274,8 +274,9 @@ export const MURMURS: Murmur[] = [
   },
 ];
 
-const COOLDOWN_MS = 45_000;
+export const COOLDOWN_MS = 120_000; // at most one murmur every two minutes
 const SHOW_MS = 10_000;
+export const REHEAR_MS = 48 * 3_600_000; // words heard recently stay unspoken
 
 // The murmur echoes: every murmur the world has ever offered, kept in the
 // order of the offering, across every island and every sitting — the
@@ -346,7 +347,14 @@ export class MurmurEngine {
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
   private place = "somewhere";
 
-  constructor(private kv: KV | null = defaultKV()) {}
+  // The anthology remembers across sittings: anything heard within
+  // REHEAR_MS stays quiet, so reloading never replays the same words.
+  constructor(private kv: KV | null = defaultKV()) {
+    const cutoff = Date.now() - REHEAR_MS;
+    for (const e of loadAnthology(this.kv)) {
+      if (e.at > cutoff) this.shown.add(e.text);
+    }
+  }
 
   // The island whose name the anthology will remember.
   setPlace(name: string): void {

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { MURMURS, pickMurmur } from "../src/game/murmurs";
+import { COOLDOWN_MS, MURMURS, pickMurmur } from "../src/game/murmurs";
 
 test("every murmur has text, an em-dash attribution, and a tag", () => {
   for (const m of MURMURS) {
@@ -10,8 +10,8 @@ test("every murmur has text, an em-dash attribution, and a tag", () => {
 });
 
 test("pickMurmur respects the cooldown", () => {
-  expect(pickMurmur("island", new Set(), 0, 10_000)).toBeNull();
-  expect(pickMurmur("island", new Set(), 0, 60_000)).not.toBeNull();
+  expect(pickMurmur("island", new Set(), 0, COOLDOWN_MS - 1)).toBeNull();
+  expect(pickMurmur("island", new Set(), 0, COOLDOWN_MS + 1)).not.toBeNull();
 });
 
 test("pickMurmur never repeats and eventually runs dry per tag", () => {

@@ -76,3 +76,16 @@ test("on a bloom day the fungi answer threefold", () => {
   }
   expect(flora.count).toBeGreaterThan(flora2.count);
 });
+
+test("aurora-born plants carry more glow than their ordinary siblings", () => {
+  const { flora, flora2 } = fungusWorld();
+  for (let i = 0; i < 60; i++) {
+    flora.simTick({ aurora: true });
+    flora2.simTick({});
+  }
+  const meanGlow = (f: Flora) => {
+    const kids = f.all.filter((p) => p.born > 0);
+    return kids.reduce((s, p) => s + p.genome.glow, 0) / Math.max(1, kids.length);
+  };
+  expect(meanGlow(flora)).toBeGreaterThan(meanGlow(flora2) + 0.05);
+});

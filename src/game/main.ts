@@ -222,9 +222,7 @@ function loadWorld(seed: number): void {
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
-  // the island's whisper: its most recent memory rides the label
-  const whisper = memories.length > 0 ? ` · ${memories[memories.length - 1]}` : "";
-  seedLabel.textContent = `${islandName(seed)} · seed ${seed}${whisper} — R for a new island`;
+  seedLabel.textContent = `${islandName(seed)} · seed ${seed} — R for a new island`;
   murmurs.setPlace(islandName(seed));
   renderHud();
   if (saved) {
@@ -506,10 +504,15 @@ function frame(now: number): void {
   player.update(dt, input(), map);
   const rainNow = FORCE_RAIN ? 0.85 : rainAt(now, currentSeed);
   const bloomToday = isBloomDay(now, currentSeed);
+  const auroraTonight = FORCE_AURORA || isAuroraNight(now, currentSeed);
   rainMurmurArmed = rainNow > 0.5;
   simAcc += dt * 1000;
   while (simAcc >= SIM_MS) {
-    flora.simTick({ rain: rainNow > 0.2, bloom: bloomToday });
+    flora.simTick({
+      rain: rainNow > 0.2,
+      bloom: bloomToday,
+      aurora: auroraTonight && darknessAt(now) > 0.6,
+    });
     simAcc -= SIM_MS;
   }
   for (const ev of flora.takeEvents()) {
@@ -552,7 +555,6 @@ function frame(now: number): void {
     map.height * TILE_SIZE - renderer.viewHeight,
   );
   const darkness = darknessNow;
-  const auroraTonight = FORCE_AURORA || isAuroraNight(now, currentSeed);
   if (darkness > 0.6) {
     murmurs.offer("night");
     if (auroraTonight) {

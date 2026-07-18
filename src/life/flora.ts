@@ -190,8 +190,9 @@ export class Flora {
 
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
   // dies, and reseeds nearby with drifted genomes. Rain quickens everything
-  // a little; the day after rain, the fungi answer threefold.
-  simTick(weather: { rain?: boolean; bloom?: boolean } = {}): void {
+  // a little; the day after rain, the fungi answer threefold; children born
+  // under an aurora carry a little of its light for good.
+  simTick(weather: { rain?: boolean; bloom?: boolean; aurora?: boolean } = {}): void {
     this.tick++;
     const t = this.tuning;
     const n = Math.min(t.simBudget, this.all.length);
@@ -232,7 +233,7 @@ export class Flora {
           (q) => q !== p && q.species === p.species,
         );
         const drift = t.mutationAmount * (weather.rain ? 1.25 : 1); // rain quickens drift
-        const genome =
+        let genome =
           partners.length > 0
             ? cross(
                 p.genome,
@@ -241,6 +242,10 @@ export class Flora {
                 drift,
               )
             : mutate(p.genome, this.rng, drift);
+        if (weather.aurora) {
+          // aurora-born: the sky's light settles into the lineage
+          genome = { ...genome, glow: clampTrait("glow", genome.glow + 0.08 + this.rng() * 0.15) };
+        }
         const child = this.addPlant(p.species, genome, x, y, this.tick);
         if (child) this.maybeSpeciate(child);
       }
