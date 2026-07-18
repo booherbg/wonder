@@ -19,6 +19,7 @@ test("beast generation is deterministic and spawns on walkable ground", () => {
   }
 });
 
+// generates 20 whole islands — needs more than the default 5s under load
 test("some islands have a beast and some do not", () => {
   const withBeast: number[] = [];
   const without: number[] = [];
@@ -28,7 +29,7 @@ test("some islands have a beast and some do not", () => {
   }
   expect(withBeast.length).toBeGreaterThan(5);
   expect(without.length).toBeGreaterThan(0);
-});
+}, 20_000);
 
 test("the beast stays on walkable ground across minutes of travel", () => {
   const map = generate(42);

@@ -2,8 +2,19 @@ import { Rng, makeRng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { WorldMap, isWalkable } from "../world/types";
 import { Flora } from "./flora";
-import { PlantForm } from "./genome";
+import { Genome, PlantForm } from "./genome";
 import { PlantSpecies } from "./species";
+
+// What a critter's mouth knows: not a species name but a taste — a form it
+// can eat, a color it seeks, a feeling about glow. Anything that matches
+// draws it: sown plants, drifted individuals, daughter species. Anything
+// that drifts out of the taste quietly stops being food.
+export interface Palate {
+  form: PlantForm; // the shape it knows how to eat
+  hueCenter: number; // 0..1 around the wheel, the color it seeks
+  hueWidth: number; // tolerance either side of that color
+  glowTaste: number; // -1 shuns light .. +1 seeks it
+}
 
 export interface CritterSpecies {
   id: number;
@@ -12,9 +23,23 @@ export interface CritterSpecies {
   earLen: number; // 0..1
   tailLen: number; // 0..1
   size: number; // 0.75..1.25
-  favoriteSpecies: number; // the plant species this critter forages
+  palate: Palate; // taste over traits; does the day-to-day choosing
+  favoriteSpecies: number; // the species it was born loving (den anchor, UI)
   den: { x: number; y: number }; // tile coords of its burrow
 }
+
+// 0 = inedible to this critter .. 1 = exactly to its taste.
+export function appetite(palate: Palate, g: Genome): number {
+  if (g.form !== palate.form) return 0;
+  const d = Math.abs(g.hue - palate.hueCenter);
+  const hueDist = Math.min(d, 1 - d); // hue wraps the wheel
+  const hueScore = Math.max(0, 1 - hueDist / palate.hueWidth);
+  const target = (palate.glowTaste + 1) / 2;
+  const glowScore = 1 - Math.abs(g.glow - target);
+  return hueScore * (0.6 + 0.4 * glowScore);
+}
+
+export const APPETITE_MIN = 0.3; // below this a plant is just scenery
 
 export type CritterState = "idle" | "seek" | "nibble" | "home";
 
@@ -45,8 +70,10 @@ function critterName(rng: Rng): string {
   return `${word.charAt(0).toUpperCase()}${word.slice(1)} ${epithet.charAt(0).toUpperCase()}${epithet.slice(1)}`;
 }
 
-// Three species per island, each devoted to one (preferably nibblable,
-// non-tree) plant species, denned where those plants actually grow.
+// Three species per island, each born loving one (preferably nibblable,
+// non-tree) plant species and denned where those plants actually grow.
+// The palate is cut from that species' archetype, so the love generalizes:
+// close colors and kin qualify, far drift disqualifies.
 export function generateCritterSpecies(
   seed: number,
   map: WorldMap,
@@ -54,6 +81,7 @@ export function generateCritterSpecies(
   plants: PlantSpecies[],
 ): CritterSpecies[] {
   const rng = makeRng(seed ^ 0xc417);
+  const taste = makeRng(seed ^ 0x9a1a7e); // palates draw their own stream
   const nibblable = plants.filter(
     (p) => p.archetype.form !== PlantForm.Tree && p.archetype.form !== PlantForm.Coral,
   );
@@ -63,16 +91,26 @@ export function generateCritterSpecies(
     const pick = pool[Math.floor(rng() * pool.length)];
     if (!favorites.includes(pick)) favorites.push(pick);
   }
-  return favorites.map((favoriteSpecies, id) => ({
-    id,
-    name: critterName(rng),
-    bodyHue: rng(),
-    earLen: rng(),
-    tailLen: rng(),
-    size: 0.75 + rng() * 0.5,
-    favoriteSpecies,
-    den: findDen(rng, map, flora, favoriteSpecies),
-  }));
+  return favorites.map((favoriteSpecies, id) => {
+    const arch = plants[favoriteSpecies].archetype;
+    const palate: Palate = {
+      form: arch.form,
+      hueCenter: (arch.hue + (taste() - 0.5) * 0.06 + 1) % 1,
+      hueWidth: 0.12 + taste() * 0.14,
+      glowTaste: Math.max(-1, Math.min(1, arch.glow * 2 - 1 + (taste() - 0.5) * 0.5)),
+    };
+    return {
+      id,
+      name: critterName(rng),
+      bodyHue: rng(),
+      earLen: rng(),
+      tailLen: rng(),
+      size: 0.75 + rng() * 0.5,
+      palate,
+      favoriteSpecies,
+      den: findDen(rng, map, flora, favoriteSpecies),
+    };
+  });
 }
 
 // A walkable tile near where the favorite plants actually grow.
@@ -186,10 +224,11 @@ export function updateCritter(
     c.targetY = c.y + (player.y - c.y) * 0.5;
     c.state = "idle";
   } else if (roll < 0.5) {
-    // graze: nearest favorite plant in sniffing range
+    // graze: the nearest plant in sniffing range that suits the palate —
+    // whatever species it belongs to, however it got here
     const found = flora
       .plantsNear(c.x, c.y, SEEK_RADIUS_PX)
-      .filter((p) => p.species === sp.favoriteSpecies);
+      .filter((p) => appetite(sp.palate, p.genome) > APPETITE_MIN);
     if (found.length > 0) {
       let best = found[0];
       let bd = Infinity;
