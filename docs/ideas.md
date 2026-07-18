@@ -118,6 +118,31 @@ checklist — the journal is a *memoir*, not a todo list. It also solves
 - **Nothing to win.** If a structure ever appears (journal completion,
   archipelago map), it should be the kind you're glad to leave unfinished.
 
+## Second night of dreaming (added while the loop ticked)
+
+- **Traces of before**: press a key near loose stones to build a small
+  cairn. Cairns persist per seed (localStorage) — return to an island
+  months later and find your own markers waiting. The only "save" this
+  game may ever need: not progress, *presence*.
+- **The beast's trail**: pressed grass fading behind it for a minute —
+  you could track something you never quite catch.
+- **Aurora nights**: maybe one night in twenty, slow color curtains over
+  everything; glow plants answer by pulsing. Islands remember it happened
+  (a murmur the next day).
+- **Rain** → the next day's mushroom bloom: weather that pays off later,
+  not instantly.
+- **Bioluminescent tide**: some nights the shallow water itself glints
+  blue-green where you wade.
+- **Singing stones**: a rare rock formation; standing close plays a soft
+  generative chime unique to the island (seed-derived scale). First sound
+  in the game should probably be this — rare, discovered, optional.
+- **Spore motes** drifting slowly in pocket biomes (the shimmer made
+  particulate).
+- **Beachcombing**: driftwood, shells, sea-glass appearing on sand after
+  each night; purely collectible, maybe cairn-building material.
+- **Crater lakes**: rarely, the island's heart is water — a caldera with
+  an inner shore only reachable by one river-cut.
+
 ## Small polish anytime
 
 - Grass sways where the wanderer walks; footprints on sand that fade.
