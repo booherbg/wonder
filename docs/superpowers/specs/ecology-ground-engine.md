@@ -119,11 +119,38 @@ anywhere on screen — appetite stays hidden; the *pattern* is the reward.
 7. **The bench** (vision) — tilt a lineage's drift dice at the home bed;
    released variants get a journal page that keeps writing itself.
 
-## Findings pending from research
+## Progress
 
-To be filled from `../research/ecosystem-prior-art.md` when it lands:
+- **Step 1 (palate + appetite): shipped** `5ddc176`. Critters taste traits,
+  not species names; sown plants, kin, and daughters draw diners on merit.
+- **Step 2 (teeth + ledger): shipped** `458807b`. Nibbles consume growth;
+  critters carry an energy ledger; nothing starves. Perturb-and-recover is
+  proven against an ungrazed twin island.
+- **Next: step 3 (witnessed edges)**, then drives-not-rolls (step 2's
+  decision loop already leans on the ledger; full drive weighting is the
+  richest remaining lever — validated twice by the research below).
 
-- How simple can rules be and still surprise? (rule-count vs. emergence)
-- Discoverability patterns that beat menus (vs. Wander's journal answer)
-- Balance without scripting: parameter ranges, feedback shapes, respawn
-  tension, what to simulate vs. fake at Wander's scale
+## Findings from research (`../research/ecosystem-prior-art.md`)
+
+The prior-art pass (Creatures, Rain World, Equilinox, Dwarf Fortress/URR,
+ecological theory) landed. What it changes here:
+
+- **Simplicity surprises through interaction density**, not rule count
+  (DF's unscripted drunk cats). Build features that *cross* existing ones —
+  tide × day/night × palate × ledger — not standalone systems.
+- **Discoverability = internal state shown as visible behavior** (Creatures,
+  Pirates!). Standing rule: *every hidden tuning value needs a visible
+  tell.* The journal records the tell; the player infers the value.
+- **Balance is tuned offline in data + geometry, never a runtime clamp**
+  (Rain World, Equilinox). Keep the crowding thin as a soft global cap;
+  never add a per-species population controller.
+- **Finite food is the restoring force, and the world's cycles stabilize
+  it.** Lotka-Volterra with carrying capacity self-rights; a *periodic*
+  carrying capacity (Swailem & Täuber 2023) *enlarges* the coexistence
+  zone. So Wander's day/night, tide, and rain/bloom are promoted from
+  flavor to balance infrastructure: when births land (step 6), gate them
+  on a food supply that ebbs with those cycles.
+- **Caveat:** no shipped *peaceful* game provably self-rights after a
+  perturbation (Equilinox's self-correction claim was refuted). Wander's
+  teeth test showing recovery is mildly novel ground — worth keeping as a
+  standing invariant, not assuming from prior art.
