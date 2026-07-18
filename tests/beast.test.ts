@@ -47,4 +47,10 @@ test("the beast stays on walkable ground across minutes of travel", () => {
   const segs = beastSegments(beast!);
   expect(segs).toHaveLength(beast!.segments);
   expect(segs[0].r).toBeGreaterThan(segs[segs.length - 1].r);
+  // the pressed-grass trail exists and never outlives its fade window
+  expect(beast!.trail.length).toBeGreaterThan(0);
+  expect(beast!.trail.length).toBeLessThanOrEqual(220);
+  for (const tp of beast!.trail) {
+    expect(beast!.ageSec - tp.age).toBeLessThanOrEqual(60.1);
+  }
 });

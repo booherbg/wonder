@@ -17,6 +17,8 @@ export interface Beast {
   targetX: number;
   targetY: number;
   history: { x: number; y: number }[]; // recent head positions; body follows
+  trail: { x: number; y: number; age: number }[]; // pressed grass, fading for a minute
+  ageSec: number; // the beast's own clock
   pauseTime: number; // seconds it stands regarding you
   stuckTime: number;
   seen: boolean; // has the wanderer ever come close?
@@ -26,6 +28,9 @@ export const BEAST_SPEED = 26; // px/s — it is never in a hurry
 const HISTORY_SPACING = 2; // px between recorded points
 const SEGMENT_STEP = 4; // history points between body segments
 const PAUSE_RADIUS = 1.6 * TILE_SIZE;
+const TRAIL_SPACING = 10; // px between pressed-grass marks
+export const TRAIL_FADE_S = 60; // how long the trail lasts
+const TRAIL_CAP = 220;
 
 const TITLES = [
   "the long quiet one",
@@ -57,6 +62,8 @@ export function generateBeast(seed: number, map: WorldMap): Beast | null {
     targetX: (target.x + 0.5) * TILE_SIZE,
     targetY: (target.y + 0.5) * TILE_SIZE,
     history: [],
+    trail: [],
+    ageSec: 0,
     pauseTime: 0,
     stuckTime: 0,
     seen: false,
@@ -79,6 +86,8 @@ export function updateBeast(
   player: { x: number; y: number } | null,
   rng: Rng,
 ): void {
+  b.ageSec += dt;
+  while (b.trail.length > 0 && b.ageSec - b.trail[0].age > TRAIL_FADE_S) b.trail.shift();
   if (b.pauseTime > 0) {
     b.pauseTime -= dt;
     return;
@@ -121,6 +130,11 @@ export function updateBeast(
       b.history.unshift({ x: b.x, y: b.y });
       const cap = b.segments * SEGMENT_STEP + 8;
       if (b.history.length > cap) b.history.length = cap;
+    }
+    const lastMark = b.trail[b.trail.length - 1];
+    if (!lastMark || Math.hypot(b.x - lastMark.x, b.y - lastMark.y) >= TRAIL_SPACING) {
+      b.trail.push({ x: b.x, y: b.y, age: b.ageSec });
+      if (b.trail.length > TRAIL_CAP) b.trail.shift();
     }
   } else {
     b.stuckTime += dt;

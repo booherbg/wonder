@@ -1,5 +1,5 @@
 import { hash2d } from "../core/rng";
-import { Beast } from "../life/beast";
+import { Beast, TRAIL_FADE_S } from "../life/beast";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm } from "../life/genome";
@@ -121,6 +121,24 @@ export class Renderer {
         grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
         ctx.fillStyle = grad;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        // spore motes on slow drifting orbits
+        for (let k = 0; k < 5; k++) {
+          const mx = cx + Math.sin(timeMs / 4700 + k * 1.7) * r * 0.55;
+          const my = cy + Math.cos(timeMs / 6100 + k * 2.3) * r * 0.45;
+          const pulse = 0.3 + 0.25 * Math.sin(timeMs / 900 + k * 2.1);
+          ctx.fillStyle = `hsla(${(hue + k * 40) % 360}, 90%, 75%, ${pulse.toFixed(3)})`;
+          ctx.fillRect(Math.round(mx), Math.round(my), 1, 1);
+        }
+      }
+    }
+
+    // the beast's trail: pressed grass, fading over a minute
+    if (scene.beast) {
+      for (const tp of scene.beast.trail) {
+        const a = 0.13 * Math.max(0, 1 - (scene.beast.ageSec - tp.age) / TRAIL_FADE_S);
+        if (a <= 0.015) continue;
+        ctx.fillStyle = `rgba(15, 25, 15, ${a.toFixed(3)})`;
+        ctx.fillRect(Math.round(tp.x - camX) - 1, Math.round(tp.y - camY), 2, 1);
       }
     }
 
