@@ -38,6 +38,7 @@ export interface Scene {
   rain?: number; // 0 = dry .. 1 at the heart of a shower
   materials?: { x: number; y: number; kind: string }[]; // ungathered driftwood/stones
   fire?: boolean; // the camp fire is built (burns beside the garden)
+  bedroll?: boolean; // the woven bedroll on the garden's far side
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -172,6 +173,14 @@ export class Renderer {
             ctx.fillStyle = "hsl(24, 30%, 22%)";
             ctx.fillRect(Math.round(mx + ox), Math.round(my + oy + 4), 2, 1);
           }
+        } else if (m.kind === "rush") {
+          // rushes stand rather than lie: green stems, brown cattail heads
+          ctx.fillStyle = "hsl(85, 28%, 36%)";
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 3), 1, 5);
+          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 2), 1, 4);
+          ctx.fillStyle = "hsl(30, 42%, 30%)";
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 5), 1, 2);
+          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 4), 1, 2);
         } else {
           ctx.fillStyle = "hsl(215, 8%, 52%)";
           ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 2, 2);
@@ -223,6 +232,20 @@ export class Renderer {
           );
         }
       }
+    }
+
+    // the bedroll on the garden's far side: woven rushes, a driftwood head
+    if (scene.home && scene.bedroll) {
+      const bx = (scene.home.x - 2) * TILE_SIZE + 4 - camX;
+      const by = scene.home.y * TILE_SIZE + 2 - camY;
+      ctx.fillStyle = "hsl(48, 38%, 44%)";
+      ctx.fillRect(Math.round(bx), Math.round(by), 7, 11);
+      ctx.fillStyle = "hsla(45, 45%, 28%, 0.55)";
+      for (let d = 2; d < 11; d += 3) {
+        ctx.fillRect(Math.round(bx), Math.round(by + d), 7, 1); // the weave
+      }
+      ctx.fillStyle = "hsl(24, 35%, 32%)";
+      ctx.fillRect(Math.round(bx - 1), Math.round(by - 2), 9, 2); // driftwood headboard
     }
 
     // the wanderer's garden bed: tilled soil and corner stones, 3x3

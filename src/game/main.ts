@@ -16,9 +16,9 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
-import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, rainAt } from "./daynight";
+import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
-import { FIRE_COST, MaterialNode, placeMaterials } from "./materials";
+import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
@@ -90,7 +90,10 @@ function renderHud(): void {
     )
     .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
-  const carried = mat.wood + mat.stone > 0 ? `wood ${mat.wood} · stone ${mat.stone} · ` : "";
+  const carriedParts = (["wood", "stone", "rush"] as const)
+    .filter((k) => mat[k] > 0)
+    .map((k) => `${k} ${mat[k]}`);
+  const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   const seeds =
     inventory.seeds.length > 0
       ? `${carried}seeds ${dots} · G sow · Q toss · E inspect`
@@ -114,10 +117,12 @@ let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
 let home: { x: number; y: number } | null = null;
-let materials: MaterialNode[] = []; // driftwood and loose stones, per seed
+let materials: MaterialNode[] = []; // driftwood, loose stones, marsh rushes, per seed
 let taken = new Set<number>(); // material nodes already gathered
-let mat = { wood: 0, stone: 0 }; // what the wanderer carries
+let mat = { wood: 0, stone: 0, rush: 0 }; // what the wanderer carries
 let fire = false; // the camp fire, once built
+let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
+let skyOffset = 0; // ms slept forward: the sky's clock runs ahead of the wall's
 let saveAcc = 0;
 let rArmed = false;
 
@@ -135,7 +140,7 @@ function persist(): void {
       Date.now(),
       species.slice(baseSpeciesCount),
       memories,
-      { wood: mat.wood, stone: mat.stone, taken: [...taken], fire },
+      { wood: mat.wood, stone: mat.stone, rush: mat.rush, taken: [...taken], fire, bedroll },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -190,8 +195,13 @@ function loadWorld(seed: number): void {
   memories = saved?.memories ? [...saved.memories] : [];
   materials = placeMaterials(map, seed);
   taken = new Set(saved?.camp?.taken ?? []);
-  mat = { wood: saved?.camp?.wood ?? 0, stone: saved?.camp?.stone ?? 0 };
+  mat = {
+    wood: saved?.camp?.wood ?? 0,
+    stone: saved?.camp?.stone ?? 0,
+    rush: saved?.camp?.rush ?? 0,
+  };
   fire = saved?.camp?.fire ?? false;
+  bedroll = saved?.camp?.bedroll ?? false;
   let catchUp = 0;
   let awayBorn: string | null = null; // a species that arose while you were gone
   if (saved) {
@@ -264,6 +274,27 @@ function remember(text: string): void {
   memories.push(text);
   memories = memories.slice(-12);
   persist();
+}
+
+// Sleep swings the sky forward to daybreak. The flora lives the skipped
+// hours for real — the same ticks it would have taken — so you can wake
+// to something that was not there when you lay down.
+function sleepToDawn(sky: number): void {
+  const skipped = msUntilDawn(sky);
+  skyOffset += skipped;
+  const ticks = Math.min(MAX_CATCHUP_TICKS, Math.floor(skipped / SIM_MS));
+  for (let i = 0; i < ticks; i++) flora.simTick();
+  simAcc = 0;
+  const born = flora.takeEvents();
+  for (const ev of born) remember(`${ev.name} arose here`);
+  flashHud(
+    born.length > 0
+      ? `you wake at first light — in the night, ${born[born.length - 1].name} arose`
+      : "you sleep, and the island turns beneath you — dawn",
+  );
+  murmurs.offer("dawn");
+  persist();
+  renderHud();
 }
 
 function openInspectAtPlayer(): void {
@@ -343,8 +374,9 @@ window.addEventListener("keydown", (e) => {
     const tx = Math.floor(player.x / TILE_SIZE);
     const ty = Math.floor(player.y / TILE_SIZE);
     const here = tileAt(map, tx, ty);
-    if (home && !fire && Math.hypot(home.x - tx, home.y - ty) <= 2.5) {
-      // beside an existing home, H tends the camp: build the fire
+    const nearHome = home !== null && Math.hypot(home.x - tx, home.y - ty) <= 2.5;
+    if (nearHome && !fire) {
+      // beside an existing home, H tends the camp: first the fire
       if (mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
         mat.wood -= FIRE_COST.wood;
         mat.stone -= FIRE_COST.stone;
@@ -358,10 +390,33 @@ window.addEventListener("keydown", (e) => {
           `a fire wants ${FIRE_COST.wood} driftwood and ${FIRE_COST.stone} stones — you carry ${mat.wood} and ${mat.stone}`,
         );
       }
+    } else if (nearHome && !bedroll) {
+      // then the bedroll, woven from what the marsh gives
+      if (mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
+        mat.wood -= BEDROLL_COST.wood;
+        mat.rush -= BEDROLL_COST.rush;
+        bedroll = true;
+        flashHud("a bedroll of woven rushes — when dark falls, H here carries you to dawn");
+        murmurs.offer("rest");
+        persist();
+        renderHud();
+      } else {
+        flashHud(
+          `a bedroll wants ${BEDROLL_COST.wood} driftwood and ${BEDROLL_COST.rush} marsh rushes — you carry ${mat.wood} and ${mat.rush}`,
+        );
+      }
+    } else if (nearHome) {
+      // camp complete: H beside the fire sleeps the night away
+      const sky = performance.now() + skyOffset;
+      if (darknessAt(sky) > 0.3) {
+        sleepToDawn(sky);
+      } else {
+        flashHud("the bedroll waits for dark");
+      }
     } else if (here === Tile.Grass || here === Tile.Sand || here === Tile.Marsh || here === Tile.Forest) {
       home = { x: tx, y: ty };
       flora.setHome(tx, ty);
-      flashHud(fire ? "home moves — the fire stays lit beside it" : "home — a garden bed takes shape");
+      flashHud(fire ? "home moves — the camp comes along" : "home — a garden bed takes shape");
       murmurs.offer("home");
       persist();
     } else {
@@ -420,8 +475,16 @@ window.addEventListener("keydown", (e) => {
       mat[node.kind]++;
       if (!fire && mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
         flashHud("you carry enough for a fire — press H beside your home");
+      } else if (fire && !bedroll && mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
+        flashHud("you carry enough for a bedroll — press H beside your fire");
       } else {
-        flashHud(node.kind === "wood" ? "driftwood — salt-dried and light" : "a loose stone, sun-warm");
+        flashHud(
+          node.kind === "wood"
+            ? "driftwood — salt-dried and light"
+            : node.kind === "stone"
+              ? "a loose stone, sun-warm"
+              : "a marsh rush, cut green and soft",
+        );
       }
       renderHud();
       persist();
@@ -562,7 +625,7 @@ function offerMurmurMoments(dt: number): void {
       murmurs.offer("skerries");
     }
     if (
-      isBloomDay(performance.now(), currentSeed) &&
+      isBloomDay(performance.now() + skyOffset, currentSeed) &&
       flora.plantsNear(player.x, player.y, 40).some((p) => p.genome.form === PlantForm.Fungus)
     ) {
       murmurs.offer("bloom");
@@ -579,17 +642,19 @@ function frame(now: number): void {
   }
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
+  // the sky's clock: wall time plus every night slept through
+  const sky = now + skyOffset;
   player.update(dt, input(), map);
-  const rainNow = FORCE_RAIN ? 0.85 : rainAt(now, currentSeed);
-  const bloomToday = isBloomDay(now, currentSeed);
-  const auroraTonight = FORCE_AURORA || isAuroraNight(now, currentSeed);
+  const rainNow = FORCE_RAIN ? 0.85 : rainAt(sky, currentSeed);
+  const bloomToday = isBloomDay(sky, currentSeed);
+  const auroraTonight = FORCE_AURORA || isAuroraNight(sky, currentSeed);
   rainMurmurArmed = rainNow > 0.5;
   simAcc += dt * 1000;
   while (simAcc >= SIM_MS) {
     flora.simTick({
       rain: rainNow > 0.2,
       bloom: bloomToday,
-      aurora: auroraTonight && darknessAt(now) > 0.6,
+      aurora: auroraTonight && darknessAt(sky) > 0.6,
     });
     simAcc -= SIM_MS;
   }
@@ -613,7 +678,7 @@ function frame(now: number): void {
       remember(`${beast.name} passed this way once`);
     }
   }
-  const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(now);
+  const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
   for (const f of flocks) {
     updateFlock(f, dt, map, player, darknessNow, birdRng);
     if (f.startled) {
@@ -641,7 +706,7 @@ function frame(now: number): void {
     }
     const ptx = Math.floor(player.x / TILE_SIZE);
     const pty = Math.floor(player.y / TILE_SIZE);
-    if (tileAt(map, ptx, pty) === Tile.ShallowWater && isBiolumeNight(now, currentSeed)) {
+    if (tileAt(map, ptx, pty) === Tile.ShallowWater && isBiolumeNight(sky, currentSeed)) {
       murmurs.offer("tide");
       remember("the glowing tide rose here once");
     }
@@ -652,9 +717,9 @@ function frame(now: number): void {
     {
       player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home,
       darkness, aurora: auroraTonight, rain: rainNow,
-      materials: materials.filter((m) => !taken.has(m.idx)), fire,
+      materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
     },
-    now,
+    sky,
   );
   requestAnimationFrame(frame);
 }

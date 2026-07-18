@@ -25,8 +25,10 @@ export interface SavedWorld {
 export interface SavedCamp {
   wood: number;
   stone: number;
+  rush?: number; // absent in saves from before the bedroll
   taken: number[]; // material node indices already gathered
   fire: boolean;
+  bedroll?: boolean;
 }
 
 // A daughter species is the one thing besides genomes the seed can't regrow.

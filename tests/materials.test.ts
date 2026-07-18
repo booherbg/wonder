@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { emptyInventory } from "../src/game/inventory";
-import { FIRE_COST, placeMaterials } from "../src/game/materials";
+import { BEDROLL_COST, FIRE_COST, placeMaterials } from "../src/game/materials";
 import { SavedWorld, packWorld } from "../src/game/save";
 import { generate } from "../src/world/generate";
 import { Tile, WALKABLE } from "../src/world/types";
@@ -23,6 +23,8 @@ test("driftwood beaches and stony rock-edges, deterministic per seed", () => {
       if (n.kind === "wood") {
         expect(t).toBe(Tile.Sand);
         expect(sides.some((s) => s === Tile.ShallowWater || s === Tile.DeepWater)).toBe(true);
+      } else if (n.kind === "rush") {
+        expect(t).toBe(Tile.Marsh);
       } else {
         expect(WALKABLE.has(t)).toBe(true);
         expect(sides.some((s) => s === Tile.Rock)).toBe(true);
@@ -39,14 +41,20 @@ test("mountainous islands shed plenty of stones", () => {
   expect(stones.length).toBeGreaterThan(FIRE_COST.stone);
 });
 
+test("marshy islands stand thick with rushes", () => {
+  const map = generate(20); // confluence pools ring themselves in marsh
+  const rushes = placeMaterials(map, 20).filter((n) => n.kind === "rush");
+  expect(rushes.length).toBeGreaterThan(BEDROLL_COST.rush);
+});
+
 test("the camp survives the save roundtrip", () => {
   const packed = packWorld(
     5, 10, { x: 1, y: 2 }, { x: 3, y: 4 },
     emptyInventory(), [], 99, [], [],
-    { wood: 2, stone: 1, taken: [4, 9, 17], fire: true },
+    { wood: 2, stone: 1, rush: 3, taken: [4, 9, 17], fire: true, bedroll: true },
   );
   const saved = JSON.parse(JSON.stringify(packed)) as SavedWorld;
-  expect(saved.camp).toEqual({ wood: 2, stone: 1, taken: [4, 9, 17], fire: true });
+  expect(saved.camp).toEqual({ wood: 2, stone: 1, rush: 3, taken: [4, 9, 17], fire: true, bedroll: true });
   const old = JSON.parse(JSON.stringify(packWorld(5, 10, { x: 1, y: 2 }, null, emptyInventory(), [], 99))) as SavedWorld;
   expect(old.camp ?? null).toBeNull(); // old saves simply have no camp yet
 });

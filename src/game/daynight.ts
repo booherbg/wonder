@@ -27,6 +27,12 @@ export function isNight(nowMs: number): boolean {
   return darknessAt(nowMs) > 0.6;
 }
 
+// How long until the next daybreak — the top of the cycle, darkness zero.
+export function msUntilDawn(nowMs: number): number {
+  const t = ((nowMs % CYCLE_MS) + CYCLE_MS) % CYCLE_MS;
+  return CYCLE_MS - t;
+}
+
 // Roughly one night in three, the sea's edge lights up where it is stirred.
 export function isBiolumeNight(nowMs: number, seed: number): boolean {
   const nightIndex = Math.floor(nowMs / CYCLE_MS);

@@ -36,7 +36,9 @@ export type MurmurTag =
   | "rain" // out in a real shower
   | "bloom" // the fungi answering yesterday's rain
   | "skerries" // wandering an archipelago where every islet drifts alone
-  | "fire"; // the first fire at your own camp
+  | "fire" // the first fire at your own camp
+  | "rest" // a bedroll of woven rushes beside the fire
+  | "dawn"; // waking into first light
 
 export const MURMURS: Murmur[] = [
   {
@@ -288,6 +290,36 @@ export const MURMURS: Murmur[] = [
     text: "fire is the ultra-living element.",
     attribution: "— gaston bachelard, the psychoanalysis of fire (1938)",
     tag: "fire",
+  },
+  {
+    text: "sleep that knits up the ravell'd sleave of care, the death of each day's life, sore labour's bath.",
+    attribution: "— william shakespeare, macbeth (1606)",
+    tag: "rest",
+  },
+  {
+    text: "blessings on him who invented sleep, the cloak that covers all human thoughts.",
+    attribution: "— miguel de cervantes, don quixote (1615)",
+    tag: "rest",
+  },
+  {
+    text: "the woods are lovely, dark and deep, but i have promises to keep, and miles to go before i sleep.",
+    attribution: "— robert frost, stopping by woods on a snowy evening (1923)",
+    tag: "rest",
+  },
+  {
+    text: "when young dawn with her rose-red fingers shone once more.",
+    attribution: "— homer, the odyssey (c. 8th century bce)",
+    tag: "dawn",
+  },
+  {
+    text: "i'll tell you how the sun rose, — a ribbon at a time.",
+    attribution: "— emily dickinson (c. 1860)",
+    tag: "dawn",
+  },
+  {
+    text: "morning is when i am awake and there is a dawn in me. the sun is but a morning star.",
+    attribution: "— henry david thoreau, walden (1854)",
+    tag: "dawn",
   },
 ];
 

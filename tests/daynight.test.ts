@@ -7,6 +7,7 @@ import {
   darknessAt,
   isBiolumeNight,
   isNight,
+  msUntilDawn,
 } from "../src/game/daynight";
 
 test("daytime is fully lit and night holds max darkness", () => {
@@ -33,6 +34,21 @@ test("darkness is periodic and always within bounds", () => {
 test("isNight flags the dark stretch only", () => {
   expect(isNight(DAY_MS / 2)).toBe(false);
   expect(isNight(DAY_MS + DUSK_MS + 1000)).toBe(true);
+});
+
+test("sleep carries you exactly to daybreak", () => {
+  const bedtimes = [
+    DAY_MS + DUSK_MS + 1000, // just after nightfall
+    CYCLE_MS - 5000, // deep in the dawn ramp
+    CYCLE_MS * 3 + DAY_MS + DUSK_MS / 2, // mid-dusk, cycles later
+  ];
+  for (const t of bedtimes) {
+    const skipped = msUntilDawn(t);
+    expect(skipped).toBeGreaterThan(0);
+    expect(skipped).toBeLessThanOrEqual(CYCLE_MS);
+    expect(darknessAt(t + skipped)).toBe(0);
+    expect((t + skipped) % CYCLE_MS).toBeCloseTo(0, 6);
+  }
 });
 
 test("biolume nights are deterministic and neither constant nor absent", () => {

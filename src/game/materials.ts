@@ -2,17 +2,18 @@ import { hash2d } from "../core/rng";
 import { Tile, WALKABLE, WorldMap } from "../world/types";
 
 // What the island offers a camp-builder: driftwood the sea leaves on its
-// beaches, loose stones shed at the rock's edge. Deterministic per seed;
-// what you've taken is remembered in the save.
+// beaches, loose stones shed at the rock's edge, soft rushes standing in
+// the marshes. Deterministic per seed; what you've taken is remembered.
 
 export interface MaterialNode {
   x: number; // tile coords
   y: number;
-  kind: "wood" | "stone";
+  kind: "wood" | "stone" | "rush";
   idx: number; // stable index, used to remember what was taken
 }
 
 export const FIRE_COST = { wood: 4, stone: 3 };
+export const BEDROLL_COST = { wood: 2, rush: 4 };
 
 export function placeMaterials(map: WorldMap, seed: number): MaterialNode[] {
   const out: MaterialNode[] = [];
@@ -28,6 +29,10 @@ export function placeMaterials(map: WorldMap, seed: number): MaterialNode[] {
         );
         if (nearWater && hash2d(x, y, seed ^ 0xd21f7) < 0.02) {
           out.push({ x, y, kind: "wood", idx: out.length });
+        }
+      } else if (t === Tile.Marsh) {
+        if (hash2d(x, y, seed ^ 0x2d05e) < 0.03) {
+          out.push({ x, y, kind: "rush", idx: out.length });
         }
       } else if (WALKABLE.has(t)) {
         const nearRock = sides.some((n) => n === Tile.Rock);
