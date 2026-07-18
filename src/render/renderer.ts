@@ -35,6 +35,7 @@ export interface Scene {
   home?: { x: number; y: number } | null; // garden bed center, tile coords
   darkness?: number; // 0 = day .. MAX_DARKNESS at night
   aurora?: boolean; // tonight the sky carries ribbons of light
+  rain?: number; // 0 = dry .. 1 at the heart of a shower
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -346,6 +347,23 @@ export class Renderer {
     );
 
     if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
+
+    // rain: the world darkens a shade, then silver streaks lean with the wind
+    const rain = scene.rain ?? 0;
+    if (rain > 0.01) {
+      ctx.fillStyle = `rgba(30, 42, 60, ${(rain * 0.18).toFixed(3)})`;
+      ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
+      const drops = Math.floor(rain * 90);
+      const span = this.viewHeight + 12;
+      for (let i = 0; i < drops; i++) {
+        const h = hash2d(i, 13, 997);
+        const speed = 190 + h * 110;
+        const y = (h * 5077 + (timeMs / 1000) * speed) % span;
+        const x = (hash2d(i, 29, 991) * (this.viewWidth + 40) - y * 0.22) % (this.viewWidth + 8);
+        ctx.fillStyle = `rgba(205, 222, 240, ${(0.22 + rain * 0.2).toFixed(3)})`;
+        ctx.fillRect(Math.round(x), Math.round(y), 1, 3);
+      }
+    }
 
     // dragonflies hunt over the water while the light lasts
     this.dragonflies.update(map, camX, camY, this.viewWidth, this.viewHeight, darkness, timeMs);

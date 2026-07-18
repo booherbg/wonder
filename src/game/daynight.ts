@@ -39,3 +39,25 @@ export function isAuroraNight(nowMs: number, seed: number): boolean {
   const nightIndex = Math.floor(nowMs / CYCLE_MS);
   return hash2d(nightIndex, 11, seed) < 0.085;
 }
+
+// Rain: roughly three day-cycles in ten carry one shower, arriving at a
+// seeded hour — it eases in, soaks, and eases off. Returns intensity 0..1.
+export const RAIN_MS = 70_000;
+const RAIN_CHANCE = 0.3;
+
+export function rainAt(nowMs: number, seed: number): number {
+  const cycle = Math.floor(nowMs / CYCLE_MS);
+  if (hash2d(cycle, 3, seed) >= RAIN_CHANCE) return 0;
+  const t = ((nowMs % CYCLE_MS) + CYCLE_MS) % CYCLE_MS;
+  const start = hash2d(cycle, 5, seed) * (CYCLE_MS - RAIN_MS);
+  const f = (t - start) / RAIN_MS;
+  if (f < 0 || f > 1) return 0;
+  return Math.sin(f * Math.PI);
+}
+
+// Rain pays off later, not instantly: the day after a shower, the fungi
+// answer. True through the whole cycle following a rainy one.
+export function isBloomDay(nowMs: number, seed: number): boolean {
+  const cycle = Math.floor(nowMs / CYCLE_MS);
+  return hash2d(cycle - 1, 3, seed) < RAIN_CHANCE;
+}

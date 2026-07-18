@@ -9,12 +9,12 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { Flora } from "../life/flora";
-import { hsl } from "../life/genome";
+import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
-import { darknessAt, isAuroraNight, isBiolumeNight } from "./daynight";
+import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow } from "./inventory";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
@@ -30,6 +30,7 @@ import {
 
 const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev aid
+const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { generate } from "../world/generate";
 import { islandName } from "../world/name";
@@ -107,6 +108,7 @@ let simAcc = 0;
 let currentSeed = 0;
 let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
+let rainMurmurArmed = false; // true while a shower is really coming down
 let home: { x: number; y: number } | null = null;
 let saveAcc = 0;
 let rArmed = false;
@@ -449,6 +451,15 @@ function offerMurmurMoments(dt: number): void {
     if ((map.confluences ?? []).some((c) => Math.hypot(c.x - tx, c.y - ty) < 3)) {
       murmurs.offer("confluence");
     }
+    if (rainMurmurArmed) {
+      murmurs.offer("rain");
+    }
+    if (
+      isBloomDay(performance.now(), currentSeed) &&
+      flora.plantsNear(player.x, player.y, 40).some((p) => p.genome.form === PlantForm.Fungus)
+    ) {
+      murmurs.offer("bloom");
+    }
   }
 }
 
@@ -462,9 +473,12 @@ function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   player.update(dt, input(), map);
+  const rainNow = FORCE_RAIN ? 0.85 : rainAt(now, currentSeed);
+  const bloomToday = isBloomDay(now, currentSeed);
+  rainMurmurArmed = rainNow > 0.5;
   simAcc += dt * 1000;
   while (simAcc >= SIM_MS) {
-    flora.simTick();
+    flora.simTick({ rain: rainNow > 0.2, bloom: bloomToday });
     simAcc -= SIM_MS;
   }
   for (const ev of flora.takeEvents()) {
@@ -524,7 +538,7 @@ function frame(now: number): void {
   renderer.draw(
     camX,
     camY,
-    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness, aurora: auroraTonight },
+    { player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home, darkness, aurora: auroraTonight, rain: rainNow },
     now,
   );
   requestAnimationFrame(frame);

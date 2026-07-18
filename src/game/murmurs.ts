@@ -32,7 +32,9 @@ export type MurmurTag =
   | "falls" // standing in the mist of a waterfall
   | "aurora" // ribbons of light on the rarest nights
   | "crater" // reaching the caldera lake at the island's heart
-  | "confluence"; // standing where two rivers become one
+  | "confluence" // standing where two rivers become one
+  | "rain" // out in a real shower
+  | "bloom"; // the fungi answering yesterday's rain
 
 export const MURMURS: Murmur[] = [
   {
@@ -254,6 +256,21 @@ export const MURMURS: Murmur[] = [
     text: "the river is everywhere at once, at the source and at the mouth, at the waterfall, at the ferry, at the rapids, in the sea, in the mountains, everywhere at once.",
     attribution: "— hermann hesse, siddhartha (1922)",
     tag: "confluence",
+  },
+  {
+    text: "let the rain kiss you. let the rain beat upon your head with silver liquid drops.",
+    attribution: "— langston hughes, april rain song (1921)",
+    tag: "rain",
+  },
+  {
+    text: "the rain is raining all around, it falls on field and tree.",
+    attribution: "— robert louis stevenson, rain (1885)",
+    tag: "rain",
+  },
+  {
+    text: "the mushroom is the elf of plants, at evening it is not; at morning in a truffled hut it stops upon a spot.",
+    attribution: "— emily dickinson (c. 1874)",
+    tag: "bloom",
   },
 ];
 

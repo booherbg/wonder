@@ -189,8 +189,9 @@ export class Flora {
   }
 
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
-  // dies, and reseeds nearby with drifted genomes.
-  simTick(): void {
+  // dies, and reseeds nearby with drifted genomes. Rain quickens everything
+  // a little; the day after rain, the fungi answer threefold.
+  simTick(weather: { rain?: boolean; bloom?: boolean } = {}): void {
     this.tick++;
     const t = this.tuning;
     const n = Math.min(t.simBudget, this.all.length);
@@ -215,7 +216,9 @@ export class Flora {
         this.removePlant(p);
         continue;
       }
-      const repro = t.reproChance * (this.inGarden(p.x, p.y) ? 2 : 1); // gardens breed eagerly
+      let repro = t.reproChance * (this.inGarden(p.x, p.y) ? 2 : 1); // gardens breed eagerly
+      if (weather.rain) repro *= 1.6;
+      if (weather.bloom && p.genome.form === PlantForm.Fungus) repro *= 3;
       if (age >= t.matureAge && this.rng() < repro) {
         const dtx = Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
         const dty = Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
@@ -228,15 +231,16 @@ export class Flora {
         const partners = this.plantsNear(p.x, p.y, t.pollinationRadius * TILE_SIZE).filter(
           (q) => q !== p && q.species === p.species,
         );
+        const drift = t.mutationAmount * (weather.rain ? 1.25 : 1); // rain quickens drift
         const genome =
           partners.length > 0
             ? cross(
                 p.genome,
                 partners[Math.floor(this.rng() * partners.length)].genome,
                 this.rng,
-                t.mutationAmount,
+                drift,
               )
-            : mutate(p.genome, this.rng, t.mutationAmount);
+            : mutate(p.genome, this.rng, drift);
         const child = this.addPlant(p.species, genome, x, y, this.tick);
         if (child) this.maybeSpeciate(child);
       }
