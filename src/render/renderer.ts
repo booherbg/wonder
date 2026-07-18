@@ -6,7 +6,7 @@ import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { isBiolumeNight } from "../game/daynight";
-import { FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
+import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -52,6 +52,7 @@ export class Renderer {
   private pollinators = new Pollinators();
   private fishes = new FishSchool();
   private frogs = new FrogPatch();
+  private dragonflies = new Dragonflies();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -345,6 +346,10 @@ export class Renderer {
     );
 
     if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
+
+    // dragonflies hunt over the water while the light lasts
+    this.dragonflies.update(map, camX, camY, this.viewWidth, this.viewHeight, darkness, timeMs);
+    this.dragonflies.draw(ctx, camX, camY);
 
     // butterflies and moths ride above everything, even the dark
     this.pollinators.update(

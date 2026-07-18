@@ -445,6 +445,9 @@ function offerMurmurMoments(dt: number): void {
       murmurs.offer("crater");
       remember("you reached the earth's eye at the island's heart");
     }
+    if ((map.confluences ?? []).some((c) => Math.hypot(c.x - tx, c.y - ty) < 3)) {
+      murmurs.offer("confluence");
+    }
   }
 }
 

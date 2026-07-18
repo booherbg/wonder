@@ -180,6 +180,7 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   const carved = placeCrater(elevation, tiles, genSeed, cfg);
   const rivers = carveRivers(elevation, tiles, genSeed, cfg);
   if (carved?.outflow && carved.outflow.path.length > 0) rivers.push(carved.outflow);
+  const confluences = placeConfluences(elevation, tiles, rivers, cfg);
 
   let land = 0;
   for (const t of tiles) {
@@ -195,8 +196,44 @@ function tryGenerate(displaySeed: number, genSeed: number, cfg: WorldConfig): Wo
   const falls = placeFalls(elevation, rivers, cfg);
   return {
     width, height, seed: displaySeed, tiles, elevation, rivers, spawn,
-    pockets, springs, falls, crater: carved?.crater,
+    pockets, springs, falls, crater: carved?.crater, confluences,
   };
+}
+
+// Where two rivers meet, the water opens: steepest-descent rivers that touch
+// share their whole downstream tail, so each river's first shared tile is a
+// true meeting. Inland meetings widen into a pond ringed with marsh.
+export function placeConfluences(
+  elevation: Float32Array,
+  tiles: Uint8Array,
+  rivers: River[],
+  cfg: WorldConfig,
+): { x: number; y: number }[] {
+  const MAX_POOLS = 4;
+  const owner = new Map<number, number>(); // tile -> index of first river through it
+  const out: { x: number; y: number }[] = [];
+  for (let r = 0; r < rivers.length; r++) {
+    const path = rivers[r].path;
+    for (let k = 0; k < path.length; k++) {
+      const t = path[k];
+      const prev = owner.get(t);
+      if (prev === undefined) {
+        owner.set(t, r);
+        continue;
+      }
+      if (prev === r) continue;
+      // r has met an earlier river; k >= 1 keeps duplicate springs honest,
+      // and the elevation floor keeps sea-delta merges from counting
+      if (k >= 1 && elevation[t] >= cfg.beachLevel && out.length < MAX_POOLS) {
+        const x = t % cfg.width;
+        const y = (t / cfg.width) | 0;
+        if (!out.some((c) => Math.hypot(c.x - x, c.y - y) < 6)) out.push({ x, y });
+      }
+      break; // downstream of here the paths are identical
+    }
+  }
+  for (const c of out) carvePond(tiles, c.y * cfg.width + c.x, cfg);
+  return out;
 }
 
 // Rarely, the island's heart is water: a caldera at the highest peak — a

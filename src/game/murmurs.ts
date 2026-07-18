@@ -31,7 +31,8 @@ export type MurmurTag =
   | "speciation" // witnessing a lineage become its own kind
   | "falls" // standing in the mist of a waterfall
   | "aurora" // ribbons of light on the rarest nights
-  | "crater"; // reaching the caldera lake at the island's heart
+  | "crater" // reaching the caldera lake at the island's heart
+  | "confluence"; // standing where two rivers become one
 
 export const MURMURS: Murmur[] = [
   {
@@ -243,6 +244,16 @@ export const MURMURS: Murmur[] = [
     text: "heaven is under our feet as well as over our heads.",
     attribution: "— henry david thoreau, walden (1854)",
     tag: "crater",
+  },
+  {
+    text: "eventually, all things merge into one, and a river runs through it.",
+    attribution: "— norman maclean, a river runs through it (1976)",
+    tag: "confluence",
+  },
+  {
+    text: "the river is everywhere at once, at the source and at the mouth, at the waterfall, at the ferry, at the rapids, in the sea, in the mountains, everywhere at once.",
+    attribution: "— hermann hesse, siddhartha (1922)",
+    tag: "confluence",
   },
 ];
 

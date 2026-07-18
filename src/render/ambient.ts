@@ -320,6 +320,113 @@ export class FrogPatch {
   }
 }
 
+interface Dragonfly {
+  x: number;
+  y: number;
+  heading: number;
+  hue: number; // jewel tones: teal through violet
+  hover: number; // seconds left holding still in the air
+  dart: number; // seconds left of the straight fast dash
+  phase: number;
+}
+
+const MAX_DRAGONFLIES = 5;
+const DART_SPEED = 85;
+
+// Day hunters over the water: they hang motionless, then dash in a straight
+// line and stop dead, wings flickering white. They sleep somewhere at night.
+export class Dragonflies {
+  private flies: Dragonfly[] = [];
+  private rng: Rng = makeRng(0xd7a9);
+  private lastMs = -1;
+
+  update(
+    map: WorldMap,
+    viewX: number,
+    viewY: number,
+    viewW: number,
+    viewH: number,
+    darkness: number,
+    timeMs: number,
+  ): void {
+    const dt = this.lastMs < 0 ? 0.016 : Math.min((timeMs - this.lastMs) / 1000, 0.1);
+    this.lastMs = timeMs;
+    if (darkness > 0.45) {
+      this.flies.length = 0;
+      return;
+    }
+
+    this.flies = this.flies.filter(
+      (f) =>
+        f.x > viewX - 40 && f.x < viewX + viewW + 40 && f.y > viewY - 40 && f.y < viewY + viewH + 40,
+    );
+
+    if (this.flies.length < MAX_DRAGONFLIES) {
+      const tx = Math.floor((viewX + this.rng() * viewW) / TILE_SIZE);
+      const ty = Math.floor((viewY + this.rng() * viewH) / TILE_SIZE);
+      if (tx >= 0 && ty >= 0 && tx < map.width && ty < map.height) {
+        const t = map.tiles[ty * map.width + tx];
+        if (t === Tile.ShallowWater || t === Tile.Marsh) {
+          this.flies.push({
+            x: (tx + 0.5) * TILE_SIZE,
+            y: (ty + 0.5) * TILE_SIZE,
+            heading: this.rng() * 6.28,
+            hue: 0.45 + this.rng() * 0.4,
+            hover: 0.5 + this.rng() * 1.5,
+            dart: 0,
+            phase: this.rng() * 6.28,
+          });
+        }
+      }
+    }
+
+    for (const f of this.flies) {
+      f.phase += dt * 40; // wings are nearly a blur
+      if (f.hover > 0) {
+        f.hover -= dt;
+        f.x += Math.sin(f.phase / 9) * 2 * dt; // holding, not frozen
+        f.y += Math.cos(f.phase / 7) * 2 * dt;
+        if (f.hover <= 0) {
+          f.heading = this.rng() * 6.28;
+          f.dart = 0.15 + this.rng() * 0.3;
+        }
+      } else {
+        f.dart -= dt;
+        const nx = f.x + Math.cos(f.heading) * DART_SPEED * dt;
+        const ny = f.y + Math.sin(f.heading) * DART_SPEED * dt;
+        const t =
+          map.tiles[Math.floor(ny / TILE_SIZE) * map.width + Math.floor(nx / TILE_SIZE)];
+        if (t === Tile.ShallowWater || t === Tile.Marsh || t === Tile.Grass || t === Tile.Sand) {
+          f.x = nx;
+          f.y = ny;
+        } else {
+          f.heading += Math.PI; // the water is home; turn back toward it
+        }
+        if (f.dart <= 0) f.hover = 0.5 + this.rng() * 1.5;
+      }
+    }
+  }
+
+  draw(ctx: CanvasRenderingContext2D, camX: number, camY: number): void {
+    for (const f of this.flies) {
+      const x = Math.round(f.x - camX);
+      const y = Math.round(f.y - camY);
+      const cs = Math.cos(f.heading);
+      const sn = Math.sin(f.heading);
+      // long body, three pixels along the heading
+      ctx.fillStyle = hsl(f.hue, 0.85, 0.55);
+      for (let k = -1; k <= 1; k++) {
+        ctx.fillRect(Math.round(x + cs * k * 1.2), Math.round(y + sn * k * 1.2), 1, 1);
+      }
+      // wing pairs flicker perpendicular to the body
+      const flick = Math.sin(f.phase) > 0 ? 1 : 2;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+      ctx.fillRect(Math.round(x - sn * flick), Math.round(y + cs * flick), 1, 1);
+      ctx.fillRect(Math.round(x + sn * flick), Math.round(y - cs * flick), 1, 1);
+    }
+  }
+}
+
 // A few slow cloud shadows crossing the island; they fade out toward night.
 const CLOUDS = [
   { r: 95, speed: 3.4, ox: 0, oy: 1200 },
