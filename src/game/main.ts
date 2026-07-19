@@ -30,7 +30,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
+import { closeInspect, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import {
   closePicker,
   featurePhrase,
@@ -42,7 +42,7 @@ import {
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
 import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
-import { TIDE_LOW, TidePool, placeTidePools, tideAt } from "./tide";
+import { TIDE_LOW, TidePool, exposureAt, placeTidePools, tideAt } from "./tide";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
@@ -416,7 +416,12 @@ function openIslePicker(): void {
   if (missing.length > 0) setTimeout(fill, 30);
 }
 
-function openInspectAtPlayer(): void {
+// the panel follows the wanderer while it's open — re-rendered as they move,
+// but the journal is written only on the deliberate lean-in (E), never on
+// every step of a following panel
+let lastInspectX = -999;
+let lastInspectY = -999;
+function openInspectAtPlayer(record = true): void {
   const nearby = flora
     .plantsNear(player.x, player.y, INSPECT_RANGE)
     .sort(
@@ -453,29 +458,82 @@ function openInspectAtPlayer(): void {
   const beastNear =
     beast && Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE ? beast : null;
   const shown = [...groups.values()].slice(0, 10);
-  // leaning close is how the journal writes itself
-  for (const g of shown) {
-    const sp = species[g.plant.species];
-    recordSighting({
-      seed: currentSeed,
-      island: islandName(currentSeed),
-      speciesId: sp.id,
-      speciesName: sp.name,
-      genome: g.plant.genome,
-      aquatic: sp.habitat === Tile.ShallowWater,
-      drift: driftDistance(g.plant.genome, sp.archetype) * 100,
-      at: Date.now(),
-    });
+  // leaning close writes the journal — but only on the deliberate lean-in,
+  // never on the steps of a panel that follows you as you wander
+  if (record) {
+    for (const g of shown) {
+      const sp = species[g.plant.species];
+      recordSighting({
+        seed: currentSeed,
+        island: islandName(currentSeed),
+        speciesId: sp.id,
+        speciesName: sp.name,
+        genome: g.plant.genome,
+        aquatic: sp.habitat === Tile.ShallowWater,
+        drift: driftDistance(g.plant.genome, sp.archetype) * 100,
+        at: Date.now(),
+      });
+    }
+    // the creature pages too — met means inspected, here, in reach
+    for (const sp of companySpecies) {
+      recordCritterMeeting({
+        seed: currentSeed,
+        island: islandName(currentSeed),
+        critter: sp,
+        at: Date.now(),
+      });
+    }
   }
-  // the creature pages too — met means inspected, here, in reach
-  for (const sp of companySpecies) {
-    recordCritterMeeting({
-      seed: currentSeed,
-      island: islandName(currentSeed),
-      critter: sp,
-      at: Date.now(),
-    });
+  // the hour, and everything near that isn't a plant, a critter, or a seed —
+  // so leaning close always answers, even on a bare beach at low tide
+  const sky = performance.now() + skyOffset;
+  const dark = FORCE_NIGHT ? 0.75 : darknessAt(sky);
+  const tideNow = FORCE_LOWTIDE ? 1 : tideAt(sky);
+  const hour = hourLine({
+    darkness: dark,
+    tide: tideNow,
+    aurora: (FORCE_AURORA || isAuroraNight(sky, currentSeed)) && dark > 0.6,
+    biolume: isBiolumeNight(sky, currentSeed) && dark > 0.6,
+    bloom: isBloomDay(sky, currentSeed),
+    rain: FORCE_RAIN ? 0.85 : rainAt(sky, currentSeed),
+  });
+  const bared = exposureAt(tideNow) > 0.35;
+  const waterEdge: string[] = [];
+  for (const p of pools) {
+    if (Math.hypot((p.x + 0.5) * TILE_SIZE - player.x, (p.y + 0.5) * TILE_SIZE - player.y) >= INSPECT_RANGE)
+      continue;
+    const dweller =
+      p.dweller === "star"
+        ? "a rose star"
+        : p.dweller === "anemone"
+          ? "an anemone, folded and open"
+          : "a violet urchin";
+    waterEdge.push(bared ? `a tide pool — ${dweller}` : `a tide pool, brimming — ${dweller} beneath`);
   }
+  const near3 = { wood: 0, stone: 0, rush: 0 };
+  for (const m of materials) {
+    if (taken.has(m.idx)) continue;
+    if (Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y) >= INSPECT_RANGE)
+      continue;
+    near3[m.kind]++;
+  }
+  if (near3.wood > 0)
+    waterEdge.push(near3.wood > 1 ? `driftwood, salt-dried (${near3.wood})` : "driftwood, salt-dried");
+  const land: string[] = [];
+  const itx = Math.floor(player.x / TILE_SIZE);
+  const ity = Math.floor(player.y / TILE_SIZE);
+  if ((map.springs ?? []).some((s) => Math.hypot(s.x - itx, s.y - ity) < 3))
+    land.push("a hot spring, steaming");
+  if ((map.falls ?? []).some((f) => Math.hypot(f.x - itx, f.y - ity) < 3))
+    land.push("a waterfall, white and loud");
+  if ((map.confluences ?? []).some((c) => Math.hypot(c.x - itx, c.y - ity) < 3))
+    land.push("a pool where two rivers meet");
+  if (map.crater && Math.hypot(map.crater.x - itx, map.crater.y - ity) <= map.crater.lakeRadius + 1)
+    land.push("the crater lake — the earth's eye");
+  if (near3.stone > 0)
+    land.push(near3.stone > 1 ? `loose stones, sun-warm (${near3.stone})` : "a loose stone, sun-warm");
+  if (near3.rush > 0) land.push("marsh rushes, cut green and soft");
+
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(
@@ -528,7 +586,10 @@ function openInspectAtPlayer(): void {
       return "shared";
     },
     trust,
+    { hour, waterEdge, land },
   );
+  lastInspectX = player.x;
+  lastInspectY = player.y;
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -913,6 +974,14 @@ function frame(now: number): void {
   // the sky's clock: wall time plus every night slept through
   const sky = now + skyOffset;
   player.update(dt, input(), map);
+  // the inspect panel follows you: walk with it open and it re-reads what's
+  // around, without re-writing the journal each step
+  if (
+    isInspectOpen() &&
+    Math.hypot(player.x - lastInspectX, player.y - lastInspectY) > TILE_SIZE * 0.5
+  ) {
+    openInspectAtPlayer(false);
+  }
   const rainNow = FORCE_RAIN ? 0.85 : rainAt(sky, currentSeed);
   const bloomToday = isBloomDay(sky, currentSeed);
   const auroraTonight = FORCE_AURORA || isAuroraNight(sky, currentSeed);

@@ -46,6 +46,52 @@ const BIOME_WORDS: Partial<Record<Tile, string>> = {
   [Tile.Snow]: "the snow",
 };
 
+// Everything near the wanderer that isn't a plant, a critter, or a seed —
+// so leaning close (E) always answers, even on a bare beach at low tide.
+export interface Surroundings {
+  hour: string; // the sky and sea, right now, in one line
+  waterEdge: string[]; // tide pools + dwellers, driftwood, the glowing tide
+  land: string[]; // springs, falls, a confluence, the crater, loose stones
+}
+
+// The hour said in a line. Pure and unit-tested; the reader assembles the
+// sky/tide/weather state and this names it.
+export function hourLine(o: {
+  darkness: number;
+  tide: number;
+  aurora: boolean;
+  biolume: boolean;
+  bloom: boolean;
+  rain: number;
+}): string {
+  const low = o.tide > 0.7; // beyond TIDE_LOW the flats stand bare
+  if (o.darkness > 0.6) {
+    if (o.aurora) return "deep night, and an aurora crossing the dark";
+    if (o.biolume) return low ? "a glowing low tide under the stars" : "a glowing tide tonight";
+    return low ? "a low tide under the stars" : "the deep of night";
+  }
+  if (o.darkness > 0.12) return "the half-light, between day and dark";
+  if (o.rain > 0.25) return "a soft shower passing through";
+  if (o.bloom) return "the morning after rain — the fungi answer";
+  if (low) return "the sea drawn back — low tide bares its gardens";
+  return "broad, quiet daylight";
+}
+
+// A plain list of gentle lines under a title — for the things that get a
+// word, not a card.
+function noteSection(el: HTMLElement, title: string, lines: string[]): void {
+  if (lines.length === 0) return;
+  sectionTitle(el, title);
+  const wrap = document.createElement("div");
+  for (const line of lines) {
+    const d = document.createElement("div");
+    d.className = "inspect-traits";
+    d.textContent = line;
+    wrap.appendChild(d);
+  }
+  el.appendChild(wrap);
+}
+
 function heightWord(h: number): string {
   if (h < 0.25) return "low";
   if (h < 0.5) return "knee-high";
@@ -181,9 +227,17 @@ export function openInspect(
   onGather?: GatherFromCard,
   onFeed?: FeedFromCard,
   trust?: ReadonlyMap<number, number>,
+  surroundings?: Surroundings,
 ): void {
   const el = panel();
   el.innerHTML = "";
+  if (surroundings) {
+    sectionTitle(el, "the hour");
+    const line = document.createElement("div");
+    line.className = "inspect-traits";
+    line.textContent = surroundings.hour;
+    el.appendChild(line);
+  }
   sectionTitle(el, groups.length > 0 ? "growing here" : "nothing grows within reach");
   if (groups.length > 0) {
     const g = grid(el);
@@ -216,6 +270,11 @@ export function openInspect(
       }
       g.appendChild(card);
     }
+  }
+
+  if (surroundings) {
+    noteSection(el, "at the water's edge", surroundings.waterEdge);
+    noteSection(el, "the land", surroundings.land);
   }
 
   if (critters.length > 0 || beast) {
