@@ -35,6 +35,13 @@ export function drawBeast(
     ctx.fillRect(x + 1, y, w - 2, h);
     ctx.fillRect(x, y + 1, w, h - 2);
   }
+  // burrs riding in its coat: one bright fleck per carried seed, in the
+  // seed's own color — visible the whole way, pickup to sowing
+  for (let ci = 0; ci < b.cargo.length && ci + 1 < segs.length; ci++) {
+    const s = segs[ci + 1];
+    ctx.fillStyle = hsl(b.cargo[ci].genome.hue, 0.75, 0.7);
+    ctx.fillRect(Math.round(s.x - camX), Math.round(s.y - s.r * 2 - camY) + 1, 1, 1);
+  }
   // face on the head segment
   const head = segs[0];
   const hx = Math.round(head.x - camX);

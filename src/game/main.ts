@@ -46,12 +46,13 @@ const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev a
 const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
+const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate } from "../world/generate";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
-import { Renderer } from "../render/renderer";
+import { Renderer, SOW_LINGER_MS } from "../render/renderer";
 import { InputState, Player } from "./player";
 
 const SIM_MS = 2000; // one flora heartbeat every 2s
@@ -121,6 +122,7 @@ let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
 let beast: Beast | null = null;
+let beastSows: { x: number; y: number; hue: number; at: number }[] = []; // sowings still shimmering
 let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
@@ -250,6 +252,7 @@ function loadWorld(seed: number): void {
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
   beast = generateBeast(seed, map, species);
+  beastSows = [];
   flocks = generateFlocks(seed, map);
   birdRng = makeRng(seed ^ 0xb12d);
   clearCritterSpriteCache();
@@ -801,6 +804,11 @@ function frame(now: number): void {
     updateCritter(c, dt, map, flora, critterSpecies, player, critterRng, critterCtx);
   if (beast) {
     const dropped = updateBeast(beast, dt, map, flora, player, critterRng);
+    // the sow made visible: the renderer drops a seed-colored mote and a
+    // brief shimmer where the fresh sprout stands
+    if (dropped) {
+      beastSows.push({ x: dropped.x, y: dropped.y, hue: dropped.genome.hue, at: sky });
+    }
     // if you stand still and watch it set a far-carried seed down, the plant's
     // page learns the beast's name — "spread by <name>", long-distance dispersal
     // made legible (and only for a kind you've already met — recordSpread no-ops
@@ -828,16 +836,17 @@ function frame(now: number): void {
   }
   offerMurmurMoments(dt);
   // the focus lens eases in and out; the camera math below sees only the
-  // smaller view and keeps itself centered on the wanderer
+  // smaller view and keeps itself centered on the wanderer (or the beast)
   focusEase = easeToward(focusEase, focusOn ? 1 : 0, dt, 4);
   renderer.setZoom(1 + (FOCUS_ZOOM - 1) * focusEase);
+  const focus = FOLLOW_BEAST && beast ? beast : player;
   const camX = clamp(
-    player.x - renderer.viewWidth / 2,
+    focus.x - renderer.viewWidth / 2,
     0,
     map.width * TILE_SIZE - renderer.viewWidth,
   );
   const camY = clamp(
-    player.y - renderer.viewHeight / 2,
+    focus.y - renderer.viewHeight / 2,
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
@@ -855,6 +864,7 @@ function frame(now: number): void {
       remember("the glowing tide rose here once");
     }
   }
+  if (beastSows.length > 0) beastSows = beastSows.filter((s) => sky - s.at < SOW_LINGER_MS);
   renderer.draw(
     camX,
     camY,
@@ -862,7 +872,7 @@ function frame(now: number): void {
       player, flora, plantSpecies: species, critters, critterSpecies, beast, flocks, home,
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
-      tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools,
+      tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
     },
     sky,
   );

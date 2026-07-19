@@ -62,6 +62,15 @@ export const CARGO_CAP = 2; // a courier, not a granary
 const PICKUP_RADIUS = 1.5 * TILE_SIZE; // a favored plant this close is brushing its coat
 const PICKUP_CHANCE = 0.08; // per step a favored, uncarried plant is in reach
 const CARRY_DISTANCE = 32 * TILE_SIZE; // px of travel before a seed is set down, far from home
+const PICKUP_PAUSE_S = 0.5; // the small dip as a burr catches in its coat
+const SOW_PAUSE_S = 1.4; // it stands a moment over what it set down
+
+// Purposeful wandering: mostly it walks stand to stand among the kind it
+// favors — a forager's line, not a random one — with enough free wander left
+// in that the whole island stays on its round.
+const FORAGE_CHANCE = 0.75; // the rest of the time it goes wherever
+const FORAGE_SAMPLES = 12; // favored plants considered per decision
+const FORAGE_MIN_DIST = 6 * TILE_SIZE; // a goal should be a walk, not a shuffle
 // the beast's own tile first, then its near neighbors: the first that would
 // take a seed of this kind gets it
 const DROP_TILES: ReadonlyArray<readonly [number, number]> = [
@@ -135,6 +144,32 @@ function randomWalkableTile(rng: Rng, map: WorldMap): { x: number; y: number } |
   return null;
 }
 
+// Where to next: usually toward a distant plant it favors, so its slow lines
+// stitch together the island's stands of the kind it loves — going somewhere,
+// for a reason. Now and then it goes anywhere at all, which keeps the whole
+// island on its round. All rolls from the passed rng; the tile is walkable.
+export function chooseBeastTarget(
+  b: Beast,
+  map: WorldMap,
+  flora: Flora,
+  rng: Rng,
+): { x: number; y: number } | null {
+  if (rng() < FORAGE_CHANCE) {
+    const stands: { x: number; y: number }[] = [];
+    const plants = flora.all;
+    for (let i = 0; i < FORAGE_SAMPLES && plants.length > 0; i++) {
+      const p = plants[Math.floor(rng() * plants.length)];
+      if (appetite(b.palate, p.genome) <= APPETITE_MIN) continue;
+      if (Math.hypot(p.x - b.x, p.y - b.y) < FORAGE_MIN_DIST) continue; // a journey, not the bush it just left
+      const tx = Math.floor(p.x / TILE_SIZE);
+      const ty = Math.floor(p.y / TILE_SIZE);
+      if (isWalkable(map, tx, ty)) stands.push({ x: tx, y: ty });
+    }
+    if (stands.length > 0) return stands[Math.floor(rng() * stands.length)];
+  }
+  return randomWalkableTile(rng, map);
+}
+
 export function updateBeast(
   b: Beast,
   dt: number,
@@ -159,7 +194,7 @@ export function updateBeast(
   const dy = b.targetY - b.y;
   const dist = Math.hypot(dx, dy);
   if (dist < TILE_SIZE) {
-    const next = randomWalkableTile(rng, map);
+    const next = chooseBeastTarget(b, map, flora, rng);
     if (next) {
       b.targetX = (next.x + 0.5) * TILE_SIZE;
       b.targetY = (next.y + 0.5) * TILE_SIZE;
@@ -197,9 +232,13 @@ export function updateBeast(
       if (b.trail.length > TRAIL_CAP) b.trail.shift();
     }
     // as it walks it gathers a burr of what it favors, and — having carried an
-    // older one a long way — sets that one down, far from where it grew
-    pickUpFavored(b, flora, rng);
-    return dropCarried(b, flora, rng);
+    // older one a long way — sets that one down, far from where it grew.
+    // both are moments: a small dip as the burr catches, a longer stand
+    // over the fresh sowing — purpose you can watch.
+    if (pickUpFavored(b, flora, rng)) b.pauseTime = PICKUP_PAUSE_S;
+    const drop = dropCarried(b, flora, rng);
+    if (drop) b.pauseTime = SOW_PAUSE_S;
+    return drop;
   }
 
   b.stuckTime += dt;
@@ -217,17 +256,19 @@ export function updateBeast(
 // Passing a favored plant it isn't already carrying, a gentle chance a burr
 // catches into its coat. The plant is left standing, unharmed — the beast
 // carries a copy of the seed, never a bite. One candidate per step, and only
-// while there's room in the coat.
-function pickUpFavored(b: Beast, flora: Flora, rng: Rng): void {
-  if (b.cargo.length >= CARGO_CAP) return;
+// while there's room in the coat. True when a burr caught.
+function pickUpFavored(b: Beast, flora: Flora, rng: Rng): boolean {
+  if (b.cargo.length >= CARGO_CAP) return false;
   for (const p of flora.plantsNear(b.x, b.y, PICKUP_RADIUS)) {
     if (appetite(b.palate, p.genome) <= APPETITE_MIN) continue;
     if (b.cargo.some((c) => c.species === p.species)) continue;
     if (rng() < PICKUP_CHANCE) {
       b.cargo.push({ species: p.species, genome: { ...p.genome }, since: b.distance });
+      return true;
     }
-    return; // one opportunity per step, taken or not
+    return false; // one opportunity per step, taken or not
   }
+  return false;
 }
 
 // Any seed carried far enough gets set down here: a drifted child sown on open,

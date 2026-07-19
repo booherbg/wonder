@@ -1,5 +1,5 @@
 import { hash2d } from "../core/rng";
-import { Beast, TRAIL_FADE_S } from "../life/beast";
+import { Beast, TRAIL_FADE_S, beastSegments } from "../life/beast";
 import { Flock } from "../life/birds";
 import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
@@ -26,6 +26,11 @@ import { SCALE, VARIANTS, buildTileAtlas, drawPlayerSprite } from "./tiles";
 const WATER_FRAME_MS = 450;
 const WATER_FRAME_SEQUENCE = [0, 1, 2, 1]; // gentle back-and-forth drift
 
+// A far-carried seed, set down: how long the falling mote and the ground's
+// answering shimmer last, from the sow frame to gone.
+export const SOW_LINGER_MS = 1900;
+const SOW_FALL_S = 0.55; // the mote's drift from flank to ground
+
 export interface Scene {
   player: { x: number; y: number } | null;
   flora: Flora | null;
@@ -43,6 +48,7 @@ export interface Scene {
   bedroll?: boolean; // the woven bedroll on the garden's far side
   tide?: number; // 0 = full sea .. 1 = the sea drawn all the way back
   pools?: TidePool[]; // small gardens the low tide bares along the sand
+  sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -546,6 +552,7 @@ export class Renderer {
         }
       }
       if (scene.beast && Math.floor(scene.beast.y / TILE_SIZE) === ty) {
+        this.drawBeastWake(scene.beast, camX, camY, timeMs);
         drawBeast(ctx, scene.beast, camX, camY);
       }
       if (scene.player && ty === playerRow) {
@@ -559,6 +566,44 @@ export class Renderer {
 
     // depth pass: sunlight breathes on the tallest crowns
     drawCrownLight(ctx, scene, camX, camY, x0, y0, x1, Math.min(map.height - 1, y1 + yPad), timeMs);
+
+    // the beast's sowing, made visible: a seed-colored mote drifts down from
+    // its flank, and the ground answers — soft sparks settling outward around
+    // the fresh sprout it planted, gone again in a couple of breaths
+    if (scene.sows) {
+      for (const s of scene.sows) {
+        const t = (timeMs - s.at) / 1000;
+        if (t < 0 || t * 1000 > SOW_LINGER_MS) continue;
+        const sx = s.x - camX;
+        const sy = s.y - camY;
+        if (sx < -24 || sx > this.viewWidth + 24 || sy < -24 || sy > this.viewHeight + 24)
+          continue;
+        if (t < SOW_FALL_S) {
+          const f = t / SOW_FALL_S;
+          const mx = sx + Math.sin(t * 7 + s.hue * 6.28) * 1.5; // swaying as it falls
+          const my = sy - 12 * (1 - f * f);
+          ctx.fillStyle = hsl(s.hue, 0.7, 0.72);
+          ctx.fillRect(Math.round(mx), Math.round(my) - 1, 1, 2);
+        } else {
+          const g = 1 - (t - SOW_FALL_S) / (SOW_LINGER_MS / 1000 - SOW_FALL_S); // 1 → 0
+          const r = 2.5 + (1 - g) * 4; // the ring breathes outward as it fades
+          const hue = Math.round(s.hue * 360);
+          for (let k = 0; k < 6; k++) {
+            const a = (k / 6) * Math.PI * 2 + s.hue * 6.28;
+            ctx.fillStyle = `hsla(${hue}, 80%, 75%, ${(0.5 * g).toFixed(3)})`;
+            ctx.fillRect(
+              Math.round(sx + Math.cos(a) * r),
+              Math.round(sy - 1 + Math.sin(a) * r * 0.55),
+              1,
+              1,
+            );
+          }
+          // the sprout's own small light, brightest the moment it lands
+          ctx.fillStyle = `rgba(240, 255, 235, ${(0.45 * g).toFixed(3)})`;
+          ctx.fillRect(Math.round(sx), Math.round(sy) - 2, 1, 2);
+        }
+      }
+    }
 
     // birds ride above the canopy
     if (scene.flocks) {
@@ -647,6 +692,27 @@ export class Renderer {
     // then the lens itself, its edges easing dark
     drawForegroundMotes(ctx, camX, camY, this.viewWidth, this.viewHeight, darkness, rain, timeMs);
     drawVignette(ctx, this.viewWidth, this.viewHeight, darkness, Math.min(1, this.zoomLevel - 1));
+  }
+
+  // Wading, not floating: any segment standing in shallow water rings the
+  // surface with a small spreading ripple, drawn under the body. Subtle —
+  // the shallows are part of its range, and it crosses them on its feet.
+  private drawBeastWake(b: Beast, camX: number, camY: number, timeMs: number): void {
+    const { ctx, map } = this;
+    const segs = beastSegments(b);
+    for (let i = 0; i < segs.length; i += 2) {
+      const s = segs[i];
+      const tx = Math.floor(s.x / TILE_SIZE);
+      const ty = Math.floor(s.y / TILE_SIZE);
+      if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) continue;
+      if (map.tiles[ty * map.width + tx] !== Tile.ShallowWater) continue;
+      const phase = (timeMs / 900 + i * 0.37) % 1;
+      const r = s.r + 1 + phase * 4;
+      const y = Math.round(s.y - camY);
+      ctx.fillStyle = `rgba(225, 244, 250, ${(0.3 * (1 - phase)).toFixed(3)})`;
+      ctx.fillRect(Math.round(s.x - r - camX), y, 2, 1); // rings spreading either side
+      ctx.fillRect(Math.round(s.x + r - 1 - camX), y, 2, 1);
+    }
   }
 
   // Night falls over everything already drawn; then the things that make
