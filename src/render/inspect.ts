@@ -31,6 +31,17 @@ const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Succulent]: "succulent",
 };
 
+// the biome a kind calls home — so you know where to go looking for it
+const BIOME_WORDS: Partial<Record<Tile, string>> = {
+  [Tile.Sand]: "the beach",
+  [Tile.Grass]: "the meadow",
+  [Tile.Forest]: "the forest",
+  [Tile.Marsh]: "the marsh",
+  [Tile.ShallowWater]: "the shallows",
+  [Tile.Rock]: "the bare rock",
+  [Tile.Snow]: "the snow",
+};
+
 function heightWord(h: number): string {
   if (h < 0.25) return "low";
   if (h < 0.5) return "knee-high";
@@ -132,6 +143,7 @@ function plantCard(
   if (sp.homeland) {
     bits.push("endemic — born only at the earth's eye");
   }
+  bits.splice(1, 0, `of ${BIOME_WORDS[sp.habitat] ?? "the island"}`); // where it grows
   bits.push(...extras);
   traits.textContent = bits.join(" · ");
   card.appendChild(traits);
