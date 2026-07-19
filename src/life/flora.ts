@@ -23,6 +23,21 @@ export interface Plant {
   idx: number; // position in the flat array; maintained by Flora
 }
 
+// The plant the wanderer actually means: plantsNear hands back tile-scan
+// order, so the truly nearest must be picked by hand.
+export function nearestPlant(plants: readonly Plant[], x: number, y: number): Plant | null {
+  let best: Plant | null = null;
+  let bestD = Infinity;
+  for (const p of plants) {
+    const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 export interface FloraTuning {
   maxPlants: number;
   maxPerTile: number;

@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { TILE_SIZE } from "../src/world/config";
 import { generate } from "../src/world/generate";
 import { Tile, WorldMap } from "../src/world/types";
-import { Flora } from "../src/life/flora";
+import { Flora, nearestPlant } from "../src/life/flora";
 import { PlantForm } from "../src/life/genome";
 import { PlantSpecies, generatePlantSpecies } from "../src/life/species";
 import { pocketAt } from "../src/world/types";
@@ -175,4 +175,19 @@ test("plantsNear returns exactly the plants within the radius", () => {
   for (const q of flora.plantsNear(p.x, p.y, 40)) {
     expect((q.x - p.x) ** 2 + (q.y - p.y) ** 2).toBeLessThanOrEqual(40 * 40);
   }
+});
+
+test("nearestPlant picks the truly nearest, not tile-scan order", () => {
+  const flora = new Flora(grassPatchMap(), grassSpecies(), 13);
+  for (const p of [...flora.all]) flora.removePlant(p);
+  const g = grassSpecies()[0].archetype;
+  // the tile scan visits row 2 before row 5, so the far plant comes first
+  const far = flora.addPlant(0, { ...g }, 2 * TILE_SIZE + 8, 2 * TILE_SIZE + 8, 0)!;
+  const near = flora.addPlant(0, { ...g }, 5 * TILE_SIZE + 8, 5 * TILE_SIZE + 8, 0)!;
+  const x = 5 * TILE_SIZE + 10;
+  const y = 5 * TILE_SIZE + 10;
+  const found = flora.plantsNear(x, y, 100);
+  expect(found[0]).toBe(far); // scan order really would hand you the far one
+  expect(nearestPlant(found, x, y)).toBe(near);
+  expect(nearestPlant([], x, y)).toBeNull();
 });

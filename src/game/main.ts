@@ -9,7 +9,7 @@ import {
   spawnCritters,
   updateCritter,
 } from "../life/fauna";
-import { Flora, Plant } from "../life/flora";
+import { Flora, Plant, nearestPlant } from "../life/flora";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { loadJournal, recordForage, recordSpread, recordSighting } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
@@ -66,7 +66,8 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const seedLabel = document.getElementById("seed-label")!;
 const hud = document.getElementById("hud")!;
 
-const GATHER_RANGE = 24; // px
+const GATHER_RANGE = 24; // px — materials' reach
+const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
 const INSPECT_RANGE = 2.5 * TILE_SIZE;
 
 let inventory: Inventory = emptyInventory();
@@ -97,11 +98,9 @@ function renderHud(): void {
     .filter((k) => mat[k] > 0)
     .map((k) => `${k} ${mat[k]}`);
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
-  const seeds =
-    inventory.seeds.length > 0
-      ? `${carried}seeds ${dots} · G sow · Q toss · E inspect`
-      : `${carried}E inspect · F gather · G sow · H home · J journal · M murmurs`;
-  hud.innerHTML = `${msg}${seeds}`;
+  // the pouch adds to the legend, never replaces it — no key goes hidden
+  const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
+  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · H home · J journal · M murmurs`;
 }
 
 let map!: WorldMap;
@@ -353,7 +352,16 @@ function openInspectAtPlayer(): void {
       at: Date.now(),
     });
   }
-  openInspect(shown, species, inventory.seeds, companySpecies, beastNear, companyMoods);
+  // each plant card carries a small gather button — the same quiet take
+  // as F, for the plant you are already looking at
+  openInspect(shown, species, inventory.seeds, companySpecies, beastNear, companyMoods, (group) => {
+    const next = gather(inventory, { species: group.plant.species, genome: group.plant.genome });
+    if (!next) return "pouch full";
+    inventory = next;
+    flashHud(`a seed of ${species[group.plant.species].name}`);
+    murmurs.offer("gather");
+    return "gathered";
+  });
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -507,11 +515,15 @@ window.addEventListener("keydown", (e) => {
       persist();
       return;
     }
-    const near = flora.plantsNear(player.x, player.y, GATHER_RANGE);
-    if (near.length === 0) {
+    // then plants: the one you mean is the nearest, not the first found
+    const plant = nearestPlant(
+      flora.plantsNear(player.x, player.y, PLANT_REACH),
+      player.x,
+      player.y,
+    );
+    if (!plant) {
       flashHud("nothing in reach to gather");
     } else {
-      const plant = near[0];
       const next = gather(inventory, { species: plant.species, genome: plant.genome });
       if (!next) {
         flashHud("your seed pouch is full");

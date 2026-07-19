@@ -1,4 +1,4 @@
-import { Seed } from "../game/inventory";
+import { INV_CAP, Seed } from "../game/inventory";
 import { Beast, beastSegments } from "../life/beast";
 import { CritterMood, CritterSpecies } from "../life/fauna";
 import { Plant } from "../life/flora";
@@ -16,6 +16,10 @@ export interface PlantGroup {
   plant: Plant; // the nearest individual stands for its kind
   nearby: number;
 }
+
+// A card's gather button lands here: try to pocket a seed of the group's
+// plant. The word that comes back is what the button says next.
+export type GatherFromCard = (group: PlantGroup) => "gathered" | "pouch full";
 
 const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Flower]: "flower",
@@ -143,16 +147,41 @@ export function openInspect(
   critters: CritterSpecies[] = [],
   beast: Beast | null = null,
   moods: Map<number, CritterMood> = new Map(),
+  onGather?: GatherFromCard,
 ): void {
   const el = panel();
   el.innerHTML = "";
   sectionTitle(el, groups.length > 0 ? "growing here" : "nothing grows within reach");
   if (groups.length > 0) {
     const g = grid(el);
+    // the panel keeps its own pouch count, so a pouch that fills mid-look
+    // quiets every remaining button at once
+    let pouched = pouch.length;
+    const buttons: HTMLButtonElement[] = [];
+    const settle = (b: HTMLButtonElement, word: string) => {
+      b.textContent = word;
+      b.disabled = true;
+    };
     for (const group of groups) {
       const sp = speciesList[group.plant.species];
       const extras = group.nearby > 1 ? [`${group.nearby} nearby`] : [];
-      g.appendChild(plantCard(group.plant.genome, sp, speciesList, extras));
+      const card = plantCard(group.plant.genome, sp, speciesList, extras);
+      if (onGather) {
+        const btn = document.createElement("button");
+        btn.className = "inspect-gather";
+        btn.textContent = "gather";
+        if (pouched >= INV_CAP) settle(btn, "pouch full");
+        btn.addEventListener("click", () => {
+          const word = onGather(group);
+          settle(btn, word);
+          if (word === "gathered" && ++pouched >= INV_CAP) {
+            for (const b of buttons) if (!b.disabled) settle(b, "pouch full");
+          }
+        });
+        buttons.push(btn);
+        card.appendChild(btn);
+      }
+      g.appendChild(card);
     }
   }
 
