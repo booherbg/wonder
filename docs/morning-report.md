@@ -56,9 +56,10 @@ crown-light, foreground parallax, a vignette.
 
 ## What's *not* done (for you to weigh in on)
 
-- **Take one home as a portable companion** — a specific critter that follows
-  you everywhere, not just dens near camp. The natural next cozy step (I may be
-  building it — check `git log`).
+- ~~Take one home as a companion~~ — **shipped while you slept.** Take a bonded
+  critter home (the "take home" button, once it trusts you) and it pads at your
+  heel wherever you wander, still yours when you return. The befriend loop is
+  whole: feed → trust → bond → they live at your camp → one comes with you.
 - **Fauna persistence** — trust persists, but individual critters still respawn
   fresh each load. The world doesn't yet *fully* remember its animals.
 - **The mountain as a destination** — Rock/Snow are still impassable walls; you
