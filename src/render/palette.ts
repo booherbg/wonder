@@ -36,3 +36,16 @@ export const PALETTE = {
   playerHair: "#4a3225",
   playerShadow: "rgba(0, 0, 0, 0.25)",
 } as const;
+
+// The island at a glance: one flat color per Tile, indexed by the enum.
+// The ?overview dev map and the journal's fog-of-war woodcut both read it.
+export const OVERVIEW_COLORS = [
+  PALETTE.deepWaterBase,
+  PALETTE.shallowWaterBase,
+  PALETTE.sandBase,
+  PALETTE.grassBase,
+  PALETTE.treeCanopy,
+  PALETTE.rockBase,
+  PALETTE.snowBase,
+  PALETTE.marshBase,
+] as const;

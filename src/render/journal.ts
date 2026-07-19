@@ -1,3 +1,4 @@
+import { isSeen, seenFraction } from "../game/explored";
 import { CritterEntry, JournalEntry, islandCharacter } from "../game/journal";
 import { CritterSpecies } from "../life/fauna";
 import { hsl } from "../life/genome";
@@ -7,6 +8,7 @@ import { islandName } from "../world/name";
 import { WorldMap } from "../world/types";
 import { critterPortrait, getCritterSprites } from "./critterSprites";
 import { trustLine } from "./inspect";
+import { OVERVIEW_COLORS, PALETTE } from "./palette";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
 
 const ZOOM = 4;
@@ -34,6 +36,13 @@ export interface JournalScene {
   critterSpecies: CritterSpecies[]; // its living critter kinds, for fresh sprites
   memories: string[]; // what this island has witnessed
   trust?: ReadonlyMap<number, number>; // this island's bonds, kind by kind
+  // the fog-of-war map, when the island underfoot keeps one: where you've
+  // walked (one bit per tile, row-major), where you stand, and where home is
+  explored?: {
+    seen: Uint8Array;
+    player: { x: number; y: number }; // tile coords
+    home: { x: number; y: number } | null;
+  };
 }
 
 function sectionTitle(el: HTMLElement, text: string): void {
@@ -103,6 +112,81 @@ function byIsland<T extends { island: string; firstMetAt: number }>(list: T[]): 
   return grouped;
 }
 
+// ── the little woodcut: the island as far as you've walked. Seen tiles in
+// their true colors, the rest under fog; quiet marks for landmarks you've
+// stood beside — and one for you. It grows across sittings because the ink
+// is kept per island, so it reads as "the island, as of my last visit."
+const MAP_FOG = "#10151d"; // darker than the deep sea — the unwalked keeps its secret
+const MAP_SHOWN_PX = 300; // the woodcut's width on the page, one css px per tile
+
+function hexRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function renderMinimap(el: HTMLElement, scene: JournalScene): void {
+  const ex = scene.explored;
+  if (!ex) return;
+  const { map } = scene;
+  const mini = document.createElement("canvas");
+  mini.width = map.width;
+  mini.height = map.height;
+  mini.style.display = "block";
+  mini.style.margin = "8px 0 4px";
+  mini.style.width = `${Math.min(map.width, MAP_SHOWN_PX)}px`;
+  mini.style.maxWidth = "100%";
+  mini.style.imageRendering = "pixelated";
+  mini.style.borderRadius = "4px";
+  mini.style.border = "1px solid rgba(255, 255, 255, 0.14)";
+  const ctx = mini.getContext("2d")!;
+  // one pass through an ImageData, not ninety thousand fillRects
+  const fog = hexRgb(MAP_FOG);
+  const inks = OVERVIEW_COLORS.map(hexRgb);
+  const img = ctx.createImageData(map.width, map.height);
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      const i = y * map.width + x;
+      const rgb = isSeen(ex.seen, map.width, x, y) ? inks[map.tiles[i]] : fog;
+      img.data[i * 4] = rgb[0];
+      img.data[i * 4 + 1] = rgb[1];
+      img.data[i * 4 + 2] = rgb[2];
+      img.data[i * 4 + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  // landmarks, marked only once their ground has been under your feet
+  const mark = (tx: number, ty: number, color: string): void => {
+    ctx.fillStyle = "rgba(6, 9, 14, 0.9)";
+    ctx.fillRect(tx - 2, ty - 2, 5, 5);
+    ctx.fillStyle = color;
+    ctx.fillRect(tx - 1, ty - 1, 3, 3);
+  };
+  for (const f of scene.map.falls ?? []) {
+    if (isSeen(ex.seen, map.width, f.x, f.y)) mark(f.x, f.y, "#eef4fa"); // white water
+  }
+  if (map.crater && isSeen(ex.seen, map.width, map.crater.x, map.crater.y)) {
+    mark(map.crater.x, map.crater.y, "#7fc8de"); // the earth's eye
+  }
+  if (ex.home && isSeen(ex.seen, map.width, ex.home.x, ex.home.y)) {
+    mark(ex.home.x, ex.home.y, "#e8b04a"); // the hearth
+  }
+  mark(ex.player.x, ex.player.y, PALETTE.playerCloak); // and you, in your red cloak
+  el.appendChild(mini);
+  const caption = document.createElement("div");
+  caption.style.font = "italic 12px Georgia, serif";
+  caption.style.opacity = "0.55";
+  caption.style.margin = "0 0 6px";
+  caption.style.lineHeight = "1.5";
+  caption.textContent =
+    seenFraction(ex.seen, map.width, map.height) < 0.02
+      ? "the map is barely begun — the island still keeps its shape to itself."
+      : "the island, as far as you've walked — the red mark is you; the fog is ground you haven't met.";
+  el.appendChild(caption);
+}
+
 // ── this island ── the place itself: always written, never earned
 function renderIsland(el: HTMLElement, scene: JournalScene): void {
   sectionTitle(el, "this island");
@@ -112,6 +196,7 @@ function renderIsland(el: HTMLElement, scene: JournalScene): void {
   name.style.font = "13px monospace";
   name.textContent = `${islandName(scene.map.seed)} — ${shape}`;
   el.appendChild(name);
+  renderMinimap(el, scene);
   const character = islandCharacter(scene.map);
   if (character.biomes.length > 0) fact(el, `the land: ${character.biomes.join(" · ")}`);
   if (character.features.length > 0) fact(el, character.features.join(" · "));

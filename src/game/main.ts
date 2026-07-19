@@ -41,6 +41,7 @@ import {
   setIsleFeature,
 } from "../render/picker";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
+import { loadExplored, markSeen, saveExplored } from "./explored";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
 import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
 import { TIDE_LOW, TidePool, exposureAt, placeTidePools, tideAt } from "./tide";
@@ -67,6 +68,7 @@ import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
+import { OVERVIEW_COLORS } from "../render/palette";
 import { Renderer, SOW_LINGER_MS } from "../render/renderer";
 import { InputState, Player } from "./player";
 
@@ -147,6 +149,10 @@ let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
 let home: { x: number; y: number } | null = null;
+let explored: Uint8Array | null = null; // one bit per tile: where you've walked, this island
+let exploredDirty = false; // fresh ink not yet written to the book
+let walkTx = -1; // the tile last inked — marking happens on crossings, never per frame
+let walkTy = -1;
 let materials: MaterialNode[] = []; // driftwood, loose stones, marsh rushes, per seed
 let taken = new Set<number>(); // material nodes already gathered
 let pools: TidePool[] = []; // the shore's small gardens, bared at low water
@@ -202,6 +208,8 @@ function loadSave(seed: number): SavedWorld | null {
 }
 
 function loadWorld(seed: number): void {
+  // the map you drew of the island you're leaving keeps its ink
+  if (explored) saveExplored(currentSeed, explored, map.width, map.height);
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
   // dev aid + the seed of the future terrain slider: ?shape=twin|lowland|...
@@ -285,6 +293,12 @@ function loadWorld(seed: number): void {
     }
     inventory = restoreInventory(saved, species);
   }
+  // the fog-of-war map: pick up where the ink left off, and see the ground
+  // underfoot before the first step is taken
+  explored = loadExplored(seed, map.width, map.height);
+  walkTx = Math.floor(player.x / TILE_SIZE);
+  walkTy = Math.floor(player.y / TILE_SIZE);
+  exploredDirty = markSeen(explored, map.width, map.height, walkTx, walkTy);
   closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
@@ -347,6 +361,13 @@ function openAlmanac(): void {
     critterSpecies,
     memories,
     trust,
+    explored: explored
+      ? {
+          seen: explored,
+          player: { x: Math.floor(player.x / TILE_SIZE), y: Math.floor(player.y / TILE_SIZE) },
+          home,
+        }
+      : undefined,
   });
 }
 
@@ -878,6 +899,9 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener("resize", () => renderer.resize());
 window.addEventListener("beforeunload", persist);
+window.addEventListener("beforeunload", () => {
+  if (explored) saveExplored(currentSeed, explored, map.width, map.height);
+});
 
 function input(): InputState {
   return {
@@ -889,7 +913,6 @@ function input(): InputState {
 }
 
 // dev aid: ?overview=1 renders the whole island at a glance (worldgen tuning)
-const OVERVIEW_COLORS = ["#22467c", "#4a7dbd", "#e3d29c", "#68a557", "#3e7a40", "#8b8e93", "#e9eef4", "#4d7355"];
 function drawOverview(): void {
   const ctx = canvas.getContext("2d")!;
   canvas.width = window.innerWidth;
@@ -1006,6 +1029,15 @@ function frame(now: number): void {
   // the sky's clock: wall time plus every night slept through
   const sky = now + skyOffset;
   player.update(dt, input(), map);
+  // the fog-of-war map: crossing into a new tile inks it and the glance
+  // around it — a handful of bit-sets on a crossing, nothing at all between
+  const walkNowX = Math.floor(player.x / TILE_SIZE);
+  const walkNowY = Math.floor(player.y / TILE_SIZE);
+  if (explored && (walkNowX !== walkTx || walkNowY !== walkTy)) {
+    walkTx = walkNowX;
+    walkTy = walkNowY;
+    if (markSeen(explored, map.width, map.height, walkTx, walkTy)) exploredDirty = true;
+  }
   // the inspect panel follows you: walk with it open and it re-reads what's
   // around, without re-writing the journal each step
   if (
@@ -1036,6 +1068,11 @@ function frame(now: number): void {
   if (saveAcc >= 10) {
     saveAcc = 0;
     persist();
+    // the walked map is written only when fresh ground was seen
+    if (explored && exploredDirty) {
+      exploredDirty = false;
+      saveExplored(currentSeed, explored, map.width, map.height);
+    }
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
   const inp = input();
