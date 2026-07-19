@@ -37,13 +37,50 @@ export function rollShape(seed: number): IslandShape {
   return "skerries";
 }
 
+// Island relief: the geology under the silhouette. Where shape decides the
+// coastline, relief decides what the climb feels like — smooth shoulders,
+// stepped terraces, a flat-crowned mesa, gorge-cut country, serried crags.
+export type IslandRelief = "rolling" | "terraced" | "mesa" | "gorges" | "crags";
+
+export const RELIEFS: readonly IslandRelief[] = [
+  "rolling", "terraced", "mesa", "gorges", "crags",
+];
+
+export const RELIEF_PHRASE: Record<IslandRelief, string> = {
+  rolling: "rolling open country",
+  terraced: "ground stepped in old terraces",
+  mesa: "a flat-crowned tableland",
+  gorges: "country cut by gorges",
+  crags: "a serried crag-land",
+};
+
+export function rollRelief(seed: number): IslandRelief {
+  const r = hash2d(seed, 13, 0xbbca);
+  if (r < 0.4) return "rolling";
+  if (r < 0.56) return "terraced";
+  if (r < 0.7) return "mesa";
+  if (r < 0.85) return "gorges";
+  return "crags";
+}
+
+// How steep a tile face must be (elevation lost to a 4-neighbor) before the
+// ground breaks into a sheer cliff. Above the steepest natural slopes, so
+// cliffs mark sculpted country: terrace risers, mesa rims, gorge walls.
+const CLIFF_SLOPE = 0.038;
+const CLIFF_FLOOR_ABOVE_BEACH = 0.02; // no cliffs down on the flats
+const SCREE_BAND = 0.035; // talus apron thickness beneath the bare rock
+const HIGHLAND_BAND = 0.05; // open turf band beneath the scree — the treeline
+
 // fBm elevation shaped by the island's rolled silhouette: guaranteed sea at
 // the edges, highlands only possible inland. Center, steepness, orientation,
-// and separation all jitter per seed — no two silhouettes alike.
+// and separation all jitter per seed — no two silhouettes alike. The rolled
+// relief then sculpts the field: every transform keeps the sea at the sea
+// and leaves the borders at zero, so the worldgen promises all still hold.
 export function buildElevation(
   seed: number,
   cfg: WorldConfig,
   shape: IslandShape = rollShape(seed),
+  relief: IslandRelief = rollRelief(seed),
 ): Float32Array {
   const { width, height } = cfg;
   const shapeRng = makeRng(seed ^ 0x15a4d);
@@ -61,7 +98,9 @@ export function buildElevation(
     const d = Math.sqrt(dx * dx + dy * dy);
     return Math.max(0, 1 - Math.pow(d, sh));
   };
-  const out = new Float32Array(width * height);
+  // pass one: the base field, kept in doubles so the relief pass introduces
+  // no extra rounding on islands whose relief leaves them untouched
+  const base = new Float64Array(width * height);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const nx = (2 * x) / (width - 1) - 1 - cx;
@@ -100,35 +139,146 @@ export function buildElevation(
       const border = Math.min(x, y, width - 1 - x, height - 1 - y);
       const borderFalloff = Math.min(1, border / BORDER_MARGIN);
       const raw = fbm(x / scale, y / scale, seed, cfg.elevationOctaves);
-      let e = raw * falloff * borderFalloff;
+      base[y * width + x] = raw * falloff * borderFalloff;
+    }
+  }
+  // pass two: the relief sculpts the base, and the lowland promise lands last
+  const sculpt = makeRelief(seed, relief, cfg, base);
+  const out = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      let e = sculpt(base[i], x, y);
       if (shape === "lowland") {
+        // the weald's promise outranks any geology: applied last, so even a
+        // craggy or terraced weald stays a low and gentle place
         const knee = cfg.rockLevel - 0.1;
         if (e > knee) e = knee + (e - knee) * 0.22; // the hills never become mountains
       }
-      out[y * width + x] = e;
+      out[i] = e;
     }
   }
   return out;
 }
 
-export function classify(e: number, m: number, cfg: WorldConfig): Tile {
+// The relief transforms. Terraces and mesas are strictly monotonic remaps of
+// elevation (order-preserving: rivers still descend, minima stay minima, the
+// sea line never moves). Gorges only ever lower ground, and never below the
+// shore; crags multiply, so zero stays zero and the borders stay sea.
+function makeRelief(
+  seed: number,
+  relief: IslandRelief,
+  cfg: WorldConfig,
+  base: Float64Array,
+): (e: number, x: number, y: number) => number {
+  switch (relief) {
+    case "terraced": {
+      // stepped ground between beach and rock: long treads, sharp risers.
+      // Piecewise-linear, continuous, strictly increasing — invariant-safe.
+      const lo = cfg.beachLevel;
+      const hi = cfg.rockLevel;
+      const steps = 4 + Math.floor(hash2d(seed, 61, 0x7a11) * 3); // 4-6
+      const TREAD = 0.74; // fraction of each step spent nearly flat
+      const RISE = 0.14; // height gained crossing the tread
+      return (e) => {
+        if (e <= lo || e >= hi) return e;
+        const s = ((e - lo) / (hi - lo)) * steps;
+        const k = Math.floor(s);
+        const f = s - k;
+        const g = f < TREAD ? (f / TREAD) * RISE : RISE + ((f - TREAD) / (1 - TREAD)) * (1 - RISE);
+        return lo + ((k + g) / steps) * (hi - lo);
+      };
+    }
+    case "mesa": {
+      // piedmont — escarpment — tableland: the summit pressed flat, the last
+      // climb pressed steep. Monotonic remap; the mesa never reaches snow.
+      // The knee sits a little under the island's own summit, so even a low
+      // isle gets a true flat crown — but never so low the sea line moves.
+      let maxBase = 0;
+      for (const b of base) maxBase = Math.max(maxBase, b);
+      const jitter = hash2d(seed, 62, 0x7a12) * 0.05;
+      const knee = Math.min(cfg.rockLevel - 0.02 - jitter, Math.max(0.51, maxBase - 0.1));
+      const W = 0.028; // escarpment source band (input elevation)
+      const D = 0.12; // escarpment output drop — slope multiplied ~4x
+      const B = 0.16; // piedmont band below, gently flattened to reconnect
+      return (e) => {
+        if (e >= knee) return knee + (e - knee) * 0.22; // the tableland
+        if (e >= knee - W) return knee - ((knee - e) / W) * D; // the wall
+        if (e >= knee - B) {
+          const u = (e - (knee - B)) / (B - W);
+          return knee - B + u * (B - D); // the piedmont shoulder
+        }
+        return e;
+      };
+    }
+    case "gorges":
+      // winding canyons sunk along the crests of a ridged noise field. The
+      // floor keeps ~18% of its height above the shore, so gorge bottoms
+      // stay dry land (sand, marsh, grass) that still drains to the sea.
+      return (e, x, y) => {
+        if (e <= cfg.shoreLevel + 0.015) return e;
+        const g = 1 - Math.abs(2 * fbm(x / 26, y / 26, seed + 9713, 4) - 1);
+        if (g <= 0.86) return e;
+        const m = Math.min(1, (g - 0.86) / 0.06);
+        const mm = m * m * (3 - 2 * m); // smooth wall
+        const floor = cfg.shoreLevel + 0.012 + (e - cfg.shoreLevel) * 0.18;
+        return e - (e - floor) * 0.92 * mm;
+      };
+    case "crags":
+      // ridged noise serrates the country: sharp crests, sunken vales, the
+      // occasional skerry tooth where a crest crosses the shallows.
+      return (e, x, y) => {
+        const r = 1 - Math.abs(2 * fbm(x / 15, y / 15, seed + 5527, 4) - 1);
+        return e * (0.8 + 0.42 * r * r);
+      };
+    default:
+      return (e) => e;
+  }
+}
+
+// Elevation + moisture (+ how sharply the ground falls away) become ground.
+// On mountain isles the climb reads in bands: grass, then open highland turf
+// at the treeline, then a scree apron, then bare rock, then snow. Gentle
+// isles whose summits never reach the rock keep their meadows all the way
+// up — a treeline belongs to mountains. And anywhere the land drops hard
+// enough, whatever the country, the face breaks into sheer cliff.
+export function classify(e: number, m: number, cfg: WorldConfig, slope = 0, alpine = true): Tile {
   if (e < cfg.seaLevel) return Tile.DeepWater;
   if (e < cfg.shoreLevel) return Tile.ShallowWater;
   if (e < cfg.beachLevel + 0.04 && m >= cfg.marshMoisture) return Tile.Marsh; // wet lowland
   if (e < cfg.beachLevel) return Tile.Sand;
   if (e >= cfg.snowLevel) return Tile.Snow;
-  if (e >= cfg.rockLevel) return Tile.Rock;
+  if (e >= cfg.rockLevel) return slope >= CLIFF_SLOPE ? Tile.Cliff : Tile.Rock;
+  if (slope >= CLIFF_SLOPE && e >= cfg.beachLevel + CLIFF_FLOOR_ABOVE_BEACH) return Tile.Cliff;
+  if (alpine) {
+    if (e >= cfg.rockLevel - SCREE_BAND) return m >= 0.66 ? Tile.Highland : Tile.Scree;
+    if (e >= cfg.rockLevel - SCREE_BAND - HIGHLAND_BAND) {
+      return m >= cfg.forestMoisture + 0.06 ? Tile.Forest : Tile.Highland; // the treeline
+    }
+  }
   return m >= cfg.forestMoisture ? Tile.Forest : Tile.Grass;
 }
 
 export function classifyTiles(elevation: Float32Array, seed: number, cfg: WorldConfig): Uint8Array {
   const { width, height } = cfg;
   const tiles = new Uint8Array(width * height);
+  let summit = 0;
+  for (const v of elevation) summit = Math.max(summit, v);
+  const alpine = summit >= cfg.rockLevel; // only true mountains wear a treeline
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
       const m = fbm(x / cfg.moistureScale, y / cfg.moistureScale, seed + 7777, cfg.moistureOctaves);
-      tiles[i] = classify(elevation[i], m, cfg);
+      // the steepest drop to a 4-neighbor: cliffs face downhill
+      let slope = 0;
+      for (const [dx, dy] of NEIGHBORS4) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const d = elevation[i] - elevation[ny * width + nx];
+        if (d > slope) slope = d;
+      }
+      tiles[i] = classify(elevation[i], m, cfg, slope, alpine);
     }
   }
   return tiles;
@@ -249,9 +399,10 @@ export function generate(
   seed: number,
   config: WorldConfig = DEFAULT_CONFIG,
   shape?: IslandShape,
+  relief?: IslandRelief,
 ): WorldMap {
   for (let attempt = 0; attempt < config.maxGenerationAttempts; attempt++) {
-    const map = tryGenerate(seed, seed + attempt, config, shape);
+    const map = tryGenerate(seed, seed + attempt, config, shape, relief);
     if (map) return map;
   }
   throw new Error(
@@ -264,10 +415,12 @@ function tryGenerate(
   genSeed: number,
   cfg: WorldConfig,
   forcedShape?: IslandShape,
+  forcedRelief?: IslandRelief,
 ): WorldMap | null {
   const { width, height } = cfg;
   const shape = forcedShape ?? rollShape(genSeed);
-  const elevation = buildElevation(genSeed, cfg, shape);
+  const relief = forcedRelief ?? rollRelief(genSeed);
+  const elevation = buildElevation(genSeed, cfg, shape, relief);
   const tiles = classifyTiles(elevation, genSeed, cfg);
   const carved = placeCrater(elevation, tiles, genSeed, cfg);
   const rivers = carveRivers(elevation, tiles, genSeed, cfg);
@@ -288,11 +441,76 @@ function tryGenerate(
 
   const pockets = placePockets(tiles, spawn, genSeed, cfg);
   const springs = placeSprings(tiles, genSeed, cfg);
+  const stacks = placeStacks(tiles, rivers, springs, genSeed, cfg);
   const falls = placeFalls(elevation, rivers, cfg);
   return {
     width, height, seed: displaySeed, tiles, elevation, rivers, spawn,
     pockets, springs, falls, crater: carved?.crater, confluences, shape,
+    relief, stacks,
   };
+}
+
+// Sea stacks: teeth of stone standing off the coast, the coastline the sea
+// has already taken back. Sheer faces (Cliff), so nothing roots or springs
+// on them; placed only in open water — never on a river's mouth, never
+// crowding a spring — so every worldgen promise stands.
+export function placeStacks(
+  tiles: Uint8Array,
+  rivers: River[],
+  springs: { x: number; y: number }[],
+  seed: number,
+  cfg: WorldConfig,
+): { x: number; y: number }[] {
+  const rng = makeRng(Math.floor(hash2d(seed, 91, 0x6) * 0xffffffff));
+  const roll = rng();
+  // roughly half of islands keep a bare coast; the rest stand a few teeth
+  const count = roll < 0.48 ? 0 : roll < 0.82 ? 2 + Math.floor(rng() * 2) : 4 + Math.floor(rng() * 3);
+  if (count === 0) return [];
+  const { width, height } = cfg;
+  const riverTiles = new Set<number>();
+  for (const r of rivers) for (const t of r.path) riverTiles.add(t);
+  const water = (t: number) => t === Tile.DeepWater || t === Tile.ShallowWater;
+  const candidates: number[] = [];
+  for (let y = 2; y < height - 2; y++) {
+    for (let x = 2; x < width - 2; x++) {
+      const i = y * width + x;
+      if (tiles[i] !== Tile.ShallowWater || riverTiles.has(i)) continue;
+      let open = true;
+      let deepNear = false;
+      for (let dy = -1; dy <= 1 && open; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const j = (y + dy) * width + (x + dx);
+          if (!water(tiles[j]) || riverTiles.has(j)) {
+            open = false; // the surf around a stack is all water, no river mouths
+            break;
+          }
+          if (tiles[j] === Tile.DeepWater) deepNear = true;
+        }
+      }
+      if (open && deepNear) candidates.push(i);
+    }
+  }
+  const out: { x: number; y: number }[] = [];
+  for (let tries = 0; tries < count * 8 && out.length < count && candidates.length > 0; tries++) {
+    const i = candidates[Math.floor(rng() * candidates.length)];
+    const x = i % width;
+    const y = (i / width) | 0;
+    if (out.some((s) => Math.hypot(s.x - x, s.y - y) < 9)) continue;
+    if (springs.some((s) => Math.hypot(s.x - x, s.y - y) < 4)) continue;
+    tiles[i] = Tile.Cliff;
+    if (rng() < 0.45) {
+      // some stacks are a pair: a second tooth leaning close
+      for (const [dx, dy] of NEIGHBORS4) {
+        const j = (y + dy) * width + (x + dx);
+        if (tiles[j] === Tile.ShallowWater && !riverTiles.has(j)) {
+          tiles[j] = Tile.Cliff;
+          break;
+        }
+      }
+    }
+    out.push({ x, y });
+  }
+  return out;
 }
 
 // Where two rivers meet, the water opens: steepest-descent rivers that touch

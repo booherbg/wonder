@@ -28,10 +28,23 @@ test("classify maps elevation/moisture bands to tiles", () => {
   expect(classify(0.36, 0.5, cfg)).toBe(Tile.Sand);
   expect(classify(0.36, 0.9, cfg)).toBe(Tile.Marsh); // wet lowland
   expect(classify(0.41, 0.9, cfg)).toBe(Tile.Marsh); // marsh creeps past the beach line
-  expect(classify(0.5, 0.9, cfg)).toBe(Tile.Forest);
-  expect(classify(0.5, 0.2, cfg)).toBe(Tile.Grass);
+  expect(classify(0.5, 0.9, cfg)).toBe(Tile.Forest); // moist woods climb past the treeline
+  expect(classify(0.48, 0.2, cfg)).toBe(Tile.Grass);
   expect(classify(0.65, 0.5, cfg)).toBe(Tile.Rock);
   expect(classify(0.9, 0.5, cfg)).toBe(Tile.Snow);
+});
+
+test("the climb reads in bands: treeline turf, scree apron, cliff faces", () => {
+  expect(classify(0.5, 0.2, cfg)).toBe(Tile.Highland); // above the treeline, dry: open turf
+  expect(classify(0.56, 0.3, cfg)).toBe(Tile.Scree); // the talus apron under the rock
+  expect(classify(0.56, 0.8, cfg)).toBe(Tile.Highland); // moist slopes keep their turf
+  expect(classify(0.65, 0.5, cfg, 0.05)).toBe(Tile.Cliff); // steep high ground breaks sheer
+  expect(classify(0.45, 0.4, cfg, 0.05)).toBe(Tile.Cliff); // even a green hillside can wall up
+  expect(classify(0.39, 0.4, cfg, 0.05)).toBe(Tile.Grass); // but never down on the flats
+  expect(classify(0.9, 0.5, cfg, 0.05)).toBe(Tile.Snow); // and the snow stays snow
+  // a treeline belongs to mountains: gentle isles keep their meadows high up
+  expect(classify(0.5, 0.2, cfg, 0, false)).toBe(Tile.Grass);
+  expect(classify(0.56, 0.3, cfg, 0, false)).toBe(Tile.Grass);
 });
 
 test("land fraction lands in a sane band across seeds", () => {

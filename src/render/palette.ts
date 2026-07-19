@@ -48,4 +48,7 @@ export const OVERVIEW_COLORS = [
   PALETTE.rockBase,
   PALETTE.snowBase,
   PALETTE.marshBase,
+  "#99917f", // Scree — talus gravel between turf and bare rock
+  "#85a95e", // Highland — open ground above the treeline, cooler than the meadow
+  "#585b63", // Cliff — escarpment lines, dark so sculpted country reads on the map
 ] as const;

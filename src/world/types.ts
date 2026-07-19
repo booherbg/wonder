@@ -7,6 +7,9 @@ export enum Tile {
   Rock = 5,
   Snow = 6,
   Marsh = 7, // wet lowland: river endings, moist shores
+  Scree = 8, // loose talus apron beneath the high rock — walkable gravel
+  Highland = 9, // open turf above the treeline — walkable alpine ground
+  Cliff = 10, // sheer escarpment face — impassable, marks sculpted country
 }
 
 export interface River {
@@ -50,6 +53,8 @@ export interface WorldMap {
   crater?: Crater; // rarely, the island's heart is water
   confluences?: { x: number; y: number }[]; // pools where two rivers meet
   shape?: string; // the island's rolled silhouette (see IslandShape)
+  relief?: string; // the island's rolled geology (see IslandRelief)
+  stacks?: { x: number; y: number }[]; // sea stacks: stone teeth standing offshore
 }
 
 export function pocketAt(map: WorldMap, tx: number, ty: number): Pocket | null {
@@ -66,6 +71,8 @@ export const WALKABLE: ReadonlySet<Tile> = new Set([
   Tile.Grass,
   Tile.Forest,
   Tile.Marsh,
+  Tile.Scree,
+  Tile.Highland,
 ]);
 
 export function tileAt(map: WorldMap, x: number, y: number): Tile {
