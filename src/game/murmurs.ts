@@ -406,6 +406,16 @@ export function pickMurmur(
   return MURMURS.find((m) => m.tag === tag && !shown.has(m.text)) ?? null;
 }
 
+// While a panel (inspect, journal, anthology, help) is up it owns the screen;
+// a murmur must not float over what the wanderer is reading.
+function aPanelIsOpen(): boolean {
+  if (typeof document === "undefined") return false;
+  for (const id of ["inspect", "journal", "anthology", "help"]) {
+    if (document.getElementById(id)?.style.display === "block") return true;
+  }
+  return false;
+}
+
 export class MurmurEngine {
   private shown = new Set<string>();
   private lastShownAt = -Infinity;
@@ -428,6 +438,7 @@ export class MurmurEngine {
 
   // Offer a moment; the engine decides whether a murmur surfaces.
   offer(tag: MurmurTag, now = performance.now()): void {
+    if (aPanelIsOpen()) return; // never float a murmur over a panel being read
     const m = pickMurmur(tag, this.shown, this.lastShownAt, now);
     if (!m) return;
     this.shown.add(m.text);
