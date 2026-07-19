@@ -16,6 +16,7 @@ import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../l
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
+import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
@@ -100,7 +101,7 @@ function renderHud(): void {
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   // the pouch adds to the legend, never replaces it — no key goes hidden
   const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · H home · J journal · M murmurs`;
+  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · H home · J journal · M murmurs · ? help`;
 }
 
 let map!: WorldMap;
@@ -378,6 +379,18 @@ const renderer = new Renderer(canvas, map);
 // dev aid: ?inspect=1 opens the inspect panel on load (screenshot tours)
 if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
 
+// the very first arrival, ever: the field guide opens itself once, with a
+// line of welcome. after that it waits behind ? and never speaks unasked.
+const SEEN_KEY = "wander.seen";
+try {
+  if (!localStorage.getItem(SEEN_KEY)) {
+    localStorage.setItem(SEEN_KEY, "1");
+    openHelp(true);
+  }
+} catch {
+  // storage unavailable: no welcome, but ? still answers
+}
+
 const keys = new Set<string>();
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
@@ -453,6 +466,7 @@ window.addEventListener("keydown", (e) => {
     } else {
       closeInspect();
       closeJournal();
+      closeHelp();
       openAnthology(loadAnthology());
     }
   } else if (k === "j") {
@@ -461,12 +475,24 @@ window.addEventListener("keydown", (e) => {
     } else {
       closeInspect();
       closeAnthology();
+      closeHelp();
       openJournal(loadJournal());
+    }
+  } else if (k === "?") {
+    // the field guide: a card, not a curriculum
+    if (isHelpOpen()) {
+      closeHelp();
+    } else {
+      closeInspect();
+      closeAnthology();
+      closeJournal();
+      openHelp();
     }
   } else if (k === "escape") {
     closeInspect();
     closeAnthology();
     closeJournal();
+    closeHelp();
   } else if (k === "p") {
     // a postcard: the canvas as it stands, named for the island
     canvas.toBlob((blob) => {

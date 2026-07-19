@@ -104,6 +104,30 @@
       #journal .inspect-name { margin-top: 2px; color: #ffffff; }
       #journal .inspect-traits { opacity: 0.6; margin-top: 2px; line-height: 1.4; }
       #journal canvas.journal-canvas { image-rendering: pixelated; width: 64px; height: 112px; }
+      #help {
+        display: none;
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(600px, 88vw); max-height: 78vh; overflow-y: auto;
+        background: rgba(8, 12, 18, 0.94);
+        border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+        padding: 18px 22px; color: #dfe7ef;
+      }
+      #help .anth-title { font: 12px monospace; opacity: 0.7; margin-top: 12px; }
+      #help .anth-title:first-child { margin-top: 0; }
+      #help .anth-epigraph {
+        font: italic 12px Georgia, serif; opacity: 0.5;
+        margin: 4px 0 8px; padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #help .help-welcome {
+        font: italic 13px Georgia, serif; line-height: 1.5;
+        color: rgba(255, 255, 255, 0.85); margin: 8px 0 2px;
+      }
+      #help .help-row { display: flex; gap: 12px; font: 12px monospace; line-height: 1.6; margin-top: 3px; }
+      #help .help-key { color: #ffffff; flex: 0 0 96px; text-align: right; white-space: nowrap; }
+      #help .help-what { opacity: 0.7; }
+      #help .help-line { font: 12px monospace; opacity: 0.7; line-height: 1.6; margin-top: 6px; }
+      #help .anth-hint { font: 11px monospace; opacity: 0.45; margin-top: 14px; text-align: center; }
     </style>
   </head>
   <body>
@@ -114,6 +138,7 @@
     <div id="murmur"></div>
     <div id="anthology"></div>
     <div id="journal"></div>
+    <div id="help"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>
