@@ -1018,12 +1018,14 @@ function offerMurmurMoments(dt: number): void {
   else if (here === Tile.Sand) murmurs.offer("sand");
   else if (here === Tile.Marsh) murmurs.offer("marsh");
   else if (here === Tile.Grass) murmurs.offer("meadow");
+  else if (here === Tile.Scree) murmurs.offer("heights");
+  else if (here === Tile.Highland) murmurs.offer("highland");
   slowCheckAcc += dt;
   if (slowCheckAcc >= 1) {
     slowCheckAcc = 0;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const t = tileAt(map, tx + dx, ty + dy);
-      if (t === Tile.Rock || t === Tile.Snow) {
+      if (t === Tile.Rock || t === Tile.Snow || t === Tile.Cliff) {
         murmurs.offer("heights");
         break;
       }

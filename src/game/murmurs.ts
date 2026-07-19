@@ -14,7 +14,8 @@ export type MurmurTag =
   | "water" // wading a river or shallows
   | "sand"
   | "marsh"
-  | "heights" // rock and snow at the interior
+  | "heights" // rock, scree, cliff and snow at the interior
+  | "highland" // gentle alpine turf above the treeline
   | "meadow"
   | "still" // standing quietly a while
   | "gather"
@@ -101,6 +102,21 @@ export const MURMURS: Murmur[] = [
     text: "the everlasting universe of things flows through the mind.",
     attribution: "— percy bysshe shelley, mont blanc (1817)",
     tag: "heights",
+  },
+  {
+    text: "the mountains are calling and i must go.",
+    attribution: "— john muir, letter to his sister (1873)",
+    tag: "heights",
+  },
+  {
+    text: "climb the mountains and get their good tidings. nature's peace will flow into you as sunshine flows into trees.",
+    attribution: "— john muir, our national parks (1901)",
+    tag: "highland",
+  },
+  {
+    text: "going to the mountains is going home; wildness is a necessity.",
+    attribution: "— john muir, our national parks (1901)",
+    tag: "highland",
   },
   {
     text: "i believe a leaf of grass is no less than the journey-work of the stars.",
