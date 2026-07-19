@@ -1,154 +1,80 @@
-# Good morning ☀️
+# Morning report — the night Wander became a game you play
 
-While you slept, the island came alive. Here's what's waiting for you.
+*2026-07-19, built overnight by Opus + a fleet of Fable subagents.*
 
-## First, play
+You went to sleep calling it "a beautiful screensaver" — deep simulation, no
+verbs, nothing you could touch. You woke up to a game. Everything you fired at
+me tonight is **done, tested (240 tests green), and playable right now.**
 
-    npm run dev        # probably still running from last night
+## What you can DO now
 
-Open http://localhost:5173 — you'll land on a random island.
-**WASD** walk · **E** inspect · **F** gather · **G** sow · **H** found a
-home · **P** postcard · **R** new island (double-press; your world is
-saved). Days last ~4 minutes; stay out after dusk.
+- **Inspect everything (E).** No more "nothing within reach." Lean close and the
+  panel tells you *the hour* (the sky and sea right now — a low tide under
+  stars, an aurora, a glowing tide), *the water's edge* (tide pools + their
+  dwellers, driftwood), *the land* (springs, falls, the crater, stones), *what
+  grows*, *your company*, *your camp*. And it **follows you as you walk.**
+- **Feed & befriend a critter.** Open the inspect panel near one; if you carry a
+  seed its kind favors, an **offer a seed** button appears. Feed it and it warms
+  to you — *wary → warming → trusts you → bonded*. The friendship **persists per
+  island across reloads.** A bonded kind stops keeping its distance and comes to
+  live near your camp. This is the Animal-Crossing heart you asked for.
+- **A home worth tending.** Inspect while standing at your camp and you'll see a
+  **your camp** view: what's growing in the bed, what you've built (fire,
+  bedroll), and the **friends who've made a home here** — *"your camp hums —
+  three kinds live alongside you."*
+- **Lean in (Z).** A smooth focus zoom to kneel down and watch a **pollinator
+  work a specific flower** — butterflies now settle, sip, and gather thick where
+  your blooms are dense.
+- **Your almanac (J).** This island's character (shape, biomes, its remembered
+  aurora/tide/beast nights), the creatures you've met, every plant in all its
+  color varieties — and now a **fog-of-war map** of the island as far as you've
+  walked.
+- **Sail between islands (L).** The islands you've visited are saved; the picker
+  lets you return to one instead of guessing at `?seed=`.
+- **Press ? for help.** A field guide of the keys and the camp path — no more
+  guessing at mechanics. (New players get a one-time welcome.)
+- **The beast is alive.** It visibly pauses and **drops a glowing sprout** where
+  it plants, moves with purpose toward the flora it favors, and wades the
+  shallows instead of floating.
 
-This page in its evening clothes: `npm run report` regenerates
-`docs/morning-report.html` from this markdown.
+## Fixes you'll feel
 
-Worth visiting: `?seed=99` (the blue forest below), `?seed=12345`
-(two pockets, two springs, and Lulu), `?seed=555` (fenland island).
+The legend never hides keys anymore; F grabs the *nearest* plant; there's a
+gather button on the inspect card; **critters no longer starve at a cliff**
+(they only crave plants they can reach); murmurs don't clash with open panels;
+every plant card names its **biome** so "nosing after X" points you somewhere
+real. Plus the whole world got **depth** — ground shadows, a deeper sea,
+crown-light, foreground parallax, a vignette.
 
-## The tour
+## A 3-minute tour (append to your URL)
 
-**Dusil Skerry (seed 99)** — no one chose these colors; the island's tree
-species just rolled indigo and orchid, and drift did the rest:
+- `?split=1` — sow a few seeds by home and watch a **new species arise** in
+  minutes (the genome engine, visibly alive).
+- `?lowtide=1` then **E** on the beach — the tide pools finally answer.
+- `?seed=20` — a crater lake; `?seed=777` — waterfalls; `?shape=skerries` — a
+  scatter of islets. Feed a critter, then press **J** and watch your map fill in.
 
-![indigo and magenta forest](shots/dusil-skerry-forest.png)
+## What's *not* done (for you to weigh in on)
 
-**A pocket biome igniting at night** (seed 12345, hidden between two
-rivers — ~60% of islands hide one, nothing marks them, you just find them):
+- **Take one home as a portable companion** — a specific critter that follows
+  you everywhere, not just dens near camp. The natural next cozy step (I may be
+  building it — check `git log`).
+- **Fauna persistence** — trust persists, but individual critters still respawn
+  fresh each load. The world doesn't yet *fully* remember its animals.
+- **The mountain as a destination** — Rock/Snow are still impassable walls; you
+  wanted a reachable summit with a vista. A real discoverable, unbuilt.
+- **An art eye** — the fog map, the camp view, and the pollinators were verified
+  by tests, not by a live browser (no headless-browser tooling here). Worth your
+  own look; tunables are one-liners.
 
-![pocket clearing glowing at night](shots/pocket-ignites-at-night.png)
+## How it was built
 
-**The glow forest after dark** — fungi light the understory and join into
-faint mycelium threads; the wanderer carries a small lantern:
+A 4-minute loop woke me; I dispatched Fable subagents for each feature (in
+isolated git worktrees when they'd collide), then verified and cherry-picked
+their work into `main`. Some agents hung after finishing their code (during
+browser self-checks) — a transcript-freshness check caught them and their work
+salvaged cleanly. Two big tasks I built by hand when delegation kept stalling.
+The whole night is one clean history in `git log`; the plan lives in
+`docs/superpowers/specs/playable-and-alive.md`.
 
-![bioluminescent forest at night](shots/glow-forest-at-night.png)
-
-**A hot spring at the rock's edge** — steam, a warm teal pool, and a water
-flower that colonized it on its own (shallow water is valid habitat; the
-systems compose):
-
-![hot spring with resident flower](shots/hot-spring.png)
-
-**Sanpo Tumbles at their den** — every critter species loves one plant and
-dens where it grows:
-
-![critters near their burrow](shots/critter-den.png)
-
-**Lulu, the old wanderer** — seed 12345's beast. No den, no appetite, just
-an endless slow crossing. She glows at night. She will sometimes stop and
-look at you:
-
-![the beast crossing the dunes](shots/lulu-the-old-wanderer.png)
-
-**A fenland coast** (seed 555) and **an island overview** (dev view,
-`?overview=1`):
-
-![marsh coastline](shots/marsh-coast.png)
-![island overview](shots/overview-dusil-skerry.png)
-
-## What shipped overnight
-
-Everything is committed to `master`, 76 unit tests green, zero runtime
-dependencies, ~13 kB gzipped.
-
-- **World**: named islands, per-seed silhouettes, rivers with deltas and
-  pond-ring marshes, marsh biome, hot springs, hidden pocket biomes —
-  **every island now holds at least one pocket**, and one island in five
-  hides a single *deep pocket* instead: larger, denser, traits pushed
-  further, faster shimmer, more spore motes
-- **Flora**: 5 forms (flower/shrub/tree/fungus/fern, plus lily & reed
-  aquatic forms), ~15 named species per island, genome drift in real time,
-  **cross-pollination** (neighbors breed; planting is breeding), pocket
-  amplification, one ✶ sport per island
-- **Fauna**: 3 critter species with dens/foraging/curiosity/blinks; the
-  beast; butterflies by day, moths by night; **birds** that wheel over the
-  island, perch, roost at night, and flush when you walk in among them
-  (Hopkins murmur); **fish** gliding in the shallows that scatter from
-  your wading steps; **frogs** on the banksides that plop into the water
-  with spreading rings when you come close
-- **Light**: 4-minute days, glow genomes shining after dark, mycelium
-  threads, cloud shadows, the lantern
-- **You**: inspect panel with drift readings, seed pouch, sowing, postcards
-- **Murmurs**: 20 gathered voices (Thoreau, Darwin, Bashō, Dickinson,
-  Whitman, van Gogh…) surfacing at first-times: new biome, stillness,
-  night, the sport, the beast, the spring
-
-The full design record is in `docs/superpowers/` (specs + plans) and the
-idea backlog in `docs/ideas.md`.
-
-## Your worlds are safe now
-
-- **Autosave.** Every world saves itself (each 10s, on leaving, and before
-  sailing): all the drifted genomes, your position, your seed pouch, your
-  home. The last 8 worlds you visited are kept; revisit any via `?seed=N`.
-- **R asks first.** Press R once and the island tells you it's saved and
-  asks for a second press before sailing.
-- **Worlds live while you're away.** When you return to a saved island,
-  the time you were gone is simulated forward (up to ~4 hours of island
-  time) — plants have reseeded, crossed, and drifted without you. This is
-  the browser-only version of "keep a world running." If you want more, two
-  honest roads: a small export/import of save files plus a headless node
-  runner that ages a world on a schedule (the sim is pure TypeScript, so
-  this is easy), or eventually a tiny server. Say which appeals.
-- **H founds a home.** Press H on good ground: a 3×3 garden bed takes
-  shape — corner stones, turned earth, a Frost murmur. Plants sown inside
-  are *tended*: never thinned by crowding, and they breed twice as fast
-  (with cross-pollination, your garden is a breeding bench). Genetics
-  nudging — pick two parents, bias their cross — is sketched and waiting
-  for you to go deep with me.
-
-## How this works (the fun version)
-
-The whole game is one number growing consequences.
-
-1. **The seed** feeds a hash; the hash feeds layered noise; the noise,
-   shaped by a per-seed lopsided falloff, becomes elevation. Where water
-   sits in it becomes sea, shore, marsh; where it rises becomes rock and
-   snow. Rivers are just water obeying "step downhill" until it can't.
-2. **Species are rolled, not drawn.** Each island generates ~15 plant
-   species: a form (flower, shrub, tree, fungus, fern), a habitat, and an
-   archetype genome — ten numbers (hue, height, petals, glow…). The pixel
-   art is *painted from the numbers* at runtime; no sprite sheet exists.
-3. **Every individual drifts.** Plants reseed with small mutations; nearby
-   same-species plants cross, meeting in the middle of their traits (hues
-   travel the short way round the color wheel). Geography plus time equals
-   gradients you can walk through. Glow past a threshold and the plant
-   literally lights up at night.
-4. **The island self-regulates.** Past a comfortable density it quietly
-   thins the commonest plants (never the rare ones, never your garden), so
-   an old world stays composed instead of becoming jungle wallpaper.
-5. **Everything else listens.** Critters den where their favorite plant
-   thrives; birds flush from your footsteps; moths follow the glow;
-   murmurs surface when a moment matches their tag. Nothing is scripted to
-   happen *at* you — things happen *near* you, which is why it feels alive.
-
-Same seed, same island, forever — your saves just remember what time and
-you did to it.
-
-## Decisions waiting for your taste
-
-1. **Field journal** (J) — my top pick for the next step: a self-writing
-   memoir of every species you've met, renameable, per-seed memory.
-2. **The wanderer's home** — where does it live, what is it for? (My
-   instinct: a porch, a garden bed, a place the camera rests — not a base.)
-3. **Critter trust** — feeding favorites → follow → they lead you to
-   secrets. How tame should wild things get?
-4. **Sound** — generative wind/footsteps/critter motifs. Big mood win,
-   real scope.
-5. **Cross-island seeds** — should one pouch slot survive `R`? (Invasive
-   species as gameplay.)
-6. Anything on the island that made you feel something — tell me what, and
-   that's the direction.
-
-— written at the end of the night shift, with the loop still ticking
+Go play. Feed something. It'll come home with you.
