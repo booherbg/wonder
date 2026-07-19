@@ -5,6 +5,7 @@ import {
   Critter,
   CritterMood,
   CritterSpecies,
+  TRUST_LINGER_RADIUS_PX,
   bestOffering,
   feedCritter,
   generateCritterSpecies,
@@ -30,7 +31,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { closeInspect, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { CampView, closeInspect, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import {
   closePicker,
   featurePhrase,
@@ -534,6 +535,36 @@ function openInspectAtPlayer(record = true): void {
     land.push(near3.stone > 1 ? `loose stones, sun-warm (${near3.stone})` : "a loose stone, sun-warm");
   if (near3.rush > 0) land.push("marsh rushes, cut green and soft");
 
+  // standing in or beside your home, the camp speaks: what the bed grows,
+  // what stands built, and which kinds have come to live alongside you —
+  // the same closeness H uses for tending, so looking and building agree
+  let camp: CampView | undefined;
+  if (home && Math.hypot(home.x - itx, home.y - ity) <= 2.5) {
+    const hx = (home.x + 0.5) * TILE_SIZE;
+    const hy = (home.y + 0.5) * TILE_SIZE;
+    // the bed, counted by kind — the thriving lead, ties read alphabetically
+    const bedCounts = new Map<number, number>();
+    for (const p of flora.plantsNear(hx, hy, 2 * TILE_SIZE)) {
+      if (flora.inGarden(p.x, p.y)) bedCounts.set(p.species, (bedCounts.get(p.species) ?? 0) + 1);
+    }
+    const bed = [...bedCounts]
+      .map(([id, count]) => ({ name: species[id].name, count }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    // the friends settled here: kinds at least warming to you, with someone
+    // actually pottering near home right now — presence, not paperwork
+    const friends = critterSpecies
+      .filter(
+        (sp) =>
+          (trust.get(sp.id) ?? 0) > 0 &&
+          critters.some(
+            (c) =>
+              c.species === sp.id && Math.hypot(c.x - hx, c.y - hy) < TRUST_LINGER_RADIUS_PX,
+          ),
+      )
+      .map((sp) => ({ name: sp.name, trust: trust.get(sp.id) ?? 0 }));
+    camp = { bed, fire, bedroll, friends };
+  }
+
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(
@@ -587,6 +618,7 @@ function openInspectAtPlayer(record = true): void {
     },
     trust,
     { hour, waterEdge, land },
+    camp,
   );
   lastInspectX = player.x;
   lastInspectY = player.y;
@@ -1009,7 +1041,8 @@ function frame(now: number): void {
   const inp = input();
   // what the world tells the critters: the hour, whether the wanderer is
   // keeping still — stillness is this game's watching verb — and the bond
-  // each kind holds, so trusted company gathers around you and your camp
+  // each kind holds, so trusted company gathers around you and, kind by
+  // kind, comes to den beside your camp (fauna's homePoint)
   const critterCtx = {
     darkness: darknessNow,
     playerStill: !(inp.up || inp.down || inp.left || inp.right),

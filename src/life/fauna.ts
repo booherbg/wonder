@@ -70,13 +70,14 @@ export function bestOffering(palate: Palate, seeds: ReadonlyArray<{ genome: Geno
 // Kept per species per island in one small book under TRUST_KEY, so a
 // friendship made is never unmade by a reload. Behavior reads the bond
 // through CritterContext.trust: a trusted kind notices your stillness from
-// farther, sidles nearer, and potters about you and your camp instead of
-// keeping its distance. Always a lean, never a leash.
+// farther, sidles nearer, potters about you and your camp instead of
+// keeping its distance — and, bond by bond, moves its sense of home in
+// beside your fire (homePoint). Always a lean, never a leash.
 
 export const TRUST_KEY = "wander.trust";
 export const TRUST_STEP = 0.15; // one shared seed; six make a bond
 const TRUST_CLOSE = 0.3; // from here on, a kind starts keeping your company
-const TRUST_LINGER_RADIUS_PX = 8 * TILE_SIZE; // how far "with you" reaches
+export const TRUST_LINGER_RADIUS_PX = 8 * TILE_SIZE; // how far "with you" (and "at your camp") reaches
 const TRUST_PULL = 0.55; // how hard a full bond leans each pottering step
 const TRUST_NOTICE = 2; // a full bond spots your stillness from 3x as far
 const TRUST_BOOK_CAP = 900; // three hundred islands of three kinds each
@@ -205,7 +206,7 @@ export interface CritterContext {
   darkness?: number; // 0 clear day .. MAX_DARKNESS deep night
   playerStill?: boolean; // the wanderer has kept their feet a moment
   trust?: ReadonlyMap<number, number>; // per-kind bond, 0 wary .. 1 bonded
-  camp?: { x: number; y: number } | null; // the wanderer's hearth, world px
+  camp?: { x: number; y: number } | null; // the wanderer's hearth, world px — a trusted kind dens in beside it
 }
 
 export type DriveName = "hunger" | "comfort" | "curiosity";
@@ -498,9 +499,12 @@ export function updateCritter(
 
   if (c.stateTime > 0) return;
 
-  // decision time: the drives speak and the strongest chooses
-  const denX = (sp.den.x + 0.5) * TILE_SIZE;
-  const denY = (sp.den.y + 0.5) * TILE_SIZE;
+  // decision time: the drives speak and the strongest chooses. "home" is
+  // the kind's den — leaned toward the wanderer's camp once the bond is
+  // real, so every homeward walk below carries a loved kind to your fire
+  const hearthHome = homePoint(sp.den, bond, ctx.camp, map);
+  const denX = hearthHome.x;
+  const denY = hearthHome.y;
   const farFromHome = Math.hypot(c.x - denX, c.y - denY) > HOME_RANGE_TILES * TILE_SIZE;
   const want = dominantDrive(critterDrives(c, ctx));
 
@@ -564,6 +568,35 @@ export function updateCritter(
     }
   }
   c.stateTime = 1.5 + rng() * 2.5;
+}
+
+// How far a full bond moves a kind's sense of home toward the wanderer's
+// camp: most of the way, never all — home stays home, it just moves in
+// beside yours.
+const HOME_LEAN = 0.85;
+
+// Where home is for this one: its kind's den — or, once the bond is real
+// (TRUST_CLOSE and up), that den leaned toward the wanderer's camp in
+// proportion to the bond. Every homeward walk reads this point: comfort's
+// denning, hunger's drift back to known ground, contentment's home range —
+// so a well-loved camp genuinely gathers its friends around it, while an
+// unbonded kind keeps its old den exactly. Should the lean land in the sea
+// or on bare rock, the kind settles beside the camp itself. Pure, and
+// deterministic: no dice move house.
+export function homePoint(
+  den: { x: number; y: number }, // tile coords, as CritterSpecies keeps them
+  bond: number,
+  camp: { x: number; y: number } | null | undefined,
+  map: WorldMap,
+): { x: number; y: number } {
+  const dx = (den.x + 0.5) * TILE_SIZE;
+  const dy = (den.y + 0.5) * TILE_SIZE;
+  if (!camp || bond < TRUST_CLOSE) return { x: dx, y: dy };
+  const lean = HOME_LEAN * clamp01(bond);
+  const x = dx + (camp.x - dx) * lean;
+  const y = dy + (camp.y - dy) * lean;
+  if (isWalkable(map, Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return { x, y };
+  return { x: camp.x, y: camp.y };
 }
 
 // Where a trusting kind gathers: the wanderer when they are near, else the

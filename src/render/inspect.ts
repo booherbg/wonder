@@ -54,6 +54,70 @@ export interface Surroundings {
   land: string[]; // springs, falls, a confluence, the crater, loose stones
 }
 
+// ── your camp ───────────────────────────────────────────────────────────
+// The wanderer's hearth read at a glance: what the bed grows, what stands
+// built, and which kinds have come to live alongside. A cozy status, not a
+// management screen — the reader (main) gathers the facts, these helpers
+// say them, and openInspect lays the section in when you stand at home.
+
+export interface CampFriend {
+  name: string;
+  trust: number; // the bond its kind holds, 0..1
+}
+
+export interface CampView {
+  bed: { name: string; count: number }[]; // what grows in the 3×3 bed, by kind
+  fire: boolean;
+  bedroll: boolean;
+  friends: CampFriend[]; // kinds at least warming, with someone near home now
+}
+
+const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six"];
+
+// The camp's mood in one line: quiet, a first friend, a hum of company.
+export function campMood(friends: readonly CampFriend[]): string {
+  if (friends.length === 0) return "quiet still — no one's settled yet";
+  if (friends.length === 1) return `${friends[0].name} has made a home here`;
+  const n = COUNT_WORDS[friends.length] ?? String(friends.length);
+  return `your camp hums — ${n} kinds live alongside you`;
+}
+
+// A settled friend said in a line: how near its kind has come to living
+// with you, on the same ladder the critter cards speak.
+function friendLine(f: CampFriend): string {
+  switch (trustWord(f.trust)) {
+    case "bonded":
+      return `${f.name} — bonded, denned in beside you`;
+    case "trusts you":
+      return `${f.name} — trusts you, and keeps close`;
+    default:
+      return `${f.name} — warming, and pottering near`;
+  }
+}
+
+// Every line the camp section speaks, in order: mood, bed, shelter,
+// friends. Pure, so a test can read the whole camp at a glance.
+export function campLines(camp: CampView): string[] {
+  const lines = [campMood(camp.friends)];
+  lines.push(
+    camp.bed.length === 0
+      ? "the bed lies bare — G sows a gathered seed"
+      : `in the bed: ${camp.bed
+          .map((b) => (b.count > 1 ? `${b.name} ×${b.count}` : b.name))
+          .join(" · ")}`,
+  );
+  const built: string[] = [];
+  if (camp.fire) built.push("a fire, burning every night");
+  if (camp.bedroll) built.push("a bedroll of woven rushes");
+  lines.push(
+    built.length > 0
+      ? built.join(" · ")
+      : "open ground yet — driftwood and stone would raise a fire",
+  );
+  for (const f of camp.friends) lines.push(friendLine(f));
+  return lines;
+}
+
 // The hour said in a line. Pure and unit-tested; the reader assembles the
 // sky/tide/weather state and this names it.
 export function hourLine(o: {
@@ -228,6 +292,7 @@ export function openInspect(
   onFeed?: FeedFromCard,
   trust?: ReadonlyMap<number, number>,
   surroundings?: Surroundings,
+  camp?: CampView,
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -238,6 +303,8 @@ export function openInspect(
     line.textContent = surroundings.hour;
     el.appendChild(line);
   }
+  // standing at your hearth, the camp speaks first — before the wild does
+  if (camp) noteSection(el, "your camp", campLines(camp));
   sectionTitle(el, groups.length > 0 ? "growing here" : "nothing grows within reach");
   if (groups.length > 0) {
     const g = grid(el);
