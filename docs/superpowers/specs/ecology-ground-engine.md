@@ -8,6 +8,51 @@ fill the marked sections. Pillars checked throughout: peaceful; surprise
 is a budget; keys stay few; the world doesn't need you; show, don't
 commemorate.*
 
+## Direction shift — symbiosis over herbivory (2026-07-18, Blaine's steer)
+
+**The core interaction becomes mutualism, not consumption.** A critter
+with a preference visits the plants that match it, and the visit *helps*
+the plant — spreads its seed, carries its pollen — while feeding the
+critter. Both gain. Co-adaptation is always beneficial: the island drifts
+toward harmony, not an arms race. No predator, no lethal danger; the game
+stays peaceful by construction.
+
+What this keeps, unchanged: **the palate** (preference = what a critter
+visits), **the energy ledger** (a critter still feeds and tires), the
+**garden-as-invitation** loop (now purely generative — plant a chord, the
+matching fauna assemble *and spread what you planted*), and the pollinator
+wisps / cross-pollination already shipped (they were mutualist all along).
+
+What this flips: **the teeth (`458807b`).** A visit stops *consuming* the
+plant. Instead it triggers a **propagation** — a drifted seed into a
+nearby open tile, if space allows — and feeds the critter. `nibble`
+becomes `visit`; the "grazed patch thins then recovers" test flips to "a
+visited patch *spreads*." (Reframe is the next code step; the teeth still
+run correctly in the meantime.)
+
+The one thing to get right — **balance.** Herbivory self-limits by
+negative feedback (overgraze → crash → recovery). Mutualism is *positive*
+feedback (more visits → more spread → more food → more visitors) and runs
+*toward* saturation. So the restoring force is no longer predation; it is
+**finite space** (the per-tile cap, already shipped) **plus saturation**
+(a plant spreads only so fast; a tile holds only so many). The island
+fills to a lush, blooming ceiling and *holds* there — the drama moves from
+boom-bust population swings to **composition and succession**: which
+lineages win the tiles, and how the mix co-adapts as fauna preference and
+plant drift pull toward each other. Selection stays visible, but as
+*matching improving*: a lineage drifting toward what a megafauna favors
+gets spread more.
+
+**A size spectrum of mutualists** (uses pieces already in the game): wisps
+and moths pollinate locally; small critters disperse seed nearby; the
+**beast becomes a gentle megafauna** whose migrations spread what it
+favors across the whole island over island-days.
+
+*Everything below was written under the herbivory frame; read it through
+this lens. Palate, ledger, drives, discoverability all survive; only the
+sign of the plant's outcome changes (help, not harm), and "balance without
+a script" now means saturation, not predator-prey.*
+
 ## What's already load-bearing
 
 The vision asks for "every critter carries tuning values, the same idea as
