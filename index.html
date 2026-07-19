@@ -9,11 +9,13 @@
       canvas { display: block; image-rendering: pixelated; }
       #seed-label {
         position: fixed; left: 12px; bottom: 10px;
+        max-width: 34vw; line-height: 1.5;
         font: 12px monospace; color: rgba(255, 255, 255, 0.55);
         user-select: none;
       }
       #hud {
         position: fixed; right: 12px; bottom: 10px;
+        max-width: 58vw; line-height: 1.5;
         font: 12px monospace; color: rgba(255, 255, 255, 0.75);
         text-align: right; user-select: none;
       }
@@ -59,6 +61,8 @@
         line-height: 1.5;
       }
       #murmur.visible { opacity: 1; }
+      /* a panel opened mid-murmur: retire it at once, no lingering fade */
+      #murmur.hushed { opacity: 0; transition: none; }
       #murmur .murmur-attr { font-size: 11px; opacity: 0.6; margin-top: 4px; }
       #anthology {
         display: none;

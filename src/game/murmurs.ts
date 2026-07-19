@@ -462,6 +462,21 @@ export class MurmurEngine {
     this.show(m);
   }
 
+  // Called every frame: if a panel is open while a murmur is still floating,
+  // retire it at once (offer() blocks new ones, but one already up would
+  // otherwise linger over what the wanderer is reading).
+  syncPanels(): void {
+    if (!aPanelIsOpen()) return;
+    const el = typeof document === "undefined" ? null : document.getElementById("murmur");
+    if (!el || !el.classList.contains("visible")) return;
+    el.classList.remove("visible");
+    el.classList.add("hushed");
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
+  }
+
   private show(m: Murmur): void {
     const el = typeof document === "undefined" ? null : document.getElementById("murmur");
     if (!el) return;
@@ -472,6 +487,7 @@ export class MurmurEngine {
     attr.className = "murmur-attr";
     attr.textContent = m.attribution;
     el.append(text, attr);
+    el.classList.remove("hushed"); // a fresh murmur fades in cleanly again
     el.classList.add("visible");
     if (this.hideTimer) clearTimeout(this.hideTimer);
     this.hideTimer = setTimeout(() => el.classList.remove("visible"), SHOW_MS);

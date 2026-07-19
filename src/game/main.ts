@@ -129,7 +129,15 @@ function renderHud(): void {
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   // the pouch adds to the legend, never replaces it — no key goes hidden
   const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · L isles · P postcard · R island · ? help`;
+  // non-breaking spaces bind each key to its word, so when the legend wraps it
+  // only ever breaks at a " · ", never mid-item ("L isles" stays whole)
+  const legend = [
+    "E inspect", "F gather", "G sow", "Z focus", "H home", "J journal",
+    "M murmurs", "L isles", "P postcard", "R island", "? help",
+  ]
+    .map((item) => item.replace(" ", String.fromCharCode(160)))
+    .join(" · ");
+  hud.innerHTML = `${msg}${carried}${pouch}${legend}`;
 }
 
 let map!: WorldMap;
@@ -1085,6 +1093,8 @@ function frame(now: number): void {
   }
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
+  // a murmur caught floating when a panel opens is retired at once
+  murmurs.syncPanels();
   // the sky's clock: wall time plus every night slept through
   const sky = now + skyOffset;
   player.update(dt, input(), map);
