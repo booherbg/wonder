@@ -8,6 +8,13 @@ export enum PlantForm {
   Fern = 4,
   Coral = 5, // shallow-water branching colonies; polyps carry the glow
   Succulent = 6, // plump rosettes for the dry places; blooms are an event
+  Reed = 7, // cattails and rushes standing in the wet ground
+  Vine = 8, // a winding creeper hung with trumpet blossoms
+  Grass = 9, // fountain tussocks; the meadow's soft undergrowth
+  Moss = 10, // low cushions crusted with lichen discs and sporophytes
+  Bulb = 11, // an arched stem hanging a lantern-bell over its own bulb
+  Sporestalk = 12, // slender spires topped with shaded spore-orbs
+  Kelp = 13, // sinuous ribbons of the shallows, buoyed by floats
 }
 
 // Every numeric trait a plant carries. `form` is structural and never mutates;

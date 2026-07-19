@@ -2,7 +2,7 @@ import { INV_CAP, Seed } from "../game/inventory";
 import { Beast, beastSegments } from "../life/beast";
 import { COMPANION_TRUST, CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
-import { PlantForm, driftDistance } from "../life/genome";
+import { Genome, PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { Tile } from "../world/types";
 import { drawBeast } from "./beastSprite";
@@ -37,7 +37,51 @@ const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Fern]: "fern",
   [PlantForm.Coral]: "coral",
   [PlantForm.Succulent]: "succulent",
+  [PlantForm.Reed]: "reed",
+  [PlantForm.Vine]: "vine",
+  [PlantForm.Grass]: "grass",
+  [PlantForm.Moss]: "moss",
+  [PlantForm.Bulb]: "lantern-bloom",
+  [PlantForm.Sporestalk]: "spore-stalk",
+  [PlantForm.Kelp]: "kelp",
 };
+
+// the countable feature each form wears, matching the sprite's own math
+function featureWord(g: Genome): string {
+  switch (g.form) {
+    case PlantForm.Flower:
+      return `${Math.round(g.petals)} petals`;
+    case PlantForm.Fungus:
+      return `${Math.round(g.petals / 2)} spots`;
+    case PlantForm.Fern:
+      return `${Math.max(3, Math.round(g.petals * 0.8))} fronds`;
+    case PlantForm.Coral:
+      return `${Math.max(2, Math.round(g.petals * 0.5))} arms`;
+    case PlantForm.Succulent:
+      return `${Math.round(g.petals)} fleshy leaves`;
+    case PlantForm.Reed: {
+      const count = 3 + Math.round(g.spread * 3);
+      const heads = Math.max(1, Math.min(count, Math.round(g.petals / 3)));
+      return heads === 1 ? "one velvet head" : `${heads} velvet heads`;
+    }
+    case PlantForm.Vine:
+      return `${Math.max(2, Math.round(g.petals / 2) - 1)} trumpet blooms`;
+    case PlantForm.Grass:
+      return `${5 + Math.round(g.spread * 4)} blades`;
+    case PlantForm.Moss: {
+      const discs = Math.max(1, Math.round(g.petals / 3));
+      return discs === 1 ? "one lichen disc" : `${discs} lichen discs`;
+    }
+    case PlantForm.Bulb:
+      return g.petals >= 8 ? "twin hanging bells" : "one hanging bell";
+    case PlantForm.Sporestalk:
+      return `${2 + Math.round(g.spread * 2)} spore-orbs`;
+    case PlantForm.Kelp:
+      return `${2 + (g.spread > 0.55 ? 1 : 0)} ribbons`;
+    default:
+      return `${Math.round(g.petals / 2)} berries`; // shrubs, and fruit in the trees
+  }
+}
 
 // the biome a kind calls home — so you know where to go looking for it
 const BIOME_WORDS: Partial<Record<Tile, string>> = {
@@ -255,20 +299,7 @@ function plantCard(
   const traits = document.createElement("div");
   traits.className = "inspect-traits";
   const g = genome;
-  const bits = [
-    `${heightWord(g.height)} ${FORM_WORDS[g.form]}`,
-    g.form === PlantForm.Flower
-      ? `${Math.round(g.petals)} petals`
-      : g.form === PlantForm.Fungus
-        ? `${Math.round(g.petals / 2)} spots`
-        : g.form === PlantForm.Fern
-          ? `${Math.max(3, Math.round(g.petals * 0.8))} fronds`
-          : g.form === PlantForm.Coral
-            ? `${Math.max(2, Math.round(g.petals * 0.5))} arms`
-            : g.form === PlantForm.Succulent
-              ? `${Math.round(g.petals)} fleshy leaves`
-              : `${Math.round(g.petals / 2)} berries`,
-  ];
+  const bits = [`${heightWord(g.height)} ${FORM_WORDS[g.form]}`, featureWord(g)];
   if (g.glow > 0.8) bits.push("luminous");
   const drift = Math.round(driftDistance(g, sp.archetype) * 100);
   bits.push(drift <= 2 ? "true to its kind" : `drifted ${drift}%`);

@@ -67,14 +67,18 @@ test(
     expect(grazedUnderPressure).toBeLessThan(controlSteady * 0.6);
     expect(grazedUnderPressure).toBeGreaterThan(0); // suppressed, never erased
 
-    let trough = grazedUnderPressure;
     for (let i = 0; i < RECOVER; i++) {
       control.simTick();
       grazed.simTick();
-      trough = Math.min(trough, gAt());
     }
-    // released, the survivors mature and reseed: the patch climbs off its low
-    expect(gAt()).toBeGreaterThan(trough + 5);
+    // released, the patch converges back toward its untouched twin: its
+    // share of the twin's count climbs well off the low grazing forced it
+    // to — twin-relative, so richer islands' own competitive settling (a
+    // kind can drift down in BOTH twins) cancels out of the signal
+    const pressuredShare = grazedUnderPressure / Math.max(1, controlSteady);
+    const recoveredShare = gAt() / Math.max(1, control.speciesCounts.get(target) ?? 0);
+    expect(recoveredShare).toBeGreaterThan(pressuredShare * 1.15);
+    expect(gAt()).toBeGreaterThan(0); // and it never winked out on the way
   },
   30_000,
 );

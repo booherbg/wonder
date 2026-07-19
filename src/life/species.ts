@@ -16,16 +16,16 @@ export interface PlantSpecies {
 
 // which forms can appear in each habitat, roughly weighted by repetition
 const HABITAT_FORMS: ReadonlyArray<readonly [Tile, readonly PlantForm[]]> = [
-  [Tile.Grass, [PlantForm.Flower, PlantForm.Flower, PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus]],
-  [Tile.Forest, [PlantForm.Tree, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Flower, PlantForm.Fern, PlantForm.Fern]],
-  [Tile.Sand, [PlantForm.Succulent, PlantForm.Succulent, PlantForm.Shrub, PlantForm.Flower]],
-  [Tile.ShallowWater, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Coral, PlantForm.Coral]],
-  [Tile.Rock, [PlantForm.Fungus, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Succulent]],
-  [Tile.Marsh, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus, PlantForm.Fungus, PlantForm.Fern]],
+  [Tile.Grass, [PlantForm.Flower, PlantForm.Flower, PlantForm.Flower, PlantForm.Grass, PlantForm.Grass, PlantForm.Bulb, PlantForm.Shrub, PlantForm.Fungus]],
+  [Tile.Forest, [PlantForm.Tree, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Flower, PlantForm.Fern, PlantForm.Fern, PlantForm.Vine, PlantForm.Vine, PlantForm.Moss, PlantForm.Sporestalk]],
+  [Tile.Sand, [PlantForm.Succulent, PlantForm.Succulent, PlantForm.Succulent, PlantForm.Shrub, PlantForm.Flower, PlantForm.Grass]],
+  [Tile.ShallowWater, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Coral, PlantForm.Coral, PlantForm.Kelp, PlantForm.Reed]],
+  [Tile.Rock, [PlantForm.Fungus, PlantForm.Fungus, PlantForm.Shrub, PlantForm.Succulent, PlantForm.Moss, PlantForm.Moss, PlantForm.Sporestalk]],
+  [Tile.Marsh, [PlantForm.Flower, PlantForm.Shrub, PlantForm.Fungus, PlantForm.Fungus, PlantForm.Fern, PlantForm.Reed, PlantForm.Reed, PlantForm.Bulb, PlantForm.Vine]],
 ];
 
 // per-form archetype trait ranges: [heightLo, heightHi, glowHi]
-const FORM_RANGES: Record<PlantForm, { height: [number, number]; glowMax: number }> = {
+export const FORM_RANGES: Record<PlantForm, { height: [number, number]; glowMax: number }> = {
   [PlantForm.Flower]: { height: [0.15, 0.55], glowMax: 0.6 },
   [PlantForm.Shrub]: { height: [0.2, 0.6], glowMax: 0.4 },
   [PlantForm.Tree]: { height: [0.55, 1], glowMax: 0.3 },
@@ -33,6 +33,13 @@ const FORM_RANGES: Record<PlantForm, { height: [number, number]; glowMax: number
   [PlantForm.Fern]: { height: [0.2, 0.6], glowMax: 0.5 },
   [PlantForm.Coral]: { height: [0.15, 0.6], glowMax: 0.9 }, // reefs light the tide nights
   [PlantForm.Succulent]: { height: [0.1, 0.45], glowMax: 0.7 }, // low, plump, sometimes lit
+  [PlantForm.Reed]: { height: [0.35, 0.8], glowMax: 0.5 }, // tall in the wet, velvet heads
+  [PlantForm.Vine]: { height: [0.25, 0.7], glowMax: 0.7 }, // trumpet blossoms sometimes lit
+  [PlantForm.Grass]: { height: [0.15, 0.55], glowMax: 0.4 }, // low fountains, rare lit tips
+  [PlantForm.Moss]: { height: [0.05, 0.25], glowMax: 0.85 }, // the lowest life; lichen lamps
+  [PlantForm.Bulb]: { height: [0.2, 0.6], glowMax: 0.8 }, // hanging bells that lantern
+  [PlantForm.Sporestalk]: { height: [0.3, 0.75], glowMax: 1 }, // the orbs are born to glow
+  [PlantForm.Kelp]: { height: [0.4, 0.95], glowMax: 0.6 }, // tall ribbons, floats alight
 };
 
 function sampleArchetype(form: PlantForm, rng: Rng): Genome {
@@ -65,6 +72,13 @@ const FORM_EPITHETS: Record<PlantForm, readonly string[]> = {
   [PlantForm.Fern]: ["frond", "curl", "feather", "fan", "lace"],
   [PlantForm.Coral]: ["branch", "horn", "reef", "garden", "antler"],
   [PlantForm.Succulent]: ["rosette", "pad", "jewel", "star", "thorn"],
+  [PlantForm.Reed]: ["reed", "rush", "quill", "wand", "whisper"],
+  [PlantForm.Vine]: ["vine", "creeper", "coil", "tangle", "trumpet"],
+  [PlantForm.Grass]: ["grass", "blade", "sedge", "sway", "fountain"],
+  [PlantForm.Moss]: ["moss", "cushion", "lichen", "velvet", "carpet"],
+  [PlantForm.Bulb]: ["bell", "lantern", "drop", "chime", "nod"],
+  [PlantForm.Sporestalk]: ["stalk", "orb", "wisp", "spire", "beacon"],
+  [PlantForm.Kelp]: ["kelp", "ribbon", "strand", "wrack", "banner"],
 };
 
 function cap(s: string): string {
@@ -148,13 +162,13 @@ export function speciateFrom(
   };
 }
 
-// The island's flora: 2-4 species per habitat, exactly one "sport" oddball,
+// The island's flora: 3-5 species per habitat, exactly one "sport" oddball,
 // and always at least one true tree for the forests.
 export function generatePlantSpecies(seed: number): PlantSpecies[] {
   const rng = makeRng(seed ^ 0x5eed5);
   const out: PlantSpecies[] = [];
   for (const [habitat, forms] of HABITAT_FORMS) {
-    const n = 2 + Math.floor(rng() * 3); // 2-4 species
+    const n = 3 + Math.floor(rng() * 3); // 3-5 species
     for (let i = 0; i < n; i++) {
       let form = forms[Math.floor(rng() * forms.length)];
       if (habitat === Tile.Forest && i === 0) form = PlantForm.Tree; // forests get their tree

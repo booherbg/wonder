@@ -58,16 +58,16 @@ export interface FloraTuning {
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
-  maxPlants: 8000,
-  maxPerTile: 3,
-  simBudget: 400,
+  maxPlants: 10000,
+  maxPerTile: 4,
+  simBudget: 480,
   matureAge: 20,
   lifespan: 900,
   reproChance: 0.06,
   reseedRadius: 3,
   mutationAmount: 0.06,
   pollinationRadius: 2,
-  comfortFraction: 0.72,
+  comfortFraction: 0.8,
   splitDistance: 0.3,
   splitKinDistance: 0.14,
   splitKinRadius: 4,
@@ -75,6 +75,14 @@ export const DEFAULT_TUNING: FloraTuning = {
   splitCooldownTicks: 500,
   maxDaughterSpecies: 12,
 };
+
+// The carpeting forms spread in broad soft sweeps rather than tight clumps —
+// the undergrowth that makes a meadow read lush between its showpieces.
+const GROUND_COVER: ReadonlySet<PlantForm> = new Set([
+  PlantForm.Grass,
+  PlantForm.Moss,
+  PlantForm.Reed,
+]);
 
 // A lineage split, witnessed: surfaced to the HUD and the murmur engine.
 export interface SpeciationEvent {
@@ -354,6 +362,41 @@ export class Flora {
       if (!list) habitatTiles.set(t, (list = []));
       list.push(i);
     }
+    // the ground splits between the kinds that claim it: a richer species
+    // list buys variety, never a solid wall — and the scatter stays well
+    // under the global cap instead of truncating the sweep mid-island
+    const treeKinds = new Map<Tile, number>();
+    const kinds = new Map<Tile, number>();
+    for (const sp of this.speciesList) {
+      kinds.set(sp.habitat, (kinds.get(sp.habitat) ?? 0) + 1);
+      if (sp.archetype.form === PlantForm.Tree) {
+        treeKinds.set(sp.habitat, (treeKinds.get(sp.habitat) ?? 0) + 1);
+      }
+    }
+    // one probability, one place: the sweep and its pre-pass must agree
+    const baseProb = (sp: PlantSpecies, tx: number, ty: number): number => {
+      const patch = fbm(tx / 24, ty / 24, seed + 5000 + sp.id * 131, 3);
+      const share = 3.2 / Math.max(3.2, kinds.get(sp.habitat) ?? 1); // 1 at three kinds, ~0.6 at five
+      return sp.archetype.form === PlantForm.Tree
+        ? (sp.density * (0.12 + 0.36 * patch)) / (treeKinds.get(sp.habitat) ?? 1)
+        : GROUND_COVER.has(sp.archetype.form)
+          ? share * sp.density * (0.05 + Math.max(0, patch - 0.45) * 1.4) // carpets: broad, soft-edged sweeps
+          : share * sp.density * (0.034 + Math.max(0, patch - 0.49) * 1.5); // clusters + sparse loners
+    };
+    // a cheap pre-pass (one tile in sixteen) sizes the sweep, and a single
+    // scale lands the first morning at the island's comfortable fullness —
+    // no seed ever slams the cap mid-sweep and starves the south of the map
+    let estimate = 0;
+    for (let ty = 0; ty < height; ty += 4) {
+      for (let tx = 0; tx < width; tx += 4) {
+        const tile = this.map.tiles[ty * width + tx] as Tile;
+        for (const sp of this.speciesList) {
+          if (sp.habitat === tile && !sp.homeland) estimate += 16 * baseProb(sp, tx, ty);
+        }
+      }
+    }
+    const budget = this.tuning.comfortFraction * this.tuning.maxPlants;
+    const scale = Math.min(1, budget / Math.max(1, estimate));
     for (let ty = 0; ty < height; ty++) {
       for (let tx = 0; tx < width; tx++) {
         const tile = this.map.tiles[ty * width + tx] as Tile;
@@ -362,11 +405,7 @@ export class Flora {
           if (sp.homeland && Math.hypot(tx - sp.homeland.x, ty - sp.homeland.y) > sp.homeland.radius) {
             continue; // endemics scatter only in their homeland
           }
-          const patch = fbm(tx / 24, ty / 24, seed + 5000 + sp.id * 131, 3);
-          let p =
-            sp.archetype.form === PlantForm.Tree
-              ? sp.density * (0.15 + 0.45 * patch)
-              : sp.density * (0.025 + Math.max(0, patch - 0.5) * 1.5); // clusters + sparse loners
+          let p = scale * baseProb(sp, tx, ty);
           if (sp.homeland) p = Math.max(p, 0.5); // a small homeland grows dense
           const pocket = pocketAt(this.map, tx, ty);
           if (pocket) p = Math.min(0.9, p * (pocket.deep ? 4 : 3) + 0.15); // pockets grow lush

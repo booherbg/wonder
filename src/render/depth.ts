@@ -36,8 +36,21 @@ export function plantShadowSpec(g: Genome, aquatic: boolean): ShadowSpec | null 
       return { w: 3 + g.spread * 2, dx: 1 };
     case PlantForm.Succulent:
       return { w: 3 + g.spread * 3, dx: 0 };
+    case PlantForm.Reed:
+      return { w: 3 + g.spread * 2, dx: 1 }; // a thin stand, shade between the stalks
+    case PlantForm.Vine:
+      return { w: 4 + g.spread * 4, dx: 1 }; // the sprawl pools under its coils
+    case PlantForm.Grass:
+      return { w: 3 + g.spread * 3, dx: 1 };
+    case PlantForm.Moss:
+      return { w: 3 + g.spread * 2, dx: 0 }; // hugs the ground it shades
+    case PlantForm.Bulb:
+      return { w: 3 + g.spread * 2, dx: 1 };
+    case PlantForm.Sporestalk:
+      return { w: 3 + g.spread * 2, dx: 1 + Math.round(g.height) }; // tall spires throw long
     case PlantForm.Coral:
-      return null; // corals keep below the waterline
+    case PlantForm.Kelp:
+      return null; // corals and kelp keep below the waterline
   }
 }
 
