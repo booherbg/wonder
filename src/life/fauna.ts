@@ -43,6 +43,10 @@ export const APPETITE_MIN = 0.3; // below this a plant is just scenery
 
 export type CritterState = "idle" | "seek" | "nibble" | "home" | "sleep";
 
+// The face a drive wears — what an inspect line could someday read aloud.
+// "wary" is reserved for the deferred fear drive (see Drives below).
+export type CritterMood = "content" | "hungry" | "drowsy" | "weary" | "curious" | "wary";
+
 export interface Critter {
   species: number;
   x: number; // world px (feet)
@@ -55,6 +59,8 @@ export interface Critter {
   facing: 1 | -1;
   energy: number; // 0..1 — the ledger: eating fills it, living drains it
   meal?: Plant | null; // the plant it walked to and is chewing on
+  curiosity: number; // 0..CURIOSITY_CAP — a small memory of shared stillness
+  mood: CritterMood; // the drive that chose the current action — the legible why
 }
 
 export const CRITTER_SPEED = 40; // px/s — unhurried
@@ -69,6 +75,63 @@ const MEAL_ENERGY = 0.35; // one good chew
 const HUNGRY = 0.35; // below this, food is all it thinks about
 const FULL = 0.85; // above this, grazing holds no interest
 const SPENT = 0.05; // below this, only the den will do
+
+// The drives. Each is 0..1, read fresh at decision time; the strongest
+// chooses the action. Hunger reads the ledger, comfort reads the hour and
+// the body, curiosity is the one true accumulator — a small memory of
+// shared stillness. The dice only jitter timing and wander steps; motive
+// never rolls.
+const DRIVE_QUIET = 0.2; // below this nothing presses — the critter is content
+const HUNGER_CAP = 0.95; // hunger never reaches 1: a spent body's need for the den always outranks it (nothing starves)
+const CURIOSITY_CAP = 0.55; // play never outranks real hunger or deep night
+const CURIOSITY_RISE = 0.12; // per second beside a still wanderer — full in ~5 s
+const CURIOSITY_FADE = 0.2; // per second once the moment passes
+
+// What the wider world tells a critter. Everything optional: an absent
+// context reads as broad daylight and a wanderer on the move.
+export interface CritterContext {
+  darkness?: number; // 0 clear day .. MAX_DARKNESS deep night
+  playerStill?: boolean; // the wanderer has kept their feet a moment
+}
+
+export type DriveName = "hunger" | "comfort" | "curiosity";
+
+export interface Drives {
+  hunger: number; // the ledger speaks: empty belly, loud voice
+  comfort: number; // the pull of the den: night, and a body nearly spent
+  curiosity: number; // the pull of the still wanderer
+  // fear would attach here — one more term, one "wary" tell, one gentle
+  // give-space action — but this world is mutualistic; nothing in it
+  // hunts. Deferred until something is worth startling at.
+}
+
+const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+// Pure: a critter's drives, given its state and the hour. Deterministic —
+// no dice in motive, so a watcher can always answer "why".
+export function critterDrives(c: Critter, ctx: CritterContext = {}): Drives {
+  // hunger climbs as the ledger empties, pressing hardest below HUNGRY
+  const hunger = HUNGER_CAP * clamp01((FULL - c.energy) / (FULL - HUNGRY));
+  // comfort: the dark asks for the den, and so does a body nearly spent —
+  // at SPENT it saturates to 1 and outranks even hunger (nothing starves)
+  const spent = clamp01((SPENT * 2 - c.energy) / SPENT);
+  const comfort = Math.max(ctx.darkness ?? 0, spent);
+  return { hunger, comfort, curiosity: c.curiosity };
+}
+
+// The strongest drive above the quiet line wins; exact ties fall to the
+// earlier name — the ledger before shelter, shelter before play.
+export function dominantDrive(d: Drives): DriveName | null {
+  let best: DriveName | null = null;
+  let loudest = DRIVE_QUIET;
+  for (const name of ["hunger", "comfort", "curiosity"] as const) {
+    if (d[name] > loudest) {
+      loudest = d[name];
+      best = name;
+    }
+  }
+  return best;
+}
 
 const CRITTER_SYLLABLES = ["po", "mo", "ni", "bul", "tam", "wis", "ket", "ru", "fi", "dov", "san", "lop"];
 const CRITTER_EPITHETS = ["hopper", "puff", "whisk", "nibbler", "scamper", "tumble", "peep", "muncher"];
@@ -165,6 +228,8 @@ export function spawnCritters(
         hopPhase: rng() * 6.28,
         facing: rng() < 0.5 ? 1 : -1,
         energy: 0.5 + rng() * 0.4,
+        curiosity: 0,
+        mood: "content",
       });
       placed++;
     }
@@ -195,6 +260,7 @@ export function updateCritter(
   speciesList: CritterSpecies[],
   player: { x: number; y: number } | null,
   rng: Rng,
+  ctx: CritterContext = {},
 ): void {
   const sp = speciesList[c.species];
   c.stateTime -= dt;
@@ -225,6 +291,16 @@ export function updateCritter(
     return;
   }
 
+  // curiosity gathers beside a wanderer who keeps still, and drains away
+  // once the moment passes; the sidle itself spends it
+  const nearStill =
+    player != null &&
+    ctx.playerStill &&
+    Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX;
+  c.curiosity = nearStill
+    ? Math.min(CURIOSITY_CAP, c.curiosity + dt * CURIOSITY_RISE)
+    : Math.max(0, c.curiosity - dt * CURIOSITY_FADE);
+
   const arrived = moveToward(c, dt, map);
 
   if (c.state === "seek" && arrived) {
@@ -243,7 +319,8 @@ export function updateCritter(
     return;
   }
   if (c.state === "home" && arrived) {
-    if (c.energy < 0.3) {
+    if (c.energy < 0.3 || c.mood === "drowsy" || c.mood === "weary") {
+      // shelter: sleeping at the den settles the body and the hour
       c.state = "sleep";
       c.stateTime = 12 + rng() * 10;
     } else {
@@ -255,31 +332,22 @@ export function updateCritter(
 
   if (c.stateTime > 0) return;
 
-  // decision time: the ledger leans on the dice
+  // decision time: the drives speak and the strongest chooses
   const denX = (sp.den.x + 0.5) * TILE_SIZE;
   const denY = (sp.den.y + 0.5) * TILE_SIZE;
   const farFromHome = Math.hypot(c.x - denX, c.y - denY) > HOME_RANGE_TILES * TILE_SIZE;
-  const hungry = c.energy < HUNGRY;
-  const roll = rng();
+  const want = dominantDrive(critterDrives(c, ctx));
 
-  if (c.energy <= SPENT) {
-    // spent: only the den will do
+  if (want === "comfort") {
+    // the den answers the dark, and a body nearly spent
+    c.mood = c.energy <= SPENT * 2 ? "weary" : "drowsy";
     c.state = "home";
     c.targetX = denX;
     c.targetY = denY;
-  } else if (
-    player &&
-    !hungry &&
-    roll < 0.2 &&
-    Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX
-  ) {
-    // curious: sidle partway toward the wanderer (an empty belly has no play)
-    c.targetX = c.x + (player.x - c.x) * 0.5;
-    c.targetY = c.y + (player.y - c.y) * 0.5;
-    c.state = "idle";
-  } else if (c.energy < FULL && (hungry || roll < 0.5)) {
+  } else if (want === "hunger") {
     // graze: the nearest plant in sniffing range that suits the palate —
     // whatever species it belongs to, however it got here
+    c.mood = "hungry";
     const found = flora
       .plantsNear(c.x, c.y, SEEK_RADIUS_PX)
       .filter((p) => appetite(sp.palate, p.genome) > APPETITE_MIN);
@@ -296,26 +364,43 @@ export function updateCritter(
       c.targetX = best.x;
       c.targetY = best.y;
       c.state = "seek";
+    } else if (farFromHome) {
+      // nothing in sniffing range: drift back toward known ground
+      c.state = "home";
+      c.targetX = denX;
+      c.targetY = denY;
     } else {
-      c.state = farFromHome ? "home" : "idle";
-      if (c.state === "home") {
-        c.targetX = denX;
-        c.targetY = denY;
-      }
+      // cast about: a few steps and another sniff
+      wander(c, map, rng);
     }
-  } else if (farFromHome && roll < 0.7) {
-    c.state = "home";
-    c.targetX = denX;
-    c.targetY = denY;
-  } else {
-    // wander a couple of tiles
-    const tx = Math.floor(c.x / TILE_SIZE) + Math.floor(rng() * 5) - 2;
-    const ty = Math.floor(c.y / TILE_SIZE) + Math.floor(rng() * 5) - 2;
-    if (isWalkable(map, tx, ty)) {
-      c.targetX = (tx + 0.5) * TILE_SIZE;
-      c.targetY = (ty + 0.5) * TILE_SIZE;
-    }
+  } else if (want === "curiosity" && player) {
+    // sidle partway toward the still wanderer; the approach spends the itch
+    c.mood = "curious";
+    c.curiosity = 0;
+    c.targetX = c.x + (player.x - c.x) * 0.5;
+    c.targetY = c.y + (player.y - c.y) * 0.5;
     c.state = "idle";
+  } else {
+    // nothing presses: potter about the home range
+    c.mood = "content";
+    if (farFromHome) {
+      c.state = "home";
+      c.targetX = denX;
+      c.targetY = denY;
+    } else {
+      wander(c, map, rng);
+    }
   }
   c.stateTime = 1.5 + rng() * 2.5;
+}
+
+// a couple of tiles in no particular direction
+function wander(c: Critter, map: WorldMap, rng: Rng): void {
+  const tx = Math.floor(c.x / TILE_SIZE) + Math.floor(rng() * 5) - 2;
+  const ty = Math.floor(c.y / TILE_SIZE) + Math.floor(rng() * 5) - 2;
+  if (isWalkable(map, tx, ty)) {
+    c.targetX = (tx + 0.5) * TILE_SIZE;
+    c.targetY = (ty + 0.5) * TILE_SIZE;
+  }
+  c.state = "idle";
 }

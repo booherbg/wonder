@@ -692,7 +692,16 @@ function frame(now: number): void {
     saveAcc = 0;
     persist();
   }
-  for (const c of critters) updateCritter(c, dt, map, flora, critterSpecies, player, critterRng);
+  const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
+  const inp = input();
+  // what the world tells the critters: the hour, and whether the wanderer
+  // is keeping still — stillness is this game's watching verb
+  const critterCtx = {
+    darkness: darknessNow,
+    playerStill: !(inp.up || inp.down || inp.left || inp.right),
+  };
+  for (const c of critters)
+    updateCritter(c, dt, map, flora, critterSpecies, player, critterRng, critterCtx);
   if (beast) {
     updateBeast(beast, dt, map, player, critterRng);
     if (!beast.seen && Math.hypot(beast.x - player.x, beast.y - player.y) < 5 * TILE_SIZE) {
@@ -702,7 +711,6 @@ function frame(now: number): void {
       remember(`${beast.name} passed this way once`);
     }
   }
-  const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
   for (const f of flocks) {
     updateFlock(f, dt, map, player, darknessNow, birdRng);
     if (f.startled) {

@@ -171,9 +171,11 @@ anywhere on screen — appetite stays hidden; the *pattern* is the reward.
 - **Step 2 (teeth + ledger): shipped** `458807b`. Nibbles consume growth;
   critters carry an energy ledger; nothing starves. Perturb-and-recover is
   proven against an ungrazed twin island.
-- **Next: step 3 (witnessed edges)**, then drives-not-rolls (step 2's
-  decision loop already leans on the ledger; full drive weighting is the
-  richest remaining lever — validated twice by the research below).
+- **Step 3 (witnessed edges): shipped** `cfecc35`. The journal draws the
+  web from nibbles the wanderer actually watched.
+- **Drives, not rolls: shipped.** The roll table is gone; three drives
+  choose every action. Design note at the end of this doc.
+- **Next: step 4 (toss = invitation).**
 
 ## Findings from research (`../research/ecosystem-prior-art.md`)
 
@@ -199,3 +201,41 @@ ecological theory) landed. What it changes here:
   perturbation (Equilinox's self-correction claim was refuted). Wander's
   teeth test showing recovery is mildly novel ground — worth keeping as a
   standing invariant, not assuming from prior art.
+
+## Drives — how a critter chooses (design note, 2026-07-18)
+
+The roll table in `updateCritter` is gone. Three drives, each 0..1, are
+read fresh at every decision; the strongest above a quiet line (0.2)
+chooses the action, and exact ties fall to the earlier name — the ledger
+before shelter, shelter before play. The dice now only jitter timing and
+wander steps; motive never rolls, so a watcher can always answer *why*.
+
+- **hunger** — computed from the energy ledger: zero at FULL, pressing
+  hard below HUNGRY, capped at 0.95 so a spent body's need for the den
+  always outranks it. *Nothing starves* lives in the drive shapes and is
+  pinned by tests. Tell: a beeline to the nearest palatable plant.
+- **comfort** — computed from the hour and the body:
+  `max(darkness, spent)`. Dusk leans critters homeward; a nearly spent
+  body saturates it to 1. Tell: heads for the den, curls up, sleeps.
+  Mood reads "drowsy" (the hour) or "weary" (the body).
+- **curiosity** — the one true accumulator: rises beside a wanderer who
+  keeps still (~5 s to full), fades once the moment passes, and the
+  sidle itself spends it — so an approach is shy, halfway at a time.
+  Capped at 0.55: play never outranks real hunger or deep night. Tell:
+  sidles toward you, pauses, sidles again.
+- **fear** — a named, unwired slot. This ecology is mutualistic: nothing
+  in the world hunts, so nothing needs startling. If something ever
+  earns a gentle give-space response, fear is one more term, one "wary"
+  tell, one action — not a rewrite.
+
+When nothing presses, the critter is **content** and potters its home
+range. The behavior itself is every drive's primary tell; `mood` on each
+critter records the choosing drive so an inspect line could someday say
+"seems drowsy" — words on request, never numbers on screen.
+
+Threading: `updateCritter` grew an optional trailing context,
+`{ darkness?, playerStill? }` — absent context reads as broad daylight
+and a wanderer on the move, so old call sites and tests stand unchanged.
+`main.ts` passes the sky's darkness and whether the wanderer is holding
+still; stillness was already this game's watching verb. The beast is not
+threaded in — it stays scenery until fear earns its wire.
