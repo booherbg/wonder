@@ -217,3 +217,39 @@ test("the island's character names its born landforms", () => {
 test("a plain island keeps a plain page", () => {
   expect(islandCharacter(tinyMap()).features).toEqual([]);
 });
+
+test("the character names the new high grounds, shore to heights", () => {
+  const width = 16;
+  const height = 16;
+  const tiles = new Uint8Array(width * height).fill(Tile.DeepWater);
+  const paint = (t: Tile, n: number, from: number): void => {
+    for (let i = 0; i < n; i++) tiles[from + i] = t;
+  };
+  paint(Tile.Scree, BIOME_MIN_TILES, 0);
+  paint(Tile.Rock, BIOME_MIN_TILES, 16);
+  paint(Tile.Cliff, BIOME_MIN_TILES, 32);
+  paint(Tile.Highland, BIOME_MIN_TILES, 48);
+  paint(Tile.Snow, BIOME_MIN_TILES, 64);
+  const c = islandCharacter({
+    width,
+    height,
+    seed: 1,
+    tiles,
+    elevation: new Float32Array(width * height),
+    rivers: [],
+    spawn: { x: 1, y: 1 },
+  } as WorldMap);
+  expect(c.biomes).toEqual(["scree", "bare rock", "cliffs", "high turf", "high snow"]);
+});
+
+test("a sculpted island leads its landforms with its relief", () => {
+  const c = islandCharacter(
+    tinyMap({ relief: "gorges", crater: { x: 8, y: 8, lakeRadius: 2, rimRadius: 4 } }),
+  );
+  expect(c.features[0]).toBe("country cut by gorges");
+  expect(c.features).toContain("a crater lake at its heart");
+});
+
+test("a rolling island earns no relief line", () => {
+  expect(islandCharacter(tinyMap({ relief: "rolling" })).features).toEqual([]);
+});

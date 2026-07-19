@@ -1,5 +1,6 @@
 import { CritterRole, CritterSpecies } from "../life/fauna";
 import { Genome } from "../life/genome";
+import { IslandRelief, RELIEF_PHRASE } from "../world/generate";
 import { Tile, WorldMap } from "../world/types";
 import { KV } from "./murmurs";
 
@@ -278,7 +279,10 @@ const BIOME_WORDS: ReadonlyArray<readonly [Tile, string]> = [
   [Tile.Grass, "meadow"],
   [Tile.Forest, "forest"],
   [Tile.Marsh, "marsh"],
+  [Tile.Scree, "scree"],
   [Tile.Rock, "bare rock"],
+  [Tile.Cliff, "cliffs"],
+  [Tile.Highland, "high turf"],
   [Tile.Snow, "high snow"],
 ];
 
@@ -310,6 +314,12 @@ export function islandCharacter(map: WorldMap): IslandCharacter {
   const pockets = map.pockets?.length ?? 0;
   if (pockets > 0) {
     features.push(pockets === 1 ? "a hidden clearing, somewhere" : "hidden clearings, somewhere");
+  }
+  // the island's overall geology leads the landforms, unless it's plainly
+  // rolling (the unremarkable default earns no line)
+  if (map.relief && map.relief !== "rolling") {
+    const phrase = RELIEF_PHRASE[map.relief as IslandRelief];
+    if (phrase) features.unshift(phrase);
   }
   return { biomes, features };
 }
