@@ -11,7 +11,14 @@ import {
 } from "../life/fauna";
 import { Flora, Plant, nearestPlant } from "../life/flora";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { loadJournal, recordForage, recordSpread, recordSighting } from "./journal";
+import {
+  loadCritterJournal,
+  loadJournal,
+  recordCritterMeeting,
+  recordForage,
+  recordSpread,
+  recordSighting,
+} from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
@@ -302,6 +309,19 @@ function sleepToDawn(sky: number): void {
   renderHud();
 }
 
+// The journal, gathered: every page ever written plus the island underfoot —
+// its map, its living kinds, and what it remembers.
+function openAlmanac(): void {
+  openJournal({
+    entries: loadJournal(),
+    critters: loadCritterJournal(),
+    map,
+    species,
+    critterSpecies,
+    memories,
+  });
+}
+
 function openInspectAtPlayer(): void {
   const nearby = flora
     .plantsNear(player.x, player.y, INSPECT_RANGE)
@@ -353,6 +373,15 @@ function openInspectAtPlayer(): void {
       at: Date.now(),
     });
   }
+  // the creature pages too — met means inspected, here, in reach
+  for (const sp of companySpecies) {
+    recordCritterMeeting({
+      seed: currentSeed,
+      island: islandName(currentSeed),
+      critter: sp,
+      at: Date.now(),
+    });
+  }
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(shown, species, inventory.seeds, companySpecies, beastNear, companyMoods, (group) => {
@@ -378,6 +407,8 @@ if (at) {
 const renderer = new Renderer(canvas, map);
 // dev aid: ?inspect=1 opens the inspect panel on load (screenshot tours)
 if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
+// dev aid: ?journal=1 opens the almanac on load (screenshot tours)
+if (new URL(location.href).searchParams.has("journal")) openAlmanac();
 
 // the very first arrival, ever: the field guide opens itself once, with a
 // line of welcome. after that it waits behind ? and never speaks unasked.
@@ -476,7 +507,7 @@ window.addEventListener("keydown", (e) => {
       closeInspect();
       closeAnthology();
       closeHelp();
-      openJournal(loadJournal());
+      openAlmanac();
     }
   } else if (k === "?") {
     // the field guide: a card, not a curriculum

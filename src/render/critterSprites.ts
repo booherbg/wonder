@@ -39,6 +39,17 @@ export function clearCritterSpriteCache(): void {
   cache.clear();
 }
 
+// The body a portrait needs — the subset of a species the journal can keep
+// long after the living list is gone.
+export type CritterBody = Pick<CritterSpecies, "bodyHue" | "earLen" | "tailLen" | "size">;
+
+// A portrait sketched from remembered body alone: how the journal draws a
+// friend from a past island. Uncached — pages are drawn rarely, and memory
+// must never collide with the island underfoot.
+export function critterPortrait(body: CritterBody): HTMLCanvasElement {
+  return drawCritter(body, false);
+}
+
 function makeCanvas(): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement("canvas");
   c.width = 16;
@@ -56,7 +67,7 @@ function flip(src: HTMLCanvasElement): HTMLCanvasElement {
 }
 
 // A round pastel friend: body, belly, ears, tail, dot eyes. Faces right.
-function drawCritter(sp: CritterSpecies, hop: boolean, blink = false): HTMLCanvasElement {
+function drawCritter(sp: CritterBody, hop: boolean, blink = false): HTMLCanvasElement {
   const [c, ctx] = makeCanvas();
   const s = sp.size;
   const bodyW = Math.round(7 * s) + 2;
