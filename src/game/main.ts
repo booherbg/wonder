@@ -94,6 +94,15 @@ function randomSeed(): number {
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const seedLabel = document.getElementById("seed-label")!;
 const hud = document.getElementById("hud")!;
+const dev = document.getElementById("dev")!;
+
+// the debug readout (backtick): fps, seed, island, live species census — the
+// numbers behind the world, so you can watch the sim and copy the seed
+let devOn = false;
+let fpsSmooth = 60;
+let devAcc = 0; // throttles the readout to a few redraws a second
+let devTileComp = ""; // biome census, recomputed only when the island changes
+let devTileSeed = NaN;
 
 const GATHER_RANGE = 24; // px — materials' reach
 const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
@@ -138,6 +147,75 @@ function renderHud(): void {
     .map((item) => item.replace(" ", String.fromCharCode(160)))
     .join(" · ");
   hud.innerHTML = `${msg}${carried}${pouch}${legend}`;
+}
+
+// tile → short word, for the debug readout and the ground-underfoot line
+const TILE_WORD: Record<number, string> = {
+  [Tile.DeepWater]: "deep water",
+  [Tile.ShallowWater]: "shallows",
+  [Tile.Sand]: "sand",
+  [Tile.Grass]: "grass",
+  [Tile.Forest]: "forest",
+  [Tile.Marsh]: "marsh",
+  [Tile.Rock]: "bare rock",
+  [Tile.Snow]: "snow",
+  [Tile.Scree]: "scree",
+  [Tile.Highland]: "highland",
+  [Tile.Cliff]: "cliff",
+};
+
+// what the ground itself says when you lean close (E) — always an answer,
+// even where nothing grows: there is terrain underfoot wherever you stand
+const GROUND_WORDS: Record<number, string> = {
+  [Tile.ShallowWater]: "wading the shallows",
+  [Tile.Sand]: "beach sand underfoot",
+  [Tile.Grass]: "meadow grass underfoot",
+  [Tile.Forest]: "the forest floor underfoot",
+  [Tile.Marsh]: "soft marsh underfoot",
+  [Tile.Rock]: "bare rock underfoot",
+  [Tile.Snow]: "deep snow underfoot",
+  [Tile.Scree]: "loose scree underfoot",
+  [Tile.Highland]: "alpine turf underfoot",
+  [Tile.Cliff]: "a cliff's edge",
+};
+
+// the island's biome census, recomputed only when the island changes
+function devTileComposition(): string {
+  if (devTileSeed === currentSeed && devTileComp) return devTileComp;
+  const counts = new Map<number, number>();
+  for (const t of map.tiles) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const total = map.tiles.length;
+  devTileComp = [...counts.entries()]
+    .filter(([t]) => t !== Tile.DeepWater)
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => `${TILE_WORD[t] ?? t} ${Math.round((n / total) * 100)}%`)
+    .join("  ");
+  devTileSeed = currentSeed;
+  return devTileComp;
+}
+
+// the debug readout: the numbers behind the living world
+function renderDev(): void {
+  const itx = Math.floor(player.x / TILE_SIZE);
+  const ity = Math.floor(player.y / TILE_SIZE);
+  const here = tileAt(map, itx, ity);
+  const elev = map.elevation[ity * map.width + itx] ?? 0;
+  const liveKinds = [...flora.speciesCounts.entries()].filter(([, n]) => n > 0);
+  liveKinds.sort((a, b) => b[1] - a[1]);
+  const top = liveKinds
+    .slice(0, 8)
+    .map(([s, n]) => `  ${species[s]?.name ?? `#${s}`}  ${n}`)
+    .join("\n");
+  dev.textContent = [
+    `seed ${currentSeed}    ${islandName(currentSeed)}`,
+    `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}`,
+    `fps ${fpsSmooth.toFixed(0)}    tick ${flora.tick}`,
+    `you: ${itx},${ity}  ${TILE_WORD[here] ?? here}  elev ${elev.toFixed(2)}`,
+    `biomes: ${devTileComposition()}`,
+    `flora: ${flora.count} plants · ${liveKinds.length} kinds`,
+    top,
+    `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
+  ].join("\n");
 }
 
 let map!: WorldMap;
@@ -585,6 +663,9 @@ function openInspectAtPlayer(record = true): void {
   const land: string[] = [];
   const itx = Math.floor(player.x / TILE_SIZE);
   const ity = Math.floor(player.y / TILE_SIZE);
+  // the ground itself always answers — even on bare stone there is terrain
+  // underfoot, so leaning close (E) is never met with nothing
+  land.push(GROUND_WORDS[tileAt(map, itx, ity)] ?? "open ground underfoot");
   if ((map.springs ?? []).some((s) => Math.hypot(s.x - itx, s.y - ity) < 3))
     land.push("a hot spring, steaming");
   if ((map.falls ?? []).some((f) => Math.hypot(f.x - itx, f.y - ity) < 3))
@@ -746,6 +827,13 @@ const keys = new Set<string>();
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
+  if (k === "`" || k === "~") {
+    // the debug readout: everything the sim knows, for the curious
+    devOn = !devOn;
+    dev.style.display = devOn ? "block" : "none";
+    if (devOn) renderDev();
+    return;
+  }
   if (k === "r") {
     if (!rArmed) {
       rArmed = true;
@@ -1097,6 +1185,12 @@ function frame(now: number): void {
   last = now;
   // a murmur caught floating when a panel opens is retired at once
   murmurs.syncPanels();
+  // the debug readout: smoothed fps, redrawn a few times a second
+  if (dt > 0) fpsSmooth = fpsSmooth * 0.92 + (1 / dt) * 0.08;
+  if (devOn && (devAcc += dt) >= 0.25) {
+    devAcc = 0;
+    renderDev();
+  }
   // the sky's clock: wall time plus every night slept through
   const sky = now + skyOffset;
   player.update(dt, input(), map);

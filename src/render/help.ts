@@ -36,6 +36,7 @@ export function helpSections(): HelpSection[] {
         { key: "P", text: "a postcard of the view, saved" },
         { key: "R", text: "sail for a new island — pressed twice; this one keeps" },
         { key: "esc", text: "close any card, this one included" },
+        { key: "`", text: "a debug readout — seed, biomes, and the live species census" },
       ],
     },
     {

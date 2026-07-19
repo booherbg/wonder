@@ -24,6 +24,14 @@
         border-radius: 2px; margin-left: 4px; vertical-align: middle;
         border: 1px solid rgba(255, 255, 255, 0.35);
       }
+      /* the debug readout (backtick): selectable, so the seed can be copied */
+      #dev {
+        position: fixed; left: 12px; top: 12px; display: none;
+        font: 11px/1.55 monospace; color: rgba(214, 232, 246, 0.94);
+        background: rgba(6, 10, 16, 0.86); border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 6px; padding: 9px 13px; white-space: pre; max-width: 52vw;
+        pointer-events: auto; user-select: text; z-index: 6;
+      }
       #hud .msg { display: block; margin-bottom: 4px; color: rgba(255, 255, 255, 0.9); }
       #inspect {
         display: none;
@@ -161,6 +169,7 @@
     <canvas id="game"></canvas>
     <div id="seed-label"></div>
     <div id="hud"></div>
+    <div id="dev"></div>
     <div id="inspect"></div>
     <div id="murmur"></div>
     <div id="anthology"></div>
