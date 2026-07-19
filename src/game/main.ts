@@ -45,10 +45,12 @@ const FORCE_NIGHT = new URL(location.href).searchParams.has("night"); // dev aid
 const FORCE_AURORA = new URL(location.href).searchParams.has("aurora"); // dev aid
 const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
+const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate } from "../world/generate";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
+import { easeToward } from "../render/depth";
 import { Renderer } from "../render/renderer";
 import { InputState, Player } from "./player";
 
@@ -108,7 +110,7 @@ function renderHud(): void {
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   // the pouch adds to the legend, never replaces it — no key goes hidden
   const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · H home · J journal · M murmurs · ? help`;
+  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · ? help`;
 }
 
 let map!: WorldMap;
@@ -136,6 +138,11 @@ let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
 let skyOffset = 0; // ms slept forward: the sky's clock runs ahead of the wall's
 let saveAcc = 0;
 let rArmed = false;
+// the focus lens: Z kneels the view in close to watch the small lives work,
+// Z again stands back — the zoom itself eases in main's frame loop
+const FOCUS_ZOOM = 2;
+let focusOn = FORCE_FOCUS;
+let focusEase = FORCE_FOCUS ? 1 : 0; // 0 = the wide world .. 1 = leaned all the way in
 
 const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
@@ -535,6 +542,10 @@ window.addEventListener("keydown", (e) => {
       URL.revokeObjectURL(a.href);
     });
     flashHud("postcard saved");
+  } else if (k === "z" && !e.repeat) {
+    // the focus lens: kneel in close, watch a pollinator work one flower
+    focusOn = !focusOn;
+    if (focusOn) flashHud("you lean in close — Z to stand back");
   } else if (k === "e") {
     if (isInspectOpen()) {
       closeInspect();
@@ -816,6 +827,10 @@ function frame(now: number): void {
     }
   }
   offerMurmurMoments(dt);
+  // the focus lens eases in and out; the camera math below sees only the
+  // smaller view and keeps itself centered on the wanderer
+  focusEase = easeToward(focusEase, focusOn ? 1 : 0, dt, 4);
+  renderer.setZoom(1 + (FOCUS_ZOOM - 1) * focusEase);
   const camX = clamp(
     player.x - renderer.viewWidth / 2,
     0,

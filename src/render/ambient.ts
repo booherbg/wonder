@@ -1,4 +1,4 @@
-import { Rng, makeRng } from "../core/rng";
+import { Rng, hash2d, makeRng } from "../core/rng";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { TILE_SIZE } from "../world/config";
@@ -459,5 +459,101 @@ export function drawClouds(
     grad.addColorStop(1, "rgba(10, 16, 28, 0)");
     ctx.fillStyle = grad;
     ctx.fillRect(sx - c.r, sy - c.r, c.r * 2, c.r * 2);
+  }
+}
+
+// ── foreground parallax ──────────────────────────────────────────────────────
+// The nearest layer of the air: seed-fluff adrift just in front of the lens,
+// and a couple of truly out-of-focus blurs behind it. Both live on virtual
+// planes that slide faster than the ground when the camera moves — the
+// whisper of parallax that gives the island a front and a behind. Fully
+// deterministic: positions hash from plane cells, drift comes from time.
+
+const MOTE_PARALLAX = 1.35; // how much faster than the world the fluff slides
+const MOTE_CELL = 120; // one possible fluff per cell of the near plane
+const BLUR_PARALLAX = 1.75; // the blurs sit nearer still
+const BLUR_CELL = 340;
+
+let blurMote: HTMLCanvasElement | null = null;
+function getBlurMote(): HTMLCanvasElement {
+  if (blurMote) return blurMote;
+  const r = 13;
+  const c = document.createElement("canvas");
+  c.width = r * 2;
+  c.height = r * 2;
+  const g = c.getContext("2d")!;
+  const grad = g.createRadialGradient(r, r, 1, r, r, r);
+  grad.addColorStop(0, "rgba(216, 236, 190, 0.13)");
+  grad.addColorStop(1, "rgba(216, 236, 190, 0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, r * 2, r * 2);
+  blurMote = c;
+  return c;
+}
+
+export function drawForegroundMotes(
+  ctx: CanvasRenderingContext2D,
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number,
+  darkness: number,
+  rain: number,
+  timeMs: number,
+): void {
+  const lit = (1 - darkness * 0.55) * (1 - rain * 0.6);
+  if (lit <= 0.05) return;
+  // the soft blurs first — the deepest of the near layer
+  {
+    const px = camX * BLUR_PARALLAX;
+    const py = camY * BLUR_PARALLAX;
+    const cx0 = Math.floor(px / BLUR_CELL) - 1;
+    const cx1 = Math.floor((px + viewW) / BLUR_CELL) + 1;
+    const cy0 = Math.floor(py / BLUR_CELL) - 1;
+    const cy1 = Math.floor((py + viewH) / BLUR_CELL) + 1;
+    const sprite = getBlurMote();
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const h1 = hash2d(cx, cy, 0xb10b);
+        if (h1 < 0.62) continue; // most cells stay empty
+        const h2 = hash2d(cy, cx, 0xb10b);
+        const wx = cx * BLUR_CELL + h1 * BLUR_CELL + Math.sin(timeMs / 5100 + h2 * 6.28) * 9;
+        const wy = cy * BLUR_CELL + h2 * BLUR_CELL + Math.cos(timeMs / 6700 + h1 * 6.28) * 7;
+        ctx.globalAlpha = lit * (0.55 + 0.45 * Math.sin(timeMs / 3900 + h1 * 9));
+        ctx.drawImage(sprite, Math.round(wx - px - 13), Math.round(wy - py - 13));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  // then the fluff: a bright grain wearing a one-pixel haze of near-focus
+  const px = camX * MOTE_PARALLAX;
+  const py = camY * MOTE_PARALLAX;
+  const cx0 = Math.floor(px / MOTE_CELL) - 1;
+  const cx1 = Math.floor((px + viewW) / MOTE_CELL) + 1;
+  const cy0 = Math.floor(py / MOTE_CELL) - 1;
+  const cy1 = Math.floor((py + viewH) / MOTE_CELL) + 1;
+  for (let cy = cy0; cy <= cy1; cy++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const h1 = hash2d(cx, cy, 0x0f1f);
+      if (h1 < 0.55) continue; // sparse — never a snowstorm
+      const h2 = hash2d(cy, cx, 0x0f1f);
+      const wx =
+        cx * MOTE_CELL + h1 * MOTE_CELL +
+        Math.sin(timeMs / 2900 + h1 * 6.28) * 8 + Math.sin(timeMs / 800 + h2 * 6.28) * 1.5;
+      const wy =
+        cy * MOTE_CELL + h2 * MOTE_CELL +
+        Math.cos(timeMs / 3600 + h2 * 6.28) * 6 + Math.cos(timeMs / 950 + h1 * 6.28) * 1.2;
+      const sx = Math.round(wx - px);
+      const sy = Math.round(wy - py);
+      if (sx < -2 || sx > viewW + 2 || sy < -2 || sy > viewH + 2) continue;
+      const tw = 0.55 + 0.45 * Math.sin(timeMs / 1300 + h2 * 9);
+      ctx.fillStyle = `rgba(255, 250, 233, ${(0.55 * tw * lit).toFixed(3)})`;
+      ctx.fillRect(sx, sy, 1, 1);
+      ctx.fillStyle = `rgba(255, 250, 233, ${(0.18 * tw * lit).toFixed(3)})`;
+      ctx.fillRect(sx - 1, sy, 1, 1);
+      ctx.fillRect(sx + 1, sy, 1, 1);
+      ctx.fillRect(sx, sy - 1, 1, 1);
+      ctx.fillRect(sx, sy + 1, 1, 1);
+    }
   }
 }

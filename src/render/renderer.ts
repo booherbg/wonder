@@ -7,8 +7,9 @@ import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
-import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds } from "./ambient";
+import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds, drawForegroundMotes } from "./ambient";
 import { drawBeast } from "./beastSprite";
+import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from "./depth";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
@@ -63,6 +64,7 @@ export class Renderer {
   private prints: { x: number; y: number; at: number }[] = [];
   private lastPrintX = -999;
   private lastPrintY = -999;
+  private zoomLevel = 1; // the focus lens: 1 = the wide world, 2 = leaned in close
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -83,18 +85,24 @@ export class Renderer {
     this.canvas.height = window.innerHeight;
   }
 
+  // The focus lens (Z): main's frame loop eases this toward its target, and
+  // the whole pipeline — camera math included — sees only the smaller view.
+  setZoom(z: number): void {
+    this.zoomLevel = Math.max(1, z);
+  }
+
   get viewWidth(): number {
-    return this.canvas.width / SCALE;
+    return this.canvas.width / (SCALE * this.zoomLevel);
   }
 
   get viewHeight(): number {
-    return this.canvas.height / SCALE;
+    return this.canvas.height / (SCALE * this.zoomLevel);
   }
 
   draw(camX: number, camY: number, scene: Scene, timeMs: number): void {
     const { ctx, map } = this;
     ctx.imageSmoothingEnabled = false;
-    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.setTransform(SCALE * this.zoomLevel, 0, 0, SCALE * this.zoomLevel, 0, 0);
     ctx.fillStyle = PALETTE.background;
     ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
 
@@ -125,6 +133,9 @@ export class Renderer {
         );
       }
     }
+
+    // depth pass: the open sea cools and darkens away from shore
+    drawWaterDepth(ctx, map, camX, camY, x0, y0, x1, y1);
 
     // low water: the sea pulls back from the sand and the flats stand bare,
     // still wet enough to hold a darker sheen
@@ -478,6 +489,9 @@ export class Renderer {
       }
     }
 
+    // depth pass: soft pools of shade beneath everything that stands
+    drawEntityShadows(ctx, scene, camX, camY, x0, y0, x1, y1, this.viewWidth, this.viewHeight);
+
     // entity pass, top row to bottom so taller things overlap what's behind them
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
@@ -542,6 +556,9 @@ export class Renderer {
         );
       }
     }
+
+    // depth pass: sunlight breathes on the tallest crowns
+    drawCrownLight(ctx, scene, camX, camY, x0, y0, x1, Math.min(map.height - 1, y1 + yPad), timeMs);
 
     // birds ride above the canopy
     if (scene.flocks) {
@@ -625,6 +642,11 @@ export class Renderer {
       timeMs,
     );
     this.pollinators.draw(ctx, camX, camY, darkness);
+
+    // depth pass: the nearest air — drifting fluff with true parallax — and
+    // then the lens itself, its edges easing dark
+    drawForegroundMotes(ctx, camX, camY, this.viewWidth, this.viewHeight, darkness, rain, timeMs);
+    drawVignette(ctx, this.viewWidth, this.viewHeight, darkness, Math.min(1, this.zoomLevel - 1));
   }
 
   // Night falls over everything already drawn; then the things that make
