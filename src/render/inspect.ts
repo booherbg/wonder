@@ -1,6 +1,6 @@
 import { Seed } from "../game/inventory";
 import { Beast, beastSegments } from "../life/beast";
-import { CritterSpecies } from "../life/fauna";
+import { CritterMood, CritterSpecies } from "../life/fauna";
 import { Plant } from "../life/flora";
 import { PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -32,6 +32,26 @@ function heightWord(h: number): string {
   if (h < 0.5) return "knee-high";
   if (h < 0.75) return "tall";
   return "towering";
+}
+
+// The drive a critter kind is wearing right now, said gently — the visible
+// tell for a hidden motive. Falls back to the plant it loves when at ease.
+export function moodLine(mood: CritterMood, favorite: string): string {
+  switch (mood) {
+    case "hungry":
+      return `nosing after ${favorite}`;
+    case "drowsy":
+      return "drowsing toward the den";
+    case "weary":
+      return "spent, and homeward";
+    case "curious":
+      return "watching you back";
+    case "wary":
+      return "keeping its distance";
+    case "content":
+    default:
+      return `at ease among ${favorite}`;
+  }
 }
 
 function panel(): HTMLElement {
@@ -122,6 +142,7 @@ export function openInspect(
   pouch: Seed[] = [],
   critters: CritterSpecies[] = [],
   beast: Beast | null = null,
+  moods: Map<number, CritterMood> = new Map(),
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -156,7 +177,9 @@ export function openInspect(
       card.appendChild(name);
       const traits = document.createElement("div");
       traits.className = "inspect-traits";
-      traits.textContent = `follows the scent of ${speciesList[sp.favoriteSpecies].name}`;
+      const favorite = speciesList[sp.favoriteSpecies].name;
+      const mood = moods.get(sp.id);
+      traits.textContent = mood ? moodLine(mood, favorite) : `follows the scent of ${favorite}`;
       card.appendChild(traits);
       g.appendChild(card);
     }

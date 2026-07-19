@@ -3,6 +3,7 @@ import { Beast, generateBeast, updateBeast } from "../life/beast";
 import { Flock, generateFlocks, updateFlock } from "../life/birds";
 import {
   Critter,
+  CritterMood,
   CritterSpecies,
   generateCritterSpecies,
   spawnCritters,
@@ -316,13 +317,25 @@ function openInspectAtPlayer(): void {
     if (g) g.nearby++;
     else groups.set(p.species, { plant: p, nearby: 1 });
   }
-  const companySpecies = [
-    ...new Set(
-      critters
-        .filter((c) => Math.hypot(c.x - player.x, c.y - player.y) < INSPECT_RANGE)
-        .map((c) => c.species),
-    ),
-  ].map((id) => critterSpecies[id]);
+  const near = critters.filter((c) => Math.hypot(c.x - player.x, c.y - player.y) < INSPECT_RANGE);
+  const companySpecies = [...new Set(near.map((c) => c.species))].map((id) => critterSpecies[id]);
+  // the mood most of a kind wears right now — the live tell for the inspect card
+  const companyMoods = new Map<number, CritterMood>();
+  for (const sp of companySpecies) {
+    const counts = new Map<CritterMood, number>();
+    for (const c of near) {
+      if (c.species === sp.id) counts.set(c.mood, (counts.get(c.mood) ?? 0) + 1);
+    }
+    let prevailing: CritterMood = "content";
+    let most = -1;
+    for (const [mood, n] of counts) {
+      if (n > most) {
+        most = n;
+        prevailing = mood;
+      }
+    }
+    companyMoods.set(sp.id, prevailing);
+  }
   const beastNear =
     beast && Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE ? beast : null;
   const shown = [...groups.values()].slice(0, 10);
@@ -340,7 +353,7 @@ function openInspectAtPlayer(): void {
       at: Date.now(),
     });
   }
-  openInspect(shown, species, inventory.seeds, companySpecies, beastNear);
+  openInspect(shown, species, inventory.seeds, companySpecies, beastNear, companyMoods);
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
