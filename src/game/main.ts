@@ -129,7 +129,7 @@ function renderHud(): void {
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   // the pouch adds to the legend, never replaces it — no key goes hidden
   const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · L isles · ? help`;
+  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · L isles · P postcard · R island · ? help`;
 }
 
 let map!: WorldMap;
