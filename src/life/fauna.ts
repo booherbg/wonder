@@ -172,6 +172,7 @@ export interface Critter {
   energy: number; // 0..1 — the ledger: eating fills it, living drains it
   meal?: Plant | null; // the plant it walked to and is chewing on
   treat?: boolean; // a seed from the wanderer's hand, promised and on its way
+  companion?: boolean; // the one who walks with the wanderer — takeCompanion's mark
   curiosity: number; // 0..CURIOSITY_CAP — a small memory of shared stillness
   mood: CritterMood; // the drive that chose the current action — the legible why
 }
@@ -386,12 +387,67 @@ export function feedCritter(c: Critter, player: { x: number; y: number }): void 
   c.stateTime = 8; // long enough that nothing louder interrupts the walk
 }
 
-function moveToward(c: Critter, dt: number, map: WorldMap): boolean {
+// ── companion ───────────────────────────────────────────────────────────
+// The coziest verb: a kind that trusts you can be taken home — one
+// individual falls in at the wanderer's heel and pads along wherever they
+// go. One companion at a time; asking a new friend releases the old one
+// kindly, back to its own ways. The bond gates the asking (the inspect
+// card offers "take home" from COMPANION_TRUST up); the flag marks the
+// one who said yes.
+
+export const COMPANION_TRUST = 0.5; // "trusts you" and up may be asked home
+export const COMPANION_HEEL_PX = 1.5 * TILE_SIZE; // near enough to feel together
+const COMPANION_PULL = 0.8; // tighter than any bond — it walks with you, not near you
+const COMPANION_KEPT = 0.5; // fed from your hand as you go — never spent, never frantic
+const COMPANION_HURRY_PX = 4 * TILE_SIZE; // fallen this far behind, it scampers to catch up
+
+// Ask the nearest of a kind to walk with you. Any prior companion is
+// released first — it simply returns to its own ways, no ceremony, no
+// hurt. Returns the new companion, or null when none of the kind stands
+// anywhere on the island.
+export function takeCompanion(
+  critters: Critter[],
+  speciesId: number,
+  player: { x: number; y: number },
+): Critter | null {
+  let chosen: Critter | null = null;
+  let best = Infinity;
+  for (const c of critters) {
+    if (c.species !== speciesId) continue;
+    const d = Math.hypot(c.x - player.x, c.y - player.y);
+    if (d < best) {
+      best = d;
+      chosen = c;
+    }
+  }
+  if (!chosen) return null;
+  releaseCompanion(critters);
+  chosen.companion = true;
+  chosen.mood = "content";
+  chosen.state = "idle";
+  chosen.stateTime = 0; // it falls in at once
+  return chosen;
+}
+
+// The old friend goes back to its old life — only the flag lifts; its
+// den, its tastes, and its kind's whole bond held all along.
+export function releaseCompanion(critters: Critter[]): Critter | null {
+  let released: Critter | null = null;
+  for (const c of critters) {
+    if (c.companion) {
+      c.companion = false;
+      released = c;
+    }
+  }
+  return released;
+}
+
+function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
   const dx = c.targetX - c.x;
   const dy = c.targetY - c.y;
   const dist = Math.hypot(dx, dy);
   if (dist < 2) return true;
-  const step = Math.min(dist, CRITTER_SPEED * dt);
+  const step = Math.min(dist, speed * dt);
   const nx = c.x + (dx / dist) * step;
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
@@ -458,7 +514,13 @@ export function updateCritter(
     ? Math.min(CURIOSITY_CAP, c.curiosity + dt * CURIOSITY_RISE * (1 + bond))
     : Math.max(0, c.curiosity - dt * CURIOSITY_FADE * (1 - 0.6 * bond));
 
-  const arrived = moveToward(c, dt, map);
+  // a companion that has fallen well behind hurries — ears back, a quick
+  // scamper — until it regains your heel; everyone else keeps critter pace
+  const pace =
+    c.companion && player && Math.hypot(player.x - c.x, player.y - c.y) > COMPANION_HURRY_PX
+      ? CRITTER_SPEED * 2
+      : CRITTER_SPEED;
+  const arrived = moveToward(c, dt, map, pace);
 
   if (c.state === "seek" && arrived) {
     if (c.treat) {
@@ -498,6 +560,30 @@ export function updateCritter(
   }
 
   if (c.stateTime > 0) return;
+
+  // the companion's day: at the wanderer's heel the old drives fall quiet —
+  // you are den, meadow, and weather all at once. walking with you feeds it
+  // (the ledger never empties: nothing starves, least of all a friend),
+  // night at your side is shelter enough, and the only question left is the
+  // gap — fallen behind, it makes for your heel; at heel, it potters a step
+  // and waits. released, every line below is its own again.
+  if (c.companion && player) {
+    c.mood = "content";
+    c.curiosity = 0;
+    c.energy = Math.max(c.energy, COMPANION_KEPT);
+    const gap = Math.hypot(player.x - c.x, player.y - c.y);
+    if (gap > COMPANION_HEEL_PX) {
+      // aim for a spot at your heel — never into your boots
+      const heel = COMPANION_HEEL_PX * 0.6;
+      c.targetX = player.x + ((c.x - player.x) / gap) * heel;
+      c.targetY = player.y + ((c.y - player.y) / gap) * heel;
+      c.state = "idle";
+    } else {
+      wander(c, map, rng, { x: player.x, y: player.y, pull: COMPANION_PULL });
+    }
+    c.stateTime = 0.3 + rng() * 0.5; // quick to notice you've moved on
+    return;
+  }
 
   // decision time: the drives speak and the strongest chooses. "home" is
   // the kind's den — leaned toward the wanderer's camp once the bond is

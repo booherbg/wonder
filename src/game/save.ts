@@ -29,6 +29,15 @@ export interface SavedCamp {
   taken: number[]; // material node indices already gathered
   fire: boolean;
   bedroll?: boolean;
+  companion?: SavedCompanion; // absent in saves from before companions
+}
+
+// The friend at your heel, kept across a reload. Individuals respawn each
+// load, so what the save keeps is the kind: on return, the nearest of this
+// species is re-designated your companion — waiting where you left it.
+export interface SavedCompanion {
+  species: number; // the kind that walks with you
+  name: string; // its kind's name, so the welcome back can speak it plainly
 }
 
 // A daughter species is the one thing besides genomes the seed can't regrow.

@@ -1,6 +1,6 @@
 import { INV_CAP, Seed } from "../game/inventory";
 import { Beast, beastSegments } from "../life/beast";
-import { CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
+import { COMPANION_TRUST, CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
 import { PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -24,6 +24,10 @@ export type GatherFromCard = (group: PlantGroup) => "gathered" | "pouch full";
 // A critter card's feed button lands here: offer this kind the pouch's
 // best-matching seed. The word that comes back is what the button says next.
 export type FeedFromCard = (sp: CritterSpecies) => "shared" | "nothing it favors";
+
+// A critter card's take-home button lands here: ask the nearest of this
+// kind to walk with you. The word that comes back is what the button says next.
+export type AdoptFromCard = (sp: CritterSpecies) => "at your heel" | "none of its kind near";
 
 const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Flower]: "flower",
@@ -70,6 +74,7 @@ export interface CampView {
   fire: boolean;
   bedroll: boolean;
   friends: CampFriend[]; // kinds at least warming, with someone near home now
+  companion?: string; // the kind at your heel, named — absent when you walk alone
 }
 
 const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six"];
@@ -95,10 +100,11 @@ function friendLine(f: CampFriend): string {
   }
 }
 
-// Every line the camp section speaks, in order: mood, bed, shelter,
-// friends. Pure, so a test can read the whole camp at a glance.
+// Every line the camp section speaks, in order: mood, companion, bed,
+// shelter, friends. Pure, so a test can read the whole camp at a glance.
 export function campLines(camp: CampView): string[] {
   const lines = [campMood(camp.friends)];
+  if (camp.companion) lines.push(`${camp.companion} — your companion, at your heel`);
   lines.push(
     camp.bed.length === 0
       ? "the bed lies bare — G sows a gathered seed"
@@ -293,6 +299,8 @@ export function openInspect(
   trust?: ReadonlyMap<number, number>,
   surroundings?: Surroundings,
   camp?: CampView,
+  onAdopt?: AdoptFromCard,
+  companion?: number | null,
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -376,6 +384,13 @@ export function openInspect(
       bondEl.className = "inspect-traits";
       bondEl.textContent = trustLine(bond);
       card.appendChild(bondEl);
+      // the one who walks with you wears it plainly on its card
+      if (sp.id === companion) {
+        const mine = document.createElement("div");
+        mine.className = "inspect-traits";
+        mine.textContent = "your companion — always at your heel";
+        card.appendChild(mine);
+      }
       const taste = document.createElement("div");
       taste.className = "inspect-traits";
       taste.textContent =
@@ -391,6 +406,19 @@ export function openInspect(
         btn.textContent = "offer a seed";
         btn.addEventListener("click", () => {
           btn.textContent = onFeed(sp);
+          btn.disabled = true;
+        });
+        card.appendChild(btn);
+      }
+      // a kind that trusts you can be asked home — the feed button's quiet
+      // look again, and the coziest ask of all: one companion at a time,
+      // padding along at your heel wherever you wander
+      if (onAdopt && sp.id !== companion && bond >= COMPANION_TRUST) {
+        const btn = document.createElement("button");
+        btn.className = "inspect-gather";
+        btn.textContent = "take home";
+        btn.addEventListener("click", () => {
+          btn.textContent = onAdopt(sp);
           btn.disabled = true;
         });
         card.appendChild(btn);

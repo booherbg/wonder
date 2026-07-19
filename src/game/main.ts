@@ -13,6 +13,7 @@ import {
   raiseTrust,
   saveTrust,
   spawnCritters,
+  takeCompanion,
   trustWord,
   updateCritter,
 } from "../life/fauna";
@@ -139,6 +140,7 @@ let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
 let trust: Map<number, number> = new Map(); // per-kind bond, this island; wander.trust
+let companionKind: number | null = null; // the kind at your heel — one friend at a time
 let beast: Beast | null = null;
 let beastSows: { x: number; y: number; hue: number; at: number }[] = []; // sowings still shimmering
 let flocks: Flock[] = [];
@@ -182,7 +184,20 @@ function persist(): void {
       Date.now(),
       species.slice(baseSpeciesCount),
       memories,
-      { wood: mat.wood, stone: mat.stone, rush: mat.rush, taken: [...taken], fire, bedroll },
+      {
+        wood: mat.wood,
+        stone: mat.stone,
+        rush: mat.rush,
+        taken: [...taken],
+        fire,
+        bedroll,
+        // the friend at your heel rides the camp block: its kind, named,
+        // so a reload can call it back to you
+        companion:
+          companionKind !== null
+            ? { species: companionKind, name: critterSpecies[companionKind].name }
+            : undefined,
+      },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -276,6 +291,7 @@ function loadWorld(seed: number): void {
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
   trust = loadTrust(seed); // friendships made here, remembered here
+  companionKind = null; // each island keeps its own friend; this one's is re-called below
   beast = generateBeast(seed, map, species);
   beastSows = [];
   flocks = generateFlocks(seed, map);
@@ -292,6 +308,21 @@ function loadWorld(seed: number): void {
       player.y = py;
     }
     inventory = restoreInventory(saved, species);
+  }
+  // the companion keeps its promise across a reload: individuals respawn
+  // each load, so what the save kept is the kind — the nearest of your
+  // friend's kind is re-designated yours, waiting where you left it
+  let companionWaiting: string | null = null;
+  const savedCompanion = saved?.camp?.companion;
+  if (
+    savedCompanion &&
+    Number.isInteger(savedCompanion.species) &&
+    savedCompanion.species >= 0 &&
+    savedCompanion.species < critterSpecies.length &&
+    takeCompanion(critters, savedCompanion.species, player)
+  ) {
+    companionKind = savedCompanion.species;
+    companionWaiting = critterSpecies[savedCompanion.species].name;
   }
   // the fog-of-war map: pick up where the ink left off, and see the ground
   // underfoot before the first step is taken
@@ -311,9 +342,11 @@ function loadWorld(seed: number): void {
     flashHud(
       awayBorn
         ? `while you were away, ${awayBorn} arose`
-        : catchUp > 0
-          ? "the island lived while you were away"
-          : "welcome back",
+        : companionWaiting
+          ? `${companionWaiting} is waiting where you left it — your companion`
+          : catchUp > 0
+            ? "the island lived while you were away"
+            : "welcome back",
     );
   }
   if (awayBorn) murmurs.offer("speciation");
@@ -583,7 +616,13 @@ function openInspectAtPlayer(record = true): void {
           ),
       )
       .map((sp) => ({ name: sp.name, trust: trust.get(sp.id) ?? 0 }));
-    camp = { bed, fire, bedroll, friends };
+    camp = {
+      bed,
+      fire,
+      bedroll,
+      friends,
+      companion: companionKind !== null ? critterSpecies[companionKind].name : undefined,
+    };
   }
 
   // each plant card carries a small gather button — the same quiet take
@@ -640,6 +679,26 @@ function openInspectAtPlayer(record = true): void {
     trust,
     { hour, waterEdge, land },
     camp,
+    // and a kind that trusts you can be asked home: the nearest of it
+    // falls in at your heel — one companion at a time, any old friend
+    // released kindly to its own ways
+    (sp) => {
+      const prior =
+        companionKind !== null && companionKind !== sp.id
+          ? critterSpecies[companionKind].name
+          : null;
+      if (!takeCompanion(critters, sp.id, player)) return "none of its kind near";
+      companionKind = sp.id;
+      flashHud(
+        prior
+          ? `${prior} returns to its own ways — ${sp.name} falls in at your heel`
+          : `${sp.name} falls in at your heel`,
+      );
+      murmurs.offer("critter");
+      persist();
+      return "at your heel";
+    },
+    companionKind,
   );
   lastInspectX = player.x;
   lastInspectY = player.y;
