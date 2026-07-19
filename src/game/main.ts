@@ -31,6 +31,14 @@ import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { closeInspect, isInspectOpen, openInspect } from "../render/inspect";
+import {
+  closePicker,
+  featurePhrase,
+  isPickerOpen,
+  isleRows,
+  openPicker,
+  setIsleFeature,
+} from "../render/picker";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
 import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
@@ -54,7 +62,7 @@ const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
-import { IslandShape, SHAPES, SHAPE_PHRASE, generate } from "../world/generate";
+import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -117,7 +125,7 @@ function renderHud(): void {
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
   // the pouch adds to the legend, never replaces it — no key goes hidden
   const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · ? help`;
+  hud.innerHTML = `${msg}${carried}${pouch}E inspect · F gather · G sow · Z focus · H home · J journal · M murmurs · L isles · ? help`;
 }
 
 let map!: WorldMap;
@@ -341,6 +349,73 @@ function openAlmanac(): void {
   });
 }
 
+// The isles you've known: the saved-worlds ledger as a panel, each row a
+// way back. Names and shapes are pure arithmetic on the seed, so the list
+// opens at once; a far island's standout feature wants a full regeneration
+// (tens of ms apiece), so those fill in one per beat while the panel stays
+// open, cached for the session. The island underfoot reads its own map.
+const isleFeatureCache = new Map<number, string | null>();
+let isleFillToken = 0;
+
+function isleLook(seed: number): { shape: string; feature: string | null } {
+  if (seed === currentSeed) {
+    return {
+      shape: SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"],
+      feature: featurePhrase(map),
+    };
+  }
+  return {
+    shape: SHAPE_PHRASE[rollShape(seed)],
+    feature: isleFeatureCache.get(seed) ?? null,
+  };
+}
+
+function savedIndex(): number[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
+    const index = Array.isArray(raw)
+      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0)
+      : [];
+    // storage may be unavailable: the island underfoot is still a place
+    return index.includes(currentSeed) ? index : [currentSeed, ...index];
+  } catch {
+    return [currentSeed];
+  }
+}
+
+function openIslePicker(): void {
+  persist(); // the island underfoot takes its place in the ledger first
+  const index = savedIndex();
+  const rows = isleRows(
+    index,
+    currentSeed,
+    Date.now(),
+    (s) => loadSave(s)?.savedAt ?? null,
+    isleLook,
+  );
+  openPicker(rows, (seed) => {
+    persist();
+    loadWorld(seed);
+    renderer.setMap(map);
+  });
+  // far islands learn their standout feature one per beat, never all at once
+  const token = ++isleFillToken;
+  const missing = index.filter((s) => s !== currentSeed && !isleFeatureCache.has(s));
+  const fill = (): void => {
+    if (token !== isleFillToken || !isPickerOpen()) return;
+    const s = missing.shift();
+    if (s === undefined) return;
+    try {
+      isleFeatureCache.set(s, featurePhrase(generate(s, DEFAULT_CONFIG)));
+    } catch {
+      isleFeatureCache.set(s, null); // a seed the sea reclaimed — its row stays plain
+    }
+    setIsleFeature(s, isleFeatureCache.get(s) ?? null);
+    setTimeout(fill, 30);
+  };
+  if (missing.length > 0) setTimeout(fill, 30);
+}
+
 function openInspectAtPlayer(): void {
   const nearby = flora
     .plantsNear(player.x, player.y, INSPECT_RANGE)
@@ -471,6 +546,8 @@ const renderer = new Renderer(canvas, map);
 if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
 // dev aid: ?journal=1 opens the almanac on load (screenshot tours)
 if (new URL(location.href).searchParams.has("journal")) openAlmanac();
+// dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
+if (new URL(location.href).searchParams.has("isles")) openIslePicker();
 
 // the very first arrival, ever: the field guide opens itself once, with a
 // line of welcome. after that it waits behind ? and never speaks unasked.
@@ -560,6 +637,7 @@ window.addEventListener("keydown", (e) => {
       closeInspect();
       closeJournal();
       closeHelp();
+      closePicker();
       openAnthology(loadAnthology());
     }
   } else if (k === "j") {
@@ -569,7 +647,19 @@ window.addEventListener("keydown", (e) => {
       closeInspect();
       closeAnthology();
       closeHelp();
+      closePicker();
       openAlmanac();
+    }
+  } else if (k === "l") {
+    // the isles you've known: the saved-worlds ledger, each row a way back
+    if (isPickerOpen()) {
+      closePicker();
+    } else {
+      closeInspect();
+      closeAnthology();
+      closeJournal();
+      closeHelp();
+      openIslePicker();
     }
   } else if (k === "?") {
     // the field guide: a card, not a curriculum
@@ -579,6 +669,7 @@ window.addEventListener("keydown", (e) => {
       closeInspect();
       closeAnthology();
       closeJournal();
+      closePicker();
       openHelp();
     }
   } else if (k === "escape") {
@@ -586,6 +677,7 @@ window.addEventListener("keydown", (e) => {
     closeAnthology();
     closeJournal();
     closeHelp();
+    closePicker();
   } else if (k === "p") {
     // a postcard: the canvas as it stands, named for the island
     canvas.toBlob((blob) => {

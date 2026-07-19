@@ -13,7 +13,7 @@ test("the guide keeps its three small chapters, in the quiet voice", () => {
 
 test("every verb the game answers to has a line", () => {
   const keys = helpSections()[0].entries.map((e) => e.key);
-  for (const k of ["E", "F", "G", "Q", "H", "J", "M", "P", "R", "esc"]) {
+  for (const k of ["E", "F", "G", "Q", "H", "J", "M", "L", "P", "R", "esc"]) {
     expect(keys).toContain(k);
   }
   expect(keys.some((k) => k?.includes("arrows"))).toBe(true);

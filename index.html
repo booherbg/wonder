@@ -104,6 +104,29 @@
       #journal .inspect-name { margin-top: 2px; color: #ffffff; }
       #journal .inspect-traits { opacity: 0.6; margin-top: 2px; line-height: 1.4; }
       #journal canvas.journal-canvas { image-rendering: pixelated; width: 64px; height: 112px; }
+      #picker {
+        display: none;
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(480px, 88vw); max-height: 72vh; overflow-y: auto;
+        background: rgba(8, 12, 18, 0.94);
+        border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px;
+        padding: 18px 22px; color: #dfe7ef;
+      }
+      #picker .anth-title { font: 12px monospace; opacity: 0.7; }
+      #picker .anth-epigraph {
+        font: italic 12px Georgia, serif; opacity: 0.5;
+        margin: 4px 0 12px; padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #picker .isle-row { padding: 7px 10px; margin: 2px -10px; border-radius: 6px; cursor: pointer; }
+      #picker .isle-row:hover { background: rgba(255, 255, 255, 0.07); }
+      #picker .isle-row.here { cursor: default; }
+      #picker .isle-row.here:hover { background: transparent; }
+      #picker .isle-name { font: 13px monospace; color: #ffffff; }
+      #picker .isle-place { font: 11px monospace; opacity: 0.6; margin-top: 2px; }
+      #picker .isle-when { font: italic 12px Georgia, serif; opacity: 0.55; margin-top: 1px; line-height: 1.4; }
+      #picker .anth-empty { font: italic 13px Georgia, serif; opacity: 0.6; margin-top: 6px; }
+      #picker .anth-hint { font: 11px monospace; opacity: 0.45; margin-top: 12px; text-align: center; }
       #help {
         display: none;
         position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -138,6 +161,7 @@
     <div id="murmur"></div>
     <div id="anthology"></div>
     <div id="journal"></div>
+    <div id="picker"></div>
     <div id="help"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
