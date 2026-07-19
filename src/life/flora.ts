@@ -153,15 +153,27 @@ export class Flora {
     return out;
   }
 
-  addPlant(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
+  // The gate every seed must pass to take root: in bounds, on its own
+  // habitat, the tile not yet full, the island not yet full. Public so a
+  // courier (the beast) can find open, correct-habitat ground before it
+  // bothers to drift a seed onto it.
+  rootableAt(species: number, x: number, y: number): boolean {
     const tx = Math.floor(x / TILE_SIZE);
     const ty = Math.floor(y / TILE_SIZE);
-    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return null;
-    if (this.all.length >= this.tuning.maxPlants) return null;
+    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+    if (this.all.length >= this.tuning.maxPlants) return false;
     const key = ty * this.map.width + tx;
-    if (this.map.tiles[key] !== this.speciesList[species].habitat) return null;
+    if (this.map.tiles[key] !== this.speciesList[species].habitat) return false;
+    const bucket = this.byTile.get(key);
+    return !bucket || bucket.length < this.tuning.maxPerTile;
+  }
+
+  addPlant(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
+    if (!this.rootableAt(species, x, y)) return null;
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    const key = ty * this.map.width + tx;
     let bucket = this.byTile.get(key);
-    if (bucket && bucket.length >= this.tuning.maxPerTile) return null;
     if (!bucket) {
       bucket = [];
       this.byTile.set(key, bucket);

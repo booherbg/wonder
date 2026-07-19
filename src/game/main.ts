@@ -235,7 +235,7 @@ function loadWorld(seed: number): void {
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
-  beast = generateBeast(seed, map);
+  beast = generateBeast(seed, map, species);
   flocks = generateFlocks(seed, map);
   birdRng = makeRng(seed ^ 0xb12d);
   clearCritterSpriteCache();
@@ -720,7 +720,18 @@ function frame(now: number): void {
   for (const c of critters)
     updateCritter(c, dt, map, flora, critterSpecies, player, critterRng, critterCtx);
   if (beast) {
-    updateBeast(beast, dt, map, player, critterRng);
+    const dropped = updateBeast(beast, dt, map, flora, player, critterRng);
+    // if you stand still and watch it set a far-carried seed down, the plant's
+    // page learns the beast's name — "spread by <name>", long-distance dispersal
+    // made legible (and only for a kind you've already met — recordSpread no-ops
+    // otherwise)
+    if (
+      dropped &&
+      stillTime >= 1 &&
+      Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE
+    ) {
+      recordSpread(currentSeed, dropped.species, beast.name);
+    }
     if (!beast.seen && Math.hypot(beast.x - player.x, beast.y - player.y) < 5 * TILE_SIZE) {
       beast.seen = true;
       flashHud(`${beast.name}, passes`);

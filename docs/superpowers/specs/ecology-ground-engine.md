@@ -49,7 +49,8 @@ gets spread more.
 **A size spectrum of mutualists** (uses pieces already in the game): wisps
 and moths pollinate locally; small critters disperse seed nearby; the
 **beast becomes a gentle megafauna** whose migrations spread what it
-favors across the whole island over island-days.
+favors across the whole island over island-days. **Shipped end to end —
+see the beast bullet under Progress.**
 
 *Everything below was written under the herbivory frame; read it through
 this lens. Palate, ledger, drives, discoverability all survive; only the
@@ -209,6 +210,43 @@ anywhere on screen — appetite stays hidden; the *pattern* is the reward.
     `recordForage` unchanged for back-compat; the witness in `main.ts`
     branches on the critter's role. Old journals with neither field still
     load.
+- **The beast as long-distance disperser (top of the size spectrum): shipped**
+  `2026-07-18`. The size spectrum of dispersers now runs end to end —
+  **pollinator wisps** work a single bloom, **critters** seed a nearby patch,
+  and the **beast** carries favored lineages *shore to shore*. It is the
+  largest disperser, not a new kind of thing: it reuses the same
+  `Palate` + `appetite` a critter uses.
+  - **A quiet preference.** `generateBeast` now takes the plant species list
+    and rolls the beast a `palate` cut from one plant it can *walk to* (a
+    `WALKABLE`-habitat kind, so what it favors is also a kind it can set down —
+    it never favors the impassable rock flora it could pick up but never
+    deliver). Same recipe as `generateCritterSpecies`.
+  - **Cargo.** A bounded `cargo: {species, genome, since}[]`, capped at
+    `CARGO_CAP = 2` (a courier, not a granary). Passing within `PICKUP_RADIUS`
+    (1.5 tiles) of a favored plant it isn't already carrying, a per-step
+    `PICKUP_CHANCE` of 0.08 catches a *copy* of its seed as a burr — the plant
+    is **left standing, unharmed** (carried, never bitten). `since` records the
+    beast's odometer (`distance`, px travelled) at pickup.
+  - **Drops far from the source — the whole point.** Once a carried seed has
+    ridden `CARRY_DISTANCE` (32 tiles) of real travel, the beast sows a
+    **drifted** child (`mutate` at `mutationAmount`, neutral — never biased) at
+    **its own feet**, trying its tile then a neighbor or two. This is *not*
+    `propagate` (which seeds near the *source*): it is `addPlant(species,
+    drifted, x, y, tick)` near the *beast*, far from where it began, so a north-
+    shore lineage ends up growing on the south shore. A new public
+    `Flora.rootableAt` (the gate `addPlant` already applied — bounds, habitat,
+    per-tile cap, global cap) lets the beast find open correct-habitat ground
+    *before* it spends drift; if nowhere near will take it, it keeps carrying.
+  - **Balance stays gentle by construction:** one beast, ~70% of islands,
+    `BEAST_SPEED` slow, cargo ≤ 2, and every drop bounded by the same finite
+    space (`addPlant`'s caps) as every other spread. It is a slow *connective
+    thread* between the island's regions, never a firehose — emergent knitting,
+    not a script.
+  - **Threading:** `updateBeast` gained `flora` (to sense favored plants and
+    sow) and now returns a `BeastDrop | null`; the frame loop uses that, when
+    the wanderer stands still and near, to write "spread by &lt;beast name&gt;"
+    onto the dropped kind's journal page (`recordSpread`) — a beautiful
+    long-distance-dispersal tell, and a no-op for a kind not yet met.
 - **Next: step 4 (toss = invitation).**
 
 ## Findings from research (`../research/ecosystem-prior-art.md`)

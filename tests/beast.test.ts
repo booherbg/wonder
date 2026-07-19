@@ -1,6 +1,8 @@
 import { expect, test } from "vitest";
 import { makeRng } from "../src/core/rng";
 import { beastSegments, generateBeast, updateBeast } from "../src/life/beast";
+import { Flora } from "../src/life/flora";
+import { generatePlantSpecies } from "../src/life/species";
 import { TILE_SIZE } from "../src/world/config";
 import { generate } from "../src/world/generate";
 import { isWalkable } from "../src/world/types";
@@ -8,8 +10,9 @@ import { isWalkable } from "../src/world/types";
 test("beast generation is deterministic and spawns on walkable ground", () => {
   for (const seed of [1, 42, 777, 12345, 555]) {
     const map = generate(seed);
-    const a = generateBeast(seed, map);
-    const b = generateBeast(seed, map);
+    const plants = generatePlantSpecies(seed);
+    const a = generateBeast(seed, map, plants);
+    const b = generateBeast(seed, map, plants);
     expect(a).toEqual(b);
     if (a) {
       expect(isWalkable(map, Math.floor(a.x / TILE_SIZE), Math.floor(a.y / TILE_SIZE))).toBe(true);
@@ -25,7 +28,7 @@ test("some islands have a beast and some do not", () => {
   const without: number[] = [];
   for (let seed = 1; seed <= 20; seed++) {
     const map = generate(seed);
-    (generateBeast(seed, map) ? withBeast : without).push(seed);
+    (generateBeast(seed, map, generatePlantSpecies(seed)) ? withBeast : without).push(seed);
   }
   expect(withBeast.length).toBeGreaterThan(5);
   expect(without.length).toBeGreaterThan(0);
@@ -33,12 +36,14 @@ test("some islands have a beast and some do not", () => {
 
 test("the beast stays on walkable ground across minutes of travel", () => {
   const map = generate(42);
-  const beast = generateBeast(42, map);
+  const plants = generatePlantSpecies(42);
+  const flora = new Flora(map, plants, 42);
+  const beast = generateBeast(42, map, plants);
   expect(beast).not.toBeNull();
   const rng = makeRng(5);
   const dt = 1 / 30;
   for (let step = 0; step < 30 * 240; step++) {
-    updateBeast(beast!, dt, map, null, rng);
+    updateBeast(beast!, dt, map, flora, null, rng);
     const tx = Math.floor(beast!.x / TILE_SIZE);
     const ty = Math.floor(beast!.y / TILE_SIZE);
     expect(isWalkable(map, tx, ty)).toBe(true);
