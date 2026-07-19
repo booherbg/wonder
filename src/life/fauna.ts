@@ -27,13 +27,159 @@ export interface CritterSpecies {
   id: number;
   name: string;
   bodyHue: number; // pastel body color
-  earLen: number; // 0..1
-  tailLen: number; // 0..1
-  size: number; // 0.75..1.25
+  earLen: number; // 0..1 — scales whatever the crown turns out to be
+  tailLen: number; // 0..1 — scales whatever the tail turns out to be
+  size: number; // 0.35 tiny scurrier .. 1.6 knee-high ambler
+  morph: CritterMorph; // the visual DNA — always morphOf() of the four numbers above
   palate: Palate; // taste over traits; does the day-to-day choosing
   favoriteSpecies: number; // the species it was born loving (den anchor, UI)
   role: CritterRole; // disperser (spreads what it eats) or grazer (consumes it)
   den: { x: number; y: number }; // tile coords of its burrow
+}
+
+// ── morphology ──────────────────────────────────────────────────────────
+// The visual DNA of a kind: a body plan and a fistful of independent
+// features, so eight archetypes × tails × crowns × eyes × coats give
+// hundreds of silhouettes and no island shows three of anything. Purely
+// cosmetic — nothing below the skin reads any of it.
+
+// The eight body plans — the archetypes every kind is a variation on.
+export type BodyPlan =
+  | "puff" // a round dumpling, nearly all fur
+  | "loaf" // long and low on stumpy legs, an unhurried grazer shape
+  | "hopper" // haunches and spring — the heritage silhouette
+  | "strider" // a small body held high on long thin legs
+  | "serpent" // a low undulating ribbon of segments
+  | "scuttler" // a domed back over many quick little legs
+  | "tuft" // a tiny ball on stick legs under an oversized plume
+  | "gazer"; // mostly head, mostly eyes
+
+export const BODY_PLANS: readonly BodyPlan[] = [
+  "puff",
+  "loaf",
+  "hopper",
+  "strider",
+  "serpent",
+  "scuttler",
+  "tuft",
+  "gazer",
+];
+
+export type TailKind = "none" | "nub" | "sweep" | "curl" | "plume" | "whip";
+export type CrownKind = "none" | "ears" | "lop" | "round" | "horns" | "antennae" | "crest";
+export type CoatPattern = "plain" | "spots" | "stripes" | "bands" | "saddle";
+
+export interface CritterMorph {
+  plan: BodyPlan;
+  legPairs: number; // 0 (a glider, a sitter) .. 4 (a proper scuttle)
+  legLen: number; // 0..1 of the plan's reach
+  tail: TailKind; // species.tailLen scales it
+  crown: CrownKind; // species.earLen scales it
+  eyeCount: 1 | 2 | 3; // one wide cyclops eye, the usual pair, or a third
+  bigEyes: boolean; // 2px glassy eyes with a shine
+  pattern: CoatPattern;
+  accentHue: number; // 0..1 — the coat pattern, crest, and inner-ear color
+  paleBelly: boolean;
+  glowMote: boolean; // one luminous fleck, kin to the flora's glow
+}
+
+// What tails and crowns suit which body — repetition is weight, as with
+// HABITAT_FORMS. Every kind can still surprise; these only tilt the dice.
+const TAIL_POOLS: Record<BodyPlan, readonly TailKind[]> = {
+  puff: ["nub", "nub", "plume", "curl", "none"],
+  loaf: ["nub", "sweep", "sweep", "none", "curl"],
+  hopper: ["nub", "nub", "curl", "sweep", "plume"],
+  strider: ["whip", "sweep", "sweep", "plume", "none"],
+  serpent: ["whip", "whip", "plume", "none", "sweep"],
+  scuttler: ["none", "none", "whip", "nub", "sweep"],
+  tuft: ["plume", "plume", "plume", "sweep", "nub"],
+  gazer: ["sweep", "curl", "none", "none", "whip"],
+};
+
+const CROWN_POOLS: Record<BodyPlan, readonly CrownKind[]> = {
+  puff: ["ears", "round", "round", "none", "crest"],
+  loaf: ["round", "lop", "lop", "horns", "none"],
+  hopper: ["ears", "ears", "ears", "lop", "round"],
+  strider: ["horns", "horns", "antennae", "ears", "none"],
+  serpent: ["none", "none", "antennae", "horns", "crest"],
+  scuttler: ["antennae", "antennae", "antennae", "horns", "none"],
+  tuft: ["crest", "crest", "crest", "ears", "antennae"],
+  gazer: ["round", "ears", "none", "none", "horns"],
+};
+
+// legPairs by plan: [base, extra-die]; pairs = base + floor(roll * extra)
+const LEG_PAIRS: Record<BodyPlan, readonly [number, number]> = {
+  puff: [0, 2], // 0-1: some dumplings simply sit
+  loaf: [1, 2], // 1-2 sets of stumps
+  hopper: [1, 2], // haunches, sometimes forepaws too
+  strider: [1, 2], // two stilts or four
+  serpent: [0, 1.3], // mostly legless; rarely a fringe of many nubs
+  scuttler: [3, 2], // 3-4 pairs, always a crowd
+  tuft: [1, 1], // stick legs, exactly two
+  gazer: [0, 2], // 0-1: some just hover-sit
+};
+
+const r3 = (v: number): number => Math.round(v * 1000);
+
+function mixHash(h: number, v: number): number {
+  h = Math.imul(h ^ v, 0x85ebca6b);
+  h ^= h >>> 13;
+  return (Math.imul(h, 0xc2b2ae35) ^ (h >>> 16)) | 0;
+}
+
+// The whole genome from the four numbers a journal page remembers — rolled
+// from a hash-seeded rng, so the living kind and its portrait years later
+// wear exactly the same body. Inputs are quantized to 3 decimals first,
+// matching how the journal rounds them; full-precision and remembered
+// bodies land on the same genome. Deterministic, no island dice touched.
+export function morphOf(body: {
+  bodyHue: number;
+  earLen: number;
+  tailLen: number;
+  size: number;
+}): CritterMorph {
+  let h = 0x51ab;
+  h = mixHash(h, r3(body.bodyHue));
+  h = mixHash(h, r3(body.earLen));
+  h = mixHash(h, r3(body.tailLen));
+  h = mixHash(h, r3(body.size));
+  const r = makeRng(h >>> 0);
+  // one frozen roll order — every draw happens for every kind, so the
+  // stream never shifts between plans and old friends keep their faces
+  const plan = BODY_PLANS[Math.floor(r() * BODY_PLANS.length)];
+  const [legBase, legDie] = LEG_PAIRS[plan];
+  const legPairs = legBase + Math.floor(r() * legDie);
+  const legLen = r();
+  const tailPool = TAIL_POOLS[plan];
+  const tail = tailPool[Math.floor(r() * tailPool.length)];
+  const crownPool = CROWN_POOLS[plan];
+  const crown = crownPool[Math.floor(r() * crownPool.length)];
+  const eyeRoll = r();
+  const eyeCount: 1 | 2 | 3 = eyeRoll < 0.08 ? 1 : eyeRoll < 0.88 ? 2 : 3;
+  const bigEyes = plan === "gazer" || r() < 0.22;
+  const patRoll = r();
+  const pattern: CoatPattern =
+    patRoll < 0.34
+      ? "plain"
+      : patRoll < 0.56
+        ? "spots"
+        : patRoll < 0.72
+          ? "stripes"
+          : patRoll < 0.88
+            ? "bands"
+            : "saddle";
+  // accent leans analogous half the time, complementary the other half —
+  // always another stop on the same psychedelic wheel. Built on the
+  // quantized hue, so remembered bodies wear the exact accent too.
+  const hueQ = r3(body.bodyHue) / 1000;
+  const complement = r() < 0.5;
+  const accentAmt = r();
+  const accentHue = complement
+    ? (hueQ + 0.5 + (accentAmt - 0.5) * 0.24 + 1) % 1
+    : (hueQ + (accentAmt < 0.5 ? -1 : 1) * (0.06 + accentAmt * 0.1) + 1) % 1;
+  const paleBelly = r() < 0.55;
+  const glowMote = r() < 0.12;
+  return { plan, legPairs, legLen, tail, crown, eyeCount, bigEyes, pattern, accentHue, paleBelly, glowMote };
 }
 
 // 0 = inedible to this critter .. 1 = exactly to its taste.
@@ -266,10 +412,21 @@ function critterName(rng: Rng): string {
 // friction, never an arms race.
 const GRAZER_CHANCE = 0.28;
 
-// Three species per island, each born loving one (preferably nibblable,
-// non-tree) plant species and denned where those plants actually grow.
-// The palate is cut from that species' archetype, so the love generalizes:
-// close colors and kin qualify, far drift disqualifies.
+// The size bands a menagerie is dealt from: one guaranteed tiny scurrier,
+// one guaranteed knee-high ambler, and the rest rolled across the whole
+// range — so every island holds both ends of the scale.
+const SIZE_MIN = 0.35;
+const SIZE_MAX = 1.6;
+const SIZE_TINY_MAX = 0.6;
+const SIZE_LARGE_MIN = 1.2;
+
+// Five to eight species per island (as many as the flora can host), each
+// born loving one (preferably nibblable, non-tree) plant species and denned
+// where those plants actually grow. The palate is cut from that species'
+// archetype, so the love generalizes: close colors and kin qualify, far
+// drift disqualifies. Bodies are dealt for spread: sizes span tiny to
+// knee-high, and the visual dice reroll until each kind's body plan is its
+// own — no island of three identical hoppers again.
 export function generateCritterSpecies(
   seed: number,
   map: WorldMap,
@@ -287,13 +444,44 @@ export function generateCritterSpecies(
   const pool = (nibblable.length >= 3 ? nibblable : reachable.length > 0 ? reachable : plants).map(
     (p) => p.id,
   );
+  const count = 5 + Math.floor(rng() * 4); // 5-8 kinds
   const favorites: number[] = [];
-  while (favorites.length < 3 && favorites.length < pool.length) {
+  while (favorites.length < count && favorites.length < pool.length) {
     const pick = pool[Math.floor(rng() * pool.length)];
     if (!favorites.includes(pick)) favorites.push(pick);
   }
+  // deal the size bands, then shuffle so no fixed id is always the tiny one
+  const bands: ("tiny" | "large" | "free")[] = favorites.map((_, i) =>
+    i === 0 ? "tiny" : i === 1 ? "large" : "free",
+  );
+  for (let i = bands.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [bands[i], bands[j]] = [bands[j], bands[i]];
+  }
+  const usedPlans = new Set<BodyPlan>();
   return favorites.map((favoriteSpecies, id) => {
     const arch = plants[favoriteSpecies].archetype;
+    const name = critterName(rng);
+    const band = bands[id];
+    const size =
+      band === "tiny"
+        ? SIZE_MIN + rng() * (SIZE_TINY_MAX - SIZE_MIN)
+        : band === "large"
+          ? SIZE_LARGE_MIN + rng() * (SIZE_MAX - SIZE_LARGE_MIN)
+          : SIZE_MIN + rng() * (SIZE_MAX - SIZE_MIN);
+    // roll the visual dice until this kind's body plan is one the island
+    // hasn't seen — a bounded reroll, so generation always lands
+    let bodyHue = rng();
+    let earLen = rng();
+    let tailLen = rng();
+    let morph = morphOf({ bodyHue, earLen, tailLen, size });
+    for (let attempt = 0; attempt < 12 && usedPlans.has(morph.plan); attempt++) {
+      bodyHue = rng();
+      earLen = rng();
+      tailLen = rng();
+      morph = morphOf({ bodyHue, earLen, tailLen, size });
+    }
+    usedPlans.add(morph.plan);
     const palate: Palate = {
       form: arch.form,
       hueCenter: (arch.hue + (taste() - 0.5) * 0.06 + 1) % 1,
@@ -302,11 +490,12 @@ export function generateCritterSpecies(
     };
     return {
       id,
-      name: critterName(rng),
-      bodyHue: rng(),
-      earLen: rng(),
-      tailLen: rng(),
-      size: 0.75 + rng() * 0.5,
+      name,
+      bodyHue,
+      earLen,
+      tailLen,
+      size,
+      morph,
       palate,
       favoriteSpecies,
       den: findDen(rng, map, flora, favoriteSpecies),

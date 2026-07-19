@@ -22,9 +22,10 @@ function world() {
   return { map, plants, flora, critterSpecies };
 }
 
-test("three critter species with valid favorites and walkable dens", () => {
+test("a menagerie of critter species with valid favorites and walkable dens", () => {
   const { map, plants, critterSpecies } = world();
-  expect(critterSpecies).toHaveLength(3);
+  expect(critterSpecies.length).toBeGreaterThanOrEqual(5);
+  expect(critterSpecies.length).toBeLessThanOrEqual(8);
   for (const sp of critterSpecies) {
     expect(sp.favoriteSpecies).toBeGreaterThanOrEqual(0);
     expect(sp.favoriteSpecies).toBeLessThan(plants.length);
@@ -32,7 +33,7 @@ test("three critter species with valid favorites and walkable dens", () => {
     expect(sp.name.length).toBeGreaterThan(3);
   }
   // favorites are distinct
-  expect(new Set(critterSpecies.map((s) => s.favoriteSpecies)).size).toBe(3);
+  expect(new Set(critterSpecies.map((s) => s.favoriteSpecies)).size).toBe(critterSpecies.length);
 });
 
 test("critter generation is deterministic", () => {
