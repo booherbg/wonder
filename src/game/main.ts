@@ -5,8 +5,14 @@ import {
   Critter,
   CritterMood,
   CritterSpecies,
+  bestOffering,
+  feedCritter,
   generateCritterSpecies,
+  loadTrust,
+  raiseTrust,
+  saveTrust,
   spawnCritters,
+  trustWord,
   updateCritter,
 } from "../life/fauna";
 import { Flora, Plant, nearestPlant } from "../life/flora";
@@ -121,6 +127,7 @@ let flora!: Flora;
 let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
+let trust: Map<number, number> = new Map(); // per-kind bond, this island; wander.trust
 let beast: Beast | null = null;
 let beastSows: { x: number; y: number; hue: number; at: number }[] = []; // sowings still shimmering
 let flocks: Flock[] = [];
@@ -251,6 +258,7 @@ function loadWorld(seed: number): void {
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   critters = spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
+  trust = loadTrust(seed); // friendships made here, remembered here
   beast = generateBeast(seed, map, species);
   beastSows = [];
   flocks = generateFlocks(seed, map);
@@ -329,6 +337,7 @@ function openAlmanac(): void {
     species,
     critterSpecies,
     memories,
+    trust,
   });
 }
 
@@ -394,14 +403,57 @@ function openInspectAtPlayer(): void {
   }
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
-  openInspect(shown, species, inventory.seeds, companySpecies, beastNear, companyMoods, (group) => {
-    const next = gather(inventory, { species: group.plant.species, genome: group.plant.genome });
-    if (!next) return "pouch full";
-    inventory = next;
-    flashHud(`a seed of ${species[group.plant.species].name}`);
-    murmurs.offer("gather");
-    return "gathered";
-  });
+  openInspect(
+    shown,
+    species,
+    inventory.seeds,
+    companySpecies,
+    beastNear,
+    companyMoods,
+    (group) => {
+      const next = gather(inventory, { species: group.plant.species, genome: group.plant.genome });
+      if (!next) return "pouch full";
+      inventory = next;
+      flashHud(`a seed of ${species[group.plant.species].name}`);
+      murmurs.offer("gather");
+      return "gathered";
+    },
+    // and each critter card, when the pouch holds a seed its kind favors,
+    // carries a feed button: the best-matching seed leaves the pouch, the
+    // nearest of the kind comes to eat at your feet, and its whole kind
+    // remembers your hands a little longer
+    (sp) => {
+      const offering = bestOffering(sp.palate, inventory.seeds);
+      if (offering < 0) return "nothing it favors"; // the pouch changed while you looked
+      const seeds = [...inventory.seeds];
+      seeds.splice(offering, 1);
+      inventory = { seeds };
+      trust.set(sp.id, raiseTrust(trust.get(sp.id) ?? 0));
+      saveTrust(currentSeed, trust);
+      let friend: Critter | null = null;
+      let best = Infinity;
+      for (const c of critters) {
+        if (c.species !== sp.id) continue;
+        const d = Math.hypot(c.x - player.x, c.y - player.y);
+        if (d < best) {
+          best = d;
+          friend = c;
+        }
+      }
+      if (friend) feedCritter(friend, player);
+      const word = trustWord(trust.get(sp.id) ?? 0);
+      flashHud(
+        word === "bonded"
+          ? `${sp.name} settles at your feet — bonded`
+          : word === "trusts you"
+            ? `${sp.name} eats from your hand — it trusts you now`
+            : `${sp.name} edges closer — it's warming to you`,
+      );
+      murmurs.offer("critter");
+      return "shared";
+    },
+    trust,
+  );
 }
 
 loadWorld(seedFromUrl() ?? randomSeed());
@@ -794,11 +846,14 @@ function frame(now: number): void {
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
   const inp = input();
-  // what the world tells the critters: the hour, and whether the wanderer
-  // is keeping still — stillness is this game's watching verb
+  // what the world tells the critters: the hour, whether the wanderer is
+  // keeping still — stillness is this game's watching verb — and the bond
+  // each kind holds, so trusted company gathers around you and your camp
   const critterCtx = {
     darkness: darknessNow,
     playerStill: !(inp.up || inp.down || inp.left || inp.right),
+    trust,
+    camp: home ? { x: (home.x + 0.5) * TILE_SIZE, y: (home.y + 0.5) * TILE_SIZE } : null,
   };
   for (const c of critters)
     updateCritter(c, dt, map, flora, critterSpecies, player, critterRng, critterCtx);

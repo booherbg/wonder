@@ -1,6 +1,6 @@
 import { INV_CAP, Seed } from "../game/inventory";
 import { Beast, beastSegments } from "../life/beast";
-import { CritterMood, CritterSpecies } from "../life/fauna";
+import { CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
 import { PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -20,6 +20,10 @@ export interface PlantGroup {
 // A card's gather button lands here: try to pocket a seed of the group's
 // plant. The word that comes back is what the button says next.
 export type GatherFromCard = (group: PlantGroup) => "gathered" | "pouch full";
+
+// A critter card's feed button lands here: offer this kind the pouch's
+// best-matching seed. The word that comes back is what the button says next.
+export type FeedFromCard = (sp: CritterSpecies) => "shared" | "nothing it favors";
 
 const FORM_WORDS: Record<PlantForm, string> = {
   [PlantForm.Flower]: "flower",
@@ -66,6 +70,21 @@ export function moodLine(mood: CritterMood, favorite: string): string {
     case "content":
     default:
       return `at ease among ${favorite}`;
+  }
+}
+
+// The bond a kind holds toward the wanderer, said the way the card says
+// it — the trust ladder (wary → warming → trusts you → bonded) in a line.
+export function trustLine(trust: number): string {
+  switch (trustWord(trust)) {
+    case "bonded":
+      return "bonded — it keeps your company";
+    case "trusts you":
+      return "it trusts you";
+    case "warming":
+      return "warming to you";
+    default:
+      return "wary — it doesn't know your hands yet";
   }
 }
 
@@ -160,6 +179,8 @@ export function openInspect(
   beast: Beast | null = null,
   moods: Map<number, CritterMood> = new Map(),
   onGather?: GatherFromCard,
+  onFeed?: FeedFromCard,
+  trust?: ReadonlyMap<number, number>,
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -218,10 +239,36 @@ export function openInspect(
       card.appendChild(name);
       const traits = document.createElement("div");
       traits.className = "inspect-traits";
-      const favorite = speciesList[sp.favoriteSpecies].name;
+      const favSp = speciesList[sp.favoriteSpecies];
       const mood = moods.get(sp.id);
-      traits.textContent = mood ? moodLine(mood, favorite) : `follows the scent of ${favorite}`;
+      traits.textContent = mood ? moodLine(mood, favSp.name) : `follows the scent of ${favSp.name}`;
       card.appendChild(traits);
+      // the bond, said plainly — and the taste: learned once you've fed
+      // it, guessed at (name and where to look) while it's still a hope
+      const bond = trust?.get(sp.id) ?? 0;
+      const bondEl = document.createElement("div");
+      bondEl.className = "inspect-traits";
+      bondEl.textContent = trustLine(bond);
+      card.appendChild(bondEl);
+      const taste = document.createElement("div");
+      taste.className = "inspect-traits";
+      taste.textContent =
+        bond > 0
+          ? `eats ${favSp.name} — a taste you've learned`
+          : `might fancy ${favSp.name}, of ${BIOME_WORDS[favSp.habitat] ?? "the island"}`;
+      card.appendChild(taste);
+      // a pouch that holds something this kind favors earns a feed button —
+      // the gather button's quiet look, offering instead of taking
+      if (onFeed && bestOffering(sp.palate, pouch) >= 0) {
+        const btn = document.createElement("button");
+        btn.className = "inspect-gather";
+        btn.textContent = "offer a seed";
+        btn.addEventListener("click", () => {
+          btn.textContent = onFeed(sp);
+          btn.disabled = true;
+        });
+        card.appendChild(btn);
+      }
       g.appendChild(card);
     }
     if (beast) {

@@ -49,6 +49,109 @@ export function appetite(palate: Palate, g: Genome): number {
 
 export const APPETITE_MIN = 0.3; // below this a plant is just scenery
 
+// The seed a palate would pick from an offered pouch: the best match above
+// the scenery line, the oldest on a tie. -1 when nothing tempts — a critter
+// that doesn't want your seed simply isn't interested, and no harm done.
+export function bestOffering(palate: Palate, seeds: ReadonlyArray<{ genome: Genome }>): number {
+  let best = -1;
+  let bestFit = APPETITE_MIN;
+  for (let i = 0; i < seeds.length; i++) {
+    const fit = appetite(palate, seeds[i].genome);
+    if (fit > bestFit) {
+      bestFit = fit;
+      best = i;
+    }
+  }
+  return best;
+}
+
+// ── trust ───────────────────────────────────────────────────────────────
+// What feeding builds: a kind's memory of your hands, 0 wary .. 1 bonded.
+// Kept per species per island in one small book under TRUST_KEY, so a
+// friendship made is never unmade by a reload. Behavior reads the bond
+// through CritterContext.trust: a trusted kind notices your stillness from
+// farther, sidles nearer, and potters about you and your camp instead of
+// keeping its distance. Always a lean, never a leash.
+
+export const TRUST_KEY = "wander.trust";
+export const TRUST_STEP = 0.15; // one shared seed; six make a bond
+const TRUST_CLOSE = 0.3; // from here on, a kind starts keeping your company
+const TRUST_LINGER_RADIUS_PX = 8 * TILE_SIZE; // how far "with you" reaches
+const TRUST_PULL = 0.55; // how hard a full bond leans each pottering step
+const TRUST_NOTICE = 2; // a full bond spots your stillness from 3x as far
+const TRUST_BOOK_CAP = 900; // three hundred islands of three kinds each
+
+export type TrustWord = "wary" | "warming" | "trusts you" | "bonded";
+
+// The bond said in words — the same ladder wherever it is spoken.
+export function trustWord(trust: number): TrustWord {
+  if (trust >= 0.8) return "bonded";
+  if (trust >= 0.5) return "trusts you";
+  if (trust > 0) return "warming";
+  return "wary";
+}
+
+// One shared seed's worth of warming, never past full.
+export function raiseTrust(trust: number): number {
+  return Math.min(1, trust + TRUST_STEP);
+}
+
+// the same tiny storage contract the journal and anthology use — declared
+// here so the life layer never reaches into game/
+interface KV {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+function defaultKV(): KV | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+// The bonds this island holds: species id -> trust, read from the one book.
+export function loadTrust(seed: number, kv: KV | null = defaultKV()): Map<number, number> {
+  const out = new Map<number, number>();
+  try {
+    const raw = kv?.getItem(TRUST_KEY);
+    const book = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    const prefix = `${seed}:`;
+    for (const [key, v] of Object.entries(book)) {
+      if (!key.startsWith(prefix) || typeof v !== "number" || !Number.isFinite(v)) continue;
+      const id = Number(key.slice(prefix.length));
+      if (Number.isInteger(id) && id >= 0) out.set(id, clamp01(v));
+    }
+  } catch {
+    // storage unreadable: every kind simply starts wary again
+  }
+  return out;
+}
+
+// Write this island's bonds back without disturbing any other island's.
+export function saveTrust(
+  seed: number,
+  trust: ReadonlyMap<number, number>,
+  kv: KV | null = defaultKV(),
+): void {
+  if (!kv) return;
+  try {
+    const raw = kv.getItem(TRUST_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    const book: Record<string, number> =
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, number>)
+        : {};
+    for (const [id, v] of trust) book[`${seed}:${id}`] = clamp01(v);
+    // the book stays small: the longest-untouched islands let go first
+    const entries = Object.entries(book).slice(-TRUST_BOOK_CAP);
+    kv.setItem(TRUST_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // storage full or unavailable: the friendship still holds this sitting
+  }
+}
+
 export type CritterState = "idle" | "seek" | "nibble" | "home" | "sleep";
 
 // The face a drive wears — what an inspect line could someday read aloud.
@@ -67,6 +170,7 @@ export interface Critter {
   facing: 1 | -1;
   energy: number; // 0..1 — the ledger: eating fills it, living drains it
   meal?: Plant | null; // the plant it walked to and is chewing on
+  treat?: boolean; // a seed from the wanderer's hand, promised and on its way
   curiosity: number; // 0..CURIOSITY_CAP — a small memory of shared stillness
   mood: CritterMood; // the drive that chose the current action — the legible why
 }
@@ -96,10 +200,12 @@ const CURIOSITY_RISE = 0.12; // per second beside a still wanderer — full in ~
 const CURIOSITY_FADE = 0.2; // per second once the moment passes
 
 // What the wider world tells a critter. Everything optional: an absent
-// context reads as broad daylight and a wanderer on the move.
+// context reads as broad daylight, a wanderer on the move, and no bond yet.
 export interface CritterContext {
   darkness?: number; // 0 clear day .. MAX_DARKNESS deep night
   playerStill?: boolean; // the wanderer has kept their feet a moment
+  trust?: ReadonlyMap<number, number>; // per-kind bond, 0 wary .. 1 bonded
+  camp?: { x: number; y: number } | null; // the wanderer's hearth, world px
 }
 
 export type DriveName = "hunger" | "comfort" | "curiosity";
@@ -110,7 +216,8 @@ export interface Drives {
   curiosity: number; // the pull of the still wanderer
   // fear would attach here — one more term, one "wary" tell, one gentle
   // give-space action — but this world is mutualistic; nothing in it
-  // hunts. Deferred until something is worth startling at.
+  // hunts. Deferred until something is worth startling at; when it lands,
+  // trust is its damper — a kind fed from your hand startles less.
 }
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -259,6 +366,25 @@ export function spawnCritters(
   return out;
 }
 
+// A seed offered and accepted: the critter turns from whatever held it and
+// comes to eat at the wanderer's feet — the visible beat of the feeding.
+// The walk is the ordinary hop, the chew the ordinary nibble wiggle; what
+// is new is only the closeness. No dice: the moment plays the same for
+// everyone it happens to.
+export function feedCritter(c: Critter, player: { x: number; y: number }): void {
+  const dx = c.x - player.x;
+  const dy = c.y - player.y;
+  const d = Math.hypot(dx, dy) || 1;
+  const stop = Math.min(d, 10); // to your feet, not into your lap
+  c.treat = true;
+  c.meal = null;
+  c.mood = "curious"; // watching you back, all the way over
+  c.state = "seek";
+  c.targetX = player.x + (dx / d) * stop;
+  c.targetY = player.y + (dy / d) * stop;
+  c.stateTime = 8; // long enough that nothing louder interrupts the walk
+}
+
 function moveToward(c: Critter, dt: number, map: WorldMap): boolean {
   const dx = c.targetX - c.x;
   const dy = c.targetY - c.y;
@@ -285,6 +411,9 @@ export function updateCritter(
   ctx: CritterContext = {},
 ): void {
   const sp = speciesList[c.species];
+  // the bond its kind holds toward the wanderer; 0 when no one has fed it,
+  // and 0 leaves every line below exactly as it always was
+  const bond = clamp01(ctx.trust?.get(c.species) ?? 0);
   c.stateTime -= dt;
   c.energy = Math.max(0, c.energy - dt * ENERGY_DRAIN_PER_S);
 
@@ -318,18 +447,29 @@ export function updateCritter(
   }
 
   // curiosity gathers beside a wanderer who keeps still, and drains away
-  // once the moment passes; the sidle itself spends it
+  // once the moment passes; the sidle itself spends it. a kind that trusts
+  // you notices from farther, warms faster, and lets the moment linger
   const nearStill =
     player != null &&
     ctx.playerStill &&
-    Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX;
+    Math.hypot(player.x - c.x, player.y - c.y) < CURIOSITY_RADIUS_PX * (1 + TRUST_NOTICE * bond);
   c.curiosity = nearStill
-    ? Math.min(CURIOSITY_CAP, c.curiosity + dt * CURIOSITY_RISE)
-    : Math.max(0, c.curiosity - dt * CURIOSITY_FADE);
+    ? Math.min(CURIOSITY_CAP, c.curiosity + dt * CURIOSITY_RISE * (1 + bond))
+    : Math.max(0, c.curiosity - dt * CURIOSITY_FADE * (1 - 0.6 * bond));
 
   const arrived = moveToward(c, dt, map);
 
   if (c.state === "seek" && arrived) {
+    if (c.treat) {
+      // the promised seed, taken from an open hand: a happy chew right at
+      // the wanderer's feet — a true meal, and no plant the poorer for it
+      c.treat = false;
+      c.meal = null;
+      c.energy = Math.min(1, c.energy + MEAL_ENERGY);
+      c.state = "nibble";
+      c.stateTime = 1.5 + rng() * 1.5;
+      return;
+    }
     // the salad may have moved on while it walked — chew only what's here
     const bites = flora
       .plantsNear(c.x, c.y, 12)
@@ -400,16 +540,22 @@ export function updateCritter(
       wander(c, map, rng);
     }
   } else if (want === "curiosity" && player) {
-    // sidle partway toward the still wanderer; the approach spends the itch
+    // sidle partway toward the still wanderer; the approach spends the
+    // itch, and a bond closes more of the gap — a trusted kind comes close
     c.mood = "curious";
     c.curiosity = 0;
-    c.targetX = c.x + (player.x - c.x) * 0.5;
-    c.targetY = c.y + (player.y - c.y) * 0.5;
+    const sidle = 0.5 + 0.35 * bond;
+    c.targetX = c.x + (player.x - c.x) * sidle;
+    c.targetY = c.y + (player.y - c.y) * sidle;
     c.state = "idle";
   } else {
-    // nothing presses: potter about the home range
+    // nothing presses: potter about the home range — though a kind that
+    // has eaten from your hand would rather potter about you, or your camp
     c.mood = "content";
-    if (farFromHome) {
+    const hearth = trustedHearth(c, bond, player, ctx);
+    if (hearth) {
+      wander(c, map, rng, { x: hearth.x, y: hearth.y, pull: TRUST_PULL * bond });
+    } else if (farFromHome) {
       c.state = "home";
       c.targetX = denX;
       c.targetY = denY;
@@ -420,10 +566,39 @@ export function updateCritter(
   c.stateTime = 1.5 + rng() * 2.5;
 }
 
-// a couple of tiles in no particular direction
-function wander(c: Critter, map: WorldMap, rng: Rng): void {
-  const tx = Math.floor(c.x / TILE_SIZE) + Math.floor(rng() * 5) - 2;
-  const ty = Math.floor(c.y / TILE_SIZE) + Math.floor(rng() * 5) - 2;
+// Where a trusting kind gathers: the wanderer when they are near, else the
+// camp they keep. Distant company never pulls — trust is a lean, not a
+// leash — and below TRUST_CLOSE the old shyness still holds.
+function trustedHearth(
+  c: Critter,
+  bond: number,
+  player: { x: number; y: number } | null,
+  ctx: CritterContext,
+): { x: number; y: number } | null {
+  if (bond < TRUST_CLOSE) return null;
+  if (player && Math.hypot(player.x - c.x, player.y - c.y) < TRUST_LINGER_RADIUS_PX) {
+    return player;
+  }
+  const camp = ctx.camp;
+  if (camp && Math.hypot(camp.x - c.x, camp.y - c.y) < TRUST_LINGER_RADIUS_PX) return camp;
+  return null;
+}
+
+// a couple of tiles in no particular direction — unless a lean is given,
+// which tilts where the step lands. the dice roll the same either way, so
+// a bond bends the walk without ever touching the stream.
+function wander(
+  c: Critter,
+  map: WorldMap,
+  rng: Rng,
+  lean?: { x: number; y: number; pull: number },
+): void {
+  let tx = Math.floor(c.x / TILE_SIZE) + Math.floor(rng() * 5) - 2;
+  let ty = Math.floor(c.y / TILE_SIZE) + Math.floor(rng() * 5) - 2;
+  if (lean) {
+    tx = Math.round(tx + (Math.floor(lean.x / TILE_SIZE) - tx) * lean.pull);
+    ty = Math.round(ty + (Math.floor(lean.y / TILE_SIZE) - ty) * lean.pull);
+  }
   if (isWalkable(map, tx, ty)) {
     c.targetX = (tx + 0.5) * TILE_SIZE;
     c.targetY = (ty + 0.5) * TILE_SIZE;

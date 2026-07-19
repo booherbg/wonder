@@ -6,6 +6,7 @@ import { IslandShape, SHAPE_PHRASE } from "../world/generate";
 import { islandName } from "../world/name";
 import { WorldMap } from "../world/types";
 import { critterPortrait, getCritterSprites } from "./critterSprites";
+import { trustLine } from "./inspect";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
 
 const ZOOM = 4;
@@ -32,6 +33,7 @@ export interface JournalScene {
   species: PlantSpecies[]; // its living plant kinds, for endemic notes
   critterSpecies: CritterSpecies[]; // its living critter kinds, for fresh sprites
   memories: string[]; // what this island has witnessed
+  trust?: ReadonlyMap<number, number>; // this island's bonds, kind by kind
 }
 
 function sectionTitle(el: HTMLElement, text: string): void {
@@ -142,14 +144,19 @@ function critterCard(e: CritterEntry, scene: JournalScene): HTMLElement {
   card.appendChild(name);
   traits(card, e.role === "grazer" ? "grazes — takes a true bite" : "tends — its meals spread seeds");
   traits(card, e.meetings === 1 ? "met once" : `met ${e.meetings} times`);
-  // learned only by watching: the plant pages hold the witness, and the
-  // creature page reads it back the other way round
+  // the bond, for the island underfoot: feeding is remembered by kind
+  const bond = live ? (scene.trust?.get(e.critterId) ?? 0) : 0;
+  if (bond > 0) traits(card, trustLine(bond));
+  // learned only by watching — or by hand: the plant pages hold the witness,
+  // and a kind you've fed has told you its taste directly
   const shelf = e.role === "grazer" ? "eatenBy" : "spreadBy";
   const seen = scene.entries
     .filter((p) => p.seed === e.seed && p[shelf]?.includes(e.name))
     .map((p) => p.speciesName);
   if (seen.length > 0) {
     traits(card, `${e.role === "grazer" ? "seen grazing" : "seen spreading"} ${seen.join(", ")}`);
+  } else if (bond > 0 && live) {
+    traits(card, `eats ${scene.species[live.favoriteSpecies].name} — learned from your hand`);
   } else {
     traits(card, "its taste is still a secret — watch it eat");
   }
