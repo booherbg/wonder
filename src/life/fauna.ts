@@ -1,6 +1,6 @@
 import { Rng, makeRng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
-import { WorldMap, isWalkable } from "../world/types";
+import { WALKABLE, WorldMap, isWalkable } from "../world/types";
 import { Flora, Plant } from "./flora";
 import { Genome, PlantForm } from "./genome";
 import { PlantSpecies } from "./species";
@@ -169,10 +169,15 @@ export function generateCritterSpecies(
 ): CritterSpecies[] {
   const rng = makeRng(seed ^ 0xc417);
   const taste = makeRng(seed ^ 0x9a1a7e); // palates draw their own stream
-  const nibblable = plants.filter(
+  // a critter can only love what it can walk to: plants on impassable rock or
+  // snow are never a favorite, or the critter would starve nosing at a cliff
+  const reachable = plants.filter((p) => WALKABLE.has(p.habitat));
+  const nibblable = reachable.filter(
     (p) => p.archetype.form !== PlantForm.Tree && p.archetype.form !== PlantForm.Coral,
   );
-  const pool = (nibblable.length >= 3 ? nibblable : plants).map((p) => p.id);
+  const pool = (nibblable.length >= 3 ? nibblable : reachable.length > 0 ? reachable : plants).map(
+    (p) => p.id,
+  );
   const favorites: number[] = [];
   while (favorites.length < 3 && favorites.length < pool.length) {
     const pick = pool[Math.floor(rng() * pool.length)];
