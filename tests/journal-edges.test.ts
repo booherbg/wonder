@@ -5,6 +5,7 @@ import {
   Sighting,
   loadJournal,
   recordForage,
+  recordSpread,
   recordSighting,
 } from "../src/game/journal";
 import { KV } from "../src/game/murmurs";
@@ -89,4 +90,43 @@ test("older pages without eatenBy still load fine", () => {
   expect(entries[0].eatenBy).toBeUndefined();
   recordForage(7, 2, "Poni Hopper", kv); // and such a page can still learn
   expect(loadJournal(kv)[0].eatenBy).toEqual(["Poni Hopper"]);
+});
+
+// The reframe on the page: a disperser is written under "spread by", never
+// mislabeled a grazer. Same page, two shelves, split by disposition.
+test("disposition splits the page: dispersers spread, grazers graze", () => {
+  const kv = fakeKV();
+  recordSighting(sighting(), kv);
+  recordSpread(7, 2, "Poni Hopper", kv); // a disperser
+  recordForage(7, 2, "Molsan Whisk", kv); // a grazer
+  const e = loadJournal(kv)[0];
+  expect(e.spreadBy).toEqual(["Poni Hopper"]);
+  expect(e.eatenBy).toEqual(["Molsan Whisk"]);
+});
+
+test("a spread is only noted on a page that already exists", () => {
+  const kv = fakeKV();
+  recordSpread(7, 2, "Poni Hopper", kv); // no page yet — nothing to write on
+  expect(loadJournal(kv)).toEqual([]);
+});
+
+test("spread-by dedups and holds at most six, like grazers", () => {
+  const kv = fakeKV();
+  recordSighting(sighting(), kv);
+  recordSpread(7, 2, "Poni Hopper", kv);
+  recordSpread(7, 2, "Poni Hopper", kv); // the same disperser, written once
+  for (let i = 0; i < EATEN_BY_CAP + 3; i++) {
+    recordSpread(7, 2, `Wisket Puff ${i}`, kv);
+  }
+  const spreadBy = loadJournal(kv)[0].spreadBy!;
+  expect(spreadBy[0]).toBe("Poni Hopper"); // first-seen order
+  expect(spreadBy.length).toBe(EATEN_BY_CAP);
+});
+
+test("older pages without spreadBy still load, and can still learn a spread", () => {
+  const kv = fakeKV();
+  recordSighting(sighting(), kv); // sketched before spread links existed
+  expect(loadJournal(kv)[0].spreadBy).toBeUndefined();
+  recordSpread(7, 2, "Poni Hopper", kv);
+  expect(loadJournal(kv)[0].spreadBy).toEqual(["Poni Hopper"]);
 });

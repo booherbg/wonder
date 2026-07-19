@@ -15,7 +15,8 @@ export interface JournalEntry {
   firstMetAt: number; // epoch ms
   maxDrift: number; // the furthest drift (%) ever witnessed in this kind
   sightings: number;
-  eatenBy?: string[]; // critter kinds seen grazing this kind, in first-seen order
+  eatenBy?: string[]; // grazer kinds seen consuming this kind, in first-seen order
+  spreadBy?: string[]; // disperser kinds seen spreading this kind, in first-seen order
 }
 
 export const JOURNAL_KEY = "wander.journal";
@@ -85,27 +86,49 @@ export function recordSighting(s: Sighting, kv: KV | null = defaultKV()): void {
   }
 }
 
-// A link learned only by watching: stand still, see a critter chew, and the
-// plant's page quietly notes who eats it. No page yet, no note — you only
-// learn what eats a kind you've already met, so two journals may disagree
-// and both be right.
-export function recordForage(
+// A link learned only by watching: stand still, see a critter visit a plant,
+// and the plant's page quietly notes the critter — under "spread by" if it
+// disperses this kind, "grazed by" if it grazes it. No page yet, no note —
+// you only learn about a kind you've already met, so two journals may
+// disagree and both be right. Same dedup and cap on either shelf.
+function recordVisit(
+  field: "eatenBy" | "spreadBy",
   seed: number,
   plantSpeciesId: number,
   critterName: string,
-  kv: KV | null = defaultKV(),
+  kv: KV | null,
 ): void {
   if (!kv) return;
   try {
     const all = loadJournal(kv);
     const entry = all.find((e) => e.key === `${seed}:${plantSpeciesId}`);
     if (!entry) return;
-    const eatenBy = entry.eatenBy ?? [];
-    if (eatenBy.includes(critterName) || eatenBy.length >= EATEN_BY_CAP) return;
-    eatenBy.push(critterName);
-    entry.eatenBy = eatenBy;
+    const names = entry[field] ?? [];
+    if (names.includes(critterName) || names.length >= EATEN_BY_CAP) return;
+    names.push(critterName);
+    entry[field] = names;
     kv.setItem(JOURNAL_KEY, JSON.stringify(all));
   } catch {
     // storage full or unavailable: the watching still happened
   }
+}
+
+// A grazer was witnessed consuming this kind → "grazed by".
+export function recordForage(
+  seed: number,
+  plantSpeciesId: number,
+  critterName: string,
+  kv: KV | null = defaultKV(),
+): void {
+  recordVisit("eatenBy", seed, plantSpeciesId, critterName, kv);
+}
+
+// A disperser was witnessed spreading this kind → "spread by".
+export function recordSpread(
+  seed: number,
+  plantSpeciesId: number,
+  critterName: string,
+  kv: KV | null = defaultKV(),
+): void {
+  recordVisit("spreadBy", seed, plantSpeciesId, critterName, kv);
 }

@@ -25,10 +25,13 @@ wisps / cross-pollination already shipped (they were mutualist all along).
 
 What this flips: **the teeth (`458807b`).** A visit stops *consuming* the
 plant. Instead it triggers a **propagation** — a drifted seed into a
-nearby open tile, if space allows — and feeds the critter. `nibble`
-becomes `visit`; the "grazed patch thins then recovers" test flips to "a
-visited patch *spreads*." (Reframe is the next code step; the teeth still
-run correctly in the meantime.)
+nearby open tile, if space allows — and feeds the critter. **Shipped
+(2026-07-18)**, but as a *disposition split* rather than a wholesale flip:
+a later steer kept a thread of friction, so most critters disperse while a
+minority still graze. `nibble` stays (the grazer path); `propagate` is the
+new mutualist path; the "grazed patch thins then recovers" test stays valid
+for grazers and a twin "a visited patch *spreads*" test proves the other
+side. See the reframe note under Progress.
 
 The one thing to get right — **balance.** Herbivory self-limits by
 negative feedback (overgraze → crash → recovery). Mutualism is *positive*
@@ -175,6 +178,37 @@ anywhere on screen — appetite stays hidden; the *pattern* is the reward.
   web from nibbles the wanderer actually watched.
 - **Drives, not rolls: shipped.** The roll table is gone; three drives
   choose every action. Design note at the end of this doc.
+- **Teeth reframe (symbiosis with a thread of friction): shipped**
+  `2026-07-18`. The bite is no longer every critter's outcome. Each
+  `CritterSpecies` now carries a `role: "disperser" | "grazer"`, rolled off
+  the seeded stream at generation with a `GRAZER_CHANCE` of 0.28 — so
+  **dispersal clearly dominates** (a typical island is mostly dispersers and
+  often has zero or one grazer; ~1/3 of islands are pure mutualist). A
+  disperser's visit calls the new `Flora.propagate` — it carries a
+  same-species seed to a nearby open tile (simTick's reseed placement,
+  drifted one generation by `mutate`), leaving the visited plant unharmed;
+  both gain. A grazer's visit still calls `nibble` (consume young, set back
+  mature). **Both feed** — every visit gives `MEAL_ENERGY`, so the ledger
+  invariant (nothing starves) is untouched; only the plant's outcome turns
+  on the role.
+  - **Balance:** dispersal is positive feedback whose *only* limit is finite
+    space — `propagate` respects the per-tile cap, habitat, and global cap
+    via `addPlant`, and simply no-ops when the neighborhood is saturated.
+    That saturation is the whole balancer; grazing keeps the old
+    negative-feedback recovery (`tests/graze.test.ts` still passes for a
+    grazer).
+  - **Emergent co-adaptation (the reason to keep it):** the drift is *not*
+    biased toward any palate. Because a mutualist spreads the plants its
+    taste favors, the plants that get spread are the ones the resident
+    critters visit most — so over island-days the flora quietly bends toward
+    its dispersers. Selection made visible, emergent from *differential
+    spreading*, never hard-coded.
+  - **Journal:** a witnessed disperser reads "spread by X", a grazer "grazed
+    by X" — never mislabeled. `JournalEntry` gained a parallel `spreadBy?`
+    field (same dedup/cap as `eatenBy`); `recordSpread` writes it,
+    `recordForage` unchanged for back-compat; the witness in `main.ts`
+    branches on the critter's role. Old journals with neither field still
+    load.
 - **Next: step 4 (toss = invitation).**
 
 ## Findings from research (`../research/ecosystem-prior-art.md`)

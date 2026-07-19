@@ -73,8 +73,15 @@ export function openJournal(entries: JournalEntry[]): void {
       ];
       traits.textContent = bits.join(" · ");
       card.appendChild(traits);
+      // only what was truly witnessed — another wanderer's page may differ.
+      // mutualists first: most visits help, a few graze.
+      if (e.spreadBy && e.spreadBy.length > 0) {
+        const spreaders = document.createElement("div");
+        spreaders.className = "inspect-traits";
+        spreaders.textContent = `spread by ${e.spreadBy.join(", ")}`;
+        card.appendChild(spreaders);
+      }
       if (e.eatenBy && e.eatenBy.length > 0) {
-        // only what was truly witnessed — another wanderer's page may differ
         const grazers = document.createElement("div");
         grazers.className = "inspect-traits";
         grazers.textContent = `grazed by ${e.eatenBy.join(", ")}`;

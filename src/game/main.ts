@@ -11,7 +11,7 @@ import {
 } from "../life/fauna";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { loadJournal, recordForage, recordSighting } from "./journal";
+import { loadJournal, recordForage, recordSpread, recordSighting } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
@@ -632,7 +632,11 @@ function offerMurmurMoments(dt: number): void {
         if (Math.hypot(c.x - player.x, c.y - player.y) >= 6 * TILE_SIZE) continue;
         if (witnessedMeals.get(c) === c.meal) continue;
         witnessedMeals.set(c, c.meal);
-        recordForage(currentSeed, c.meal.species, critterSpecies[c.species].name);
+        // the plant's page learns its visitor under the right verb: a grazer
+        // is "grazed by", a disperser "spread by" — never mislabeled
+        const witness = critterSpecies[c.species];
+        if (witness.role === "grazer") recordForage(currentSeed, c.meal.species, witness.name);
+        else recordSpread(currentSeed, c.meal.species, witness.name);
       }
     }
     if ((map.springs ?? []).some((s) => Math.hypot(s.x - tx, s.y - ty) < 2)) {

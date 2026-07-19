@@ -202,6 +202,31 @@ export class Flora {
     return "grazed";
   }
 
+  // The mutualist visit: a disperser that favors this plant carries a seed of
+  // it to nearby open ground — same species, genome drifted one generation by
+  // `mutate`, reusing simTick's reseed placement. The visited plant is left
+  // standing, unharmed; both gain. This is positive feedback, and its ONLY
+  // limit is finite space: `addPlant` refuses a full tile, an off-habitat
+  // tile, or the global cap, so when the neighborhood is saturated nothing
+  // happens — that saturation is the whole balancer. Drifted dispersal is
+  // where co-adaptation lives: the plants that get spread are the ones
+  // resident critters visit most, so over island-days the flora quietly bends
+  // toward its dispersers — selection made visible, never hard-coded here.
+  propagate(p: Plant): boolean {
+    const t = this.tuning;
+    const px = Math.floor(p.x / TILE_SIZE);
+    const py = Math.floor(p.y / TILE_SIZE);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const tx = px + Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
+      const ty = py + Math.floor(this.rng() * (2 * t.reseedRadius + 1)) - t.reseedRadius;
+      const x = tx * TILE_SIZE + 3 + this.rng() * (TILE_SIZE - 6);
+      const y = ty * TILE_SIZE + 5 + this.rng() * (TILE_SIZE - 6);
+      const genome = mutate(p.genome, this.rng, t.mutationAmount);
+      if (this.addPlant(p.species, genome, x, y, this.tick)) return true;
+    }
+    return false;
+  }
+
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
   // dies, and reseeds nearby with drifted genomes. Rain quickens everything
   // a little; the day after rain, the fungi answer threefold; children born

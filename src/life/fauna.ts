@@ -16,6 +16,13 @@ export interface Palate {
   glowTaste: number; // -1 shuns light .. +1 seeks it
 }
 
+// How a critter's visit lands on the plant it favors. Most kinds are
+// dispersers — a visit spreads the plant (a drifted seed to open ground)
+// while feeding the critter, so both gain. A minority are grazers who still
+// take a real bite: the thread of friction that keeps a little negative
+// feedback in an otherwise mutualist web.
+export type CritterRole = "disperser" | "grazer";
+
 export interface CritterSpecies {
   id: number;
   name: string;
@@ -25,6 +32,7 @@ export interface CritterSpecies {
   size: number; // 0.75..1.25
   palate: Palate; // taste over traits; does the day-to-day choosing
   favoriteSpecies: number; // the species it was born loving (den anchor, UI)
+  role: CritterRole; // disperser (spreads what it eats) or grazer (consumes it)
   den: { x: number; y: number }; // tile coords of its burrow
 }
 
@@ -143,6 +151,12 @@ function critterName(rng: Rng): string {
   return `${word.charAt(0).toUpperCase()}${word.slice(1)} ${epithet.charAt(0).toUpperCase()}${epithet.slice(1)}`;
 }
 
+// Each kind rolls this chance of being a grazer; the rest disperse. Kept
+// low so dispersal clearly dominates: a typical island is mostly
+// dispersers and often has zero or one grazer — mutualism with a thread of
+// friction, never an arms race.
+const GRAZER_CHANCE = 0.28;
+
 // Three species per island, each born loving one (preferably nibblable,
 // non-tree) plant species and denned where those plants actually grow.
 // The palate is cut from that species' archetype, so the love generalizes:
@@ -182,6 +196,9 @@ export function generateCritterSpecies(
       palate,
       favoriteSpecies,
       den: findDen(rng, map, flora, favoriteSpecies),
+      // rolled last so it never shifts the den search above it; most kinds
+      // disperse, a minority graze — deterministic per seed
+      role: rng() < GRAZER_CHANCE ? "grazer" : "disperser",
     };
   });
 }
@@ -279,9 +296,13 @@ export function updateCritter(
   if (c.state === "nibble") {
     c.hopPhase += dt * 4; // gentle munching wiggle
     if (c.stateTime <= 0) {
-      // the bite lands: the plant really loses what the critter really gains
+      // the visit lands. a disperser carries a drifted seed to open ground —
+      // the plant gains a child and stands unharmed; a grazer takes a real
+      // bite and the plant loses growth. either way the critter feeds: every
+      // visit gives MEAL_ENERGY, only the plant's outcome turns on the role.
       if (c.meal && flora.all[c.meal.idx] === c.meal) {
-        flora.nibble(c.meal);
+        if (sp.role === "grazer") flora.nibble(c.meal);
+        else flora.propagate(c.meal);
         c.energy = Math.min(1, c.energy + MEAL_ENERGY);
       }
       c.meal = null;
