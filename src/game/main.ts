@@ -8,9 +8,9 @@ import {
   spawnCritters,
   updateCritter,
 } from "../life/fauna";
-import { Flora } from "../life/flora";
+import { Flora, Plant } from "../life/flora";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { loadJournal, recordSighting } from "./journal";
+import { loadJournal, recordForage, recordSighting } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
@@ -573,6 +573,8 @@ function drawOverview(): void {
 }
 
 let slowCheckAcc = 0;
+// meals already written down, so one long chew isn't noted every second
+const witnessedMeals = new WeakMap<Critter, Plant>();
 function offerMurmurMoments(dt: number): void {
   const inp = input();
   if (inp.up || inp.down || inp.left || inp.right) {
@@ -608,6 +610,17 @@ function offerMurmurMoments(dt: number): void {
     }
     if (critters.some((c) => Math.hypot(c.x - player.x, c.y - player.y) < 2.5 * TILE_SIZE)) {
       murmurs.offer("critter");
+    }
+    // standing truly still, watching: learn who eats what — if that plant
+    // already has a page in the journal
+    if (stillTime >= 1) {
+      for (const c of critters) {
+        if (c.state !== "nibble" || !c.meal || flora.all[c.meal.idx] !== c.meal) continue;
+        if (Math.hypot(c.x - player.x, c.y - player.y) >= 6 * TILE_SIZE) continue;
+        if (witnessedMeals.get(c) === c.meal) continue;
+        witnessedMeals.set(c, c.meal);
+        recordForage(currentSeed, c.meal.species, critterSpecies[c.species].name);
+      }
     }
     if ((map.springs ?? []).some((s) => Math.hypot(s.x - tx, s.y - ty) < 2)) {
       murmurs.offer("spring");

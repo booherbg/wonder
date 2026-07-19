@@ -73,6 +73,13 @@ export function openJournal(entries: JournalEntry[]): void {
       ];
       traits.textContent = bits.join(" · ");
       card.appendChild(traits);
+      if (e.eatenBy && e.eatenBy.length > 0) {
+        // only what was truly witnessed — another wanderer's page may differ
+        const grazers = document.createElement("div");
+        grazers.className = "inspect-traits";
+        grazers.textContent = `grazed by ${e.eatenBy.join(", ")}`;
+        card.appendChild(grazers);
+      }
       grid.appendChild(card);
     }
   }

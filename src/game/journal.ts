@@ -15,10 +15,12 @@ export interface JournalEntry {
   firstMetAt: number; // epoch ms
   maxDrift: number; // the furthest drift (%) ever witnessed in this kind
   sightings: number;
+  eatenBy?: string[]; // critter kinds seen grazing this kind, in first-seen order
 }
 
 export const JOURNAL_KEY = "wander.journal";
 export const JOURNAL_CAP = 400;
+export const EATEN_BY_CAP = 6;
 
 function defaultKV(): KV | null {
   try {
@@ -80,5 +82,30 @@ export function recordSighting(s: Sighting, kv: KV | null = defaultKV()): void {
     kv.setItem(JOURNAL_KEY, JSON.stringify(kept));
   } catch {
     // storage full or unavailable: the meeting still happened
+  }
+}
+
+// A link learned only by watching: stand still, see a critter chew, and the
+// plant's page quietly notes who eats it. No page yet, no note — you only
+// learn what eats a kind you've already met, so two journals may disagree
+// and both be right.
+export function recordForage(
+  seed: number,
+  plantSpeciesId: number,
+  critterName: string,
+  kv: KV | null = defaultKV(),
+): void {
+  if (!kv) return;
+  try {
+    const all = loadJournal(kv);
+    const entry = all.find((e) => e.key === `${seed}:${plantSpeciesId}`);
+    if (!entry) return;
+    const eatenBy = entry.eatenBy ?? [];
+    if (eatenBy.includes(critterName) || eatenBy.length >= EATEN_BY_CAP) return;
+    eatenBy.push(critterName);
+    entry.eatenBy = eatenBy;
+    kv.setItem(JOURNAL_KEY, JSON.stringify(all));
+  } catch {
+    // storage full or unavailable: the watching still happened
   }
 }
