@@ -9,9 +9,11 @@
     "check": "tsc",
     "test": "vitest run",
     "report": "node scripts/report.mjs",
+    "shot": "node scripts/shot.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "playwright": "^1.61.1",
     "typescript": "^5.5.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
