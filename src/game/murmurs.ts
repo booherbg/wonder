@@ -168,6 +168,21 @@ export const MURMURS: Murmur[] = [
     tag: "critter",
   },
   {
+    text: "animals are such agreeable friends — they ask no questions, they pass no criticisms.",
+    attribution: "— george eliot, scenes of clerical life (1857)",
+    tag: "critter",
+  },
+  {
+    text: "until one has loved an animal, a part of one's soul remains unawakened.",
+    attribution: "— anatole france",
+    tag: "critter",
+  },
+  {
+    text: "the ache for home lives in all of us, the safe place where we can go as we are and not be questioned.",
+    attribution: "— maya angelou, all god's children need traveling shoes (1986)",
+    tag: "home",
+  },
+  {
     text: "the soul should always stand ajar, ready to welcome the ecstatic experience.",
     attribution: "— emily dickinson (c. 1865)",
     tag: "pocket",
