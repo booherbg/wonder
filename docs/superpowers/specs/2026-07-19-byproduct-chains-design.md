@@ -84,8 +84,10 @@ web. The chain **D eats P → substrate(P) → S germinates → S eaten → subs
 
 **`diversityScore(seed)`** — a pure, generation-time score (no sim), computing
 chain-potential exactly as the study harness does: over the generated species,
-count disperser→P→substrate-feeder(hue-match) links, weight closed ones. Fast
-(~milliseconds/seed).
+count disperser→P→substrate-feeder(hue-match) links, weight closed ones — **and
+redundancy** (average occupants per role/hue-band; see Resilience). Fast
+(~milliseconds/seed). The floor should require redundancy, not just raw chain
+count, so the default island is resilient, not fragile.
 
 **Rejection-sampled generation.** `loadWorld`/new-world roll up to `M` candidate
 seeds, keep the first with `diversityScore ≥ FLOOR`, else the best of `M`. Same
@@ -100,6 +102,43 @@ a *choice*, not a disappointment.
 **Legendary hunt.** A high floor searches for the rare rich seeds (≥40 chains ≈
 0.6%). Champion found so far: **seed 2438 "Polpol Skerry" — 71 chains, 69
 closable**; pin it as the demo/test seed.
+
+## Resilience & redundancy — chains that don't collapse
+
+*Raised by Blaine (2026-07-19): some islands thin out as if a species just can't
+survive; if a chain adds a pollinator and it vanishes, do we lose the whole
+chain? Build resilience in.* Two concerns, both real:
+
+**1. Verify the current sim first (pre-build check).** Before building chains on
+top, confirm whether the observed thinning is **succession** (a kind
+outcompeted — healthy, shows as "lost" in the `CensusLog`) or **fragility** (a
+kind that genuinely can't sustain on some seeds — a tuning/bug issue). A chain
+inherits its weakest link's survival, so a species that already can't hold on is
+a bad foundation. *Check:* sim several seeds long, watch which kinds fall to 0 and
+why — habitat starvation, over-grazing (`GRAZER_CHANCE`), or drift-out. Fix any
+real fragility in the base flora before layering chains.
+
+**2. Design chains for redundancy, never single-points-of-failure.** A linear
+A→B→C chain is brittle — lose the one pollinator, it collapses. B's chains are
+inherently *less* brittle because they route on **trait-windows, not named
+species**: a substrate is fed by *any* substrate-feeder in its hue window; a
+byproduct is produced by *any* disperser whose palate overlaps. On a diverse
+island each "slot" has several possible occupants — lose one, another routes
+around it. This is the deep reason to prefer trait-matching over authored chains,
+and it must be preserved:
+
+- **Rule:** never bind a link to a single species. Germination and emission
+  always match by trait-window, so multiple species qualify for every role.
+- **Metric:** `diversityScore` must measure **redundancy**, not just chain count —
+  e.g., average number of species that can fill each role / hue-band. "Minimum
+  viable" means chains *with backup*, not one fragile chain. This is what actually
+  guards against the collapse Blaine saw: a resilient-island floor, not just a
+  chain-count floor.
+- **Frontier caveat:** sparse/frontier islands are *deliberately* fragile — that's
+  the builder's challenge. The floor keeps the *default* resilient.
+
+Resilience is the natural pair to the disease-on-monoculture balancer: a
+monoculture is zero-redundancy — both fragile *and* disease-prone.
 
 ## Integration points (files)
 
