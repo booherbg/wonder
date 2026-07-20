@@ -23,6 +23,20 @@ export interface Plant {
   idx: number; // position in the flat array; maintained by Flora
 }
 
+// A byproduct chains rest on: a transient, trait-tagged mark on the ground
+// where a disperser fed, carrying the {hue, glow, form} of the plant it ate.
+// Read through the same appetite-style hue match everything else uses — a
+// substrate-feeder plant germinates on one whose hue sits in its window.
+// Lives only while chains are on; decays after SUBSTRATE_LIFETIME ticks.
+export interface Substrate {
+  x: number; // world px
+  y: number;
+  hue: number; // trait-signature of what produced it
+  glow: number;
+  form: PlantForm; // what was eaten (for future form-gated rules)
+  born: number; // flora sim-tick it appeared
+}
+
 // The plant the wanderer actually means: plantsNear hands back tile-scan
 // order, so the truly nearest must be picked by hand.
 export function nearestPlant(plants: readonly Plant[], x: number, y: number): Plant | null {
@@ -55,6 +69,7 @@ export interface FloraTuning {
   splitClusterMin: number; // founder + kin needed for a true split
   splitCooldownTicks: number; // island-wide pause between splits (~2s per tick)
   maxDaughterSpecies: number; // per island; keeps the field guide finite
+  chains: boolean; // byproduct chains: substrates emitted + germinated. Off ⇒ byte-identical to today.
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
@@ -74,6 +89,7 @@ export const DEFAULT_TUNING: FloraTuning = {
   splitClusterMin: 6,
   splitCooldownTicks: 500,
   maxDaughterSpecies: 12,
+  chains: false, // default OFF so every existing test/caller is unchanged; main.ts turns it on
 };
 
 // The carpeting forms spread in broad soft sweeps rather than tight clumps —
@@ -104,6 +120,7 @@ export class Flora {
   all: Plant[] = [];
   byTile = new Map<number, Plant[]>();
   speciesCounts = new Map<number, number>();
+  substrates: Substrate[] = []; // live byproducts; empty unless chains are on
   tick = 0;
   readonly tuning: FloraTuning;
   private rng: Rng;
@@ -221,6 +238,15 @@ export class Flora {
       if (bucket.length === 0) this.byTile.delete(key);
     }
     this.speciesCounts.set(p.species, (this.speciesCounts.get(p.species) ?? 1) - 1);
+  }
+
+  // A disperser drops a byproduct where it fed, stamped with the eaten plant's
+  // trait-signature. Self-gates on the chains flag — a no-op when off, so the
+  // caller (fauna.ts) needs no branch and draws no rng. Stamped with the
+  // current tick, which sets its decay clock.
+  addSubstrate(x: number, y: number, sig: { hue: number; glow: number; form: PlantForm }): void {
+    if (!this.tuning.chains) return;
+    this.substrates.push({ x, y, hue: sig.hue, glow: sig.glow, form: sig.form, born: this.tick });
   }
 
   // A real bite. A young plant is eaten whole; a mature one is set back to
