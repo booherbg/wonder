@@ -711,8 +711,16 @@ export function updateCritter(
       // bite and the plant loses growth. either way the critter feeds: every
       // visit gives MEAL_ENERGY, only the plant's outcome turns on the role.
       if (c.meal && flora.all[c.meal.idx] === c.meal) {
-        if (sp.role === "grazer") flora.nibble(c.meal);
-        else flora.propagate(c.meal);
+        if (sp.role === "grazer") {
+          flora.nibble(c.meal);
+        } else {
+          flora.propagate(c.meal);
+          // a disperser leaves a byproduct where it fed, tagged with the eaten
+          // plant's trait-signature — the substrate a matching feeder germinates
+          // on. addSubstrate self-gates on the chains flag (no-op + no rng when
+          // off), so this needs no branch and never perturbs the seeded stream.
+          flora.addSubstrate(c.x, c.y, c.meal.genome);
+        }
         c.energy = Math.min(1, c.energy + MEAL_ENERGY);
       }
       c.meal = null;
