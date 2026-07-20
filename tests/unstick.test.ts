@@ -1,0 +1,81 @@
+import { expect, test } from "vitest";
+import { makeRng } from "../src/core/rng";
+import { Critter, CritterSpecies, morphOf, updateCritter } from "../src/life/fauna";
+import { Flora } from "../src/life/flora";
+import { PlantForm } from "../src/life/genome";
+import { generatePlantSpecies } from "../src/life/species";
+import { TILE_SIZE } from "../src/world/config";
+import { Tile, WorldMap, isWalkable } from "../src/world/types";
+
+// Deep water walling the east and south of a shallow tile makes a concave
+// corner. A critter whose den lies across that water walks straight at it and
+// — with only axis-separated wall-sliding — creeps into the corner and pins:
+// both the eastward and southward steps land in deep water, so it stops
+// moving, and every homeward decision re-aims at the same unreachable den.
+// The deer Blaine found "jammed in the corner of a shallow-water tile."
+function inletMap(): WorldMap {
+  const w = 20;
+  const h = 20;
+  const tiles = new Uint8Array(w * h).fill(Tile.Grass);
+  const set = (x: number, y: number, t: Tile) => (tiles[y * w + x] = t);
+  set(5, 5, Tile.ShallowWater); // the critter's shallow perch
+  for (let y = 0; y <= 12; y++) set(6, y, Tile.DeepWater); // the wall to the east
+  for (let x = 0; x <= 12; x++) set(x, 6, Tile.DeepWater); // the wall to the south
+  return {
+    width: w,
+    height: h,
+    seed: 1,
+    tiles,
+    elevation: new Float32Array(w * h),
+    rivers: [],
+    spawn: { x: 5, y: 5 },
+  };
+}
+
+function deer(den: { x: number; y: number }): CritterSpecies {
+  return {
+    id: 0,
+    name: "Test Deer",
+    bodyHue: 0.5,
+    earLen: 0.5,
+    tailLen: 0.5,
+    size: 1,
+    morph: morphOf({ bodyHue: 0.5, earLen: 0.5, tailLen: 0.5, size: 1 }),
+    palate: { form: PlantForm.Flower, hueCenter: 0.5, hueWidth: 0.1, glowTaste: 0 },
+    favoriteSpecies: 0,
+    role: "disperser",
+    den,
+  };
+}
+
+test("a critter does not stay jammed in a shallow-water corner (unreachable den)", () => {
+  const map = inletMap();
+  const plants = generatePlantSpecies(1);
+  const flora = new Flora(map, plants, 1);
+  const sp = deer({ x: 8, y: 8 }); // den across the deep water — no straight path
+  const c: Critter = {
+    species: 0,
+    x: 5.5 * TILE_SIZE,
+    y: 5.5 * TILE_SIZE,
+    state: "idle",
+    targetX: 5.5 * TILE_SIZE,
+    targetY: 5.5 * TILE_SIZE,
+    stateTime: 0,
+    hopPhase: 0,
+    facing: 1,
+    energy: 0.5,
+    curiosity: 0,
+    mood: "content",
+  };
+  const rng = makeRng(7);
+  const tiles = new Set<string>();
+  for (let i = 0; i < 600; i++) {
+    updateCritter(c, 1 / 30, map, flora, [sp], null, rng, { darkness: 1 });
+    tiles.add(`${Math.floor(c.x / TILE_SIZE)},${Math.floor(c.y / TILE_SIZE)}`);
+  }
+  // it can't reach the den, but it must not freeze in the corner: a critter
+  // that keeps trying the same blocked step visits exactly one tile forever.
+  expect(tiles.size).toBeGreaterThan(1);
+  // and it never ends up standing in the deep water it can't walk on
+  expect(isWalkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE))).toBe(true);
+});

@@ -321,6 +321,7 @@ export interface Critter {
   companion?: boolean; // the one who walks with the wanderer — takeCompanion's mark
   curiosity: number; // 0..CURIOSITY_CAP — a small memory of shared stillness
   mood: CritterMood; // the drive that chose the current action — the legible why
+  stuck?: number; // seconds of no headway toward a target — trips the unstick
 }
 
 export const CRITTER_SPEED = 40; // px/s — unhurried
@@ -631,6 +632,14 @@ export function releaseCompanion(critters: Critter[]): Critter | null {
   return released;
 }
 
+// A critter pinned against a wall's concave corner (deep water east AND south
+// of a shallow tile, say) makes no headway: axis-sliding can round a flat wall
+// but not a corner, and the homeward/hearth drives keep re-aiming at the same
+// blocked point. When that stall persists, the critter steps off the wall
+// toward open ground — so a deer can't end up frozen jammed in a water corner.
+const STUCK_EPS = 0.25; // px moved in a frame below which it counts as no headway
+const STUCK_LIMIT = 0.6; // seconds pinned before it breaks free
+
 function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
   const dx = c.targetX - c.x;
   const dy = c.targetY - c.y;
@@ -644,6 +653,27 @@ function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED
   if (isWalkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;
   return Math.hypot(c.targetX - c.x, c.targetY - c.y) < 2;
+}
+
+// Aim a pinned critter at the nearest walkable neighbour tile — cardinals
+// first for a clean side-step, then diagonals. Deterministic (a fixed scan,
+// no dice), so it frees the corner pin without ever perturbing the seeded
+// stream the rest of the sim depends on.
+function stepOffWall(c: Critter, map: WorldMap): void {
+  const cx = Math.floor(c.x / TILE_SIZE);
+  const cy = Math.floor(c.y / TILE_SIZE);
+  const ring = [
+    [0, -1], [-1, 0], [1, 0], [0, 1],
+    [-1, -1], [1, -1], [-1, 1], [1, 1],
+  ];
+  for (const [dx, dy] of ring) {
+    if (isWalkable(map, cx + dx, cy + dy)) {
+      c.targetX = (cx + dx + 0.5) * TILE_SIZE;
+      c.targetY = (cy + dy + 0.5) * TILE_SIZE;
+      c.state = "idle";
+      return;
+    }
+  }
 }
 
 export function updateCritter(
@@ -709,7 +739,24 @@ export function updateCritter(
     c.companion && player && Math.hypot(player.x - c.x, player.y - c.y) > COMPANION_HURRY_PX
       ? CRITTER_SPEED * 2
       : CRITTER_SPEED;
+  const wasX = c.x;
+  const wasY = c.y;
   const arrived = moveToward(c, dt, map, pace);
+  // pinned against a concave corner: no arrival and no headway. Let the stall
+  // build, then step off the wall toward open ground rather than grinding the
+  // same blocked target forever — no more deer frozen in a shallow-water
+  // corner. Gated on a committed walk (stateTime > 0) so it never preempts a
+  // decision, keeping the seeded stream exactly in step.
+  if (!arrived && Math.hypot(c.x - wasX, c.y - wasY) < STUCK_EPS && c.stateTime > 0) {
+    c.stuck = (c.stuck ?? 0) + dt;
+    if (c.stuck >= STUCK_LIMIT) {
+      c.stuck = 0;
+      stepOffWall(c, map);
+      return;
+    }
+  } else {
+    c.stuck = 0;
+  }
 
   if (c.state === "seek" && arrived) {
     if (c.treat) {
