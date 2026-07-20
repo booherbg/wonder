@@ -1,7 +1,15 @@
 import { expect, test } from "vitest";
+import { generateCritterSpecies, spawnCritters } from "../src/life/fauna";
 import { Flora } from "../src/life/flora";
 import { generatePlantSpecies } from "../src/life/species";
-import { packGenome, packWorld, restoreInventory, restorePlants, unpackGenome } from "../src/game/save";
+import {
+  packGenome,
+  packWorld,
+  restoreCritters,
+  restoreInventory,
+  restorePlants,
+  unpackGenome,
+} from "../src/game/save";
 import { generate } from "../src/world/generate";
 
 const SEED = 42;
@@ -41,6 +49,39 @@ test("a saved world restores its plants, inventory, and drifted genomes", () => 
   expect(invBack.seeds).toHaveLength(1);
   expect(invBack.seeds[0].genome.hue).toBeCloseTo(sample.genome.hue, 3);
   expect(saved.home).toEqual([30, 31]);
+});
+
+test("a saved world round-trips its name, time, and critters where they stood", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+  const critters = spawnCritters(critterSpecies, map, SEED);
+  critters[0].x = 1234.5; // move one so the round-trip has something to prove
+  critters[0].y = 678.9;
+  critters[0].energy = 0.42;
+  const saved = packWorld(
+    SEED,
+    flora.tick,
+    { x: 1, y: 1 },
+    null,
+    { seeds: [] },
+    flora.all,
+    1000,
+    [],
+    [],
+    undefined,
+    critters,
+    { name: "My Little World", playMs: 3_600_000 },
+  );
+  expect(saved.name).toBe("My Little World");
+  expect(saved.playMs).toBe(3_600_000);
+  const back = restoreCritters(saved, critterSpecies);
+  expect(back).toHaveLength(critters.length);
+  expect(back[0].x).toBeCloseTo(1234.5, 1); // positions kept to a tenth of a pixel
+  expect(back[0].y).toBeCloseTo(678.9, 1);
+  expect(back[0].energy).toBeCloseTo(0.42, 3);
+  expect(back[0].species).toBe(critters[0].species);
 });
 
 test("the garden bed is a 3x3 around home and boosts survival semantics", () => {

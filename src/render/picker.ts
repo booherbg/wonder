@@ -9,9 +9,11 @@ import { islandName } from "../world/name";
 export interface IsleRow {
   seed: number;
   name: string; // "Toralei Isle"
+  given?: string; // a name the wanderer gave this world, shown ahead of the isle's own
   shape: string; // "a highland isle"
   feature: string | null; // "a crater lake" — or not yet known
   lastSeen: string; // "you are here now" / "last seen moments ago"
+  playMs?: number; // real time spent here — a weight, shown as "2h here"
   current: boolean;
 }
 
@@ -56,15 +58,19 @@ export function isleRows(
   now: number,
   savedAtOf: (seed: number) => number | null,
   lookOf: (seed: number) => { shape: string; feature: string | null },
+  metaOf: (seed: number) => { name?: string; playMs?: number } = () => ({}),
 ): IsleRow[] {
   return index.map((seed) => {
     const look = lookOf(seed);
     const savedAt = savedAtOf(seed);
+    const meta = metaOf(seed);
     return {
       seed,
       name: islandName(seed),
+      given: meta.name,
       shape: look.shape,
       feature: look.feature,
+      playMs: meta.playMs,
       current: seed === currentSeed,
       lastSeen:
         seed === currentSeed
@@ -74,6 +80,13 @@ export function isleRows(
             : `last seen ${agoPhrase(now - savedAt)}`,
     };
   });
+}
+
+// time spent in a world, as a weight on the row — "2h here", "40m here"
+export function hereFor(playMs: number | undefined): string {
+  if (!playMs || playMs < 60_000) return "";
+  const m = Math.floor(playMs / 60_000);
+  return m < 60 ? `${m}m here` : `${Math.floor(m / 60)}h here`;
 }
 
 function panel(): HTMLElement {
@@ -110,7 +123,11 @@ export function setIsleFeature(seed: number, feature: string | null): void {
 
 // The ledger, opened: every kept island in the order last walked, the one
 // underfoot marked, the rest a click from underfoot again.
-export function openPicker(rows: IsleRow[], sail: (seed: number) => void): void {
+export function openPicker(
+  rows: IsleRow[],
+  sail: (seed: number) => void,
+  remove: (seed: number) => void,
+): void {
   const el = panel();
   el.innerHTML = "";
   placeLines.clear();
@@ -127,7 +144,8 @@ export function openPicker(rows: IsleRow[], sail: (seed: number) => void): void 
     r.className = row.current ? "isle-row here" : "isle-row";
     const name = document.createElement("div");
     name.className = "isle-name";
-    name.textContent = row.name;
+    // a given name leads; the isle's own name stays close so the place still reads
+    name.textContent = row.given ? `${row.given}  ·  ${row.name}` : row.name;
     r.appendChild(name);
     const place = document.createElement("div");
     place.className = "isle-place";
@@ -136,7 +154,8 @@ export function openPicker(rows: IsleRow[], sail: (seed: number) => void): void 
     placeLines.set(row.seed, { el: place, row });
     const when = document.createElement("div");
     when.className = "isle-when";
-    when.textContent = row.lastSeen;
+    const here = hereFor(row.playMs);
+    when.textContent = here ? `${row.lastSeen} · ${here}` : row.lastSeen;
     r.appendChild(when);
     if (row.current) {
       // the island underfoot: nothing to sail for, the card simply folds
@@ -146,6 +165,16 @@ export function openPicker(rows: IsleRow[], sail: (seed: number) => void): void 
         closePicker();
         sail(row.seed);
       });
+      // a small way to let a world go — forget it from the ledger
+      const forget = document.createElement("button");
+      forget.className = "isle-forget";
+      forget.textContent = "forget";
+      forget.title = "delete this saved world";
+      forget.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        remove(row.seed);
+      });
+      r.appendChild(forget);
     }
     el.appendChild(r);
   }

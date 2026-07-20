@@ -1,3 +1,4 @@
+import { Critter, CritterSpecies } from "../life/fauna";
 import { Plant } from "../life/flora";
 import { Genome, NUMERIC_TRAITS, PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -13,10 +14,13 @@ export interface SavedWorld {
   seed: number;
   tick: number;
   savedAt: number; // epoch ms — lets the island live while you're away
+  name?: string; // a name the wanderer gave this world, if any
+  playMs?: number; // real time spent here — so weighty saves are obvious
   player: [number, number];
   home: [number, number] | null;
   inv: number[][]; // [species, ...traits]
   plants: number[][]; // [species, x, y, born, ...traits]
+  critters?: number[][]; // [species, x, y, energy] — the animals, where you left them
   daughters?: SavedDaughter[]; // species that arose here after worldgen
   memories?: string[]; // weather memory: rare events this island has witnessed
   camp?: SavedCamp; // the wanderer's camp: materials carried, nodes taken, fire built
@@ -77,16 +81,21 @@ export function packWorld(
   daughters: readonly PlantSpecies[] = [],
   memories: readonly string[] = [],
   camp?: SavedCamp,
+  critters: readonly Critter[] = [],
+  extra: { name?: string; playMs?: number } = {},
 ): SavedWorld {
   return {
     v: 1,
     seed,
     tick,
     savedAt,
+    name: extra.name,
+    playMs: extra.playMs,
     player: [r1(player.x), r1(player.y)],
     home: home ? [home.x, home.y] : null,
     inv: inventory.seeds.map((s) => [s.species, ...packGenome(s.genome)]),
     plants: plants.map((p) => [p.species, r1(p.x), r1(p.y), p.born, ...packGenome(p.genome)]),
+    critters: critters.map((c) => [c.species, r1(c.x), r1(c.y), r3(c.energy)]),
     daughters: daughters.map((s) => ({
       name: s.name,
       habitat: s.habitat,
@@ -135,6 +144,33 @@ export function restorePlants(
       genome: unpackGenome(species[sp].archetype.form, row.slice(4)),
     });
   }
+  return out;
+}
+
+// The animals, restored where you left them — energy kept; momentary state
+// (where it was headed, its hop) is let go, chosen fresh on the next tick.
+export function restoreCritters(saved: SavedWorld, speciesList: CritterSpecies[]): Critter[] {
+  const out: Critter[] = [];
+  (saved.critters ?? []).forEach((row, i) => {
+    const sp = row[0];
+    if (sp < 0 || sp >= speciesList.length) return;
+    const x = row[1];
+    const y = row[2];
+    out.push({
+      species: sp,
+      x,
+      y,
+      state: "idle",
+      targetX: x,
+      targetY: y,
+      stateTime: (i % 5) * 0.4,
+      hopPhase: (i * 1.7) % 6.28,
+      facing: i % 2 === 0 ? 1 : -1,
+      energy: row[3],
+      curiosity: 0,
+      mood: "content",
+    });
+  });
   return out;
 }
 

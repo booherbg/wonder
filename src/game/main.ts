@@ -53,6 +53,7 @@ import {
   SavedWorld,
   WORLD_INDEX_KEY,
   packWorld,
+  restoreCritters,
   restoreDaughters,
   restoreInventory,
   restorePlants,
@@ -106,6 +107,9 @@ let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
 // the living history: how many of each plant kind, sampled over island-time
 const census = new CensusLog();
+// this world's identity: a name you gave it, and the real time you've spent here
+let worldName: string | null = null;
+let worldPlayMs = 0;
 
 const GATHER_RANGE = 24; // px — materials' reach
 const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
@@ -182,6 +186,14 @@ const GROUND_WORDS: Record<number, string> = {
   [Tile.Cliff]: "a cliff's edge",
 };
 
+// a stretch of real time in a wanderer's words: "<1m", "42m", "2h 6m"
+function fmtDur(ms: number): string {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "<1m";
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 // the island's biome census, recomputed only when the island changes
 function devTileComposition(): string {
   if (devTileSeed === currentSeed && devTileComp) return devTileComp;
@@ -223,8 +235,8 @@ function renderDev(): void {
     ? `flora: ${flora.count} plants · ${sum.live} kinds · ${sum.arose} arose · ${sum.lost} lost`
     : `flora: ${flora.count} plants · ${liveKinds.length} kinds`;
   dev.textContent = [
-    `seed ${currentSeed}    ${islandName(currentSeed)}`,
-    `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}`,
+    `seed ${currentSeed}    ${worldName ?? islandName(currentSeed)}`,
+    `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}    here ${fmtDur(worldPlayMs)}`,
     `fps ${fpsSmooth.toFixed(0)}    tick ${flora.tick}`,
     `you: ${itx},${ity}  ${TILE_WORD[here] ?? here}  elev ${elev.toFixed(2)}`,
     `biomes: ${devTileComposition()}`,
@@ -232,6 +244,14 @@ function renderDev(): void {
     top,
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
   ].join("\n");
+}
+
+// the seed-label, bottom-left: a given name if you set one, else the island's
+// own name and shape — always the seed, always the way to a new world
+function renderSeedLabel(): void {
+  const shapePhrase = SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"];
+  const identity = worldName ?? `${islandName(currentSeed)} · ${shapePhrase}`;
+  seedLabel.textContent = `${identity} · seed ${currentSeed} — R for a new island`;
 }
 
 let map!: WorldMap;
@@ -300,6 +320,8 @@ function persist(): void {
             ? { species: companionKind, name: critterSpecies[companionKind].name }
             : undefined,
       },
+      critters,
+      { name: worldName ?? undefined, playMs: Math.round(worldPlayMs) },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -354,6 +376,8 @@ function loadWorld(seed: number): void {
     ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
     : {};
   const saved = loadSave(seed);
+  worldName = saved?.name ?? null;
+  worldPlayMs = saved?.playMs ?? 0;
   memories = saved?.memories ? [...saved.memories] : [];
   materials = placeMaterials(map, seed);
   pools = placeTidePools(map, seed);
@@ -402,7 +426,10 @@ function loadWorld(seed: number): void {
     census.sample(flora.tick, flora.speciesCounts);
   }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
-  critters = spawnCritters(critterSpecies, map, seed);
+  // the animals, restored where you left them if this world was saved;
+  // otherwise spawned fresh from the seed at their dens
+  const savedCritters = saved ? restoreCritters(saved, critterSpecies) : [];
+  critters = savedCritters.length > 0 ? savedCritters : spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(seed ^ 0xcafe);
   trust = loadTrust(seed); // friendships made here, remembered here
   companionKind = null; // each island keeps its own friend; this one's is re-called below
@@ -448,8 +475,7 @@ function loadWorld(seed: number): void {
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
   history.replaceState(null, "", url);
-  const shapePhrase = SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"];
-  seedLabel.textContent = `${islandName(seed)} · ${shapePhrase} · seed ${seed} — R for a new island`;
+  renderSeedLabel();
   murmurs.setPlace(islandName(seed));
   renderHud();
   if (saved) {
@@ -556,6 +582,7 @@ function savedIndex(): number[] {
 }
 
 function openIslePicker(): void {
+  localStorage.setItem("wander.pickerSeen", "1"); // the way back has been found
   persist(); // the island underfoot takes its place in the ledger first
   const index = savedIndex();
   const rows = isleRows(
@@ -564,12 +591,25 @@ function openIslePicker(): void {
     Date.now(),
     (s) => loadSave(s)?.savedAt ?? null,
     isleLook,
+    (s) => {
+      const sv = loadSave(s);
+      return { name: sv?.name, playMs: sv?.playMs };
+    },
   );
-  openPicker(rows, (seed) => {
-    persist();
-    loadWorld(seed);
-    renderer.setMap(map);
-  });
+  openPicker(
+    rows,
+    (seed) => {
+      persist();
+      loadWorld(seed);
+      renderer.setMap(map);
+    },
+    (seed) => {
+      // forget a world: drop its save and its ledger row, then re-open the panel
+      localStorage.removeItem(worldKey(seed));
+      localStorage.setItem(WORLD_INDEX_KEY, JSON.stringify(savedIndex().filter((s) => s !== seed)));
+      openIslePicker();
+    },
+  );
   // far islands learn their standout feature one per beat, never all at once
   const token = ++isleFillToken;
   const missing = index.filter((s) => s !== currentSeed && !isleFeatureCache.has(s));
@@ -877,6 +917,11 @@ window.addEventListener("keydown", (e) => {
       persist();
       loadWorld(randomSeed());
       renderer.setMap(map);
+      // until you've opened the ledger once, name the way back at the moment
+      // it matters — right after leaving an isle behind
+      if (!localStorage.getItem("wander.pickerSeen")) {
+        flashHud("press L to sail back to any isle you've known");
+      }
     }
   } else if (k === "h") {
     const tx = Math.floor(player.x / TILE_SIZE);
@@ -989,6 +1034,15 @@ window.addEventListener("keydown", (e) => {
       URL.revokeObjectURL(a.href);
     });
     flashHud("postcard saved");
+  } else if (k === "n") {
+    // name this world — a given name, kept with the save, shown ahead of the seed
+    const given = window.prompt("name this world", worldName ?? islandName(currentSeed));
+    if (given !== null) {
+      worldName = given.trim() || null;
+      renderSeedLabel();
+      persist();
+      flashHud(worldName ? `this world is now “${worldName}”` : "the given name is cleared");
+    }
   } else if (k === "z" && !e.repeat) {
     // the focus lens: kneel in close, watch a pollinator work one flower
     focusOn = !focusOn;
@@ -1216,6 +1270,7 @@ function frame(now: number): void {
   last = now;
   // a murmur caught floating when a panel opens is retired at once
   murmurs.syncPanels();
+  worldPlayMs += dt * 1000; // the real time you've spent in this world
   // the debug readout: smoothed fps, redrawn a few times a second
   if (dt > 0) fpsSmooth = fpsSmooth * 0.92 + (1 / dt) * 0.08;
   if (devOn && (devAcc += dt) >= 0.25) {
