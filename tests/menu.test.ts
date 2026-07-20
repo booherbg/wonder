@@ -6,7 +6,7 @@ const cost = { fire: FIRE_COST, bedroll: BEDROLL_COST };
 
 test("launchers name each tucked-away action and its key; toss only with seeds", () => {
   const none = menuLaunchers(0).map((a) => a.key);
-  expect(none).toEqual(["L", "?", "M", "J", "P", "N"]);
+  expect(none).toEqual(["C", "L", "?", "M", "J", "P", "N"]);
   expect(menuLaunchers(2).map((a) => a.key)).toContain("Q");
 });
 

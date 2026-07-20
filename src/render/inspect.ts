@@ -84,7 +84,7 @@ function featureWord(g: Genome): string {
 }
 
 // the biome a kind calls home — so you know where to go looking for it
-const BIOME_WORDS: Partial<Record<Tile, string>> = {
+export const BIOME_WORDS: Partial<Record<Tile, string>> = {
   [Tile.Sand]: "the beach",
   [Tile.Grass]: "the meadow",
   [Tile.Forest]: "the forest",

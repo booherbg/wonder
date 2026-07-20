@@ -18,7 +18,7 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { CensusLog, sparkline, trend } from "../life/census";
-import { Flora, Plant, nearestPlant } from "../life/flora";
+import { Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { CHAINS_KEY, resolveChains } from "./flags";
@@ -37,6 +37,7 @@ import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
+import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import {
   closePicker,
   featurePhrase,
@@ -260,7 +261,7 @@ function webLines(): string[] {
   const stats = chainStats(species, critterSpecies);
   const named = chainLinks(species, critterSpecies)
     .slice(0, 3)
-    .map((l) => `    ${l.disperser} spreads ${l.source} → wakes ${l.feeder}${l.closes ? " ↺" : ""}`);
+    .map((l) => `    ${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}${l.closes ? " ↺" : ""}`);
   return [
     `web: score ${Math.round(chainScoreNow())} · ${richnessWord(chainScoreNow())}`,
     `  ${stats.chains} links · ${stats.closable} close the loop · ${stats.redundancy.toFixed(1)}× backup per source`,
@@ -1069,6 +1070,7 @@ function buildMenuModel(): MenuModel {
 
 function menuLaunch(key: string): void {
   switch (key) {
+    case "C": openWebNow(); break;
     case "L": openIslePicker(); break;
     case "?": openHelp(); break;
     case "M": openAnthology(loadAnthology()); break;
@@ -1107,7 +1109,50 @@ function openMenuNow(): void {
   closeJournal();
   closeHelp();
   closePicker();
+  closeWeb();
   openMenu(buildMenuModel(), menuHandlers);
+}
+
+// The player's web view: the chains as drawable links — the species themselves,
+// grounded with how many live on the island now and whether a byproduct of the
+// source is on the ground this moment (so you can go watch the loop close).
+// Ordered live-first, then loops, then the rest; capped so the panel reads.
+function buildWebView(): WebView {
+  const count = (id: number): number => flora.speciesCounts.get(id) ?? 0;
+  const liveOf = (source: PlantSpecies): boolean =>
+    flora.substrates.some((s) => hueGap(s.hue, source.archetype.hue) <= SUBSTRATE_HUE_MATCH);
+  const links: WebLink[] = chainLinks(species, critterSpecies).map((l) => ({
+    disperser: l.disperser,
+    source: l.source,
+    feeder: l.feeder,
+    sourceCount: count(l.source.id),
+    feederCount: count(l.feeder.id),
+    closes: l.closes,
+    live: liveOf(l.source),
+  }));
+  links.sort((a, b) => Number(b.live) - Number(a.live) || Number(b.closes) - Number(a.closes));
+  const CAP = 8;
+  const score = Math.round(chainScoreNow());
+  return {
+    island: worldName ?? islandName(currentSeed),
+    score,
+    word: richnessWord(score),
+    spreaders: critterSpecies.filter((c) => c.role === "disperser").length,
+    grazers: critterSpecies.filter((c) => c.role === "grazer").length,
+    kinds: [...flora.speciesCounts.values()].filter((n) => n > 0).length,
+    links: links.slice(0, CAP),
+    more: Math.max(0, links.length - CAP),
+  };
+}
+
+function openWebNow(): void {
+  closeInspect();
+  closeAnthology();
+  closeJournal();
+  closeHelp();
+  closePicker();
+  closeMenu();
+  openWeb(buildWebView());
 }
 
 window.addEventListener("keydown", (e) => {
@@ -1176,6 +1221,7 @@ window.addEventListener("keydown", (e) => {
       closeHelp();
       closePicker();
       closeMenu();
+      closeWeb();
       openAnthology(loadAnthology());
     }
   } else if (k === "j") {
@@ -1187,6 +1233,7 @@ window.addEventListener("keydown", (e) => {
       closeHelp();
       closePicker();
       closeMenu();
+      closeWeb();
       openAlmanac();
     }
   } else if (k === "l") {
@@ -1199,6 +1246,7 @@ window.addEventListener("keydown", (e) => {
       closeJournal();
       closeHelp();
       closeMenu();
+      closeWeb();
       openIslePicker();
     }
   } else if (k === "?") {
@@ -1211,8 +1259,13 @@ window.addEventListener("keydown", (e) => {
       closeJournal();
       closePicker();
       closeMenu();
+      closeWeb();
       openHelp();
     }
+  } else if (k === "c") {
+    // the living web: the chain explorer — see, understand, find, witness it
+    if (isWebOpen()) closeWeb();
+    else openWebNow();
   } else if (k === "tab") {
     // the menu: everything that isn't an immediate step, tucked in one place
     e.preventDefault();
@@ -1225,6 +1278,7 @@ window.addEventListener("keydown", (e) => {
     closeHelp();
     closePicker();
     closeMenu();
+    closeWeb();
   } else if (k === "p") {
     savePostcard();
   } else if (k === "n") {
@@ -1237,6 +1291,7 @@ window.addEventListener("keydown", (e) => {
     if (isInspectOpen()) {
       closeInspect();
     } else {
+      closeWeb();
       openInspectAtPlayer();
     }
   } else if (k === "g") {

@@ -441,7 +441,7 @@ export function pickMurmur(
 // a murmur must not float over what the wanderer is reading.
 function aPanelIsOpen(): boolean {
   if (typeof document === "undefined") return false;
-  for (const id of ["inspect", "journal", "anthology", "help", "picker", "menu"]) {
+  for (const id of ["inspect", "journal", "anthology", "help", "picker", "menu", "web"]) {
     if (document.getElementById(id)?.style.display === "block") return true;
   }
   return false;

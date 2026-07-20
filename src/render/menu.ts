@@ -14,6 +14,7 @@ export interface MenuAction {
 // there's a seed to give back.
 export function menuLaunchers(pouchCount: number): MenuAction[] {
   const out: MenuAction[] = [
+    { key: "C", label: "the living web — this island's chains" },
     { key: "L", label: "the isles you've known" },
     { key: "?", label: "the field guide" },
     { key: "M", label: "the murmurs" },

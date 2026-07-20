@@ -85,7 +85,10 @@ test("chainLinks names each disperser→source→feeder link", () => {
   const flowerEater = disperser(0, PlantForm.Flower, 0.5);
   const links = chainLinks([flower, moss], [flowerEater]);
   expect(links.length).toBeGreaterThanOrEqual(1);
-  expect(links[0]).toMatchObject({ disperser: "c0", source: "p0", feeder: "p1", closes: false });
+  expect(links[0].disperser.name).toBe("c0");
+  expect(links[0].source.name).toBe("p0");
+  expect(links[0].feeder.name).toBe("p1");
+  expect(links[0].closes).toBe(false);
 });
 
 test("chainLinks marks a closing loop and leads with it", () => {

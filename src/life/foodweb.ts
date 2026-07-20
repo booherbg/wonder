@@ -78,9 +78,9 @@ export function richnessWord(score: number): string {
 // on. Loop-closers lead (they're the interesting ones). Same trait-window
 // logic as chainStats, but it keeps the names so a watcher can read the web.
 export interface ChainLink {
-  disperser: string; // the spreader's kind
-  source: string; // the plant it spreads
-  feeder: string; // the plant that wakes on the byproduct
+  disperser: CritterSpecies; // the spreader
+  source: PlantSpecies; // the plant it eats and scatters
+  feeder: PlantSpecies; // the plant that wakes on the byproduct
   closes: boolean; // the feeder is itself eaten → the loop continues
 }
 
@@ -95,7 +95,7 @@ export function chainLinks(plants: PlantSpecies[], critters: CritterSpecies[]): 
     if (!eater) continue;
     for (const s of feeders) {
       if (hueGap(s.archetype.hue, p.archetype.hue) > SUBSTRATE_HUE_MATCH) continue;
-      out.push({ disperser: eater.name, source: p.name, feeder: s.name, closes: !!eaterOf(s) });
+      out.push({ disperser: eater, source: p, feeder: s, closes: !!eaterOf(s) });
     }
   }
   return out.sort((a, b) => Number(b.closes) - Number(a.closes)); // loops first (stable)
