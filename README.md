@@ -1,4 +1,4 @@
-# Wander
+# Wonder
 
 A peaceful, generative pixel-art island that is *alive*. Every seed grows a
 new island — mountains at the heart, rivers running to the sea — and then
