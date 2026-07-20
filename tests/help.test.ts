@@ -4,7 +4,7 @@ import { HELP_WELCOME, helpSections } from "../src/render/help";
 
 test("the guide keeps its three small chapters, in the quiet voice", () => {
   const sections = helpSections();
-  expect(sections.map((s) => s.title)).toEqual(["the keys", "your camp", "things to seek"]);
+  expect(sections.map((s) => s.title)).toEqual(["the keys", "your camp", "the living web", "things to seek"]);
   for (const s of sections) {
     expect(s.title).toBe(s.title.toLowerCase());
     expect(s.entries.length).toBeGreaterThan(0);
@@ -52,7 +52,7 @@ test("the camp chapter quotes the true costs and says where to look", () => {
 });
 
 test("things to seek leaves doors ajar: night, tide, drift, other islands", () => {
-  const seek = helpSections()[2].entries.map((e) => e.text).join(" ");
+  const seek = helpSections().find((s) => s.title === "things to seek")!.entries.map((e) => e.text).join(" ");
   expect(seek).toContain("night");
   expect(seek).toContain("the sea breathes"); // the tide, named the island's way
   expect(seek).toContain("drift");

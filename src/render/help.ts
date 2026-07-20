@@ -71,6 +71,28 @@ export function helpSections(): HelpSection[] {
       ],
     },
     {
+      title: "the living web",
+      entries: [
+        { text: "press C to see this island's web drawn out — its creatures and plants, and the chains they make. the short of it:" },
+        {
+          text:
+            "most critters are spreaders: eating a plant, they carry its seed to open ground, so both gain. a few are grazers, and crop what they eat instead. lean close (E) and each tells you which, and what it's after right now.",
+        },
+        {
+          text:
+            "where a spreader feeds it leaves a byproduct, and a matching plant can sprout from it — then that one is eaten in turn. that loop is a chain. stand still near a feeding critter and you may witness one close.",
+        },
+        {
+          text:
+            "the critters follow simple wants — food by day, their den by dark, a sidle toward you when you hold still. nothing hunts here, and nothing starves.",
+        },
+        {
+          text:
+            "your camp is a garden bed: sow a gathered seed (F) in it, and if you plant what a critter loves, its kind will settle in near your fire to feed.",
+        },
+      ],
+    },
+    {
       title: "things to seek",
       entries: [
         {
