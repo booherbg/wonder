@@ -84,16 +84,52 @@ flora leans, over its days, toward what its spreaders love — and it's exactly
 what the byproduct chains (below) ride on. *(commit `feat: a critter's
 spreader/grazer role…`)*
 
-## Design B — byproduct chains & seed search  *(status below)*
+## Design B — byproduct chains & seed search  *(shipped, behind the A/B toggle)*
 
-<!-- FINALIZE: design B integration result -->
-The big ecology layer built in parallel tonight. One new primitive — a
-transient, trait-tagged **substrate** (a byproduct a spreader drops where it
-feeds) — lets multi-organism life-cycle chains self-assemble from the seed, and
-turns "sail to a new island" into a search with a minimum-diversity floor.
-**It's behind an A/B checkbox** (`wander.chains`, default on) exactly as you
-asked — flip it off (`?chains=0`) to compare, "in case it's a disaster." Full
-status and how-to filled in once it's integrated and verified.
+The big ecology layer. Built in parallel overnight (Fable in a worktree, I
+verified independently and integrated), now on `master` — **all 320 tests
+green, tsc clean, build succeeds.**
+
+**What it does.** One new primitive: a transient, trait-tagged **substrate** —
+a byproduct a *spreader* drops where it feeds, carrying the eaten plant's
+hue/glow/form. Some species are **substrate-feeders** (rolled at generation,
+biased to pioneers like moss/fungus/spore-stalks); they germinate on a
+hue-matching substrate. Closure falls out for free: a germinated plant is
+ordinary — eaten in turn, it drops its own byproduct. So **multi-step
+life-cycle chains self-assemble from the seed, different every island**, no
+authored chains. And "sail to a new island" (`R`) is now a **search**: it rolls
+candidate seeds and keeps the first that clears a minimum-diversity floor, so
+you're never dropped on a barren rock — with `?frontier` for a deliberately
+sparse builder's canvas.
+
+**The A/B checkbox you asked for.** `wander.chains`, **default on**. Add
+`?chains=0` to turn the whole layer off (byte-identical to before — I checked)
+and `?chains=1` back on; the choice persists. So you can compare, or kill it
+"in case it's a disaster."
+
+**Does it stay stable?** Yes — I re-ran the long collapse check with chains ON:
+islands hold at the ~8800 ceiling (never crash), biodiversity holds or grows
+(seed 20: 26→29 kinds, seed 1: 22→27), **hundreds of germinations** fire over a
+run (seed 2438: 613), and substrate load stays tiny (peak ~40, bounded by
+decay). The monoculture-amplification risk didn't materialize — per-tile caps
+and multiple feeders per role keep it balanced. (The disease-on-monoculture
+balancer stays its natural future pair, but the sim doesn't need it to hold.)
+
+**How to watch it.** The dev readout (backtick) has a new line — e.g.
+**`chains: 11 substrates · 2 sprouted · score 44`**. Substrates render as faint
+tinted ground patches near where spreaders fed; germination is watchable (a
+feeder creeps out where a critter has been), and the journal records it when
+you're still and near. **Demo seed: 2438 "Polpol Skerry" — diversity score 44
+(legendary), 41 germinations with full closure; the flat seed 42 scores ~2, no
+chains.** Emergence tracks the seed, exactly as intended.
+
+> One judgment call to flag: the diversity *score* (the gen-time seed-search
+> heuristic) is habitat-blind — faithful to the study the spec calibrates the
+> floor against (its numbers are habitat-blind, and the plan's literal "match
+> habitat" clause contradicted its own `floor=5`). It's a ranking heuristic
+> only; **actual in-sim germination still respects habitat**, and the emergence
+> test proves real habitat-enforced chains separately. Documented in
+> `src/life/foodweb.ts`.
 
 ## Decisions waiting for you
 
