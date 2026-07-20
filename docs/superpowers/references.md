@@ -25,8 +25,8 @@ new studies here and to the index page together.
   food web (63% of plants are "scenery", chains are length-1), real-seed
   examples, and a structural projection of design B (byproducts as a
   trait-medium → 93% of islands gain multi-link chains).
-  - Repo: `docs/superpowers/research/food-web-and-byproducts.md`
-  - (not yet on the web index — offer to port when the design firms up)
+  - Web study (artifact): https://claude.ai/code/artifact/c6f922ff-76e5-4a3c-ae81-2e12956922f2
+  - Source doc (repo): `docs/superpowers/research/food-web-and-byproducts.md`
 
 ## Prior art
 
