@@ -131,16 +131,75 @@ chains.** Emergence tracks the seed, exactly as intended.
 > test proves real habitat-enforced chains separately. Documented in
 > `src/life/foodweb.ts`.
 
-## Decisions waiting for you
+## Then you woke and pushed — findable materials, and a world you can *read*
 
-<!-- FINALIZE: merge with Fable audit's ideas -->
-1. **Menu:** secondary actions folded into the one menu — keep, or split
-   postcards/name into their own?
-2. **Camp-zone growth** (deferred): purely a cosmetic radius, or does a bigger
-   camp *do* more (draw critters, protect plants)?
-3. **The home-lab loop next** (soil dig+carry → off-habitat planting →
-   composter → felling/clearing → an origin story for starting supplies) — all
-   want the menu as their home, which now exists.
+You hit two walls and named a third, so I turned to them:
+
+**"Where are the stones? no wood in forests." — fixed.** Wood was beach-only and
+stone was rock-edge-only, so a low-rock island could have *no* stone source and
+a fire couldn't be built at all. Now stone comes from **shore cobbles** (every
+coast), **scree**, **waterfall spray**, and rock/cliff edges; wood includes
+**fallen wood on the forest floor**. A test guards it: every island (9 seeds)
+has at least a fire's worth of both. And it reads right now — forest wood says
+"fallen wood," not "driftwood."
+
+**"I have no idea what's going on — insight, man." — the big one.** You were
+right that the chain *data* meant nothing to a player. So there's now a real
+comprehension layer, built to your four verbs (see / understand / find /
+witness):
+
+- **The living web (`C`)** — a *graphical* chain explorer. Each chain is drawn
+  from the **actual sprites** you meet — [that critter] → [that plant] → [that
+  feeder] — with plain-language arrows ("eats it & scatters the seed", "its
+  leavings let this sprout"), a one-line "what a chain is" primer, every plant
+  node grounded with **where it lives and how many are here now**, loops marked
+  "↺ the loop closes", and **● firing now** on the chains that are live this
+  moment so you know where to walk and watch one close.
+- **The dev readout (`` ` ``)** — the raw data you love: `web: score 44 ·
+  legendary`, then `38 links · 33 close the loop · 4.2× backup per source`, then
+  the actual named chains, plus live substrate/germination counts.
+- **The seed-label** now carries a viability word — *"a legendary web"* / *"a
+  living web"* / *"a flat web"* — so the instant you arrive you know whether you
+  sailed somewhere alive or somewhere to build up yourself.
+- **The field guide (`?`)** gained a **"the living web"** chapter that teaches
+  it in plain words — spreaders vs grazers, what a chain is, why the critters
+  move (food by day, den by dark, curiosity toward a still watcher — nothing
+  hunts, nothing starves), and that your camp is a garden bed you sow to draw a
+  kind to settle. And a critter's **spreader/grazer role** now shows on its
+  inspect card.
+
+## Roadmap — what I'd build next (co-designing this with you)
+
+You set the compass: **SimCity / Civ / Factorio — more data, more charts, more
+insight, and the system legible *and* manipulable.** Tonight built the *reading*
+layer; here's the *agency + depth* layer I'm driving toward, most-wanted first:
+
+1. **Soil & planting freedom** *(building now — Fable, in a worktree; I'll
+   integrate + verify overnight)*. Dig soil, carry it, lay it anywhere and sow a
+   critter's favorite food right by your fire — so you can actually keep a pet:
+   plant what it eats, and its kind settles in. This unblocks the whole
+   observation-lab loop you described.
+2. **Clearing & sculpting** — fell/remove plants to clear a garden zone around
+   camp (you asked "how do I remove plants, sculpt the area?"). The first step of
+   real terraforming.
+3. **The camp as a *place*** — right now "the bed's just sitting there." A
+   shelter/house that takes shape as you build, a camp zone that visibly grows
+   with your fire, denned critters clustering in — the base made to *look* like
+   the home-lab it is.
+4. **A charts dashboard** — the census as real graphs: population lines per kind
+   over island-time, arose/lost, the web's chain-count trend, biome makeup.
+   "More charts = fancy pantsy." A data panel beyond the dev readout.
+5. **The chain explorer v2 — witnessing** — mark the chains you've *personally
+   seen* close (vs. merely latent); click a node to point the camera at the
+   nearest one; filter to "chains running through my camp." Turns the panel from
+   a readout into a logbook of what you've discovered.
+6. **An origin story** — a crashed boat / varied arrivals seeding a few starting
+   supplies, giving felling/clearing its means.
+
+Open calls I took leans on (say the word to change them): secondary actions
+(postcards/name) folded into the one Tab menu rather than a separate one; the
+camp-zone-growth is cosmetic-first (radius grows with building) rather than
+mechanical, for now.
 
 ## The Fable art/ideas audit
 
