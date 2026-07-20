@@ -495,6 +495,28 @@ export class Renderer {
       }
     }
 
+    // byproduct chains: a faint tinted patch on the ground where a disperser
+    // fed and a matching feeder may sprout — the tell that makes a chain
+    // watchable (moss creeping from where a critter ate). Drawn above every
+    // ground/water overlay but under all sprites, so it never occludes life.
+    // Glowing byproducts read a touch brighter, carrying the tell into night.
+    if (scene.flora && scene.flora.substrates.length) {
+      const r = 7; // ~a tile across; soft-edged so it says "something here", not "a dot"
+      for (const s of scene.flora.substrates) {
+        const sx = Math.round(s.x - camX);
+        const sy = Math.round(s.y - camY);
+        if (sx < -r || sx > this.viewWidth + r || sy < -r || sy > this.viewHeight + r) continue;
+        const deg = Math.round(((((s.hue % 1) + 1) % 1) * 360));
+        const lit = s.glow > 0.6;
+        const grad = ctx.createRadialGradient(sx, sy, 0.5, sx, sy, r);
+        grad.addColorStop(0, `hsla(${deg}, 72%, ${lit ? 68 : 58}%, ${lit ? 0.42 : 0.34})`);
+        grad.addColorStop(0.55, `hsla(${deg}, 72%, ${lit ? 62 : 54}%, ${lit ? 0.2 : 0.15})`);
+        grad.addColorStop(1, "hsla(0, 0%, 0%, 0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+      }
+    }
+
     // depth pass: soft pools of shade beneath everything that stands
     drawEntityShadows(ctx, scene, camX, camY, x0, y0, x1, y1, this.viewWidth, this.viewHeight);
 
