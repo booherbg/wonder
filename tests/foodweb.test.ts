@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { CritterSpecies } from "../src/life/fauna";
 import { PlantForm, Genome } from "../src/life/genome";
-import { chainStats, diversityScore, pickNewSeed } from "../src/life/foodweb";
+import { chainLinks, chainStats, diversityScore, pickNewSeed, richnessWord } from "../src/life/foodweb";
 import { PlantSpecies } from "../src/life/species";
 import { Tile } from "../src/world/types";
 
@@ -68,6 +68,33 @@ test("diversityScore is deterministic and ranks the legendary seed far above a f
   expect(rich).toBeGreaterThan(30);
   expect(flat).toBeLessThan(rich);
   expect(flat).toBeLessThan(30); // below a sane default floor
+});
+
+test("richnessWord grades a score from flat to legendary", () => {
+  expect(richnessWord(0)).toBe("flat");
+  expect(richnessWord(3)).toBe("sparse");
+  expect(richnessWord(9)).toBe("living");
+  expect(richnessWord(20)).toBe("rich");
+  expect(richnessWord(35)).toBe("lush");
+  expect(richnessWord(44)).toBe("legendary");
+});
+
+test("chainLinks names each disperser→source→feeder link", () => {
+  const flower = plant(0, PlantForm.Flower, 0.5, Tile.Grass);
+  const moss = plant(1, PlantForm.Moss, 0.5, Tile.Grass, true);
+  const flowerEater = disperser(0, PlantForm.Flower, 0.5);
+  const links = chainLinks([flower, moss], [flowerEater]);
+  expect(links.length).toBeGreaterThanOrEqual(1);
+  expect(links[0]).toMatchObject({ disperser: "c0", source: "p0", feeder: "p1", closes: false });
+});
+
+test("chainLinks marks a closing loop and leads with it", () => {
+  const flower = plant(0, PlantForm.Flower, 0.5, Tile.Grass);
+  const moss = plant(1, PlantForm.Moss, 0.5, Tile.Grass, true);
+  const flowerEater = disperser(0, PlantForm.Flower, 0.5);
+  const mossEater = disperser(1, PlantForm.Moss, 0.5); // eats the feeder → loop continues
+  const links = chainLinks([flower, moss], [flowerEater, mossEater]);
+  expect(links[0].closes).toBe(true); // the loop-closing link sorts first
 });
 
 test("pickNewSeed rejection-samples to the floor, and frontier bypasses it", () => {

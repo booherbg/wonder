@@ -19,7 +19,7 @@ import {
 } from "../life/fauna";
 import { CensusLog, sparkline, trend } from "../life/census";
 import { Flora, Plant, nearestPlant } from "../life/flora";
-import { DIVERSITY_FLOOR, SEED_CANDIDATES, diversityScore, pickNewSeed } from "../life/foodweb";
+import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { CHAINS_KEY, resolveChains } from "./flags";
 import {
@@ -143,8 +143,6 @@ let fpsSmooth = 60;
 let devAcc = 0; // throttles the readout to a few redraws a second
 let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
-let devChainScore = 0; // this island's diversityScore, computed once per island (it's not cheap)
-let devChainSeed = NaN;
 // the living history: how many of each plant kind, sampled over island-time
 const census = new CensusLog();
 // this world's identity: a name you gave it, and the real time you've spent here
@@ -248,13 +246,27 @@ function devTileComposition(): string {
   return devTileComp;
 }
 
-// this island's chain-diversity score — recomputed only when the island
-// changes (a full generation pass, so never per frame), like the biome census
-function devChainScoreCached(): number {
-  if (devChainSeed === currentSeed) return devChainScore;
-  devChainScore = diversityScore(currentSeed);
-  devChainSeed = currentSeed;
-  return devChainScore;
+// this island's chain-potential, from the live species — the same measure the
+// seed-search uses to pick a viable island, read here so you can see it.
+function chainScoreNow(): number {
+  const s = chainStats(species, critterSpecies);
+  return s.chains + 2 * (s.redundancy - 1);
+}
+
+// the food web explained — the insight the observation lab is for. The score
+// in a word and a number, how many links close into loops, how much backup
+// each source has, a few of the ACTUAL named chains, and what's live right now.
+function webLines(): string[] {
+  const stats = chainStats(species, critterSpecies);
+  const named = chainLinks(species, critterSpecies)
+    .slice(0, 3)
+    .map((l) => `    ${l.disperser} spreads ${l.source} → wakes ${l.feeder}${l.closes ? " ↺" : ""}`);
+  return [
+    `web: score ${Math.round(chainScoreNow())} · ${richnessWord(chainScoreNow())}`,
+    `  ${stats.chains} links · ${stats.closable} close the loop · ${stats.redundancy.toFixed(1)}× backup per source`,
+    ...named,
+    `  live: ${flora.substrates.length} substrates · ${flora.germinations} sprouted`,
+  ];
 }
 
 // the debug readout: the numbers behind the living world
@@ -291,9 +303,7 @@ function renderDev(): void {
     floraLine,
     top,
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
-    ...(CHAINS
-      ? [`chains: ${flora.substrates.length} substrates · ${flora.germinations} sprouted · score ${Math.round(devChainScoreCached())}`]
-      : []),
+    ...(CHAINS ? webLines() : []),
   ].join("\n");
 }
 
@@ -302,7 +312,10 @@ function renderDev(): void {
 function renderSeedLabel(): void {
   const shapePhrase = SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"];
   const identity = worldName ?? `${islandName(currentSeed)} · ${shapePhrase}`;
-  seedLabel.textContent = `${identity} · seed ${currentSeed} — R for a new island`;
+  // a plain word for how rich the island's web is — so you know, at a glance,
+  // whether you sailed somewhere alive or somewhere to build up yourself
+  const web = CHAINS ? ` · a ${richnessWord(chainScoreNow())} web` : "";
+  seedLabel.textContent = `${identity}${web} · seed ${currentSeed} — R for a new island`;
 }
 
 let map!: WorldMap;

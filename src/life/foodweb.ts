@@ -60,6 +60,47 @@ export function chainStats(plants: PlantSpecies[], critters: CritterSpecies[]): 
   return { chains, closable, redundancy };
 }
 
+// A score said in a word — so "is this island viable?" has a plain answer,
+// and the dev readout's number carries meaning. Calibrated to the study's
+// distribution: median ~9 ("living"), the floor at 5, ≥40 legendary (~0.6%).
+export function richnessWord(score: number): string {
+  if (score <= 1) return "flat";
+  if (score < 5) return "sparse"; // below the viability floor
+  if (score < 15) return "living";
+  if (score < 30) return "rich";
+  if (score < 40) return "lush";
+  return "legendary";
+}
+
+// The emergent chains named, for the insight surface: each a disperser that
+// spreads a source plant, and a feeder that wakes on its byproduct — with
+// whether that feeder is itself eaten, so the loop closes and the chain runs
+// on. Loop-closers lead (they're the interesting ones). Same trait-window
+// logic as chainStats, but it keeps the names so a watcher can read the web.
+export interface ChainLink {
+  disperser: string; // the spreader's kind
+  source: string; // the plant it spreads
+  feeder: string; // the plant that wakes on the byproduct
+  closes: boolean; // the feeder is itself eaten → the loop continues
+}
+
+export function chainLinks(plants: PlantSpecies[], critters: CritterSpecies[]): ChainLink[] {
+  const dispersers = critters.filter((c) => c.role === "disperser");
+  const feeders = plants.filter((p) => p.substrateFeeder);
+  const eaterOf = (sp: PlantSpecies): CritterSpecies | undefined =>
+    dispersers.find((d) => appetite(d.palate, sp.archetype) > APPETITE_MIN);
+  const out: ChainLink[] = [];
+  for (const p of plants) {
+    const eater = eaterOf(p);
+    if (!eater) continue;
+    for (const s of feeders) {
+      if (hueGap(s.archetype.hue, p.archetype.hue) > SUBSTRATE_HUE_MATCH) continue;
+      out.push({ disperser: eater.name, source: p.name, feeder: s.name, closes: !!eaterOf(s) });
+    }
+  }
+  return out.sort((a, b) => Number(b.closes) - Number(a.closes)); // loops first (stable)
+}
+
 // One scalar for a seed's chain-potential, computed at generation time (no
 // sim). Rewards redundancy over raw count so the default island is resilient,
 // not fragile (spec §Resilience). Builds the species exactly as loadWorld
