@@ -205,8 +205,56 @@ Open calls I took leans on (say the word to change them): secondary actions
 camp-zone-growth is cosmetic-first (radius grows with building) rather than
 mechanical, for now.
 
-## The Fable art/ideas audit
+## The Fable art/ideas audit — the true-end pass
 
-<!-- FINALIZE: paste Fable audit findings -->
-Running a fresh Fable pass over the whole game for details, ideas, and art
-direction — findings folded in here and into `docs/ideas.md`.
+A fresh Fable agent played across seeds/day-night/panels and read the whole
+codebase. Its headline, which I think is dead right: **the engine and the
+poetry are already here in abundance — the work now is *surfacing* it.** And
+most of the wins are cheap because the data and even the functions already
+exist and just aren't wired to the player. It also **caught a real bug, which
+I fixed tonight** (the "● firing now" flag over-promised — now it mirrors the
+germination rule, so ● means a chain you can actually go watch close).
+
+**The four highest-leverage moves (all mostly-existing pieces):**
+
+1. **Promote the data you already compute.** `CensusLog` (`src/life/census.ts`)
+   already stores full per-species population history, peaks, arose/lost — it's
+   rendered only as tiny unicode sparklines in the *debug* overlay. Build a real
+   **charts dashboard** (population lines over island-time, biome makeup, the
+   web's chain-count trend) opened from the menu. And the gorgeous full-colour
+   island map already exists as `?overview` — **promote it into a real
+   in-journal map** (the fog map is a near-black void with `SIGHT=2` on a
+   300×300 island). This *is* your "more charts / more map = fancy pantsy," and
+   it's mostly wiring over data that's already there.
+2. **Dawn/dusk + lift the meadow off flat.** Day↔night is a single blue multiply
+   — no golden hour; and the commonest meadow plant (a gold tussock) tiles
+   near-identically so fields read "stamped." Cheap fixes: per-instance
+   mirror/jitter/±size in the entity pass (`renderer.ts`), low-frequency tonal
+   variation on the ground, and a dawn/dusk colour grade in `daynight.ts` +
+   `renderer.ts` (the single biggest beauty win). Warmed islands are already
+   markedly prettier than fresh tick-2 ones — a small default warm-up would let
+   new players meet the rich version.
+3. **Give the camp a body and a reason** — "the bed's just sitting there" is
+   literally true (a 0.22-alpha square). Grow a visible silhouette as you build
+   (lean-to → tent → cabin), unify the bed's look with the crisp tilled-soil
+   patch, and make the fire/bed *do* something legible (a homecoming "what
+   changed while I was away" card, a growing draw-radius).
+4. **Behavior/heat overlays** — the sim knows each critter's drive, substrate
+   hotspots, per-species density, trust; none of it shows spatially. A toggleable
+   overlay set would make the ecology click at island scale.
+
+**Also flagged (cheap, high-value):** an uproot/clear verb — `flora.removePlant`
+already exists, there's just no key for it (this is roadmap item 2, nearly
+free); a **lost-species elegy** to match the ✧ arrival trace; a shore/foam line
+where sand meets water (the least-finished surface); the wanderer doesn't
+animate (a 2-frame bob); genetic pollination (two same-species neighbours cross)
+as the gardening-depth pairing for soil + charts. Rough edges: the fog map never
+fills, `?overview` renders only ~60% wide, and the seed-label wraps mid-phrase at
+some widths.
+
+Full report (all findings, ranked, with file pointers and shot references) is in
+the audit agent's transcript; the top items above are folded into the roadmap.
+Its verdict: *"four moves would transform the feel with mostly-existing pieces —
+promote the census into charts and the overview into a map, grade dawn/dusk and
+lift the meadow, give the camp a body and a reason, and let the ● mean what it
+says."* (The last is done.)
