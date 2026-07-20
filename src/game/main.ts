@@ -35,7 +35,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { CampView, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import {
   closePicker,
@@ -779,16 +779,19 @@ function openInspectAtPlayer(record = true): void {
   // gatherables near the wanderer: counted within reach of a lean (E), and
   // marked reachable when a node is within arm's reach of a gather (G) — so
   // the pick-up tell can say "G to gather" truthfully, never a step too soon
-  const near3 = { wood: 0, stone: 0, rush: 0 };
-  const reach3 = { wood: false, stone: false, rush: false };
+  const mats = { driftwood: 0, fallenwood: 0, stone: 0, rush: 0 };
+  const matReach = { driftwood: false, fallenwood: false, stone: false, rush: false };
   for (const m of materials) {
     if (taken.has(m.idx)) continue;
     const d = Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y);
     if (d >= INSPECT_RANGE) continue;
-    near3[m.kind]++;
-    if (d < GATHER_RANGE + 8) reach3[m.kind] = true;
+    // wood reads by where it lies: fallen wood in the forest, driftwood on the shore
+    const kind: Gatherable =
+      m.kind === "wood" ? (tileAt(map, m.x, m.y) === Tile.Forest ? "fallenwood" : "driftwood") : m.kind;
+    mats[kind]++;
+    if (d < GATHER_RANGE + 8) matReach[kind] = true;
   }
-  if (near3.wood > 0) waterEdge.push(gatherableLine("wood", near3.wood, reach3.wood));
+  if (mats.driftwood > 0) waterEdge.push(gatherableLine("driftwood", mats.driftwood, matReach.driftwood));
   const land: string[] = [];
   const itx = Math.floor(player.x / TILE_SIZE);
   const ity = Math.floor(player.y / TILE_SIZE);
@@ -803,8 +806,9 @@ function openInspectAtPlayer(record = true): void {
     land.push("a pool where two rivers meet");
   if (map.crater && Math.hypot(map.crater.x - itx, map.crater.y - ity) <= map.crater.lakeRadius + 1)
     land.push("the crater lake — the earth's eye");
-  if (near3.stone > 0) land.push(gatherableLine("stone", near3.stone, reach3.stone));
-  if (near3.rush > 0) land.push(gatherableLine("rush", near3.rush, reach3.rush));
+  if (mats.fallenwood > 0) land.push(gatherableLine("fallenwood", mats.fallenwood, matReach.fallenwood));
+  if (mats.stone > 0) land.push(gatherableLine("stone", mats.stone, matReach.stone));
+  if (mats.rush > 0) land.push(gatherableLine("rush", mats.rush, matReach.rush));
 
   // standing in or beside your home, the camp speaks: what the bed grows,
   // what stands built, and which kinds have come to live alongside you —
@@ -1243,7 +1247,9 @@ window.addEventListener("keydown", (e) => {
       } else {
         flashHud(
           node.kind === "wood"
-            ? "driftwood — salt-dried and light"
+            ? tileAt(map, node.x, node.y) === Tile.Forest
+              ? "fallen wood, dry and light"
+              : "driftwood — salt-dried and light"
             : node.kind === "stone"
               ? "a loose stone, sun-warm"
               : "a marsh rush, cut green and soft",

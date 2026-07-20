@@ -1,5 +1,4 @@
 import { INV_CAP, Seed } from "../game/inventory";
-import type { MaterialNode } from "../game/materials";
 import { Beast, beastSegments } from "../life/beast";
 import { COMPANION_TRUST, CritterMood, CritterRole, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
@@ -196,16 +195,16 @@ export function hourLine(o: {
 // lacked: what it is (and how many), then how to take it — "G to gather" when
 // it's within arm's reach, a nudge to step closer when it's only just in view.
 // The visible tell that answers "can I pick this up, and how?"
-export function gatherableLine(
-  kind: MaterialNode["kind"],
-  count: number,
-  reachable: boolean,
-): string {
+export type Gatherable = "driftwood" | "fallenwood" | "stone" | "rush";
+
+export function gatherableLine(kind: Gatherable, count: number, reachable: boolean): string {
   const many = count > 1 ? ` (${count})` : "";
   const tell = reachable ? "G to gather" : "a step closer to gather";
   switch (kind) {
-    case "wood":
+    case "driftwood":
       return `driftwood, salt-dried${many} — ${tell}`;
+    case "fallenwood":
+      return `fallen wood, dry${many} — ${tell}`;
     case "stone":
       return `${count > 1 ? `loose stones, sun-warm${many}` : "a loose stone, sun-warm"} — ${tell}`;
     case "rush":

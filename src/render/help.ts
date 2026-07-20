@@ -50,9 +50,9 @@ export function helpSections(): HelpSection[] {
         { text: "press H on open ground and home takes shape — a garden bed to tend." },
         {
           text:
-            "the island offers what a camp needs: driftwood on the beaches at the " +
-            "water's edge, loose stones where ground meets rock, soft rushes standing " +
-            "in the marsh. G gathers each.",
+            "the island offers what a camp needs: driftwood on the beaches and fallen " +
+            "wood in the forest; loose stones on the shore, on the scree, and where " +
+            "ground meets rock; soft rushes standing in the marsh. G gathers each.",
         },
         {
           text:

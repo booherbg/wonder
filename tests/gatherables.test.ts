@@ -3,14 +3,20 @@ import { gatherableLine } from "../src/render/inspect";
 
 // The visible tell the bare beach lacked: leaning close (E) must not only
 // name a gatherable but say you can take it — and, truthfully, whether it's
-// in reach right now (G) or a step away.
+// in reach right now (G) or a step away. Wood reads by where it lies:
+// driftwood on the shore, fallen wood on the forest floor.
 
 test("a gatherable in reach names the key that takes it", () => {
-  expect(gatherableLine("wood", 1, true)).toBe("driftwood, salt-dried — G to gather");
+  expect(gatherableLine("driftwood", 1, true)).toBe("driftwood, salt-dried — G to gather");
 });
 
 test("a gatherable in view but out of reach nudges you closer", () => {
-  expect(gatherableLine("wood", 1, false)).toBe("driftwood, salt-dried — a step closer to gather");
+  expect(gatherableLine("driftwood", 1, false)).toBe("driftwood, salt-dried — a step closer to gather");
+});
+
+test("forest wood reads as fallen wood, not driftwood", () => {
+  expect(gatherableLine("fallenwood", 1, true)).toBe("fallen wood, dry — G to gather");
+  expect(gatherableLine("fallenwood", 3, true)).toBe("fallen wood, dry (3) — G to gather");
 });
 
 test("more than one is counted; a lone one reads singular", () => {
