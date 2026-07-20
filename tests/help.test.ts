@@ -13,7 +13,7 @@ test("the guide keeps its three small chapters, in the quiet voice", () => {
 
 test("every verb the game answers to has a line", () => {
   const keys = helpSections()[0].entries.map((e) => e.key);
-  for (const k of ["E", "F", "G", "Q", "H", "J", "M", "L", "P", "R", "esc"]) {
+  for (const k of ["E", "space", "Q", "H", "J", "M", "L", "P", "R", "esc"]) {
     expect(keys).toContain(k);
   }
   expect(keys.some((k) => k?.includes("arrows"))).toBe(true);
@@ -25,17 +25,18 @@ test("the guide names the Tab menu", () => {
   expect(tab!.text).toContain("menu");
 });
 
-test("G gathers and F sows — G is the gather key (the mnemonic rebind)", () => {
-  const keys = helpSections()[0].entries;
-  const gather = keys.find((e) => e.text.startsWith("gather"));
-  const sow = keys.find((e) => e.text.startsWith("sow"));
-  expect(gather?.key).toBe("G");
-  expect(sow?.key).toBe("F");
+test("space is the one action, resolved by the held slot", () => {
+  const act = helpSections()[0].entries.find((e) => e.key === "space");
+  expect(act).toBeDefined();
+  const t = act!.text.toLowerCase();
+  expect(t).toContain("gather"); // the hand
+  expect(t).toContain("till"); // the hoe
+  expect(t).toContain("plant"); // the pouch
 });
 
-test("the camp chapter names G for the gather that feeds a fire", () => {
+test("the camp chapter names the hand-gather that feeds a fire", () => {
   const camp = helpSections()[1].entries.map((e) => e.text).join(" ");
-  expect(camp).toContain("G gathers each");
+  expect(camp).toContain("press space to gather");
 });
 
 test("the camp chapter quotes the true costs and says where to look", () => {
@@ -51,15 +52,10 @@ test("the camp chapter quotes the true costs and says where to look", () => {
   expect(camp).toContain("marsh");
 });
 
-test("the guide teaches digging and laying soil, and why", () => {
-  const keys = helpSections()[0].entries;
-  const dig = keys.find((e) => e.key === "T");
-  const lay = keys.find((e) => e.key === "B");
-  expect(dig?.text).toContain("soil");
-  expect(lay?.text.toLowerCase()).toContain("till");
-  // the camp chapter says the point: garden anywhere, off the usual habitat
+test("the guide teaches tilling and planting, and why", () => {
+  // the camp chapter says the point: work a tilled bed, garden off the usual habitat
   const camp = helpSections()[1].entries.map((e) => e.text).join(" ").toLowerCase();
-  expect(camp).toContain("dig");
+  expect(camp).toContain("hoe");
   expect(camp).toContain("tilled");
   expect(camp).toContain("habitat");
 });

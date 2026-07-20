@@ -17,7 +17,7 @@ import {
   trustWord,
   updateCritter,
 } from "../life/fauna";
-import { CensusLog, sparkline, trend } from "../life/census";
+import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
 import { Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
@@ -38,6 +38,7 @@ import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
+import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import {
   closePicker,
   featurePhrase,
@@ -401,6 +402,93 @@ function webLines(): string[] {
     ...named,
     `  live: ${flora.substrates.length} substrates · ${flora.germinations} sprouted`,
   ];
+}
+
+// ── the island's ledger (G): the census & food-web promoted to real charts ──
+// natural terrain colours for the biome-makeup bar
+const BIOME_COLOR: Record<number, string> = {
+  [Tile.ShallowWater]: "#4f86ad",
+  [Tile.Sand]: "#d8c489",
+  [Tile.Grass]: "#6f9e4c",
+  [Tile.Forest]: "#3f6b3a",
+  [Tile.Marsh]: "#7d8a54",
+  [Tile.Scree]: "#9c9288",
+  [Tile.Highland]: "#aab488",
+  [Tile.Rock]: "#7c7671",
+  [Tile.Snow]: "#dbe4ea",
+};
+
+function biomeMakeup(): { name: string; share: number; color: string }[] {
+  const counts = new Map<number, number>();
+  for (const t of map.tiles) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const shown = [...counts.entries()].filter(([t]) => t !== Tile.DeepWater); // the land's the story
+  const total = shown.reduce((s, [, n]) => s + n, 0) || 1;
+  return shown
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => ({ name: TILE_WORD[t] ?? String(t), share: n / total, color: BIOME_COLOR[t] ?? "#5a6a72" }));
+}
+
+// sum the census traces into an all-plants total over time — right-aligned so
+// every kind's newest sample lines up at "now"
+function sumTraces(traces: SpeciesTrace[], maxLen: number): number[] {
+  const out = new Array(maxLen).fill(0);
+  for (const t of traces) {
+    const off = maxLen - t.counts.length;
+    for (let i = 0; i < t.counts.length; i++) out[off + i] += t.counts[i];
+  }
+  return out;
+}
+
+function padLeft(counts: number[], len: number): number[] {
+  return counts.length >= len
+    ? counts.slice(counts.length - len)
+    : [...new Array(len - counts.length).fill(0), ...counts];
+}
+
+function buildChartsView(): ChartsView {
+  const traces = census.list();
+  const maxLen = Math.max(2, ...traces.map((t) => t.counts.length));
+  const series: ChartSeries[] = traces
+    .filter((tr) => species[tr.id])
+    .sort((a, b) => b.peak - a.peak)
+    .slice(0, 7) // the dominant lineages; the tail folds into the total line
+    .map((tr) => ({
+      id: tr.id,
+      name: species[tr.id].name,
+      hue: species[tr.id].archetype.hue,
+      sat: species[tr.id].archetype.sat,
+      counts: padLeft(tr.counts, maxLen),
+      peak: tr.peak,
+    }));
+  const sum = census.summary();
+  const stats = chainStats(species, critterSpecies);
+  const score = Math.round(stats.chains + 2 * (stats.redundancy - 1));
+  const links = chainLinks(species, critterSpecies)
+    .slice(0, 5)
+    .map((l) => ({
+      text: `${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}`,
+      closes: l.closes,
+    }));
+  return {
+    name: worldName ?? "this island",
+    timeLabel: `${fmtDur(worldPlayMs)} here`,
+    totals: { plants: flora.count, kinds: sum.live, arose: sum.arose, lost: sum.lost },
+    richness: { score, word: richnessWord(score) },
+    chains: stats,
+    links,
+    series,
+    totalCounts: sumTraces(traces, maxLen),
+    biomes: biomeMakeup(),
+    substrates: flora.substrates.length,
+    germinations: flora.germinations,
+  };
+}
+
+function openChartsNow(): void {
+  closeInspect();
+  closeWeb();
+  closeMenu();
+  openCharts(buildChartsView());
 }
 
 // the debug readout: the numbers behind the living world
@@ -1417,6 +1505,10 @@ window.addEventListener("keydown", (e) => {
     // the living web: the chain explorer — see, understand, find, witness it
     if (isWebOpen()) closeWeb();
     else openWebNow();
+  } else if (k === "g") {
+    // the island's ledger: the census & food-web charts, at a glance
+    if (isChartsOpen()) closeCharts();
+    else openChartsNow();
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -1439,6 +1531,7 @@ window.addEventListener("keydown", (e) => {
     closePicker();
     closeMenu();
     closeWeb();
+    closeCharts();
   } else if (k === "p") {
     savePostcard();
   } else if (k === "n") {
