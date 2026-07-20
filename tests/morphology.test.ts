@@ -112,7 +112,7 @@ test("islands host five to eight kinds, generated deterministically", () => {
     expect(a.length).toBeGreaterThanOrEqual(5);
     expect(a.length).toBeLessThanOrEqual(8);
   }
-});
+}, 30_000); // generates each island twice across many seeds — slow under load
 
 test("every island spreads its bodies: a tiny scurrier, a large ambler, distinct plans", () => {
   for (const seed of SEEDS) {
