@@ -100,3 +100,21 @@ test("the camp survives the save roundtrip", () => {
   const old = JSON.parse(JSON.stringify(packWorld(5, 10, { x: 1, y: 2 }, null, emptyInventory(), [], 99))) as SavedWorld;
   expect(old.camp ?? null).toBeNull(); // old saves simply have no camp yet
 });
+
+test("carried soil rides the camp across the save, absent in older saves", () => {
+  const packed = packWorld(
+    5, 10, { x: 1, y: 2 }, { x: 3, y: 4 },
+    emptyInventory(), [], 99, [], [],
+    { wood: 2, stone: 1, rush: 3, soil: 5, taken: [], fire: false, bedroll: false },
+  );
+  const saved = JSON.parse(JSON.stringify(packed)) as SavedWorld;
+  expect(saved.camp?.soil).toBe(5);
+  // a camp saved before soil existed has none — the reader defaults it to zero
+  const before = packWorld(
+    5, 10, { x: 1, y: 2 }, { x: 3, y: 4 },
+    emptyInventory(), [], 99, [], [],
+    { wood: 2, stone: 1, rush: 3, taken: [], fire: false, bedroll: false },
+  );
+  const older = JSON.parse(JSON.stringify(before)) as SavedWorld;
+  expect(older.camp?.soil ?? 0).toBe(0);
+});

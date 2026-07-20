@@ -30,6 +30,7 @@ export interface SavedCamp {
   wood: number;
   stone: number;
   rush?: number; // absent in saves from before the bedroll
+  soil?: number; // clods of soil carried; absent in saves from before digging
   taken: number[]; // material node indices already gathered
   fire: boolean;
   bedroll?: boolean;
