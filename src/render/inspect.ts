@@ -151,7 +151,7 @@ export function campLines(camp: CampView): string[] {
   if (camp.companion) lines.push(`${camp.companion} — your companion, at your heel`);
   lines.push(
     camp.bed.length === 0
-      ? "the bed lies bare — G sows a gathered seed"
+      ? "the bed lies bare — F sows a gathered seed"
       : `in the bed: ${camp.bed
           .map((b) => (b.count > 1 ? `${b.name} ×${b.count}` : b.name))
           .join(" · ")}`,
@@ -492,7 +492,7 @@ export function openInspect(
 
   const hint = document.createElement("div");
   hint.className = "inspect-hint";
-  hint.textContent = "E or Esc to close · F gather · G sow · Q toss a seed";
+  hint.textContent = "E or Esc to close · G gather · F sow · Q toss a seed";
   el.appendChild(hint);
   el.style.display = "block";
 }

@@ -19,6 +19,19 @@ test("every verb the game answers to has a line", () => {
   expect(keys.some((k) => k?.includes("arrows"))).toBe(true);
 });
 
+test("G gathers and F sows — G is the gather key (the mnemonic rebind)", () => {
+  const keys = helpSections()[0].entries;
+  const gather = keys.find((e) => e.text.startsWith("gather"));
+  const sow = keys.find((e) => e.text.startsWith("sow"));
+  expect(gather?.key).toBe("G");
+  expect(sow?.key).toBe("F");
+});
+
+test("the camp chapter names G for the gather that feeds a fire", () => {
+  const camp = helpSections()[1].entries.map((e) => e.text).join(" ");
+  expect(camp).toContain("G gathers each");
+});
+
 test("the camp chapter quotes the true costs and says where to look", () => {
   const camp = helpSections()[1].entries.map((e) => e.text).join(" ");
   // costs come from materials.ts, so the card can never drift from the code

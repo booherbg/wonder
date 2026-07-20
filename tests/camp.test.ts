@@ -61,6 +61,7 @@ test("an empty, unbuilt camp still speaks gently", () => {
   expect(lines).toHaveLength(3);
   expect(lines[0]).toBe("quiet still — no one's settled yet");
   expect(lines[1]).toContain("bare");
+  expect(lines[1]).toContain("F sows"); // sow re-homed to F (G is now gather)
   expect(lines[2]).toContain("a fire");
 });
 

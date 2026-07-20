@@ -148,7 +148,7 @@ function renderHud(): void {
   // non-breaking spaces bind each key to its word, so when the legend wraps it
   // only ever breaks at a " · ", never mid-item ("L isles" stays whole)
   const legend = [
-    "E inspect", "F gather", "G sow", "Z focus", "H home", "J journal",
+    "E inspect", "G gather", "F sow", "Z focus", "H home", "J journal",
     "M murmurs", "L isles", "P postcard", "R island", "? help",
   ]
     .map((item) => item.replace(" ", String.fromCharCode(160)))
@@ -1053,7 +1053,7 @@ window.addEventListener("keydown", (e) => {
     } else {
       openInspectAtPlayer();
     }
-  } else if (k === "f") {
+  } else if (k === "g") {
     // materials first: driftwood and stones are the plainer, nearer gift
     const reachable = materials
       .filter((m) => !taken.has(m.idx))
@@ -1102,7 +1102,7 @@ window.addEventListener("keydown", (e) => {
         murmurs.offer("gather");
       }
     }
-  } else if (k === "g") {
+  } else if (k === "f") {
     const px = player.x + 6;
     const py = player.y + 2;
     const here = tileAt(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));

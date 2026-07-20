@@ -29,8 +29,8 @@ export function helpSections(): HelpSection[] {
         { key: "arrows / wasd", text: "walk" },
         { key: "E", text: "lean close — what grows and moves nearby shows itself" },
         { key: "Z", text: "lean the view in close — watch the small lives up close" },
-        { key: "F", text: "gather what is in reach — driftwood, a stone, a rush, or a seed" },
-        { key: "G", text: "sow a seed from your pouch, where the ground suits it" },
+        { key: "G", text: "gather what is in reach — driftwood, a stone, a rush, or a seed" },
+        { key: "F", text: "sow a seed from your pouch, where the ground suits it" },
         { key: "Q", text: "give a seed back to the wind" },
         { key: "H", text: "make this place home; beside home, H tends the camp" },
         { key: "J", text: "the field journal — it writes itself as you look" },
@@ -51,7 +51,7 @@ export function helpSections(): HelpSection[] {
           text:
             "the island offers what a camp needs: driftwood on the beaches at the " +
             "water's edge, loose stones where ground meets rock, soft rushes standing " +
-            "in the marsh. F gathers each.",
+            "in the marsh. G gathers each.",
         },
         {
           text:
