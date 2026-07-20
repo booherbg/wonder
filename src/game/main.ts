@@ -19,7 +19,7 @@ import {
 } from "../life/fauna";
 import { CensusLog, sparkline, trend } from "../life/census";
 import { Flora, Plant, nearestPlant } from "../life/flora";
-import { DIVERSITY_FLOOR, SEED_CANDIDATES, pickNewSeed } from "../life/foodweb";
+import { DIVERSITY_FLOOR, SEED_CANDIDATES, diversityScore, pickNewSeed } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { CHAINS_KEY, resolveChains } from "./flags";
 import {
@@ -143,6 +143,8 @@ let fpsSmooth = 60;
 let devAcc = 0; // throttles the readout to a few redraws a second
 let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
+let devChainScore = 0; // this island's diversityScore, computed once per island (it's not cheap)
+let devChainSeed = NaN;
 // the living history: how many of each plant kind, sampled over island-time
 const census = new CensusLog();
 // this world's identity: a name you gave it, and the real time you've spent here
@@ -246,6 +248,15 @@ function devTileComposition(): string {
   return devTileComp;
 }
 
+// this island's chain-diversity score — recomputed only when the island
+// changes (a full generation pass, so never per frame), like the biome census
+function devChainScoreCached(): number {
+  if (devChainSeed === currentSeed) return devChainScore;
+  devChainScore = diversityScore(currentSeed);
+  devChainSeed = currentSeed;
+  return devChainScore;
+}
+
 // the debug readout: the numbers behind the living world
 function renderDev(): void {
   const itx = Math.floor(player.x / TILE_SIZE);
@@ -280,6 +291,9 @@ function renderDev(): void {
     floraLine,
     top,
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
+    ...(CHAINS
+      ? [`chains: ${flora.substrates.length} substrates · ${flora.germinations} sprouted · score ${Math.round(devChainScoreCached())}`]
+      : []),
   ].join("\n");
 }
 
@@ -1370,6 +1384,33 @@ function offerMurmurMoments(dt: number): void {
         const witness = critterSpecies[c.species];
         if (witness.role === "grazer") recordForage(currentSeed, c.meal.species, witness.name);
         else recordSpread(currentSeed, c.meal.species, witness.name);
+      }
+    }
+    // byproduct chains: a sprout risen from a byproduct, witnessed. Standing
+    // still near a fresh germination, its page learns that it rose where a
+    // disperser had fed — the visible other half of a chain. Always drained
+    // (so the list stays small); recorded only when you're actually watching,
+    // and only when chains are on. recordSpread self-dedups and no-ops until
+    // the kind has a page, so it never spams a stranger onto the shelf.
+    if (CHAINS) {
+      const germs = flora.takeGerminations();
+      if (stillTime >= 1) {
+        for (const g of germs) {
+          if (Math.hypot(g.x - player.x, g.y - player.y) >= 6 * TILE_SIZE) continue;
+          let near: Critter | null = null;
+          let nd = Infinity;
+          for (const c of critters) {
+            if (critterSpecies[c.species].role !== "disperser") continue;
+            const d = Math.hypot(c.x - g.x, c.y - g.y);
+            if (d < nd) {
+              nd = d;
+              near = c;
+            }
+          }
+          if (near && nd < 8 * TILE_SIZE) {
+            recordSpread(currentSeed, g.species, critterSpecies[near.species].name);
+          }
+        }
       }
     }
     if ((map.springs ?? []).some((s) => Math.hypot(s.x - tx, s.y - ty) < 2)) {

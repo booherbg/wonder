@@ -139,6 +139,7 @@ export class Flora {
   speciesCounts = new Map<number, number>();
   substrates: Substrate[] = []; // live byproducts; empty unless chains are on
   germinations = 0; // running count of substrate-fed sprouts, for the dev readout
+  private germEvents: { x: number; y: number; species: number }[] = []; // recent sprouts, for the witnessed journal edge
   tick = 0;
   readonly tuning: FloraTuning;
   private rng: Rng;
@@ -188,6 +189,16 @@ export class Flora {
     if (this.events.length === 0) return [];
     const out = this.events;
     this.events = [];
+    return out;
+  }
+
+  // Hand over any substrate germinations since the last call (and forget them),
+  // so a still wanderer nearby can witness "moss sprouts where a critter fed".
+  // Observational — never touches the sim's rng.
+  takeGerminations(): { x: number; y: number; species: number }[] {
+    if (this.germEvents.length === 0) return [];
+    const out = this.germEvents;
+    this.germEvents = [];
     return out;
   }
 
@@ -398,6 +409,12 @@ export class Flora {
           const genome = mutate(s.archetype, this.rng, this.tuning.mutationAmount);
           if (this.addPlant(s.id, genome, sub.x, sub.y, this.tick)) {
             this.germinations++;
+            // remember where it sprouted so a watching wanderer's journal can
+            // note the link; capped, and drawn from no rng, so it never moves
+            // the sim. Drained by takeGerminations each frame.
+            if (this.germEvents.length < 256) {
+              this.germEvents.push({ x: sub.x, y: sub.y, species: s.id });
+            }
             consumed = true; // the substrate is spent on the sprout it fed
           }
         }
