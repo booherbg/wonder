@@ -37,6 +37,23 @@ export interface Substrate {
   born: number; // flora sim-tick it appeared
 }
 
+// Byproduct-chain constants (spec §The rules v1). A substrate not fed on
+// within its lifetime fades — bounding entity count and setting the "catch it
+// live vs it assembles while you're away" feel. A live substrate gives a
+// hue-matching feeder a small per-tick germination chance so a chain creeps
+// out over an island-day rather than popping.
+export const SUBSTRATE_LIFETIME = 150; // sim-ticks (~half an island-day at ~2s/tick)
+export const SUBSTRATE_HUE_MATCH = 0.12; // a feeder germinates within this hue window of the substrate
+export const SUBSTRATE_GERMINATE_CHANCE = 0.04; // per live substrate per tick, a matching feeder tries
+export const SUBSTRATE_FEEDER_SCATTER = 1.0; // knob to weight the substrate route down later; ×1 in v1
+
+// Distance between two hues around the color wheel (0..0.5) — the same wrap
+// `appetite` uses, so germination reads hue exactly as the palate does.
+export function hueGap(a: number, b: number): number {
+  const d = Math.abs(a - b);
+  return Math.min(d, 1 - d);
+}
+
 // The plant the wanderer actually means: plantsNear hands back tile-scan
 // order, so the truly nearest must be picked by hand.
 export function nearestPlant(plants: readonly Plant[], x: number, y: number): Plant | null {
@@ -121,6 +138,7 @@ export class Flora {
   byTile = new Map<number, Plant[]>();
   speciesCounts = new Map<number, number>();
   substrates: Substrate[] = []; // live byproducts; empty unless chains are on
+  germinations = 0; // running count of substrate-fed sprouts, for the dev readout
   tick = 0;
   readonly tuning: FloraTuning;
   private rng: Rng;
@@ -350,6 +368,43 @@ export class Flora {
         if (child) this.maybeSpeciate(child);
       }
     }
+    // Byproduct chains ride on the tail of the tick. Gated so an island with
+    // no live substrates (chains off, or simply none emitted yet) draws ZERO
+    // extra rng and stays byte-identical to today — the A/B safety valve.
+    if (this.tuning.chains && this.substrates.length) this.stepSubstrates();
+  }
+
+  // Expired substrates fade; a live one now and then sprouts a hue-matching
+  // substrate-feeder where it lies, via addPlant so per-tile caps and habitat
+  // still hold. A germinated feeder is an ordinary plant — eaten in turn it
+  // emits its own substrate, so the chain closes itself with no special rule.
+  // Trait-windowed, never a named species: any feeder in the hue window on the
+  // right habitat can fill the role, so a chain routes around a lost one.
+  private stepSubstrates(): void {
+    const feeders = this.speciesList.filter((s) => s.substrateFeeder);
+    const survivors: Substrate[] = [];
+    for (const sub of this.substrates) {
+      if (this.tick - sub.born >= SUBSTRATE_LIFETIME) continue; // decayed, unfed
+      let consumed = false;
+      if (feeders.length && this.rng() < SUBSTRATE_GERMINATE_CHANCE * SUBSTRATE_FEEDER_SCATTER) {
+        const tx = Math.floor(sub.x / TILE_SIZE);
+        const ty = Math.floor(sub.y / TILE_SIZE);
+        const tile = this.map.tiles[ty * this.map.width + tx];
+        const matches = feeders.filter(
+          (s) => s.habitat === tile && hueGap(s.archetype.hue, sub.hue) <= SUBSTRATE_HUE_MATCH,
+        );
+        if (matches.length) {
+          const s = matches[Math.floor(this.rng() * matches.length)];
+          const genome = mutate(s.archetype, this.rng, this.tuning.mutationAmount);
+          if (this.addPlant(s.id, genome, sub.x, sub.y, this.tick)) {
+            this.germinations++;
+            consumed = true; // the substrate is spent on the sprout it fed
+          }
+        }
+      }
+      if (!consumed) survivors.push(sub);
+    }
+    this.substrates = survivors;
   }
 
   // Speciation: a newborn far from its archetype, surrounded by kin drifted
