@@ -197,6 +197,67 @@ B — is robust to these knobs; the exact counts are illustrative.
 
 ---
 
+## Part 3 — Seed search: a minimum-viable floor, and the legendary hunt
+
+Because the diversity score is computed at **generation time (no sim)**,
+generation can become a **search** — "here are params, find a seed that satisfies
+them" — instead of a coin flip that sometimes sells a lush island that is
+actually barren. A scan of **2,500 seeds** (1..2500) maps the space.
+
+### The distribution (2,500 seeds)
+
+| | chains / island |
+|---|---|
+| median | 9 |
+| p90 | 19 |
+| p99 | 36 |
+| **max** | **71** |
+| flat (0 chains) | 38 / 2500 — **1.5%** |
+| ≥30 chains | 47 seeds |
+| ≥40 chains ("legendary") | 16 seeds — **0.6%** |
+
+### The floor is nearly free to enforce
+
+| minimum floor | seeds passing | candidate rolls to find one |
+|---|---|---|
+| ≥1 chain | 98% | ~1.0 |
+| ≥3 | 92% | ~1.1 |
+| ≥5 | 78% | ~1.3 |
+| ≥8 | 55% | ~1.8 |
+
+Default new-world generation to (say) ≥5 chains and no casual player ever lands
+on a dud — at ~1.3 candidate rolls, imperceptible.
+
+### The legendary tier (best of 2,500)
+
+| seed | island | chains (closed) | forms | critters |
+|---|---|---|---|---|
+| **2438** | **Polpol Skerry** | **71 (69)** | 8/14 | 7 (4D/3G) |
+| 1143 | Maqui Skerry | 71 (51) | 12/14 | 8 (7D/1G) |
+| 770 | Orzel Shoal | 60 (50) | 11/14 | 8 (6D/2G) |
+| 1093 | Ovara Isle | 56 (50) | 10/14 | 8 (5D/3G) |
+| 308 | Silith Cay | 43 (33) | 11/14 | 7 (7D/0G) |
+
+**The champion — seed 2438, "Polpol Skerry": 71 potential chains, 69 closing
+into loops.** Nearly every chain on that island is a complete, watchable cycle —
+a near-fully-wired ecology, ~8× the median. Worth pinning as a demo seed.
+
+### What this means for the design
+
+- **Generation → query.** The new-map controls become search params: minimum
+  diversity, biome mix, D/G balance, "must contain a closed loop," size, relief.
+- **A floor by default** protects the casual player; **dial it up** to hunt
+  legendary seeds (a shareable "Minecraft-seed" moment); **dial it down** for a
+  **frontier** — a deliberately-sparse canvas you cultivate yourself (the 1.5%
+  flat seeds, opt-in, the sandbox-builder's case).
+- **Richness correlates with dispersers.** The legendary tier skews
+  disperser-heavy — byproduct volume tracks disperser count — a real lever the
+  generator could nudge.
+- **Search fixes flatness; `?warm` only ages.** Flatness is structural in the
+  species roll; simming longer won't grow a chain a seed can't form.
+
+---
+
 ## Appendix — the harness
 
 Throwaway `tests/_impact.test.ts` (removed after the run; reproduced here).
