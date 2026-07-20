@@ -131,12 +131,19 @@ export interface SpeciationEvent {
 export interface RestoredFlora {
   tick: number;
   plants: { species: number; genome: Genome; x: number; y: number; born: number }[];
+  soil?: number[]; // tile keys the wanderer amended with soil (row-major, per map width)
 }
 
 export class Flora {
   all: Plant[] = [];
   byTile = new Map<number, Plant[]>();
   speciesCounts = new Map<number, number>();
+  // Tiles the wanderer has amended with a clod of dug soil — tilled ground the
+  // player may sow ANY seed on, its natural habitat set aside. Keyed row-major
+  // (ty*width+tx), the same key byTile uses. The wild sim never consults this;
+  // only the player's own sow does, so off-habitat planting stays a thing done
+  // by hand and never something the island's drift or reseeding can do.
+  soilTiles = new Set<number>();
   substrates: Substrate[] = []; // live byproducts; empty unless chains are on
   germinations = 0; // running count of substrate-fed sprouts, for the dev readout
   private germEvents: { x: number; y: number; species: number }[] = []; // recent sprouts, for the witnessed journal edge
@@ -158,6 +165,7 @@ export class Flora {
     this.rng = makeRng(seed ^ 0xf10a);
     if (restored) {
       this.tick = restored.tick;
+      for (const k of restored.soil ?? []) this.soilTiles.add(k);
       for (const p of restored.plants) this.addPlant(p.species, p.genome, p.x, p.y, p.born);
     } else {
       this.scatter(seed);
@@ -222,23 +230,62 @@ export class Flora {
     return out;
   }
 
-  // The gate every seed must pass to take root: in bounds, on its own
-  // habitat, the tile not yet full, the island not yet full. Public so a
-  // courier (the beast) can find open, correct-habitat ground before it
-  // bothers to drift a seed onto it.
-  rootableAt(species: number, x: number, y: number): boolean {
-    const tx = Math.floor(x / TILE_SIZE);
-    const ty = Math.floor(y / TILE_SIZE);
+  // Is this tile a tilled one — ground the wanderer worked a clod of soil into?
+  hasSoilTile(tx: number, ty: number): boolean {
+    return this.soilTiles.has(ty * this.map.width + tx);
+  }
+
+  // Work a carried clod into a tile, tilling it so the player may sow any seed
+  // there. A quiet no-op (false) off the map's edge; otherwise the tile is
+  // remembered until the save forgets it.
+  laySoil(tx: number, ty: number): boolean {
     if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+    this.soilTiles.add(ty * this.map.width + tx);
+    return true;
+  }
+
+  // The tilled tiles as row-major keys — what the save keeps.
+  soilTileKeys(): number[] {
+    return [...this.soilTiles];
+  }
+
+  // Room for one more plant on a tile: the island not full, the tile not full.
+  // The half of the gate that has nothing to do with habitat.
+  private hasRoom(key: number): boolean {
     if (this.all.length >= this.tuning.maxPlants) return false;
-    const key = ty * this.map.width + tx;
-    if (this.map.tiles[key] !== this.speciesList[species].habitat) return false;
     const bucket = this.byTile.get(key);
     return !bucket || bucket.length < this.tuning.maxPerTile;
   }
 
-  addPlant(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
-    if (!this.rootableAt(species, x, y)) return null;
+  // The gate every seed the SIM sows must pass to take root: in bounds, on its
+  // own habitat, the tile not yet full, the island not yet full. Public so a
+  // courier (the beast) can find open, correct-habitat ground before it
+  // bothers to drift a seed onto it. This never consults the soil tiles, so
+  // drift, propagate, reseeding and scatter can never jump off-habitat.
+  rootableAt(species: number, x: number, y: number): boolean {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+    const key = ty * this.map.width + tx;
+    if (this.map.tiles[key] !== this.speciesList[species].habitat) return false;
+    return this.hasRoom(key);
+  }
+
+  // The gate the PLAYER's own sow passes through — and the only one that waives
+  // habitat. On a tile amended with soil, ANY species may root (the caps still
+  // hold); everywhere else it defers to rootableAt, so an ordinary sow behaves
+  // exactly as it always has. The sim never calls this.
+  sowableAt(species: number, x: number, y: number): boolean {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+    const key = ty * this.map.width + tx;
+    if (!this.soilTiles.has(key)) return this.rootableAt(species, x, y);
+    return this.hasRoom(key); // tilled ground: habitat set aside, caps kept
+  }
+
+  // Place a plant with no checks — the shared tail of addPlant and sowByPlayer.
+  private insert(species: number, genome: Genome, x: number, y: number, born: number): Plant {
     const tx = Math.floor(x / TILE_SIZE);
     const ty = Math.floor(y / TILE_SIZE);
     const key = ty * this.map.width + tx;
@@ -252,6 +299,18 @@ export class Flora {
     bucket.push(plant);
     this.speciesCounts.set(species, (this.speciesCounts.get(species) ?? 0) + 1);
     return plant;
+  }
+
+  addPlant(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
+    if (!this.rootableAt(species, x, y)) return null;
+    return this.insert(species, genome, x, y, born);
+  }
+
+  // The wanderer's own hand setting a seed down: succeeds on the species' own
+  // habitat OR on any tile tilled with soil. The one habitat-waiving path.
+  sowByPlayer(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
+    if (!this.sowableAt(species, x, y)) return null;
+    return this.insert(species, genome, x, y, born);
   }
 
   removePlant(p: Plant): void {
