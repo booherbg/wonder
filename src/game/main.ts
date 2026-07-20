@@ -33,7 +33,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { CampView, closeInspect, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { CampView, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
 import {
   closePicker,
   featurePhrase,
@@ -722,15 +722,19 @@ function openInspectAtPlayer(record = true): void {
           : "a violet urchin";
     waterEdge.push(bared ? `a tide pool — ${dweller}` : `a tide pool, brimming — ${dweller} beneath`);
   }
+  // gatherables near the wanderer: counted within reach of a lean (E), and
+  // marked reachable when a node is within arm's reach of a gather (G) — so
+  // the pick-up tell can say "G to gather" truthfully, never a step too soon
   const near3 = { wood: 0, stone: 0, rush: 0 };
+  const reach3 = { wood: false, stone: false, rush: false };
   for (const m of materials) {
     if (taken.has(m.idx)) continue;
-    if (Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y) >= INSPECT_RANGE)
-      continue;
+    const d = Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y);
+    if (d >= INSPECT_RANGE) continue;
     near3[m.kind]++;
+    if (d < GATHER_RANGE + 8) reach3[m.kind] = true;
   }
-  if (near3.wood > 0)
-    waterEdge.push(near3.wood > 1 ? `driftwood, salt-dried (${near3.wood})` : "driftwood, salt-dried");
+  if (near3.wood > 0) waterEdge.push(gatherableLine("wood", near3.wood, reach3.wood));
   const land: string[] = [];
   const itx = Math.floor(player.x / TILE_SIZE);
   const ity = Math.floor(player.y / TILE_SIZE);
@@ -745,9 +749,8 @@ function openInspectAtPlayer(record = true): void {
     land.push("a pool where two rivers meet");
   if (map.crater && Math.hypot(map.crater.x - itx, map.crater.y - ity) <= map.crater.lakeRadius + 1)
     land.push("the crater lake — the earth's eye");
-  if (near3.stone > 0)
-    land.push(near3.stone > 1 ? `loose stones, sun-warm (${near3.stone})` : "a loose stone, sun-warm");
-  if (near3.rush > 0) land.push("marsh rushes, cut green and soft");
+  if (near3.stone > 0) land.push(gatherableLine("stone", near3.stone, reach3.stone));
+  if (near3.rush > 0) land.push(gatherableLine("rush", near3.rush, reach3.rush));
 
   // standing in or beside your home, the camp speaks: what the bed grows,
   // what stands built, and which kinds have come to live alongside you —

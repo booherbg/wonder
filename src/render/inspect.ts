@@ -1,4 +1,5 @@
 import { INV_CAP, Seed } from "../game/inventory";
+import type { MaterialNode } from "../game/materials";
 import { Beast, beastSegments } from "../life/beast";
 import { COMPANION_TRUST, CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
@@ -189,6 +190,27 @@ export function hourLine(o: {
   if (o.bloom) return "the morning after rain — the fungi answer";
   if (low) return "the sea drawn back — low tide bares its gardens";
   return "broad, quiet daylight";
+}
+
+// A gatherable named the island's way, with the pick-up tell the bare beach
+// lacked: what it is (and how many), then how to take it — "G to gather" when
+// it's within arm's reach, a nudge to step closer when it's only just in view.
+// The visible tell that answers "can I pick this up, and how?"
+export function gatherableLine(
+  kind: MaterialNode["kind"],
+  count: number,
+  reachable: boolean,
+): string {
+  const many = count > 1 ? ` (${count})` : "";
+  const tell = reachable ? "G to gather" : "a step closer to gather";
+  switch (kind) {
+    case "wood":
+      return `driftwood, salt-dried${many} — ${tell}`;
+    case "stone":
+      return `${count > 1 ? `loose stones, sun-warm${many}` : "a loose stone, sun-warm"} — ${tell}`;
+    case "rush":
+      return `${count > 1 ? `marsh rushes, cut green and soft${many}` : "a marsh rush, cut green and soft"} — ${tell}`;
+  }
 }
 
 // A plain list of gentle lines under a title — for the things that get a
