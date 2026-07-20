@@ -1135,8 +1135,16 @@ function openMenuNow(): void {
 // Ordered live-first, then loops, then the rest; capped so the panel reads.
 function buildWebView(): WebView {
   const count = (id: number): number => flora.speciesCounts.get(id) ?? 0;
-  const liveOf = (source: PlantSpecies): boolean =>
-    flora.substrates.some((s) => hueGap(s.hue, source.archetype.hue) <= SUBSTRATE_HUE_MATCH);
+  // A chain is truly firing only where a substrate the FEEDER could actually
+  // sprout from lies right now — the germination rule exactly (hue window AND
+  // the substrate resting on the feeder's own habitat tile). So "● firing now"
+  // never promises a sprout that habitat forbids (a meadow byproduct can't wake
+  // a bare-rock feeder where it fell).
+  const liveForFeeder = (feeder: PlantSpecies): boolean =>
+    flora.substrates.some((s) => {
+      const tile = map.tiles[Math.floor(s.y / TILE_SIZE) * map.width + Math.floor(s.x / TILE_SIZE)];
+      return feeder.habitat === tile && hueGap(s.hue, feeder.archetype.hue) <= SUBSTRATE_HUE_MATCH;
+    });
   const links: WebLink[] = chainLinks(species, critterSpecies).map((l) => ({
     disperser: l.disperser,
     source: l.source,
@@ -1144,7 +1152,7 @@ function buildWebView(): WebView {
     sourceCount: count(l.source.id),
     feederCount: count(l.feeder.id),
     closes: l.closes,
-    live: liveOf(l.source),
+    live: liveForFeeder(l.feeder),
   }));
   links.sort((a, b) => Number(b.live) - Number(a.live) || Number(b.closes) - Number(a.closes));
   const CAP = 8;
