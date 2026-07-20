@@ -17,6 +17,7 @@ import {
   trustWord,
   updateCritter,
 } from "../life/fauna";
+import { CensusLog, sparkline, trend } from "../life/census";
 import { Flora, Plant, nearestPlant } from "../life/flora";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import {
@@ -103,6 +104,8 @@ let fpsSmooth = 60;
 let devAcc = 0; // throttles the readout to a few redraws a second
 let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
+// the living history: how many of each plant kind, sampled over island-time
+const census = new CensusLog();
 
 const GATHER_RANGE = 24; // px — materials' reach
 const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
@@ -202,17 +205,30 @@ function renderDev(): void {
   const elev = map.elevation[ity * map.width + itx] ?? 0;
   const liveKinds = [...flora.speciesCounts.entries()].filter(([, n]) => n > 0);
   liveKinds.sort((a, b) => b[1] - a[1]);
+  // each kind with its history: a sparkline of its rise and fall, and whether
+  // it's climbing (▲), fading (▼), or holding — the ecology over time, not just now
+  const MARK = { rising: "▲", falling: "▼", steady: " " } as const;
   const top = liveKinds
-    .slice(0, 8)
-    .map(([s, n]) => `  ${species[s]?.name ?? `#${s}`}  ${n}`)
+    .slice(0, 9)
+    .map(([s, n]) => {
+      const tr = census.trace(s);
+      const spark = tr ? sparkline(tr.counts, 10) : "";
+      const mark = tr ? MARK[trend(tr.counts)] : " ";
+      const nm = (species[s]?.name ?? `#${s}`).slice(0, 17).padEnd(17);
+      return `  ${nm} ${spark.padEnd(10)} ${String(n).padStart(4)} ${mark}`;
+    })
     .join("\n");
+  const sum = census.summary();
+  const floraLine = census.started
+    ? `flora: ${flora.count} plants · ${sum.live} kinds · ${sum.arose} arose · ${sum.lost} lost`
+    : `flora: ${flora.count} plants · ${liveKinds.length} kinds`;
   dev.textContent = [
     `seed ${currentSeed}    ${islandName(currentSeed)}`,
     `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}`,
     `fps ${fpsSmooth.toFixed(0)}    tick ${flora.tick}`,
     `you: ${itx},${ity}  ${TILE_WORD[here] ?? here}  elev ${elev.toFixed(2)}`,
     `biomes: ${devTileComposition()}`,
-    `flora: ${flora.count} plants · ${liveKinds.length} kinds`,
+    floraLine,
     top,
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
   ].join("\n");
@@ -329,6 +345,7 @@ function loadWorld(seed: number): void {
     }
   }
   currentSeed = seed;
+  census.reset(); // a new island begins its own history
   species = generatePlantSpecies(seed);
   if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
   baseSpeciesCount = species.length;
@@ -361,7 +378,10 @@ function loadWorld(seed: number): void {
       MAX_CATCHUP_TICKS,
       Math.floor(Math.max(0, Date.now() - saved.savedAt) / SIM_MS),
     );
-    for (let i = 0; i < catchUp; i++) flora.simTick();
+    for (let i = 0; i < catchUp; i++) {
+      flora.simTick();
+      census.sample(flora.tick, flora.speciesCounts);
+    }
     const awayEvents = flora.takeEvents();
     if (awayEvents.length > 0) awayBorn = awayEvents[awayEvents.length - 1].name;
     for (const ev of awayEvents) {
@@ -372,6 +392,14 @@ function loadWorld(seed: number): void {
   } else {
     flora = new Flora(map, species, seed, floraTuning);
     home = null;
+  }
+  // dev aid + a seed of the "run N generations first" control: ?warm=3000
+  // fast-forwards the island's life before you arrive (bounded, so a typo
+  // can't hang the load)
+  const warm = Math.min(50000, Number(new URL(location.href).searchParams.get("warm") ?? 0) || 0);
+  for (let i = 0; i < warm; i++) {
+    flora.simTick();
+    census.sample(flora.tick, flora.speciesCounts);
   }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   critters = spawnCritters(critterSpecies, map, seed);
@@ -455,7 +483,10 @@ function sleepToDawn(sky: number): void {
   const skipped = msUntilDawn(sky);
   skyOffset += skipped;
   const ticks = Math.min(MAX_CATCHUP_TICKS, Math.floor(skipped / SIM_MS));
-  for (let i = 0; i < ticks; i++) flora.simTick();
+  for (let i = 0; i < ticks; i++) {
+    flora.simTick();
+    census.sample(flora.tick, flora.speciesCounts);
+  }
   simAcc = 0;
   const born = flora.takeEvents();
   for (const ev of born) remember(`${ev.name} arose here`);
@@ -1222,6 +1253,7 @@ function frame(now: number): void {
       bloom: bloomToday,
       aurora: auroraTonight && darknessAt(sky) > 0.6,
     });
+    census.sample(flora.tick, flora.speciesCounts);
     simAcc -= SIM_MS;
   }
   for (const ev of flora.takeEvents()) {
