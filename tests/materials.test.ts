@@ -5,13 +5,11 @@ import { SavedWorld, packWorld } from "../src/game/save";
 import { generate } from "../src/world/generate";
 import { Tile, WALKABLE } from "../src/world/types";
 
-test("driftwood beaches and stony rock-edges, deterministic per seed", () => {
+test("materials sit where the island offers them, deterministic per seed", () => {
   for (const seed of [1, 20, 42]) {
     const map = generate(seed);
     const nodes = placeMaterials(map, seed);
     expect(JSON.stringify(nodes)).toBe(JSON.stringify(placeMaterials(map, seed)));
-    const wood = nodes.filter((n) => n.kind === "wood");
-    expect(wood.length).toBeGreaterThan(5); // every island's sea leaves driftwood
     for (const n of nodes) {
       const t = map.tiles[n.y * map.width + n.x] as Tile;
       const sides = [
@@ -21,18 +19,40 @@ test("driftwood beaches and stony rock-edges, deterministic per seed", () => {
         map.tiles[(n.y - 1) * map.width + n.x],
       ];
       if (n.kind === "wood") {
-        expect(t).toBe(Tile.Sand);
-        expect(sides.some((s) => s === Tile.ShallowWater || s === Tile.DeepWater)).toBe(true);
+        // driftwood on the shore, or fallen wood on the forest floor
+        const driftwood = t === Tile.Sand && sides.some((s) => s === Tile.ShallowWater || s === Tile.DeepWater);
+        expect(driftwood || t === Tile.Forest).toBe(true);
       } else if (n.kind === "rush") {
         expect(t).toBe(Tile.Marsh);
       } else {
+        // stone always stands on walkable ground you can reach
         expect(WALKABLE.has(t)).toBe(true);
-        expect(sides.some((s) => s === Tile.Rock)).toBe(true);
       }
     }
     // indices are stable handles for the save's taken-list
     nodes.forEach((n, i) => expect(n.idx).toBe(i));
   }
+});
+
+test("every island can raise a fire — wood AND stone are both findable", () => {
+  // the bug this guards: a low-rock island where stone couldn't be found at all,
+  // so a fire could never be built. Stone now comes from shores/scree/falls too.
+  for (const seed of [1, 20, 42, 7, 13, 3, 11, 27, 40]) {
+    const nodes = placeMaterials(generate(seed), seed);
+    const wood = nodes.filter((n) => n.kind === "wood").length;
+    const stone = nodes.filter((n) => n.kind === "stone").length;
+    expect(wood, `seed ${seed} wood`).toBeGreaterThanOrEqual(FIRE_COST.wood);
+    expect(stone, `seed ${seed} stone`).toBeGreaterThanOrEqual(FIRE_COST.stone);
+  }
+});
+
+test("forests carry fallen wood, not just beaches", () => {
+  const map = generate(20);
+  const nodes = placeMaterials(map, 20);
+  const forestWood = nodes.filter(
+    (n) => n.kind === "wood" && (map.tiles[n.y * map.width + n.x] as Tile) === Tile.Forest,
+  );
+  expect(forestWood.length).toBeGreaterThan(0);
 });
 
 test("mountainous islands shed plenty of stones", () => {

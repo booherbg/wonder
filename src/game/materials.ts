@@ -19,24 +19,42 @@ export function placeMaterials(map: WorldMap, seed: number): MaterialNode[] {
   const out: MaterialNode[] = [];
   const { width, height, tiles } = map;
   const at = (x: number, y: number) => tiles[y * width + x] as Tile;
+  // a waterfall breaks stone loose in its spray — a small set to test against
+  const nearFall = (x: number, y: number): boolean =>
+    (map.falls ?? []).some((f) => Math.abs(f.x - x) <= 1 && Math.abs(f.y - y) <= 1);
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const t = at(x, y);
       const sides = [at(x + 1, y), at(x - 1, y), at(x, y + 1), at(x, y - 1)];
+      const nearWater = sides.some((n) => n === Tile.ShallowWater || n === Tile.DeepWater);
       if (t === Tile.Sand) {
-        const nearWater = sides.some(
-          (n) => n === Tile.ShallowWater || n === Tile.DeepWater,
-        );
+        // the sea leaves both at the waterline: driftwood, and loose cobbles —
+        // so every island with a shore can gather enough to raise a fire
         if (nearWater && hash2d(x, y, seed ^ 0xd21f7) < 0.02) {
+          out.push({ x, y, kind: "wood", idx: out.length });
+        }
+        if (nearWater && hash2d(x, y, seed ^ 0x51c0b) < 0.025) {
+          out.push({ x, y, kind: "stone", idx: out.length });
+        }
+      } else if (t === Tile.Forest) {
+        // fallen wood on the forest floor — a fire wants wood, not only the beach's
+        if (hash2d(x, y, seed ^ 0x7a3d1) < 0.03) {
           out.push({ x, y, kind: "wood", idx: out.length });
         }
       } else if (t === Tile.Marsh) {
         if (hash2d(x, y, seed ^ 0x2d05e) < 0.03) {
           out.push({ x, y, kind: "rush", idx: out.length });
         }
-      } else if (WALKABLE.has(t)) {
-        const nearRock = sides.some((n) => n === Tile.Rock);
-        if (nearRock && hash2d(x, y, seed ^ 0x570e5) < 0.045) {
+      } else if (t === Tile.Scree) {
+        // the mountain's apron of loose talus is made of stone
+        if (hash2d(x, y, seed ^ 0x9b2e1) < 0.09) {
+          out.push({ x, y, kind: "stone", idx: out.length });
+        }
+      } else if (WALKABLE.has(t) && t !== Tile.ShallowWater) {
+        // where ground meets bare rock or cliff, or a waterfall shakes it free
+        const nearRock = sides.some((n) => n === Tile.Rock || n === Tile.Cliff);
+        const rate = nearFall(x, y) ? 0.3 : nearRock ? 0.06 : 0;
+        if (rate > 0 && hash2d(x, y, seed ^ 0x570e5) < rate) {
           out.push({ x, y, kind: "stone", idx: out.length });
         }
       }
