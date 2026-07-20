@@ -258,3 +258,20 @@ Its verdict: *"four moves would transform the feel with mostly-existing pieces �
 promote the census into charts and the overview into a map, grade dawn/dusk and
 lift the meadow, give the camp a body and a reason, and let the ● mean what it
 says."* (The last is done.)
+
+## Late additions (after the report, still you-and-me at the keyboard)
+
+- **A corner minimap** (`K` toggles it) — a little island map top-right in the
+  overview colours, with a **★ for your camp** and a dot for you. First bite of
+  the audit's "give the player a real map," and an answer to "how do I find
+  things." Cheap: the overview inks once per island to an offscreen canvas and
+  is blitted each frame.
+- **This report is now HTML** — `npm run report` renders `docs/morning-report.md`
+  → `docs/morning-report.html`; I taught the renderer tables, blockquotes, and
+  numbered lists so it all lands in the dark theme.
+- **Reloading, answered:** you *can* return to a saved island (the isle picker,
+  `L` / the Tab menu), and for the home-lab that's the intended loop — camp,
+  tilled soil, drifted flora, settled critters, trust, name and time all
+  persist, and the island **ages while you're away**. `R` is for a fresh seed.
+  The thing that'd make returning sing — a "what changed while you were away"
+  homecoming card — is on the roadmap.
