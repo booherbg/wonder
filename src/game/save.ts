@@ -24,6 +24,7 @@ export interface SavedWorld {
   daughters?: SavedDaughter[]; // species that arose here after worldgen
   memories?: string[]; // weather memory: rare events this island has witnessed
   camp?: SavedCamp; // the wanderer's camp: materials carried, nodes taken, fire built
+  soil?: number[]; // tiles the wanderer tilled with soil (row-major keys); absent before digging
 }
 
 export interface SavedCamp {
@@ -83,7 +84,7 @@ export function packWorld(
   memories: readonly string[] = [],
   camp?: SavedCamp,
   critters: readonly Critter[] = [],
-  extra: { name?: string; playMs?: number } = {},
+  extra: { name?: string; playMs?: number; soil?: number[] } = {},
 ): SavedWorld {
   return {
     v: 1,
@@ -92,6 +93,7 @@ export function packWorld(
     savedAt,
     name: extra.name,
     playMs: extra.playMs,
+    soil: extra.soil && extra.soil.length > 0 ? [...extra.soil] : undefined,
     player: [r1(player.x), r1(player.y)],
     home: home ? [home.x, home.y] : null,
     inv: inventory.seeds.map((s) => [s.species, ...packGenome(s.genome)]),

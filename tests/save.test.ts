@@ -84,6 +84,29 @@ test("a saved world round-trips its name, time, and critters where they stood", 
   expect(back[0].species).toBe(critters[0].species);
 });
 
+test("tilled soil tiles round-trip through the save", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  flora.laySoil(30, 31);
+  flora.laySoil(32, 33);
+  const saved = packWorld(
+    SEED, flora.tick, { x: 1, y: 1 }, { x: 30, y: 31 }, { seeds: [] }, flora.all, 1000,
+    [], [], undefined, [], { soil: flora.soilTileKeys() },
+  );
+  expect(saved.soil).toEqual(flora.soilTileKeys());
+  const restored = new Flora(map, species, SEED, {}, {
+    tick: saved.tick,
+    plants: restorePlants(saved, species),
+    soil: saved.soil,
+  });
+  expect(restored.hasSoilTile(30, 31)).toBe(true);
+  expect(restored.hasSoilTile(32, 33)).toBe(true);
+  // a save from before digging simply carries no tilled ground
+  const old = packWorld(SEED, 0, { x: 1, y: 1 }, null, { seeds: [] }, [], 1000);
+  expect(old.soil ?? null).toBeNull();
+});
+
 test("the garden bed is a 3x3 around home and boosts survival semantics", () => {
   const map = generate(SEED);
   const species = generatePlantSpecies(SEED);

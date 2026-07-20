@@ -72,7 +72,7 @@ export function campActionRows(
 
 export interface MenuModel {
   pouch: { name: string }[]; // seeds carried, by kind name
-  mat: { wood: number; stone: number; rush: number };
+  mat: { wood: number; stone: number; rush: number; soil: number };
   camp?: { lines: string[]; actions: CampActionRow[] }; // present only at camp
 }
 
@@ -158,7 +158,7 @@ export function openMenu(model: MenuModel, handlers: MenuHandlers): void {
   }
 
   section(el, "your backpack");
-  const carried = (["wood", "stone", "rush"] as const)
+  const carried = (["wood", "stone", "rush", "soil"] as const)
     .filter((k) => model.mat[k] > 0)
     .map((k) => `${k} ${model.mat[k]}`);
   line(el, carried.length > 0 ? carried.join(" · ") : "no materials gathered yet");

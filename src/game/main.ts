@@ -49,7 +49,7 @@ import {
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { loadExplored, markSeen, saveExplored } from "./explored";
 import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
-import { BEDROLL_COST, FIRE_COST, MaterialNode, placeMaterials } from "./materials";
+import { BEDROLL_COST, FIRE_COST, MaterialNode, isDiggable, isLayable, placeMaterials } from "./materials";
 import { TIDE_LOW, TidePool, exposureAt, placeTidePools, tideAt } from "./tide";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
@@ -178,7 +178,7 @@ function renderHud(): void {
     )
     .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
-  const carriedParts = (["wood", "stone", "rush"] as const)
+  const carriedParts = (["wood", "stone", "rush", "soil"] as const)
     .filter((k) => mat[k] > 0)
     .map((k) => `${k} ${mat[k]}`);
   const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
@@ -187,7 +187,7 @@ function renderHud(): void {
   // non-breaking spaces bind each key to its word, so when the legend wraps it
   // only ever breaks at a " · ", never mid-item ("L isles" stays whole)
   const legend = [
-    "E inspect", "G gather", "F sow", "H home", "Z focus", "R island", "Tab menu",
+    "E inspect", "G gather", "F sow", "T dig", "B lay", "H home", "Z focus", "R island", "Tab menu",
   ]
     .map((item) => item.replace(" ", String.fromCharCode(160)))
     .join(" · ");
@@ -345,7 +345,7 @@ let walkTy = -1;
 let materials: MaterialNode[] = []; // driftwood, loose stones, marsh rushes, per seed
 let taken = new Set<number>(); // material nodes already gathered
 let pools: TidePool[] = []; // the shore's small gardens, bared at low water
-let mat = { wood: 0, stone: 0, rush: 0 }; // what the wanderer carries
+let mat = { wood: 0, stone: 0, rush: 0, soil: 0 }; // what the wanderer carries
 let fire = false; // the camp fire, once built
 let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
 let skyOffset = 0; // ms slept forward: the sky's clock runs ahead of the wall's
@@ -375,6 +375,7 @@ function persist(): void {
         wood: mat.wood,
         stone: mat.stone,
         rush: mat.rush,
+        soil: mat.soil,
         taken: [...taken],
         fire,
         bedroll,
@@ -386,7 +387,7 @@ function persist(): void {
             : undefined,
       },
       critters,
-      { name: worldName ?? undefined, playMs: Math.round(worldPlayMs) },
+      { name: worldName ?? undefined, playMs: Math.round(worldPlayMs), soil: flora.soilTileKeys() },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -454,6 +455,7 @@ function loadWorld(seed: number): void {
     wood: saved?.camp?.wood ?? 0,
     stone: saved?.camp?.stone ?? 0,
     rush: saved?.camp?.rush ?? 0,
+    soil: saved?.camp?.soil ?? 0,
   };
   fire = saved?.camp?.fire ?? false;
   bedroll = saved?.camp?.bedroll ?? false;
@@ -464,6 +466,7 @@ function loadWorld(seed: number): void {
     flora = new Flora(map, species, seed, floraTuning, {
       tick: saved.tick,
       plants: restorePlants(saved, species),
+      soil: saved.soil,
     });
     // the island lived while you were away
     catchUp = Math.min(
@@ -1348,26 +1351,75 @@ window.addEventListener("keydown", (e) => {
   } else if (k === "f") {
     const px = player.x + 6;
     const py = player.y + 2;
-    const here = tileAt(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
-    const result = sow(inventory, (s) => species[s.species].habitat === here);
+    const tx = Math.floor(px / TILE_SIZE);
+    const ty = Math.floor(py / TILE_SIZE);
+    const onSoil = flora.hasSoilTile(tx, ty);
+    const here = tileAt(map, tx, ty);
+    // on ground the wanderer has tilled with soil, ANY seed takes; on wild
+    // ground, still only a seed of that tile's own habitat — the sim's rule
+    const result = sow(inventory, (s) => onSoil || species[s.species].habitat === here);
     if (!result) {
       flashHud(
         inventory.seeds.length === 0
           ? "no seeds to sow"
-          : "nothing in the pouch would grow here",
+          : "nothing in the pouch would grow here — dig a clod (T), lay it (B), and anything will",
       );
     } else {
       const [rest, seedToPlant] = result;
-      const planted = flora.addPlant(seedToPlant.species, seedToPlant.genome, px, py, flora.tick);
+      // sowByPlayer is the one path that waives habitat, and only on tilled soil
+      const planted = flora.sowByPlayer(seedToPlant.species, seedToPlant.genome, px, py, flora.tick);
       if (planted) {
         inventory = rest;
-        flashHud(`${species[seedToPlant.species].name} takes root`);
+        flashHud(
+          onSoil
+            ? `${species[seedToPlant.species].name} takes to the tilled soil`
+            : `${species[seedToPlant.species].name} takes root`,
+        );
         murmurs.offer("sow");
       } else {
         flashHud("no room here for it to root");
       }
     }
     renderHud();
+  } else if (k === "t") {
+    // dig a clod of soil from the plain earth into the pack — deterministic,
+    // one clod a press, the ground left unscarred: this is gentle gardening
+    const px = player.x + 6;
+    const py = player.y + 2;
+    const here = tileAt(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
+    if (isDiggable(here)) {
+      mat.soil++;
+      flashHud(
+        mat.soil === 1
+          ? "you dig a clod of dark soil — press B to lay it as tilled ground"
+          : `another clod of dark soil for the pack — soil ${mat.soil}`,
+      );
+      renderHud();
+      persist();
+    } else {
+      flashHud("the ground here is too hard to dig — try grass, marsh, sand, or the forest floor");
+    }
+  } else if (k === "b") {
+    // lay a carried clod down: the tile becomes tilled ground, and now any
+    // seed will root there — sow it with F, its habitat set aside
+    const px = player.x + 6;
+    const py = player.y + 2;
+    const tx = Math.floor(px / TILE_SIZE);
+    const ty = Math.floor(py / TILE_SIZE);
+    const here = tileAt(map, tx, ty);
+    if (mat.soil <= 0) {
+      flashHud("no soil to lay — press T on grass, marsh, sand, or forest to dig a clod first");
+    } else if (flora.hasSoilTile(tx, ty)) {
+      flashHud("this ground is already tilled — F sows any seed here");
+    } else if (!isLayable(here)) {
+      flashHud("nothing here to work a clod of soil into");
+    } else {
+      mat.soil--;
+      flora.laySoil(tx, ty);
+      flashHud("you work a clod into the ground — tilled now, and any seed will take (F)");
+      renderHud();
+      persist();
+    }
   } else if (k === "q") {
     tossSeed();
   }
