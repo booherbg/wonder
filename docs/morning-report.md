@@ -174,11 +174,15 @@ You set the compass: **SimCity / Civ / Factorio — more data, more charts, more
 insight, and the system legible *and* manipulable.** Tonight built the *reading*
 layer; here's the *agency + depth* layer I'm driving toward, most-wanted first:
 
-1. **Soil & planting freedom** *(building now — Fable, in a worktree; I'll
-   integrate + verify overnight)*. Dig soil, carry it, lay it anywhere and sow a
-   critter's favorite food right by your fire — so you can actually keep a pet:
-   plant what it eats, and its kind settles in. This unblocks the whole
-   observation-lab loop you described.
+1. **Soil & planting freedom** — ✅ **SHIPPED tonight** (Fable built it, I
+   verified + integrated; 338 tests green). **`T`** digs a clod of soil from
+   plain ground into your pack; **`B`** lays it to till the tile in front of
+   you; **`F`** then sows *any* seed on tilled ground, off its usual habitat.
+   So you can till a patch by your fire, plant a critter's favorite food, and
+   coax its kind to settle — the observation-lab loop, unblocked. Soil persists
+   across reloads, and crucially the **wild sim still respects habitat** (only
+   your own hand plants off-habitat; drift and reseeding can't). This was #1 on
+   your list; the rest below is still ahead:
 2. **Clearing & sculpting** — fell/remove plants to clear a garden zone around
    camp (you asked "how do I remove plants, sculpt the area?"). The first step of
    real terraforming.
