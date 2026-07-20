@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { emptyInventory } from "../src/game/inventory";
-import { BEDROLL_COST, FIRE_COST, placeMaterials } from "../src/game/materials";
+import { BEDROLL_COST, FIRE_COST, isDiggable, isLayable, placeMaterials } from "../src/game/materials";
 import { SavedWorld, packWorld } from "../src/game/save";
 import { generate } from "../src/world/generate";
 import { Tile, WALKABLE } from "../src/world/types";
@@ -65,6 +65,28 @@ test("marshy islands stand thick with rushes", () => {
   const map = generate(20); // confluence pools ring themselves in marsh
   const rushes = placeMaterials(map, 20).filter((n) => n.kind === "rush");
   expect(rushes.length).toBeGreaterThan(BEDROLL_COST.rush);
+});
+
+test("soil is dug from soft, plain ground — not from water, rock, or cliff", () => {
+  // the four kinds of plain earth a clod lifts from, matching where you settle home
+  for (const t of [Tile.Grass, Tile.Marsh, Tile.Sand, Tile.Forest]) {
+    expect(isDiggable(t), Tile[t]).toBe(true);
+  }
+  // water is for wading, bare rock and cliff are too hard, snow too cold
+  for (const t of [Tile.DeepWater, Tile.ShallowWater, Tile.Rock, Tile.Cliff, Tile.Snow]) {
+    expect(isDiggable(t), Tile[t]).toBe(false);
+  }
+});
+
+test("a carried clod lays on any ground you can stand on but the sea", () => {
+  // soil can amend even the barren heights — carry earth up and garden there
+  for (const t of [Tile.Grass, Tile.Marsh, Tile.Sand, Tile.Forest, Tile.Scree, Tile.Highland]) {
+    expect(isLayable(t), Tile[t]).toBe(true);
+  }
+  // never in the shallows (it would wash away), nor where you cannot stand
+  for (const t of [Tile.ShallowWater, Tile.DeepWater, Tile.Rock, Tile.Cliff, Tile.Snow]) {
+    expect(isLayable(t), Tile[t]).toBe(false);
+  }
 });
 
 test("the camp survives the save roundtrip", () => {

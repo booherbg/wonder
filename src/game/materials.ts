@@ -15,6 +15,32 @@ export interface MaterialNode {
 export const FIRE_COST = { wood: 4, stone: 3 };
 export const BEDROLL_COST = { wood: 2, rush: 4 };
 
+// The plain, soft ground a clod of soil lifts from — the same earth you can
+// settle a home on: meadow, marsh, beach, forest floor. The sea is for wading,
+// bare rock and cliff are too hard, the snow too cold. Deterministic: digging
+// asks nothing of the dice.
+const DIGGABLE: ReadonlySet<Tile> = new Set([Tile.Grass, Tile.Marsh, Tile.Sand, Tile.Forest]);
+
+// Where a carried clod can be worked into the ground: anywhere you can stand
+// that isn't open water — so soil can amend even the barren scree and highland,
+// letting the wanderer carry earth up and garden where nothing would grow.
+const LAYABLE: ReadonlySet<Tile> = new Set([
+  Tile.Grass,
+  Tile.Marsh,
+  Tile.Sand,
+  Tile.Forest,
+  Tile.Scree,
+  Tile.Highland,
+]);
+
+export function isDiggable(tile: Tile): boolean {
+  return DIGGABLE.has(tile);
+}
+
+export function isLayable(tile: Tile): boolean {
+  return LAYABLE.has(tile);
+}
+
 export function placeMaterials(map: WorldMap, seed: number): MaterialNode[] {
   const out: MaterialNode[] = [];
   const { width, height, tiles } = map;
