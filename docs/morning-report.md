@@ -1,81 +1,113 @@
-# Morning report — the night Wander became a game you play
+# Morning report — 2026-07-20 → 07-21
 
-*2026-07-19, built overnight by Opus + a fleet of Fable subagents.*
+Good morning. Here's the night, in the order you'd play it. Everything below
+is on `master`, tests green, unless a section says otherwise. Run `npm run dev`
+to play; `npm run report` renders this to HTML.
 
-You went to sleep calling it "a beautiful screensaver" — deep simulation, no
-verbs, nothing you could touch. You woke up to a game. Everything you fired at
-me tonight is **done, tested (240 tests green), and playable right now.**
+## The quick wins + the bug (done first, as asked)
 
-## What you can DO now
+**`G` = gather, `F` = sow.** The mnemonic swap. Every surface that names the
+keys moved with it — HUD legend, the inspect hint, the bare-bed camp line, and
+the field guide. A straight guard swap in the keydown handler; nothing else
+changed. *(commit `qol: G=gather, F=sow`)*
 
-- **Inspect everything (E).** No more "nothing within reach." Lean close and the
-  panel tells you *the hour* (the sky and sea right now — a low tide under
-  stars, an aurora, a glowing tide), *the water's edge* (tide pools + their
-  dwellers, driftwood), *the land* (springs, falls, the crater, stones), *what
-  grows*, *your company*, *your camp*. And it **follows you as you walk.**
-- **Feed & befriend a critter.** Open the inspect panel near one; if you carry a
-  seed its kind favors, an **offer a seed** button appears. Feed it and it warms
-  to you — *wary → warming → trusts you → bonded*. The friendship **persists per
-  island across reloads.** A bonded kind stops keeping its distance and comes to
-  live near your camp. This is the Animal-Crossing heart you asked for.
-- **A home worth tending.** Inspect while standing at your camp and you'll see a
-  **your camp** view: what's growing in the bed, what you've built (fire,
-  bedroll), and the **friends who've made a home here** — *"your camp hums —
-  three kinds live alongside you."*
-- **Lean in (Z).** A smooth focus zoom to kneel down and watch a **pollinator
-  work a specific flower** — butterflies now settle, sip, and gather thick where
-  your blooms are dense.
-- **Your almanac (J).** This island's character (shape, biomes, its remembered
-  aurora/tide/beast nights), the creatures you've met, every plant in all its
-  color varieties — and now a **fog-of-war map** of the island as far as you've
-  walked.
-- **Sail between islands (L).** The islands you've visited are saved; the picker
-  lets you return to one instead of guessing at `?seed=`.
-- **Press ? for help.** A field guide of the keys and the camp path — no more
-  guessing at mechanics. (New players get a one-time welcome.)
-- **The beast is alive.** It visibly pauses and **drops a glowing sprout** where
-  it plants, moves with purpose toward the flora it favors, and wades the
-  shallows instead of floating.
+**Gatherables show in `inspect` now, with a real pick-up tell.** Leaning close
+(`E`) near driftwood / stone / rushes reads e.g. **"driftwood, salt-dried — G
+to gather."** And it's *truthful*: it says **"a step closer to gather"** when a
+thing is in view but just out of arm's reach. (Turned out `inspect` range was
+wider than the gather range — so the old wording could promise a pick-up you
+couldn't make yet. Fixed.) *(commit `qol: gatherables show in inspect…`)*
 
-## Fixes you'll feel
+**The stuck deer — fixed, and you called it exactly.** Feeding one raised the
+whole kind's trust, so the others tried to potter toward you / the hearth (NW),
+away from their beach den — and the straight-line walk there ran into water.
+Root cause: the critter mover slides along flat walls but can't round a
+*concave* corner (deep water on two sides of a shallow tile), and the homeward
+drive kept re-aiming at the same blocked spot with no "I'm stuck" check. Now a
+critter that makes no headway steps off the wall toward open ground — a deer
+cut off by water **paces the shore** instead of freezing in a corner. The fix
+is deterministic (no dice) and only touches genuinely-pinned critters, so the
+seeded world is unchanged. Reproduction + regression tests included.
+*(commit `fix: critters step off walls…`)*
 
-The legend never hides keys anymore; F grabs the *nearest* plant; there's a
-gather button on the inspect card; **critters no longer starve at a cliff**
-(they only crave plants they can reach); murmurs don't clash with open panels;
-every plant card names its **biome** so "nosing after X" points you somewhere
-real. Plus the whole world got **depth** — ground shadows, a deeper sea,
-crown-light, foreground parallax, a vignette.
+## The menu (the frame everything hangs on)
 
-## A 3-minute tour (append to your URL)
+`Tab` opens a real **menu** — the thing you asked for, so not everything is a
+top-level keypress anymore. It holds:
 
-- `?split=1` — sow a few seeds by home and watch a **new species arise** in
-  minutes (the genome engine, visibly alive).
-- `?lowtide=1` then **E** on the beach — the tide pools finally answer.
-- `?seed=20` — a crater lake; `?seed=777` — waterfalls; `?shape=skerries` — a
-  scatter of islets. Feed a critter, then press **J** and watch your map fill in.
+- **Your backpack** — the seeds in your pouch and the materials you're carrying.
+- **The tucked-away doors** — the isles (`L`), the field guide (`?`), the
+  murmurs (`M`), the journal (`J`), a postcard (`P`), name this world (`N`).
+  Each row still names its shortcut, so the menu *teaches* the keys rather than
+  hiding them. The direct keys all still work.
+- **Your camp** (only when you're standing in it) — what the bed grows, what's
+  built, who's settled; the buildable actions shown as goals — **"make a fire —
+  4 driftwood · 3 stones"**, greyed until you can afford it, quoting the true
+  costs from the code so they can never drift; and a deliberate, two-click
+  **"abandon camp."**
 
-## What's *not* done (for you to weigh in on)
+The HUD legend slimmed to the immediate verbs + `Tab menu`, since the menu now
+holds the rest. Building a fire/bedroll from the menu and from `H` share one
+code path, so they can't disagree. *(commits `feat: pure menu…`, `feat: #menu
+panel…`, `feat: Tab opens the menu…`, `docs: field guide names the Tab menu`)*
 
-- ~~Take one home as a companion~~ — **shipped while you slept.** Take a bonded
-  critter home (the "take home" button, once it trusts you) and it pads at your
-  heel wherever you wander, still yours when you return. The befriend loop is
-  whole: feed → trust → bond → they live at your camp → one comes with you.
-- **Fauna persistence** — trust persists, but individual critters still respawn
-  fresh each load. The world doesn't yet *fully* remember its animals.
-- **The mountain as a destination** — Rock/Snow are still impassable walls; you
-  wanted a reachable summit with a vista. A real discoverable, unbuilt.
-- **An art eye** — the fog map, the camp view, and the pollinators were verified
-  by tests, not by a live browser (no headless-browser tooling here). Worth your
-  own look; tunables are one-liners.
+> Open question I took a lean on: I folded the "secondary actions" (postcards,
+> name) into the one menu rather than a separate menu — simpler, one place.
+> Easy to split later if you'd rather. And I **deferred** the growing camp-zone
+> radius (§2) behind the menu frame — it wants its own render pass; the menu is
+> the thing soil/felling/composter all hang off, so it went first.
 
-## How it was built
+## "Make sure things don't collapse" — they don't
 
-A 4-minute loop woke me; I dispatched Fable subagents for each feature (in
-isolated git worktrees when they'd collide), then verified and cherry-picked
-their work into `main`. Some agents hung after finishing their code (during
-browser self-checks) — a transcript-freshness check caught them and their work
-salvaged cleanly. Two big tasks I built by hand when delegation kept stalling.
-The whole night is one clean history in `git log`; the plan lives in
-`docs/superpowers/specs/playable-and-alive.md`.
+I ran real islands for ~4.5 hours of island-time each (8000 ticks) with critters
+grazing and dispersing, and watched the numbers:
 
-Go play. Feed something. It'll come home with you.
+| seed | plants (start → end, min) | living kinds (start → end) |
+|------|---------------------------|----------------------------|
+| 20 "Quipoltris" (53% water) | 8017 → 8789 (never below 8017) | 26 → 32 |
+| 2438 "Polpol Skerry" | 7319 → 8754 | 23 → 24 |
+| 1 "Fenfen Reach" | 8064 → 8787 | 22 → 28 |
+
+The finite-space balancer holds: every island fills to its lush ceiling
+(~8800) and *stays*, biodiversity holding or **rising**. No boom-bust. I left a
+lean regression test (`tests/ecology-holds.test.ts`) so a future tuning change
+can't quietly turn the peaceful sim into a crashing one.
+
+## A little fractal deepening (the observation lab)
+
+A critter's **spreader-vs-grazer role** is now a visible tell on its inspect
+card — "a spreader — its visits carry a favorite's seed to new ground" /
+"a grazer — it crops what it favors." It was a hidden value that decides
+whether a visit *plants or crops*; in the sandbox (all info shown) it earns a
+line, per the discoverability rule. It's also the quiet reason an island's
+flora leans, over its days, toward what its spreaders love — and it's exactly
+what the byproduct chains (below) ride on. *(commit `feat: a critter's
+spreader/grazer role…`)*
+
+## Design B — byproduct chains & seed search  *(status below)*
+
+<!-- FINALIZE: design B integration result -->
+The big ecology layer built in parallel tonight. One new primitive — a
+transient, trait-tagged **substrate** (a byproduct a spreader drops where it
+feeds) — lets multi-organism life-cycle chains self-assemble from the seed, and
+turns "sail to a new island" into a search with a minimum-diversity floor.
+**It's behind an A/B checkbox** (`wander.chains`, default on) exactly as you
+asked — flip it off (`?chains=0`) to compare, "in case it's a disaster." Full
+status and how-to filled in once it's integrated and verified.
+
+## Decisions waiting for you
+
+<!-- FINALIZE: merge with Fable audit's ideas -->
+1. **Menu:** secondary actions folded into the one menu — keep, or split
+   postcards/name into their own?
+2. **Camp-zone growth** (deferred): purely a cosmetic radius, or does a bigger
+   camp *do* more (draw critters, protect plants)?
+3. **The home-lab loop next** (soil dig+carry → off-habitat planting →
+   composter → felling/clearing → an origin story for starting supplies) — all
+   want the menu as their home, which now exists.
+
+## The Fable art/ideas audit
+
+<!-- FINALIZE: paste Fable audit findings -->
+Running a fresh Fable pass over the whole game for details, ideas, and art
+direction — findings folded in here and into `docs/ideas.md`.
