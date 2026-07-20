@@ -32,7 +32,36 @@
         border-radius: 6px; padding: 9px 13px; white-space: pre; max-width: 52vw;
         pointer-events: auto; user-select: text; z-index: 6;
       }
-      #hud .msg { display: block; margin-bottom: 4px; color: rgba(255, 255, 255, 0.9); }
+      #hud .msg { display: block; margin-bottom: 6px; color: rgba(255, 255, 255, 0.9); }
+      /* the hotbar — three functional slots (hand · hoe · pouch), codex-styled */
+      #hud .hotbar { display: inline-flex; align-items: stretch; gap: 6px; vertical-align: middle; }
+      #hud .hb-slot {
+        position: relative; display: inline-flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 3px;
+        width: 46px; height: 46px; padding: 3px; border-radius: 7px;
+        color: rgba(228, 236, 242, 0.62);
+        background: linear-gradient(180deg, rgba(19, 35, 47, 0.72), rgba(8, 15, 22, 0.82));
+        box-shadow: inset 0 0 0 1px rgba(127, 224, 196, 0.1);
+      }
+      #hud .hb-slot.on {
+        color: #e8f2ee;
+        box-shadow: inset 0 0 0 1px #7fe0c4, 0 0 15px rgba(127, 224, 196, 0.3);
+      }
+      #hud .hb-k { position: absolute; top: 2px; left: 5px; font-size: 9px; color: rgba(228, 236, 242, 0.3); }
+      #hud .hb-slot.on .hb-k { color: #7fe0c4; }
+      #hud .hb-ico { width: 22px; height: 22px; display: block; }
+      #hud .hb-dot { width: 15px; height: 15px; border-radius: 4px; box-shadow: 0 0 8px currentColor; }
+      #hud .hb-dot.empty { box-shadow: inset 0 0 0 1px rgba(228, 236, 242, 0.28); }
+      #hud .hb-ct { position: absolute; bottom: 2px; right: 5px; font-size: 10px; color: #f4c979; }
+      #hud .hb-n {
+        font-size: 8px; letter-spacing: 0.02em; color: rgba(228, 236, 242, 0.55);
+        max-width: 42px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #hud .hb-slot.on .hb-n { color: rgba(228, 236, 242, 0.82); }
+      #hud .hb-carry { align-self: center; margin-left: 6px; font-size: 11px; color: rgba(228, 236, 242, 0.42); }
+      #hud .hb-carry b { color: rgba(228, 236, 242, 0.72); font-weight: 400; }
+      #hud .hb-legend { display: block; margin-top: 7px; font-size: 11px; color: rgba(228, 236, 242, 0.42); }
+      #hud .hb-legend b { color: #7fe0c4; font-weight: 400; }
       #inspect {
         display: none;
         position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%);

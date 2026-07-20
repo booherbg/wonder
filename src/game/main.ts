@@ -48,8 +48,20 @@ import {
 } from "../render/picker";
 import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { loadExplored, markSeen, saveExplored } from "./explored";
-import { Inventory, emptyInventory, gather, sow, toss } from "./inventory";
-import { BEDROLL_COST, FIRE_COST, MaterialNode, isDiggable, isLayable, placeMaterials } from "./materials";
+import {
+  Toolbar,
+  cycleLoaded,
+  cycleSlot,
+  emptyToolbar,
+  gatherSeed,
+  loaded,
+  migrate,
+  plantLoaded,
+  selectSlot,
+  takeSeed,
+  tossLoaded,
+} from "./toolbar";
+import { BEDROLL_COST, FIRE_COST, MaterialNode, isTillable, placeMaterials } from "./materials";
 import { TIDE_LOW, TidePool, exposureAt, placeTidePools, tideAt } from "./tide";
 import { MurmurEngine, loadAnthology } from "./murmurs";
 import {
@@ -154,7 +166,7 @@ const GATHER_RANGE = 24; // px — materials' reach
 const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
 const INSPECT_RANGE = 2.5 * TILE_SIZE;
 
-let inventory: Inventory = emptyInventory();
+let bar: Toolbar = emptyToolbar();
 const murmurs = new MurmurEngine();
 let stillTime = 0;
 let hudMsg = "";
@@ -170,28 +182,149 @@ function flashHud(msg: string): void {
   renderHud();
 }
 
+// the two tool glyphs the hotbar draws (the pouch draws a seed dot instead)
+const HAND_GLYPH = `<svg class="hb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11.5V6a1.4 1.4 0 0 1 2.8 0v4.4m0-.4V5a1.4 1.4 0 0 1 2.8 0v5.2m0-.2a1.4 1.4 0 0 1 2.8 0v3.2c0 3.5-2.3 6.1-5.6 6.1-3.3 0-4.9-2-5.3-4.8-.2-1.5-1.5-2.6-1.5-2.6a1.2 1.2 0 0 1 1.8-1.5L8 12.3"/></svg>`;
+const HOE_GLYPH = `<svg class="hb-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 15 9"/><path d="M13 5h6v2l-3 3-3-3z"/></svg>`;
+
+// the pouch as a flat seed list — for the save, the inspect gather button, and
+// feeding, all of which still reckon in individual seeds
+const flatSeeds = (b: Toolbar) =>
+  b.bank.flatMap((v) => v.genomes.map((g) => ({ species: v.species, genome: g })));
+
+// what the one Interact key would do right now, given the selected slot
+function spaceTell(): string {
+  const nb = String.fromCharCode(160);
+  if (bar.selected === "hoe") return `<b>space</b>${nb}till`;
+  if (bar.selected === "pouch") {
+    const v = loaded(bar);
+    return v ? `<b>space</b>${nb}plant${nb}${species[v.species].name}` : `<b>space</b>${nb}(pouch${nb}empty)`;
+  }
+  return `<b>space</b>${nb}gather`;
+}
+
 function renderHud(): void {
-  const dots = inventory.seeds
-    .map(
-      (s) =>
-        `<span class="dot" style="background:${hsl(s.genome.hue, s.genome.sat, 0.55)}"></span>`,
-    )
-    .join("");
   const msg = hudMsg ? `<span class="msg">${hudMsg}</span>` : "";
-  const carriedParts = (["wood", "stone", "rush", "soil"] as const)
-    .filter((k) => mat[k] > 0)
-    .map((k) => `${k} ${mat[k]}`);
-  const carried = carriedParts.length > 0 ? `${carriedParts.join(" · ")} · ` : "";
-  // the pouch adds to the legend, never replaces it — no key goes hidden
-  const pouch = inventory.seeds.length > 0 ? `seeds ${dots} · Q toss · ` : "";
-  // non-breaking spaces bind each key to its word, so when the legend wraps it
-  // only ever breaks at a " · ", never mid-item ("L isles" stays whole)
-  const legend = [
-    "E inspect", "G gather", "F sow", "T dig", "B lay", "H home", "Z focus", "R island", "Tab menu",
-  ]
-    .map((item) => item.replace(" ", String.fromCharCode(160)))
-    .join(" · ");
-  hud.innerHTML = `${msg}${carried}${pouch}${legend}`;
+  const nb = String.fromCharCode(160);
+  const v = loaded(bar);
+  const pouchArt = v
+    ? `<span class="hb-dot" style="background:${hsl(v.genomes[0].hue, v.genomes[0].sat, 0.55)}"></span><span class="hb-ct">${v.genomes.length}</span>`
+    : `<span class="hb-dot empty"></span>`;
+  const slot = (on: boolean, key: string, art: string, name: string) =>
+    `<span class="hb-slot${on ? " on" : ""}"><span class="hb-k">${key}</span>${art}<span class="hb-n">${name}</span></span>`;
+  const slots =
+    slot(bar.selected === "hand", "1", HAND_GLYPH, "hand") +
+    slot(bar.selected === "hoe", "2", HOE_GLYPH, "hoe") +
+    slot(bar.selected === "pouch", "3", pouchArt, v ? species[v.species].name : "pouch");
+  const carry = (["wood", "stone", "rush"] as const)
+    .filter((kk) => mat[kk] > 0)
+    .map((kk) => `${kk}${nb}<b>${mat[kk]}</b>`)
+    .join(`${nb}·${nb}`);
+  const carried = carry ? `<span class="hb-carry">${carry}</span>` : "";
+  hud.innerHTML =
+    `${msg}<span class="hotbar">${slots}${carried}</span>` +
+    `<span class="hb-legend">${spaceTell()}${nb}·${nb}E${nb}examine${nb}·${nb}Tab${nb}menu</span>`;
+}
+
+// One Interact, resolved by the selected slot: the hoe tills, the pouch plants
+// its loaded seed, the bare hand gathers what's in reach.
+function interact(): void {
+  const px = player.x + 6;
+  const py = player.y + 2;
+  const tx = Math.floor(px / TILE_SIZE);
+  const ty = Math.floor(py / TILE_SIZE);
+  if (bar.selected === "hoe") {
+    if (flora.hasSoilTile(tx, ty)) {
+      flashHud("this ground is already tilled — a seed will take here");
+      return;
+    }
+    if (!isTillable(tileAt(map, tx, ty))) {
+      flashHud("too hard to till — grass, marsh, sand, or the forest floor takes a hoe");
+      return;
+    }
+    flora.laySoil(tx, ty);
+    flashHud("you work the ground into a bed — tilled now, and any seed will take");
+    renderHud();
+    persist();
+    return;
+  }
+  if (bar.selected === "pouch") {
+    const v = loaded(bar);
+    if (!v) {
+      flashHud("the pouch is empty — load a seed from your pack (Tab)");
+      return;
+    }
+    const onSoil = flora.hasSoilTile(tx, ty);
+    if (!flora.sowableAt(v.species, px, py)) {
+      flashHud(
+        onSoil
+          ? "no room here for it to root"
+          : `${species[v.species].name} won't take here — till the ground (hoe), or find its habitat`,
+      );
+      return;
+    }
+    const res = plantLoaded(bar);
+    if (!res) return;
+    const [nextBar, seed] = res;
+    if (!flora.sowByPlayer(seed.species, seed.genome, px, py, flora.tick)) {
+      flashHud("no room here for it to root");
+      return;
+    }
+    bar = nextBar;
+    flashHud(
+      onSoil ? `${species[seed.species].name} takes to the tilled soil` : `${species[seed.species].name} takes root`,
+    );
+    murmurs.offer("sow");
+    renderHud();
+    persist();
+    return;
+  }
+  gatherInReach();
+}
+
+// The bare hand's take: the nearest gatherable in reach — a material node first,
+// else the nearest plant, whose seed joins the pouch. (Was the G key.)
+function gatherInReach(): void {
+  const reachable = materials
+    .filter((m) => !taken.has(m.idx))
+    .map((m) => ({
+      m,
+      d: Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y),
+    }))
+    .filter(({ d }) => d < GATHER_RANGE + 8)
+    .sort((a, b) => a.d - b.d);
+  if (reachable.length > 0) {
+    const node = reachable[0].m;
+    taken.add(node.idx);
+    mat[node.kind]++;
+    if (!fire && mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
+      flashHud("you carry enough for a fire — press H beside your home");
+    } else if (fire && !bedroll && mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
+      flashHud("you carry enough for a bedroll — press H beside your fire");
+    } else {
+      flashHud(
+        node.kind === "wood"
+          ? tileAt(map, node.x, node.y) === Tile.Forest
+            ? "fallen wood, dry and light"
+            : "driftwood — salt-dried and light"
+          : node.kind === "stone"
+            ? "a loose stone, sun-warm"
+            : "a marsh rush, cut green and soft",
+      );
+    }
+    renderHud();
+    persist();
+    return;
+  }
+  const plant = nearestPlant(flora.plantsNear(player.x, player.y, PLANT_REACH), player.x, player.y);
+  if (!plant) {
+    flashHud("nothing in reach to gather");
+    return;
+  }
+  bar = gatherSeed(bar, plant.species, plant.genome);
+  flashHud(`a seed of ${species[plant.species].name}`);
+  murmurs.offer("gather");
+  renderHud();
+  persist();
 }
 
 // tile → short word, for the debug readout and the ground-underfoot line
@@ -345,7 +478,7 @@ let walkTy = -1;
 let materials: MaterialNode[] = []; // driftwood, loose stones, marsh rushes, per seed
 let taken = new Set<number>(); // material nodes already gathered
 let pools: TidePool[] = []; // the shore's small gardens, bared at low water
-let mat = { wood: 0, stone: 0, rush: 0, soil: 0 }; // what the wanderer carries
+let mat = { wood: 0, stone: 0, rush: 0 }; // materials the wanderer carries (seeds live in the pouch)
 let fire = false; // the camp fire, once built
 let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
 let skyOffset = 0; // ms slept forward: the sky's clock runs ahead of the wall's
@@ -366,7 +499,7 @@ function persist(): void {
       flora.tick,
       player,
       home,
-      inventory,
+      { seeds: flatSeeds(bar) },
       flora.all,
       Date.now(),
       species.slice(baseSpeciesCount),
@@ -375,7 +508,6 @@ function persist(): void {
         wood: mat.wood,
         stone: mat.stone,
         rush: mat.rush,
-        soil: mat.soil,
         taken: [...taken],
         fire,
         bedroll,
@@ -455,7 +587,6 @@ function loadWorld(seed: number): void {
     wood: saved?.camp?.wood ?? 0,
     stone: saved?.camp?.stone ?? 0,
     rush: saved?.camp?.rush ?? 0,
-    soil: saved?.camp?.soil ?? 0,
   };
   fire = saved?.camp?.fire ?? false;
   bedroll = saved?.camp?.bedroll ?? false;
@@ -512,14 +643,14 @@ function loadWorld(seed: number): void {
   simAcc = 0;
   saveAcc = 0;
   player = new Player((map.spawn.x + 0.5) * TILE_SIZE, (map.spawn.y + 0.5) * TILE_SIZE);
-  inventory = emptyInventory();
+  bar = emptyToolbar();
   if (saved) {
     const [px, py] = saved.player;
     if (isWalkable(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE))) {
       player.x = px;
       player.y = py;
     }
-    inventory = restoreInventory(saved, species);
+    bar = migrate(restoreInventory(saved, species).seeds, {});
   }
   // the companion keeps its promise across a reload: individuals respawn
   // each load, so what the save kept is the kind — the nearest of your
@@ -818,15 +949,11 @@ function openInspectAtPlayer(record = true): void {
   const aheadTx = Math.floor((player.x + 6) / TILE_SIZE);
   const aheadTy = Math.floor((player.y + 2) / TILE_SIZE);
   if (flora.hasSoilTile(itx, ity)) {
-    land.push("worked soil underfoot — tilled, and any seed will take here (F)");
+    land.push("worked soil underfoot — tilled, and a loaded seed will take here (space)");
   } else {
     land.push(GROUND_WORDS[tileAt(map, itx, ity)] ?? "open ground underfoot");
-    if (flora.hasSoilTile(aheadTx, aheadTy)) land.push("tilled soil just ahead — F sows any seed on it");
-  }
-  if (mat.soil > 0) {
-    land.push(
-      `${mat.soil === 1 ? "a clod of soil" : `${mat.soil} clods of soil`} in your pack — B lays tilled ground, T digs more`,
-    );
+    if (flora.hasSoilTile(aheadTx, aheadTy)) land.push("tilled soil just ahead — a loaded seed will take (space)");
+    else if (isTillable(tileAt(map, aheadTx, aheadTy))) land.push("soft ground ahead — a hoe would work it into a bed (space)");
   }
   if ((map.springs ?? []).some((s) => Math.hypot(s.x - itx, s.y - ity) < 3))
     land.push("a hot spring, steaming");
@@ -851,14 +978,12 @@ function openInspectAtPlayer(record = true): void {
   openInspect(
     shown,
     species,
-    inventory.seeds,
+    flatSeeds(bar),
     companySpecies,
     beastNear,
     companyMoods,
     (group) => {
-      const next = gather(inventory, { species: group.plant.species, genome: group.plant.genome });
-      if (!next) return "pouch full";
-      inventory = next;
+      bar = gatherSeed(bar, group.plant.species, group.plant.genome);
       flashHud(`a seed of ${species[group.plant.species].name}`);
       murmurs.offer("gather");
       return "gathered";
@@ -868,11 +993,12 @@ function openInspectAtPlayer(record = true): void {
     // nearest of the kind comes to eat at your feet, and its whole kind
     // remembers your hands a little longer
     (sp) => {
-      const offering = bestOffering(sp.palate, inventory.seeds);
+      const seeds = flatSeeds(bar);
+      const offering = bestOffering(sp.palate, seeds);
       if (offering < 0) return "nothing it favors"; // the pouch changed while you looked
-      const seeds = [...inventory.seeds];
-      seeds.splice(offering, 1);
-      inventory = { seeds };
+      const took = takeSeed(bar, seeds[offering].species);
+      if (!took) return "nothing it favors";
+      bar = took[0];
       trust.set(sp.id, raiseTrust(trust.get(sp.id) ?? 0));
       saveTrust(currentSeed, trust);
       let friend: Critter | null = null;
@@ -1056,12 +1182,13 @@ function nameWorld(): void {
 }
 
 function tossSeed(): void {
-  const result = toss(inventory);
-  if (!result) {
+  const v = loaded(bar);
+  if (!v) {
     flashHud("the pouch is empty");
   } else {
-    inventory = result[0];
-    flashHud(`a seed of ${species[result[1].species].name}, given back to the wind`);
+    const name = species[v.species].name;
+    bar = tossLoaded(bar);
+    flashHud(`a seed of ${name}, given back to the wind`);
   }
   renderHud();
 }
@@ -1073,7 +1200,7 @@ function tossSeed(): void {
 function buildMenuModel(): MenuModel {
   const view = campViewAtHome();
   return {
-    pouch: inventory.seeds.map((s) => ({ name: species[s.species].name })),
+    pouch: bar.bank.map((v) => ({ name: `${species[v.species].name} ×${v.genomes.length}` })),
     mat,
     camp: view
       ? {
@@ -1327,134 +1454,46 @@ window.addEventListener("keydown", (e) => {
       closeWeb();
       openInspectAtPlayer();
     }
-  } else if (k === "g") {
-    // materials first: driftwood and stones are the plainer, nearer gift
-    const reachable = materials
-      .filter((m) => !taken.has(m.idx))
-      .map((m) => ({
-        m,
-        d: Math.hypot((m.x + 0.5) * TILE_SIZE - player.x, (m.y + 0.5) * TILE_SIZE - player.y),
-      }))
-      .filter(({ d }) => d < GATHER_RANGE + 8)
-      .sort((a, b) => a.d - b.d);
-    if (reachable.length > 0) {
-      const node = reachable[0].m;
-      taken.add(node.idx);
-      mat[node.kind]++;
-      if (!fire && mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
-        flashHud("you carry enough for a fire — press H beside your home");
-      } else if (fire && !bedroll && mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
-        flashHud("you carry enough for a bedroll — press H beside your fire");
-      } else {
-        flashHud(
-          node.kind === "wood"
-            ? tileAt(map, node.x, node.y) === Tile.Forest
-              ? "fallen wood, dry and light"
-              : "driftwood — salt-dried and light"
-            : node.kind === "stone"
-              ? "a loose stone, sun-warm"
-              : "a marsh rush, cut green and soft",
-        );
-      }
-      renderHud();
-      persist();
-      return;
-    }
-    // then plants: the one you mean is the nearest, not the first found
-    const plant = nearestPlant(
-      flora.plantsNear(player.x, player.y, PLANT_REACH),
-      player.x,
-      player.y,
-    );
-    if (!plant) {
-      flashHud("nothing in reach to gather");
-    } else {
-      const next = gather(inventory, { species: plant.species, genome: plant.genome });
-      if (!next) {
-        flashHud("your seed pouch is full");
-      } else {
-        inventory = next;
-        flashHud(`a seed of ${species[plant.species].name}`);
-        murmurs.offer("gather");
-      }
-    }
-  } else if (k === "f") {
-    const px = player.x + 6;
-    const py = player.y + 2;
-    const tx = Math.floor(px / TILE_SIZE);
-    const ty = Math.floor(py / TILE_SIZE);
-    const onSoil = flora.hasSoilTile(tx, ty);
-    const here = tileAt(map, tx, ty);
-    // on ground the wanderer has tilled with soil, ANY seed takes; on wild
-    // ground, still only a seed of that tile's own habitat — the sim's rule
-    const result = sow(inventory, (s) => onSoil || species[s.species].habitat === here);
-    if (!result) {
-      flashHud(
-        inventory.seeds.length === 0
-          ? "no seeds to sow"
-          : "nothing in the pouch would grow here — dig a clod (T), lay it (B), and anything will",
-      );
-    } else {
-      const [rest, seedToPlant] = result;
-      // sowByPlayer is the one path that waives habitat, and only on tilled soil
-      const planted = flora.sowByPlayer(seedToPlant.species, seedToPlant.genome, px, py, flora.tick);
-      if (planted) {
-        inventory = rest;
-        flashHud(
-          onSoil
-            ? `${species[seedToPlant.species].name} takes to the tilled soil`
-            : `${species[seedToPlant.species].name} takes root`,
-        );
-        murmurs.offer("sow");
-      } else {
-        flashHud("no room here for it to root");
-      }
-    }
+  } else if (k === " ") {
+    e.preventDefault(); // space would scroll the page
+    interact();
+  } else if (k === "1") {
+    bar = selectSlot(bar, "hand");
     renderHud();
-  } else if (k === "t") {
-    // dig a clod of soil from the plain earth into the pack — deterministic,
-    // one clod a press, the ground left unscarred: this is gentle gardening
-    const px = player.x + 6;
-    const py = player.y + 2;
-    const here = tileAt(map, Math.floor(px / TILE_SIZE), Math.floor(py / TILE_SIZE));
-    if (isDiggable(here)) {
-      mat.soil++;
-      flashHud(
-        mat.soil === 1
-          ? "you dig a clod of dark soil — press B to lay it as tilled ground"
-          : `another clod of dark soil for the pack — soil ${mat.soil}`,
-      );
-      renderHud();
-      persist();
-    } else {
-      flashHud("the ground here is too hard to dig — try grass, marsh, sand, or the forest floor");
-    }
-  } else if (k === "b") {
-    // lay a carried clod down: the tile becomes tilled ground, and now any
-    // seed will root there — sow it with F, its habitat set aside
-    const px = player.x + 6;
-    const py = player.y + 2;
-    const tx = Math.floor(px / TILE_SIZE);
-    const ty = Math.floor(py / TILE_SIZE);
-    const here = tileAt(map, tx, ty);
-    if (mat.soil <= 0) {
-      flashHud("no soil to lay — press T on grass, marsh, sand, or forest to dig a clod first");
-    } else if (flora.hasSoilTile(tx, ty)) {
-      flashHud("this ground is already tilled — F sows any seed here");
-    } else if (!isLayable(here)) {
-      flashHud("nothing here to work a clod of soil into");
-    } else {
-      mat.soil--;
-      flora.laySoil(tx, ty);
-      flashHud("you work a clod into the ground — tilled now, and any seed will take (F)");
-      renderHud();
-      persist();
-    }
+  } else if (k === "2") {
+    bar = selectSlot(bar, "hoe");
+    renderHud();
+  } else if (k === "3") {
+    // 3 picks the pouch; press it again, already on the pouch, to swap varietal
+    bar = bar.selected === "pouch" ? cycleLoaded(bar, 1) : selectSlot(bar, "pouch");
+    renderHud();
+  } else if (k === "[") {
+    bar = cycleSlot(bar, -1);
+    renderHud();
+  } else if (k === "]") {
+    bar = cycleSlot(bar, 1);
+    renderHud();
   } else if (k === "q") {
     tossSeed();
   }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+// the wheel cycles the hotbar slot — the classic hotbar feel
+window.addEventListener(
+  "wheel",
+  (e) => {
+    // let an open card scroll; the wheel only cycles the hotbar out in the world
+    if (
+      isMenuOpen() || isInspectOpen() || isHelpOpen() || isAnthologyOpen() ||
+      isJournalOpen() || isWebOpen() || isPickerOpen()
+    )
+      return;
+    bar = cycleSlot(bar, e.deltaY > 0 ? 1 : -1);
+    renderHud();
+    e.preventDefault();
+  },
+  { passive: false },
+);
 window.addEventListener("resize", () => renderer.resize());
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {

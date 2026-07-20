@@ -103,6 +103,27 @@ export function tossLoaded(bar: Toolbar): Toolbar {
   return { ...bar, bank };
 }
 
+// Take one seed of a given kind (oldest first) — for feeding a critter the seed
+// it favours, which needn't be the loaded one. Empties the varietal when spent,
+// keeping the loaded pouch pointing at the same kind (or empty, if it was that).
+export function takeSeed(bar: Toolbar, species: number): [Toolbar, { species: number; genome: Genome }] | null {
+  const i = bar.bank.findIndex((v) => v.species === species);
+  if (i === -1 || bar.bank[i].genomes.length === 0) return null;
+  const v = bar.bank[i];
+  const [genome, ...rest] = v.genomes;
+  const picked = { species: v.species, genome };
+  if (rest.length > 0) {
+    const bank = [...bar.bank];
+    bank[i] = { ...v, genomes: rest };
+    return [{ ...bar, bank }, picked];
+  }
+  const bank = bar.bank.filter((_, j) => j !== i);
+  let active = bar.active;
+  if (active === i) active = null; // the loaded kind is spent → empty pouch
+  else if (active !== null && active > i) active -= 1; // an earlier kind left; shift down
+  return [{ ...bar, bank, active }, picked];
+}
+
 export function selectSlot(bar: Toolbar, name: SlotName): Toolbar {
   return { ...bar, selected: name };
 }

@@ -10,6 +10,7 @@ import {
   migrate,
   plantLoaded,
   selectSlot,
+  takeSeed,
   tossLoaded,
 } from "../src/game/toolbar";
 import { Genome, PlantForm } from "../src/life/genome";
@@ -134,6 +135,23 @@ test("gather does not mutate the original bar", () => {
   gatherMaterial(bar, "wood");
   expect(bar.bank).toHaveLength(0);
   expect(bar.materials.wood).toBe(0);
+});
+
+test("takeSeed pulls one seed of a given kind for feeding, keeping the pouch sane", () => {
+  let bar = emptyToolbar();
+  bar = gatherSeed(bar, 3, genomeOf(0.1)); // loaded (bank index 0)
+  bar = gatherSeed(bar, 7, genomeOf(0.2)); // bank index 1
+  bar = gatherSeed(bar, 7, genomeOf(0.3));
+  // take a species-7 seed (not the loaded kind) — the loaded stays on species 3
+  const t1 = takeSeed(bar, 7)!;
+  expect(t1[1].species).toBe(7);
+  expect(t1[1].genome.hue).toBe(0.2); // oldest of that kind
+  expect(loaded(t1[0])!.species).toBe(3);
+  // an unknown kind yields nothing
+  expect(takeSeed(bar, 99)).toBeNull();
+  // taking the last of the LOADED kind empties the pouch
+  const t2 = takeSeed(bar, 3)!;
+  expect(loaded(t2[0])).toBeNull();
 });
 
 test("migrate rebuilds the bank from legacy seeds, loads the first kind, drops soil", () => {
