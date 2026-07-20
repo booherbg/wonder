@@ -19,7 +19,7 @@ export const REFERENCES_URL = "https://claude.ai/code/artifact/d256bcb4-2a5f-4f5
 
 // one extra line, spoken only on a wanderer's very first arrival
 export const HELP_WELCOME =
-  "welcome. look around — E leans close, and the beach keeps driftwood for a fire. press ? any time to find this card again.";
+  "welcome. look around — E leans close, space acts (an empty hand gathers), and the beach keeps driftwood for a fire. press ? any time to find this card again.";
 
 export function helpSections(): HelpSection[] {
   return [
@@ -32,11 +32,10 @@ export function helpSections(): HelpSection[] {
         { key: "K", text: "show or hide the little island map in the corner — a star marks your camp" },
         { key: "E", text: "lean close — what grows and moves nearby shows itself" },
         { key: "Z", text: "lean the view in close — watch the small lives up close" },
-        { key: "G", text: "gather what is in reach — driftwood, a stone, a rush, or a seed" },
-        { key: "F", text: "sow a seed from your pouch, where the ground suits it — or on soil you've tilled" },
-        { key: "T", text: "dig a clod of soil from plain ground into your pack" },
-        { key: "B", text: "lay a clod to till the ground — then any seed will root there" },
-        { key: "Q", text: "give a seed back to the wind" },
+        { key: "space", text: "the one action — the hand gathers, the hoe tills, the pouch plants your loaded seed" },
+        { key: "1 2 3", text: "hold the hand, the hoe, or the seed pouch (the wheel and [ ] cycle too)" },
+        { key: "3 again", text: "already on the pouch, press 3 to load the next kind of seed you carry" },
+        { key: "Q", text: "give the loaded seed back to the wind" },
         { key: "H", text: "make this place home; beside home, H tends the camp" },
         { key: "J", text: "the field journal — it writes itself as you look" },
         { key: "M", text: "the murmurs you have gathered" },
@@ -56,7 +55,7 @@ export function helpSections(): HelpSection[] {
           text:
             "the island offers what a camp needs: driftwood on the beaches and fallen " +
             "wood in the forest; loose stones on the shore, on the scree, and where " +
-            "ground meets rock; soft rushes standing in the marsh. G gathers each.",
+            "ground meets rock; soft rushes standing in the marsh. hold the hand and press space to gather each.",
         },
         {
           text:
@@ -73,10 +72,10 @@ export function helpSections(): HelpSection[] {
         },
         {
           text:
-            "dig a clod of soil (T) from plain ground, carry it, and lay it (B) to make " +
-            "tilled ground of any tile — then F sows any seed there, off its usual " +
-            "habitat. till a patch by your fire and grow a critter's favorite food to " +
-            "coax it to stay.",
+            "hold the hoe (2) and press space on soft ground to work it into a tilled " +
+            "bed; then hold the seed pouch (3) and space sows your loaded seed there, " +
+            "off its usual habitat. till a patch by your fire, grow a critter's favorite " +
+            "food, and a tended plot fills itself in time — coaxing its kind to stay.",
         },
       ],
     },
@@ -98,7 +97,7 @@ export function helpSections(): HelpSection[] {
         },
         {
           text:
-            "your camp is a garden bed: sow a gathered seed (F) in it, and if you plant what a critter loves, its kind will settle in near your fire to feed.",
+            "your camp is a garden bed: till it, load a gathered seed and press space, and if you plant what a critter loves, its kind will settle in near your fire to feed.",
         },
       ],
     },
