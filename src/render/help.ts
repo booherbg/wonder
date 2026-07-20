@@ -32,7 +32,9 @@ export function helpSections(): HelpSection[] {
         { key: "E", text: "lean close — what grows and moves nearby shows itself" },
         { key: "Z", text: "lean the view in close — watch the small lives up close" },
         { key: "G", text: "gather what is in reach — driftwood, a stone, a rush, or a seed" },
-        { key: "F", text: "sow a seed from your pouch, where the ground suits it" },
+        { key: "F", text: "sow a seed from your pouch, where the ground suits it — or on soil you've tilled" },
+        { key: "T", text: "dig a clod of soil from plain ground into your pack" },
+        { key: "B", text: "lay a clod to till the ground — then any seed will root there" },
         { key: "Q", text: "give a seed back to the wind" },
         { key: "H", text: "make this place home; beside home, H tends the camp" },
         { key: "J", text: "the field journal — it writes itself as you look" },
@@ -67,6 +69,13 @@ export function helpSections(): HelpSection[] {
           text:
             "after dark, H beside the fire sleeps you to dawn. the island lives the " +
             "skipped hours for real — you may wake to something that was not there.",
+        },
+        {
+          text:
+            "dig a clod of soil (T) from plain ground, carry it, and lay it (B) to make " +
+            "tilled ground of any tile — then F sows any seed there, off its usual " +
+            "habitat. till a patch by your fire and grow a critter's favorite food to " +
+            "coax it to stay.",
         },
       ],
     },

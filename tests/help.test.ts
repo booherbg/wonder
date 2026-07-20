@@ -51,6 +51,19 @@ test("the camp chapter quotes the true costs and says where to look", () => {
   expect(camp).toContain("marsh");
 });
 
+test("the guide teaches digging and laying soil, and why", () => {
+  const keys = helpSections()[0].entries;
+  const dig = keys.find((e) => e.key === "T");
+  const lay = keys.find((e) => e.key === "B");
+  expect(dig?.text).toContain("soil");
+  expect(lay?.text.toLowerCase()).toContain("till");
+  // the camp chapter says the point: garden anywhere, off the usual habitat
+  const camp = helpSections()[1].entries.map((e) => e.text).join(" ").toLowerCase();
+  expect(camp).toContain("dig");
+  expect(camp).toContain("tilled");
+  expect(camp).toContain("habitat");
+});
+
 test("things to seek leaves doors ajar: night, tide, drift, other islands", () => {
   const seek = helpSections().find((s) => s.title === "things to seek")!.entries.map((e) => e.text).join(" ");
   expect(seek).toContain("night");

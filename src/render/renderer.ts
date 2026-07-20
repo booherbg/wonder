@@ -370,6 +370,26 @@ export class Renderer {
       }
     }
 
+    // tilled soil: each tile the wanderer worked a clod into reads as turned,
+    // furrowed earth — dark enough to tell over any ground it was laid on, so
+    // a feeding patch by the fire looks worked by hand. Over the ground but
+    // under all sprites (like the garden bed), so life always stands on top.
+    if (scene.flora && scene.flora.soilTiles.size > 0) {
+      for (const key of scene.flora.soilTiles) {
+        const tx = key % map.width;
+        const ty = (key / map.width) | 0;
+        if (tx < x0 || tx > x1 || ty < y0 || ty > y1) continue;
+        const dx = Math.round(tx * TILE_SIZE - camX);
+        const dy = Math.round(ty * TILE_SIZE - camY);
+        ctx.fillStyle = "rgba(58, 38, 22, 0.55)"; // turned earth
+        ctx.fillRect(dx + 1, dy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+        ctx.fillStyle = "rgba(32, 20, 11, 0.5)"; // furrows raked across it
+        for (let fy = dy + 4; fy < dy + TILE_SIZE - 2; fy += 4) {
+          ctx.fillRect(dx + 2, fy, TILE_SIZE - 4, 1);
+        }
+      }
+    }
+
     // the wanderer's own footprints press into sand and marsh, fading soon
     const PRINT_FADE_MS = 9000;
     if (scene.player) {

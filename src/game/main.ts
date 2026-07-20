@@ -813,8 +813,21 @@ function openInspectAtPlayer(record = true): void {
   const itx = Math.floor(player.x / TILE_SIZE);
   const ity = Math.floor(player.y / TILE_SIZE);
   // the ground itself always answers — even on bare stone there is terrain
-  // underfoot, so leaning close (E) is never met with nothing
-  land.push(GROUND_WORDS[tileAt(map, itx, ity)] ?? "open ground underfoot");
+  // underfoot, so leaning close (E) is never met with nothing. ground the
+  // wanderer has tilled with soil says so, in place of its wild name.
+  const aheadTx = Math.floor((player.x + 6) / TILE_SIZE);
+  const aheadTy = Math.floor((player.y + 2) / TILE_SIZE);
+  if (flora.hasSoilTile(itx, ity)) {
+    land.push("worked soil underfoot — tilled, and any seed will take here (F)");
+  } else {
+    land.push(GROUND_WORDS[tileAt(map, itx, ity)] ?? "open ground underfoot");
+    if (flora.hasSoilTile(aheadTx, aheadTy)) land.push("tilled soil just ahead — F sows any seed on it");
+  }
+  if (mat.soil > 0) {
+    land.push(
+      `${mat.soil === 1 ? "a clod of soil" : `${mat.soil} clods of soil`} in your pack — B lays tilled ground, T digs more`,
+    );
+  }
   if ((map.springs ?? []).some((s) => Math.hypot(s.x - itx, s.y - ity) < 3))
     land.push("a hot spring, steaming");
   if ((map.falls ?? []).some((f) => Math.hypot(f.x - itx, f.y - ity) < 3))
