@@ -14,6 +14,9 @@ export interface HelpSection {
   entries: HelpEntry[];
 }
 
+// the reading behind the game — a living index, opened in a new tab
+export const REFERENCES_URL = "https://claude.ai/code/artifact/d256bcb4-2a5f-4f5f-90bc-997c348f68be";
+
 // one extra line, spoken only on a wanderer's very first arrival
 export const HELP_WELCOME =
   "welcome. look around — E leans close, and the beach keeps driftwood for a fire. press ? any time to find this card again.";
@@ -146,6 +149,14 @@ export function openHelp(firstVisit = false): void {
       }
     }
   }
+  // the reading behind the game — the studies and sources it's built on
+  const refs = document.createElement("a");
+  refs.className = "help-refs";
+  refs.href = REFERENCES_URL;
+  refs.target = "_blank";
+  refs.rel = "noopener noreferrer";
+  refs.textContent = "references & study ↗";
+  el.appendChild(refs);
   const hint = document.createElement("div");
   hint.className = "anth-hint";
   hint.textContent = "? or Esc to close";
