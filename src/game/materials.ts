@@ -41,6 +41,16 @@ export function isLayable(tile: Tile): boolean {
   return LAYABLE.has(tile);
 }
 
+// A hoe works the soft lowland ground into a garden bed: meadow, marsh, beach,
+// forest floor. No clod to carry now, so the barren heights (scree, highland)
+// and the hard rock, sea, and snow are all off-limits — you garden where the
+// ground is already soft. Deterministic: tilling asks nothing of the dice.
+const TILLABLE: ReadonlySet<Tile> = new Set([Tile.Grass, Tile.Marsh, Tile.Sand, Tile.Forest]);
+
+export function isTillable(tile: Tile): boolean {
+  return TILLABLE.has(tile);
+}
+
 export function placeMaterials(map: WorldMap, seed: number): MaterialNode[] {
   const out: MaterialNode[] = [];
   const { width, height, tiles } = map;

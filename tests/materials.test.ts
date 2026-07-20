@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { emptyInventory } from "../src/game/inventory";
-import { BEDROLL_COST, FIRE_COST, isDiggable, isLayable, placeMaterials } from "../src/game/materials";
+import { BEDROLL_COST, FIRE_COST, isDiggable, isLayable, isTillable, placeMaterials } from "../src/game/materials";
 import { SavedWorld, packWorld } from "../src/game/save";
 import { generate } from "../src/world/generate";
 import { Tile, WALKABLE } from "../src/world/types";
@@ -86,6 +86,17 @@ test("a carried clod lays on any ground you can stand on but the sea", () => {
   // never in the shallows (it would wash away), nor where you cannot stand
   for (const t of [Tile.ShallowWater, Tile.DeepWater, Tile.Rock, Tile.Cliff, Tile.Snow]) {
     expect(isLayable(t), Tile[t]).toBe(false);
+  }
+});
+
+test("a hoe tills the soft, plain earth — not water, rock, cliff, snow, nor the barren heights", () => {
+  // the four kinds of soft lowland ground, the same earth you settle a home on
+  for (const t of [Tile.Grass, Tile.Marsh, Tile.Sand, Tile.Forest]) {
+    expect(isTillable(t), Tile[t]).toBe(true);
+  }
+  // no clod to carry now, so the loose scree and alpine turf are off-limits too
+  for (const t of [Tile.DeepWater, Tile.ShallowWater, Tile.Rock, Tile.Cliff, Tile.Snow, Tile.Scree, Tile.Highland]) {
+    expect(isTillable(t), Tile[t]).toBe(false);
   }
 });
 

@@ -134,6 +134,42 @@ test("the per-tile cap still holds on amended ground", () => {
   expect(flora.sowByPlayer(0, { ...g }, cx(9), cy(6), 0)).toBeNull();
 });
 
+test("a garden plant fills its tilled plot — but never the wild around it", () => {
+  // a wider split island: meadow west (tx<8), bare beach east. Till a 3×3 plot
+  // deep in the beach — well beyond the reseed reach of the flower's true
+  // habitat — so ONLY garden-spread can move it, never ordinary reproduction.
+  const flora = new Flora(splitMap(16), grassSpecies(), 3, {
+    reproChance: 1, matureAge: 1, mutationAmount: 0, simBudget: 200, maxPerTile: 4,
+  });
+  for (const q of [...flora.all]) flora.removePlant(q);
+  const plot: [number, number][] = [];
+  for (let ty = 6; ty <= 8; ty++) {
+    for (let tx = 11; tx <= 13; tx++) {
+      flora.laySoil(tx, ty);
+      plot.push([tx, ty]);
+    }
+  }
+  const g = grassSpecies()[0].archetype;
+  flora.sowByPlayer(0, { ...g }, cx(12), cy(7), -100); // centre, mature at once
+  for (let i = 0; i < 200; i++) flora.simTick();
+
+  // every tilled tile of the plot now carries the flower — the plot filled in
+  for (const [tx, ty] of plot) {
+    const here = flora.all.filter(
+      (q) => Math.floor(q.x / TILE_SIZE) === tx && Math.floor(q.y / TILE_SIZE) === ty,
+    );
+    expect(here.length, `plot tile ${tx},${ty}`).toBeGreaterThanOrEqual(1);
+  }
+  // ...but not one flower stands anywhere outside the tilled plot — the wild is
+  // never colonised (off-habitat sand refuses it; the meadow is out of reach)
+  const strays = flora.all.filter((q) => {
+    const tx = Math.floor(q.x / TILE_SIZE);
+    const ty = Math.floor(q.y / TILE_SIZE);
+    return !(tx >= 11 && tx <= 13 && ty >= 6 && ty <= 8);
+  });
+  expect(strays).toHaveLength(0);
+});
+
 test("laid soil tiles round-trip through a restored flora", () => {
   const flora = emptyFlora();
   flora.laySoil(9, 6);

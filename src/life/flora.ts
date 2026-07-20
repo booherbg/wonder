@@ -235,6 +235,17 @@ export class Flora {
     return this.soilTiles.has(ty * this.map.width + tx);
   }
 
+  // Is a plant standing on tilled ground? (world coords, like inGarden.)
+  onTilledTile(x: number, y: number): boolean {
+    return this.hasSoilTile(Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE));
+  }
+
+  // Ground the wanderer tends — the home garden bed, or any tile they've tilled.
+  // Tended ground breeds eagerly and is spared the island's crowding-thin.
+  private tended(x: number, y: number): boolean {
+    return this.inGarden(x, y) || this.onTilledTile(x, y);
+  }
+
   // Work a carried clod into a tile, tilling it so the player may sow any seed
   // there. A quiet no-op (false) off the map's edge; otherwise the tile is
   // remembered until the save forgets it.
@@ -395,7 +406,7 @@ export class Flora {
       if (
         crowd > 0 &&
         (this.speciesCounts.get(p.species) ?? 0) > 12 &&
-        !this.inGarden(p.x, p.y) &&
+        !this.tended(p.x, p.y) &&
         this.rng() < crowd * 0.6
       ) {
         this.removePlant(p);
@@ -405,7 +416,7 @@ export class Flora {
         this.removePlant(p);
         continue;
       }
-      let repro = t.reproChance * (this.inGarden(p.x, p.y) ? 2 : 1); // gardens breed eagerly
+      let repro = t.reproChance * (this.tended(p.x, p.y) ? 2 : 1); // tended ground breeds eagerly
       if (weather.rain) repro *= 1.6;
       if (weather.bloom && p.genome.form === PlantForm.Fungus) repro *= 3;
       if (age >= t.matureAge && this.rng() < repro) {
@@ -437,11 +448,51 @@ export class Flora {
         const child = this.addPlant(p.species, genome, x, y, this.tick);
         if (child) this.maybeSpeciate(child);
       }
+      // Garden spread: a mature plant on tilled ground now and then colonises an
+      // adjacent EMPTY tilled tile with its own kind, so a plot fills itself with
+      // what you planted. Habitat is waived — but ONLY ever onto more tilled
+      // ground, never the wild, so the off-habitat invariant holds. No tilled
+      // tiles ⇒ no plant stands on one ⇒ zero extra rng, islands unchanged.
+      if (age >= t.matureAge && this.soilTiles.size > 0 && this.onTilledTile(p.x, p.y)) {
+        if (this.rng() < repro) this.spreadToTilledNeighbor(p, weather);
+      }
     }
     // Byproduct chains ride on the tail of the tick. Gated so an island with
     // no live substrates (chains off, or simply none emitted yet) draws ZERO
     // extra rng and stays byte-identical to today — the A/B safety valve.
     if (this.tuning.chains && this.substrates.length) this.stepSubstrates();
+  }
+
+  // Seed one adjacent, empty, tilled tile with a plant's own (drifted) kind.
+  // The garden-spread helper: it waives habitat, but only ever onto tilled
+  // ground — so a cultivated plot fills in while the wild is never colonised.
+  private spreadToTilledNeighbor(p: Plant, weather: { rain?: boolean }): void {
+    if (this.all.length >= this.tuning.maxPlants) return;
+    const w = this.map.width;
+    const h = this.map.height;
+    const ptx = Math.floor(p.x / TILE_SIZE);
+    const pty = Math.floor(p.y / TILE_SIZE);
+    const open: number[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const tx = ptx + dx;
+        const ty = pty + dy;
+        if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
+        const key = ty * w + tx;
+        if (!this.soilTiles.has(key)) continue; // only onto tilled ground
+        const bucket = this.byTile.get(key);
+        if (!bucket || bucket.length === 0) open.push(key); // and only if unoccupied
+      }
+    }
+    if (open.length === 0) return;
+    const key = open[Math.floor(this.rng() * open.length)];
+    const tx = key % w;
+    const ty = Math.floor(key / w);
+    const x = tx * TILE_SIZE + 3 + this.rng() * (TILE_SIZE - 6);
+    const y = ty * TILE_SIZE + 5 + this.rng() * (TILE_SIZE - 6);
+    const drift = this.tuning.mutationAmount * (weather.rain ? 1.25 : 1);
+    this.insert(p.species, mutate(p.genome, this.rng, drift), x, y, this.tick);
   }
 
   // Expired substrates fade; a live one now and then sprouts a hue-matching
