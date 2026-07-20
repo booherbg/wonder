@@ -22,6 +22,11 @@ import { Flora, SUBSTRATE_HUE_MATCH, hueGap } from "./flora";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "./species";
 import { generate } from "../world/generate";
 
+// Seed-search defaults (study: floor 5 rejects the barren ~20-22% at ~1.3
+// rolls on average; only ~1.5% of seeds are truly flat). Frontier opts out.
+export const DIVERSITY_FLOOR = 5;
+export const SEED_CANDIDATES = 8;
+
 export interface ChainStats {
   chains: number; // disperser→P→feeder(S) links: S a feeder in P's hue-window
   closable: number; // links whose feeder S is itself eaten by some disperser (chain continues)

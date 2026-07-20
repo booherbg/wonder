@@ -19,7 +19,9 @@ import {
 } from "../life/fauna";
 import { CensusLog, sparkline, trend } from "../life/census";
 import { Flora, Plant, nearestPlant } from "../life/flora";
+import { DIVERSITY_FLOOR, SEED_CANDIDATES, pickNewSeed } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
+import { CHAINS_KEY, resolveChains } from "./flags";
 import {
   loadCritterJournal,
   loadJournal,
@@ -92,6 +94,41 @@ function seedFromUrl(): number | null {
 // the one intentional use of Math.random(): choosing a fresh seed
 function randomSeed(): number {
   return Math.floor(Math.random() * 2 ** 31);
+}
+
+// The byproduct-chains A/B toggle, resolved once at load: ?chains=1/0 wins,
+// else the remembered choice, else on. The resolved value is written back so a
+// (future) menu and the next load agree. Off ⇒ the sim is byte-identical to
+// before this feature — Blaine's safety valve.
+const CHAINS = ((): boolean => {
+  const param = new URL(location.href).searchParams.get("chains");
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(CHAINS_KEY);
+  } catch {
+    // storage unavailable: fall back to the param / default
+  }
+  const on = resolveChains(param, stored);
+  try {
+    localStorage.setItem(CHAINS_KEY, on ? "1" : "0");
+  } catch {
+    // storage unavailable: the choice still holds for this sitting
+  }
+  return on;
+})();
+
+// ?frontier: opt into a deliberately-sparse island (no diversity floor) — the
+// builder's canvas. Only bends the random new-island roll, nothing else.
+const FRONTIER = new URL(location.href).searchParams.has("frontier");
+
+// The seed for a fresh RANDOM island. With chains on this is a search: roll up
+// to SEED_CANDIDATES and keep the first clearing the diversity floor, else the
+// best seen (frontier bypasses the floor). Explicit ?seed=, the isle picker,
+// and saved worlds never pass through here — they load exactly as asked.
+function newIslandSeed(): number {
+  return CHAINS
+    ? pickNewSeed(randomSeed, { floor: DIVERSITY_FLOOR, candidates: SEED_CANDIDATES, frontier: FRONTIER })
+    : randomSeed();
 }
 
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -372,9 +409,12 @@ function loadWorld(seed: number): void {
   if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
   baseSpeciesCount = species.length;
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
-  const floraTuning = new URL(location.href).searchParams.has("split")
-    ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
-    : {};
+  const floraTuning = {
+    chains: CHAINS, // the A/B toggle threads into both new Flora sites below
+    ...(new URL(location.href).searchParams.has("split")
+      ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
+      : {}),
+  };
   const saved = loadSave(seed);
   worldName = saved?.name ?? null;
   worldPlayMs = saved?.playMs ?? 0;
@@ -837,7 +877,8 @@ function openInspectAtPlayer(record = true): void {
   lastInspectY = player.y;
 }
 
-loadWorld(seedFromUrl() ?? randomSeed());
+// explicit ?seed= loads exactly; only a truly fresh arrival is a floored search
+loadWorld(seedFromUrl() ?? newIslandSeed());
 // dev aid: ?at=tx,ty drops the wanderer at a tile (screenshot tours)
 const at = new URL(location.href).searchParams.get("at");
 if (at) {
@@ -1058,7 +1099,7 @@ window.addEventListener("keydown", (e) => {
     } else {
       rArmed = false;
       persist();
-      loadWorld(randomSeed());
+      loadWorld(newIslandSeed());
       renderer.setMap(map);
       // until you've opened the ledger once, name the way back at the moment
       // it matters — right after leaving an isle behind
