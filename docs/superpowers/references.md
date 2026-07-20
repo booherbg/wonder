@@ -18,6 +18,16 @@ new studies here and to the index page together.
   - Web study (artifact): https://claude.ai/code/artifact/99eca82f-fb37-4d80-80aa-28d0eb858b6d
   - Source doc (repo): `docs/superpowers/research/scavengers-reign-design.md`
 
+## Simulation & analysis
+
+- **The food web today, and what byproducts (design B) would do** — a grounded
+  impact study over 14 real seeds: current fauna classes, the `appetite`-based
+  food web (63% of plants are "scenery", chains are length-1), real-seed
+  examples, and a structural projection of design B (byproducts as a
+  trait-medium → 93% of islands gain multi-link chains).
+  - Repo: `docs/superpowers/research/food-web-and-byproducts.md`
+  - (not yet on the web index — offer to port when the design firms up)
+
 ## Prior art
 
 - **Ecosystem prior-art study** — how creature-sims and ecosystem-sims get emergent,
