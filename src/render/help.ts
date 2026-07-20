@@ -27,6 +27,7 @@ export function helpSections(): HelpSection[] {
       title: "the keys",
       entries: [
         { key: "arrows / wasd", text: "walk" },
+        { key: "Tab", text: "the menu — your backpack, your camp, the isles, and the field guide" },
         { key: "E", text: "lean close — what grows and moves nearby shows itself" },
         { key: "Z", text: "lean the view in close — watch the small lives up close" },
         { key: "G", text: "gather what is in reach — driftwood, a stone, a rush, or a seed" },

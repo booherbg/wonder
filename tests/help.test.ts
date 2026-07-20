@@ -19,6 +19,12 @@ test("every verb the game answers to has a line", () => {
   expect(keys.some((k) => k?.includes("arrows"))).toBe(true);
 });
 
+test("the guide names the Tab menu", () => {
+  const tab = helpSections()[0].entries.find((e) => e.key === "Tab");
+  expect(tab).toBeDefined();
+  expect(tab!.text).toContain("menu");
+});
+
 test("G gathers and F sows — G is the gather key (the mnemonic rebind)", () => {
   const keys = helpSections()[0].entries;
   const gather = keys.find((e) => e.text.startsWith("gather"));
