@@ -9,6 +9,7 @@ export interface PlantSpecies {
   archetype: Genome; // the "true" form; individuals drift away from it
   density: number; // 0..1 relative abundance within its habitat
   sport: boolean; // the island's one exaggerated oddball
+  substrateFeeder?: boolean; // germinates on a hue-matching byproduct (chains); rolled off a salted stream
   parent?: number; // set when this species arose here, split from another
   bornTick?: number; // flora tick of the split
   homeland?: { x: number; y: number; radius: number }; // endemic: born only here
@@ -162,6 +163,36 @@ export function speciateFrom(
   };
 }
 
+// Which forms lean toward being substrate-feeders, and how strongly: the
+// pioneers/decomposers that colonize bare ground answer a byproduct readily;
+// a few damp understory forms sometimes do; anything else only rarely. Rolled
+// per species, biased by form, so multiple kinds fill each feeder role and a
+// chain routes around a lost one — never a single named species.
+function substrateFeederChance(form: PlantForm): number {
+  switch (form) {
+    case PlantForm.Moss:
+    case PlantForm.Fungus:
+    case PlantForm.Sporestalk:
+      return 0.7;
+    case PlantForm.Fern:
+    case PlantForm.Vine:
+    case PlantForm.Reed:
+      return 0.2;
+    default:
+      return 0.06;
+  }
+}
+
+// Roll each species' substrateFeeder flag in place, off a SEPARATE salted rng
+// stream (never the main generation stream), so turning this on shifts no
+// existing seed's names or archetypes. Called at the end of generation.
+export function rollSubstrateFeeders(seed: number, species: PlantSpecies[]): void {
+  const rng = makeRng(seed ^ 0x5b1e);
+  for (const sp of species) {
+    sp.substrateFeeder = rng() < substrateFeederChance(sp.archetype.form);
+  }
+}
+
 // The island's flora: 3-5 species per habitat, exactly one "sport" oddball,
 // and always at least one true tree for the forests.
 export function generatePlantSpecies(seed: number): PlantSpecies[] {
@@ -195,5 +226,7 @@ export function generatePlantSpecies(seed: number): PlantSpecies[] {
     petals: clampTrait("petals", s.archetype.petals + 3),
   };
   s.name += " ✶";
+  // rolled LAST, off its own salted stream, so it never shifts the main stream
+  rollSubstrateFeeders(seed, out);
   return out;
 }
