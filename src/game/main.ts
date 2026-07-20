@@ -33,7 +33,8 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { CampView, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { CampView, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import {
   closePicker,
   featurePhrase,
@@ -148,8 +149,7 @@ function renderHud(): void {
   // non-breaking spaces bind each key to its word, so when the legend wraps it
   // only ever breaks at a " · ", never mid-item ("L isles" stays whole)
   const legend = [
-    "E inspect", "G gather", "F sow", "Z focus", "H home", "J journal",
-    "M murmurs", "L isles", "P postcard", "R island", "? help",
+    "E inspect", "G gather", "F sow", "H home", "Z focus", "R island", "Tab menu",
   ]
     .map((item) => item.replace(" ", String.fromCharCode(160)))
     .join(" · ");
@@ -754,39 +754,9 @@ function openInspectAtPlayer(record = true): void {
 
   // standing in or beside your home, the camp speaks: what the bed grows,
   // what stands built, and which kinds have come to live alongside you —
-  // the same closeness H uses for tending, so looking and building agree
-  let camp: CampView | undefined;
-  if (home && Math.hypot(home.x - itx, home.y - ity) <= 2.5) {
-    const hx = (home.x + 0.5) * TILE_SIZE;
-    const hy = (home.y + 0.5) * TILE_SIZE;
-    // the bed, counted by kind — the thriving lead, ties read alphabetically
-    const bedCounts = new Map<number, number>();
-    for (const p of flora.plantsNear(hx, hy, 2 * TILE_SIZE)) {
-      if (flora.inGarden(p.x, p.y)) bedCounts.set(p.species, (bedCounts.get(p.species) ?? 0) + 1);
-    }
-    const bed = [...bedCounts]
-      .map(([id, count]) => ({ name: species[id].name, count }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-    // the friends settled here: kinds at least warming to you, with someone
-    // actually pottering near home right now — presence, not paperwork
-    const friends = critterSpecies
-      .filter(
-        (sp) =>
-          (trust.get(sp.id) ?? 0) > 0 &&
-          critters.some(
-            (c) =>
-              c.species === sp.id && Math.hypot(c.x - hx, c.y - hy) < TRUST_LINGER_RADIUS_PX,
-          ),
-      )
-      .map((sp) => ({ name: sp.name, trust: trust.get(sp.id) ?? 0 }));
-    camp = {
-      bed,
-      fire,
-      bedroll,
-      friends,
-      companion: companionKind !== null ? critterSpecies[companionKind].name : undefined,
-    };
-  }
+  // the same closeness H uses for tending, so looking, building, and the
+  // menu all agree (campViewAtHome is shared with the Tab menu)
+  const camp: CampView | undefined = campViewAtHome() ?? undefined;
 
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
@@ -898,6 +868,176 @@ try {
 }
 
 const keys = new Set<string>();
+// The camp read as a cozy status — the bed, what's built, who's settled — when
+// the wanderer stands within tending reach of home; null otherwise. Shared by
+// the inspect panel and the Tab menu so the two can never disagree.
+function campViewAtHome(): CampView | null {
+  const itx = Math.floor(player.x / TILE_SIZE);
+  const ity = Math.floor(player.y / TILE_SIZE);
+  if (!home || Math.hypot(home.x - itx, home.y - ity) > 2.5) return null;
+  const hx = (home.x + 0.5) * TILE_SIZE;
+  const hy = (home.y + 0.5) * TILE_SIZE;
+  const bedCounts = new Map<number, number>();
+  for (const p of flora.plantsNear(hx, hy, 2 * TILE_SIZE)) {
+    if (flora.inGarden(p.x, p.y)) bedCounts.set(p.species, (bedCounts.get(p.species) ?? 0) + 1);
+  }
+  const bed = [...bedCounts]
+    .map(([id, count]) => ({ name: species[id].name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const friends = critterSpecies
+    .filter(
+      (sp) =>
+        (trust.get(sp.id) ?? 0) > 0 &&
+        critters.some(
+          (c) => c.species === sp.id && Math.hypot(c.x - hx, c.y - hy) < TRUST_LINGER_RADIUS_PX,
+        ),
+    )
+    .map((sp) => ({ name: sp.name, trust: trust.get(sp.id) ?? 0 }));
+  return {
+    bed,
+    fire,
+    bedroll,
+    friends,
+    companion: companionKind !== null ? critterSpecies[companionKind].name : undefined,
+  };
+}
+
+// Raising the camp: the fire, then the bedroll. Shared by the H key (beside
+// home) and the camp menu's action rows, so the two can never disagree on what
+// a thing costs or says. Returns whether it was built.
+function tryBuildFire(): boolean {
+  if (fire) return false;
+  if (mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
+    mat.wood -= FIRE_COST.wood;
+    mat.stone -= FIRE_COST.stone;
+    fire = true;
+    flashHud("a fire ring takes shape — it will burn every night");
+    murmurs.offer("fire");
+    persist();
+    renderHud();
+    return true;
+  }
+  flashHud(
+    `a fire wants ${FIRE_COST.wood} driftwood and ${FIRE_COST.stone} stones — you carry ${mat.wood} and ${mat.stone}`,
+  );
+  return false;
+}
+
+function tryBuildBedroll(): boolean {
+  if (bedroll) return false;
+  if (mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
+    mat.wood -= BEDROLL_COST.wood;
+    mat.rush -= BEDROLL_COST.rush;
+    bedroll = true;
+    flashHud("a bedroll of woven rushes — when dark falls, H here carries you to dawn");
+    murmurs.offer("rest");
+    persist();
+    renderHud();
+    return true;
+  }
+  flashHud(
+    `a bedroll wants ${BEDROLL_COST.wood} driftwood and ${BEDROLL_COST.rush} marsh rushes — you carry ${mat.wood} and ${mat.rush}`,
+  );
+  return false;
+}
+
+// The occasional actions, extracted so the Tab menu and the direct keys share
+// one path. A postcard of the view; a given name for the world; a seed given
+// back to the wind.
+function savePostcard(): void {
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${islandName(currentSeed).toLowerCase().replace(" ", "-")}-${currentSeed}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  flashHud("postcard saved");
+}
+
+function nameWorld(): void {
+  const given = window.prompt("name this world", worldName ?? islandName(currentSeed));
+  if (given !== null) {
+    worldName = given.trim() || null;
+    renderSeedLabel();
+    persist();
+    flashHud(worldName ? `this world is now “${worldName}”` : "the given name is cleared");
+  }
+}
+
+function tossSeed(): void {
+  const result = toss(inventory);
+  if (!result) {
+    flashHud("the pouch is empty");
+  } else {
+    inventory = result[0];
+    flashHud(`a seed of ${species[result[1].species].name}, given back to the wind`);
+  }
+  renderHud();
+}
+
+// ── the menu ──────────────────────────────────────────────────────────────
+// The Tab menu's model (backpack + camp) and handlers. A launcher row does
+// exactly what its shortcut key does; a build row shares the H build path;
+// abandon strikes the whole camp, so moving house is a real decision.
+function buildMenuModel(): MenuModel {
+  const view = campViewAtHome();
+  return {
+    pouch: inventory.seeds.map((s) => ({ name: species[s.species].name })),
+    mat,
+    camp: view
+      ? {
+          lines: campLines(view),
+          actions: campActionRows(mat, fire, bedroll, { fire: FIRE_COST, bedroll: BEDROLL_COST }),
+        }
+      : undefined,
+  };
+}
+
+function menuLaunch(key: string): void {
+  switch (key) {
+    case "L": openIslePicker(); break;
+    case "?": openHelp(); break;
+    case "M": openAnthology(loadAnthology()); break;
+    case "J": openAlmanac(); break;
+    case "P": savePostcard(); break;
+    case "N": nameWorld(); break;
+    case "Q": tossSeed(); break;
+  }
+}
+
+const menuHandlers: MenuHandlers = {
+  launch: (key) => {
+    closeMenu();
+    menuLaunch(key);
+  },
+  build: (id) => {
+    if (id === "fire") tryBuildFire();
+    else tryBuildBedroll();
+    if (isMenuOpen()) openMenu(buildMenuModel(), menuHandlers); // refresh the rows in place
+  },
+  abandon: () => {
+    home = null;
+    fire = false;
+    bedroll = false;
+    flora.setHome(null);
+    persist();
+    renderHud();
+    closeMenu();
+    flashHud("you strike camp — the ground goes wild again");
+  },
+};
+
+function openMenuNow(): void {
+  closeInspect();
+  closeAnthology();
+  closeJournal();
+  closeHelp();
+  closePicker();
+  openMenu(buildMenuModel(), menuHandlers);
+}
+
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
@@ -932,35 +1072,12 @@ window.addEventListener("keydown", (e) => {
     const here = tileAt(map, tx, ty);
     const nearHome = home !== null && Math.hypot(home.x - tx, home.y - ty) <= 2.5;
     if (nearHome && !fire) {
-      // beside an existing home, H tends the camp: first the fire
-      if (mat.wood >= FIRE_COST.wood && mat.stone >= FIRE_COST.stone) {
-        mat.wood -= FIRE_COST.wood;
-        mat.stone -= FIRE_COST.stone;
-        fire = true;
-        flashHud("a fire ring takes shape — it will burn every night");
-        murmurs.offer("fire");
-        persist();
-        renderHud();
-      } else {
-        flashHud(
-          `a fire wants ${FIRE_COST.wood} driftwood and ${FIRE_COST.stone} stones — you carry ${mat.wood} and ${mat.stone}`,
-        );
-      }
+      // beside an existing home, H tends the camp: first the fire (same path
+      // the camp menu's "make a fire" action takes — one source of truth)
+      tryBuildFire();
     } else if (nearHome && !bedroll) {
       // then the bedroll, woven from what the marsh gives
-      if (mat.wood >= BEDROLL_COST.wood && mat.rush >= BEDROLL_COST.rush) {
-        mat.wood -= BEDROLL_COST.wood;
-        mat.rush -= BEDROLL_COST.rush;
-        bedroll = true;
-        flashHud("a bedroll of woven rushes — when dark falls, H here carries you to dawn");
-        murmurs.offer("rest");
-        persist();
-        renderHud();
-      } else {
-        flashHud(
-          `a bedroll wants ${BEDROLL_COST.wood} driftwood and ${BEDROLL_COST.rush} marsh rushes — you carry ${mat.wood} and ${mat.rush}`,
-        );
-      }
+      tryBuildBedroll();
     } else if (nearHome) {
       // camp complete: H beside the fire sleeps the night away
       const sky = performance.now() + skyOffset;
@@ -986,6 +1103,7 @@ window.addEventListener("keydown", (e) => {
       closeJournal();
       closeHelp();
       closePicker();
+      closeMenu();
       openAnthology(loadAnthology());
     }
   } else if (k === "j") {
@@ -996,6 +1114,7 @@ window.addEventListener("keydown", (e) => {
       closeAnthology();
       closeHelp();
       closePicker();
+      closeMenu();
       openAlmanac();
     }
   } else if (k === "l") {
@@ -1007,6 +1126,7 @@ window.addEventListener("keydown", (e) => {
       closeAnthology();
       closeJournal();
       closeHelp();
+      closeMenu();
       openIslePicker();
     }
   } else if (k === "?") {
@@ -1018,34 +1138,25 @@ window.addEventListener("keydown", (e) => {
       closeAnthology();
       closeJournal();
       closePicker();
+      closeMenu();
       openHelp();
     }
+  } else if (k === "tab") {
+    // the menu: everything that isn't an immediate step, tucked in one place
+    e.preventDefault();
+    if (isMenuOpen()) closeMenu();
+    else openMenuNow();
   } else if (k === "escape") {
     closeInspect();
     closeAnthology();
     closeJournal();
     closeHelp();
     closePicker();
+    closeMenu();
   } else if (k === "p") {
-    // a postcard: the canvas as it stands, named for the island
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${islandName(currentSeed).toLowerCase().replace(" ", "-")}-${currentSeed}.png`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-    flashHud("postcard saved");
+    savePostcard();
   } else if (k === "n") {
-    // name this world — a given name, kept with the save, shown ahead of the seed
-    const given = window.prompt("name this world", worldName ?? islandName(currentSeed));
-    if (given !== null) {
-      worldName = given.trim() || null;
-      renderSeedLabel();
-      persist();
-      flashHud(worldName ? `this world is now “${worldName}”` : "the given name is cleared");
-    }
+    nameWorld();
   } else if (k === "z" && !e.repeat) {
     // the focus lens: kneel in close, watch a pollinator work one flower
     focusOn = !focusOn;
@@ -1129,14 +1240,7 @@ window.addEventListener("keydown", (e) => {
     }
     renderHud();
   } else if (k === "q") {
-    const result = toss(inventory);
-    if (!result) {
-      flashHud("the pouch is empty");
-    } else {
-      inventory = result[0];
-      flashHud(`a seed of ${species[result[1].species].name}, given back to the wind`);
-    }
-    renderHud();
+    tossSeed();
   }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
