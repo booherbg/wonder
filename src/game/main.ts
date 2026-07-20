@@ -1290,6 +1290,15 @@ window.addEventListener("keydown", (e) => {
     // the living web: the chain explorer — see, understand, find, witness it
     if (isWebOpen()) closeWeb();
     else openWebNow();
+  } else if (k === "k") {
+    // the corner map, shown or hidden — it remembers your choice
+    minimapOn = !minimapOn;
+    try {
+      localStorage.setItem("wander.minimap", minimapOn ? "1" : "0");
+    } catch {
+      /* private mode: the choice just holds this sitting */
+    }
+    flashHud(minimapOn ? "the island map, up in the corner" : "the corner map, tucked away");
   } else if (k === "tab") {
     // the menu: everything that isn't an immediate step, tucked in one place
     e.preventDefault();
@@ -1475,6 +1484,76 @@ function drawOverview(): void {
   }
   ctx.fillStyle = "#ff5050";
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
+}
+
+// ── the corner minimap ──────────────────────────────────────────────────
+// A little island map in the top corner, with a star where your camp stands —
+// so the whole shape is always in view and home is always findable. Optional
+// (K hides it). The overview inks once to an offscreen canvas per island and
+// is just blitted each frame, so it costs almost nothing.
+let minimapOn = ((): boolean => {
+  try {
+    return localStorage.getItem("wander.minimap") !== "0";
+  } catch {
+    return true;
+  }
+})();
+let minimapCache: HTMLCanvasElement | null = null;
+let minimapCacheSeed = NaN;
+
+function buildMinimapCache(): void {
+  const c = document.createElement("canvas");
+  c.width = map.width;
+  c.height = map.height;
+  const g = c.getContext("2d")!;
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      g.fillStyle = OVERVIEW_COLORS[map.tiles[y * map.width + x]];
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  minimapCache = c;
+  minimapCacheSeed = currentSeed;
+}
+
+function drawMinimap(): void {
+  if (!minimapOn) return;
+  if (minimapCacheSeed !== currentSeed || !minimapCache) buildMinimapCache();
+  const ctx = canvas.getContext("2d")!;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // draw in raw backing pixels, above the scene
+  const size = Math.round(Math.min(canvas.width, canvas.height) * 0.2);
+  const scale = size / Math.max(map.width, map.height);
+  const w = Math.round(map.width * scale);
+  const h = Math.round(map.height * scale);
+  const pad = Math.round(size * 0.12);
+  const x0 = canvas.width - w - pad;
+  const y0 = pad;
+  ctx.fillStyle = "rgba(6,10,16,0.5)";
+  ctx.fillRect(x0 - 4, y0 - 4, w + 8, h + 8);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(minimapCache!, x0, y0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0 - 3.5, y0 - 3.5, w + 7, h + 7);
+  // you, a small bright dot
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.beginPath();
+  ctx.arc(x0 + (player.x / TILE_SIZE) * scale, y0 + (player.y / TILE_SIZE) * scale, Math.max(2, size * 0.018), 0, Math.PI * 2);
+  ctx.fill();
+  // basecamp, a star (shadowed so it reads over any terrain)
+  if (home) {
+    const hx = x0 + (home.x + 0.5) * scale;
+    const hy = y0 + (home.y + 0.5) * scale;
+    ctx.font = `${Math.round(size * 0.16)}px Georgia, serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillText("★", hx + 1, hy + 1);
+    ctx.fillStyle = "#ffd45e";
+    ctx.fillText("★", hx, hy);
+  }
+  ctx.restore();
 }
 
 let slowCheckAcc = 0;
@@ -1750,6 +1829,7 @@ function frame(now: number): void {
     },
     sky,
   );
+  drawMinimap(); // the little island map + basecamp star, over the scene
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
