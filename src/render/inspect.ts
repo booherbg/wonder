@@ -1,7 +1,7 @@
 import { INV_CAP, Seed } from "../game/inventory";
 import type { MaterialNode } from "../game/materials";
 import { Beast, beastSegments } from "../life/beast";
-import { COMPANION_TRUST, CritterMood, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
+import { COMPANION_TRUST, CritterMood, CritterRole, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
 import { Genome, PlantForm, driftDistance } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -270,6 +270,17 @@ export function trustLine(trust: number): string {
   }
 }
 
+// The mutualist tell: a spreader plants what it eats — a visit drifts a seed of
+// its favorite to open ground, and both gain — while a grazer crops it, the
+// thread of friction in an otherwise gentle web. The hidden role made visible,
+// and the quiet reason an island's flora leans, over its days, toward what its
+// spreaders love.
+export function roleLine(role: CritterRole): string {
+  return role === "grazer"
+    ? "a grazer — it crops what it favors as it feeds"
+    : "a spreader — its visits carry a favorite's seed to new ground";
+}
+
 function panel(): HTMLElement {
   return document.getElementById("inspect")!;
 }
@@ -451,6 +462,11 @@ export function openInspect(
           ? `eats ${favSp.name} — a taste you've learned`
           : `might fancy ${favSp.name}, of ${BIOME_WORDS[favSp.habitat] ?? "the island"}`;
       card.appendChild(taste);
+      // spreader or grazer — the hidden role shown, so you can watch the web
+      const role = document.createElement("div");
+      role.className = "inspect-traits";
+      role.textContent = roleLine(sp.role);
+      card.appendChild(role);
       // a pouch that holds something this kind favors earns a feed button —
       // the gather button's quiet look, offering instead of taking
       if (onFeed && bestOffering(sp.palate, pouch) >= 0) {
