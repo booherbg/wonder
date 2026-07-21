@@ -427,6 +427,12 @@ function tryGenerate(
   if (carved?.outflow && carved.outflow.path.length > 0) rivers.push(carved.outflow);
   const confluences = placeConfluences(elevation, tiles, rivers, cfg);
 
+  // join any sizable walkable lobe the silhouette stranded across deep water to
+  // the main landmass with a wadeable shallow isthmus — no island you can see
+  // but never reach (the twin isle's far peak). Before spawn, so spawn and
+  // craterReachable see the finished, connected coastline.
+  connectLobes(tiles, cfg);
+
   let land = 0;
   for (const t of tiles) {
     if (t !== Tile.DeepWater && t !== Tile.ShallowWater) land++;
@@ -795,6 +801,122 @@ function placePockets(
     }
   }
   return out;
+}
+
+// Label every 4-connected walkable region (WALKABLE includes ShallowWater, so
+// this is "everywhere the wanderer can set foot"). Returns a per-tile label and
+// each region's size — the shared primitive behind spawn and lobe-connection.
+function labelWalkable(
+  tiles: Uint8Array,
+  width: number,
+  height: number,
+): { label: Int32Array; sizes: number[] } {
+  const label = new Int32Array(tiles.length).fill(-1);
+  const sizes: number[] = [];
+  const stack: number[] = [];
+  for (let i = 0; i < tiles.length; i++) {
+    if (label[i] !== -1 || !WALKABLE.has(tiles[i] as Tile)) continue;
+    const id = sizes.length;
+    let size = 0;
+    label[i] = id;
+    stack.push(i);
+    while (stack.length > 0) {
+      const j = stack.pop()!;
+      size++;
+      const x = j % width;
+      const y = (j / width) | 0;
+      for (const [dx, dy] of NEIGHBORS4) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const k = ny * width + nx;
+        if (label[k] === -1 && WALKABLE.has(tiles[k] as Tile)) {
+          label[k] = id;
+          stack.push(k);
+        }
+      }
+    }
+    sizes.push(size);
+  }
+  return { label, sizes };
+}
+
+// Twin peaks, scattered isles, a bitten crescent — the silhouette can leave a
+// walkable lobe stranded across deep water, an island the wanderer can see but
+// never reach. Flood the sea out from the main landmass with a 0/1 BFS (wading a
+// deep-water tile costs 1, crossing land is free; rock/cliff/snow wall it off),
+// then for each sizable stranded lobe wet the genuinely-shortest crossing into a
+// wadeable shallow shoal. Bridges are ShallowWater, never dry land, so dry
+// silhouettes are untouched (skerries still read as a scatter). Islets too small
+// or too far stay as atmospheric, unreachable scatter. Pure geometry, no dice.
+function connectLobes(tiles: Uint8Array, cfg: WorldConfig): void {
+  const { width, height } = cfg;
+  const N = tiles.length;
+  const MIN_LOBE = 60; // smaller islets stay as unreachable scatter
+  const MAX_BRIDGE = 60; // deepest wadeable crossing; beyond this an isle stays wild
+  const { label, sizes } = labelWalkable(tiles, width, height);
+  if (sizes.length <= 1) return;
+  let main = 0;
+  for (let r = 1; r < sizes.length; r++) if (sizes[r] > sizes[main]) main = r;
+  const hasLobe = sizes.some((s, r) => r !== main && s >= MIN_LOBE);
+  if (!hasLobe) return;
+
+  // 0/1 BFS (Dial's) from every tile of the main landmass.
+  const dist = new Int32Array(N).fill(-1);
+  const parent = new Int32Array(N).fill(-1);
+  const buckets: number[][] = [];
+  const relax = (i: number, d: number, p: number): void => {
+    dist[i] = d;
+    parent[i] = p;
+    (buckets[d] ??= []).push(i);
+  };
+  for (let i = 0; i < N; i++) if (label[i] === main) relax(i, 0, -1);
+  for (let d = 0; d <= MAX_BRIDGE; d++) {
+    const b = buckets[d];
+    if (!b) continue;
+    for (let bi = 0; bi < b.length; bi++) {
+      const u = b[bi];
+      if (dist[u] !== d) continue; // a stale entry, already improved
+      const x = u % width;
+      const y = (u / width) | 0;
+      for (const [dx, dy] of NEIGHBORS4) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        const v = ny * width + nx;
+        const t = tiles[v] as Tile;
+        if (t !== Tile.DeepWater && !WALKABLE.has(t)) continue; // rock/cliff/snow wall off
+        const nd = d + (t === Tile.DeepWater ? 1 : 0);
+        if (nd > MAX_BRIDGE) continue;
+        if (dist[v] === -1 || nd < dist[v]) relax(v, nd, u);
+      }
+    }
+  }
+
+  // For each sizable stranded lobe, wet the shortest crossing that reached it.
+  for (let r = 0; r < sizes.length; r++) {
+    if (r === main || sizes[r] < MIN_LOBE) continue;
+    let bestTile = -1;
+    let bestD = MAX_BRIDGE + 1;
+    for (let i = 0; i < N; i++) {
+      if (label[i] === r && dist[i] >= 0 && dist[i] < bestD) {
+        bestD = dist[i];
+        bestTile = i;
+      }
+    }
+    if (bestTile === -1) continue; // no crossing within budget — this isle stays wild
+    for (let cur = bestTile; cur !== -1; cur = parent[cur]) {
+      const x = cur % width;
+      const y = (cur / width) | 0;
+      // wet the crossing and a one-tile skirt, so the shoal reads as an isthmus
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const px = x + dx;
+        const py = y + dy;
+        if (px < 1 || py < 1 || px >= width - 1 || py >= height - 1) continue; // never the sea-border
+        if (tiles[py * width + px] === Tile.DeepWater) tiles[py * width + px] = Tile.ShallowWater;
+      }
+    }
+  }
 }
 
 // Largest connected walkable region, then its lowest-elevation grass tile —
