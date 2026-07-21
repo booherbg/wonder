@@ -84,14 +84,16 @@
         border-radius: var(--radius);
         padding: 14px 16px; font: 12px var(--mono); color: var(--ink);
       }
-      #inspect .inspect-title { opacity: 0.7; margin-bottom: 10px; }
+      #inspect .inspect-title { font: 10px var(--mono); letter-spacing: 0.2em; text-transform: uppercase;
+        color: rgb(var(--lumen)); opacity: 0.72; margin: 13px 0 6px; display: flex; align-items: center; gap: 8px; }
+      #inspect .inspect-title:first-child { margin-top: 0; }
+      #inspect .inspect-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(var(--lumen), 0.2), transparent); }
       #inspect .inspect-grid {
         display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
       }
       #inspect .inspect-card { width: 110px; text-align: center; }
       #inspect canvas { image-rendering: pixelated; width: 96px; height: 168px; }
       #inspect canvas.critter-canvas { width: 96px; height: auto; margin-top: 40px; }
-      #inspect .inspect-title { margin-top: 12px; }
       #inspect .inspect-name { margin-top: 4px; color: var(--ink-bright); }
       #inspect .inspect-traits { opacity: 0.65; margin-top: 2px; line-height: 1.5; }
       #inspect .inspect-gather {

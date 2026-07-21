@@ -158,19 +158,28 @@ export function openWeb(view: WebView): void {
     }
     const flow = document.createElement("div");
     flow.className = "web-flow";
+    // a self-loop — the source plant is its own feeder: the critter farms it into
+    // reseeding itself. Draw ONE plant, not the same sprite twice (which reads as
+    // a bug), and say what's really happening.
+    const selfLoop = link.source.id === link.feeder.id;
     flow.appendChild(critterNode(link.disperser));
     flow.appendChild(arrow("eats it &amp; scatters the seed"));
     flow.appendChild(plantNode(link.source, link.sourceCount));
-    flow.appendChild(arrow("its leavings let this sprout"));
-    flow.appendChild(plantNode(link.feeder, link.feederCount));
-    if (link.closes) {
+    if (!selfLoop) {
+      flow.appendChild(arrow("its leavings let this sprout"));
+      flow.appendChild(plantNode(link.feeder, link.feederCount));
+    }
+    row.appendChild(flow);
+    if (selfLoop) {
+      const loop = document.createElement("div");
+      loop.className = "web-loop";
+      loop.textContent = "↺ its own leavings reseed it — the critter farms it in a loop";
+      row.appendChild(loop);
+    } else if (link.closes) {
       const loop = document.createElement("div");
       loop.className = "web-loop";
       loop.textContent = "↺ and eaten in turn — the loop closes";
-      row.appendChild(flow);
       row.appendChild(loop);
-    } else {
-      row.appendChild(flow);
     }
     el.appendChild(row);
   }
