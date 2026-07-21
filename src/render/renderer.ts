@@ -370,6 +370,59 @@ export class Renderer {
       }
     }
 
+    // the camp's growing body: a lean-to when you first settle, a tent once the
+    // fire burns, a cabin once the bedroll's woven — the base made to look like
+    // the home it is. Sits at the garden's back, behind the life standing in front.
+    if (scene.home) {
+      const level = scene.bedroll ? 2 : scene.fire ? 1 : 0;
+      const sx = Math.round(scene.home.x * TILE_SIZE + TILE_SIZE / 2 - camX);
+      const baseY = Math.round(scene.home.y * TILE_SIZE - 1 - camY);
+      const wood = "hsl(28, 30%, 36%)";
+      const woodDark = "hsl(26, 32%, 25%)";
+      const roof = "hsl(38, 30%, 46%)";
+      const thatch = "hsl(44, 34%, 44%)";
+      const opening = "rgba(18, 12, 9, 0.78)";
+      if (level === 0) {
+        // lean-to: a single-slope plank roof on two posts
+        ctx.fillStyle = wood;
+        ctx.fillRect(sx - 8, baseY - 8, 1, 8);
+        ctx.fillRect(sx + 6, baseY - 4, 1, 4);
+        ctx.fillStyle = roof;
+        for (let x = -8; x <= 7; x++) ctx.fillRect(sx + x, baseY - 9 + Math.round((x + 8) * 0.33), 1, 2);
+      } else if (level === 1) {
+        // tent: an A-frame of thatch with a dark doorway
+        for (let x = -9; x <= 9; x++) {
+          const h = Math.round(11 - Math.abs(x) * 1.05);
+          if (h > 0) {
+            ctx.fillStyle = thatch;
+            ctx.fillRect(sx + x, baseY - h, 1, h);
+          }
+        }
+        ctx.fillStyle = opening;
+        for (let x = -2; x <= 2; x++) {
+          const h = Math.round(8 - Math.abs(x) * 1.4);
+          if (h > 0) ctx.fillRect(sx + x, baseY - h, 1, h);
+        }
+      } else {
+        // cabin: log walls, a lit window, a door, a pitched roof
+        ctx.fillStyle = wood;
+        ctx.fillRect(sx - 9, baseY - 10, 18, 10);
+        ctx.fillStyle = woodDark;
+        for (let y = baseY - 8; y < baseY; y += 3) ctx.fillRect(sx - 9, y, 18, 1);
+        ctx.fillStyle = opening;
+        ctx.fillRect(sx - 2, baseY - 7, 5, 7);
+        ctx.fillStyle = scene.fire && (scene.darkness ?? 0) > 0.15 ? "hsl(44, 80%, 66%)" : "hsl(46, 45%, 55%)";
+        ctx.fillRect(sx + 4, baseY - 8, 3, 3);
+        ctx.fillStyle = roof;
+        for (let x = -11; x <= 11; x++) {
+          const h = Math.round(8 - Math.abs(x) * 0.6);
+          if (h > 0) ctx.fillRect(sx + x, baseY - 10 - h, 1, h);
+        }
+        ctx.fillStyle = woodDark;
+        ctx.fillRect(sx - 11, baseY - 11, 23, 1);
+      }
+    }
+
     // tilled soil: each tile the wanderer worked a clod into reads as turned,
     // furrowed earth — dark enough to tell over any ground it was laid on, so
     // a feeding patch by the fire looks worked by hand. Over the ground but
