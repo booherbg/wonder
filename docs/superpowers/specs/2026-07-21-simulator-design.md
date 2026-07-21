@@ -331,6 +331,14 @@ on its own without the parked predation machinery.*
 The mutable key-and-lock Blaine wants to "trace adaptation over time." Start
 insect-specific; generalise (onto `appetite`/substrate) only later.
 
+**Genome vs. phenotype (Blaine's steer, 2026-07-21):** the identity map is the
+*abstract tag grid* that matching runs on — it is **not** the creature's body.
+The visible phenotype is **rendered *from* the genome** (genome colours → the
+colours you see, pattern → markings), so the two are **correlated, not
+identical**: evolve the genome and the look shifts, but the genome stays a clean
+map you can inspect and match on. (Prototype confirmed the crisp-grid genome reads
+better than trying to make the grid literally *be* the body.)
+
 > **This is John Holland's tags** (ECHO, *Hidden Order* / *Signals and
 > Boundaries*): tag-matching as the interaction primitive; the swarm is a little
 > **genetic algorithm** (population + selection + mutation), the map is its
@@ -380,10 +388,71 @@ anyone to watch cousins diverge. It confirmed the model reads at a glance and th
 the **double payoff** (mimicry = food + camouflage) drives fast, legible
 convergence — Holland ECHO-style tags in miniature.
 
-**Open (working through):** the map's **shape** (size — e.g. 4×4 vs 8×8 — and
-whether a pixel is a literal colour or an abstract key); the exact **match→reward**
-curve; the **within-swarm competition + fission** rule; whether **predator
-palatability** reuses the same map (rides with the parked predation).
+### The in-game model — worked out live (2026-07-21)
+
+The prototype settled the mechanics; here's how they become the actual game. A
+whole ecology from **two map types + a nectar cycle + one population number + a
+few behaviour genes.**
+
+**The swarm = one cloud + a small internal gene pool.** A swarm is a *single
+spatial entity* (a cloud that moves, homes, forages, renders) carrying a **small
+internal pool of ~6–12 genomes**. The pool is GA bookkeeping, **not** spatial
+agents — movement/pathfinding cost is per-*swarm*, not per-insect, which
+**retires the "thousands of insects melt the sim" perf risk.** Selection runs
+*inside* the pool. (A single genome per swarm was rejected: all clones → nothing
+to select, predators can't pick anyone off, no divergence — variance is required.)
+**Population = pool size / cloud density.**
+
+**The map — one shared format, two instances:**
+- **Flower map** (per plant *species*): two layers in one grid — a **base/foliage
+  colour** filling most cells (*always present → always something to match*) + a
+  **flower accent** whose *size is a genome trait* (few pixels = small bloom =
+  small jackpot; many = big showy bloom). Renders as the plant's real flower;
+  every plant shows at least a hint, and **Z-zoom / inspect shows it crisp**.
+  Plants reproduce slowly → the flower map drifts slowly (a near-fixed target).
+- **Insect sensor/appearance map** (per swarm): adapts (via the pool) toward the
+  flower it works most. **The insect's colours are rendered from this map** →
+  adapting = coming to *look* like the flower.
+
+**Feeding = adaptive metabolism.** A flower's nectar **regenerates on a reset
+cycle**; an insect draws **once per cycle**, and the **amount = its match
+quality** (base pixels: small generic; flower pixels: the jackpot). Well-matched →
+full meals from a few home flowers (safe); poorly-matched → crumbs, must **range**
+(exposed). Rate-limited by the cycle, so poor fit genuinely costs — it can't be
+brute-forced by grazing. Feeding also **pollinates** (spreads the plant) — the
+mutualism.
+
+**Camouflage (free, spatial).** Conspicuousness = `1 − match(appearance, the plant
+it's on)`. Adapted + home = hidden; strayed = exposed. One map does feeding *and*
+hiding, and gives a **roam-vs-stay** tension for free.
+
+**Predation (gentle, non-wiping).** A predator thins the **conspicuous variants**
+— cull rate ∝ conspicuousness — as a **slow population drain, not constant kills**;
+hidden/fed swarms **regrow**. Fed predators satiate/rest; predator density capped.
+**No predator map needed in v1** (they eat what stands out); an evolving predator
+search-image is the richer v2 (the prototype's Red Queen). Peaceful: population
+down, never a bonded critter killed.
+
+**Behaviour genes (a scalar slice — heritable + visible):** **Range**
+(homebody↔wanderer), **Nerve** (skittish↔bold), **Cohesion** (loose↔tight),
+optional **Rhythm** (day↔night). Separate from the pixel map (that's *looks*;
+these are *personality*). Evolve under the same pressures; read straight off how
+the cloud moves → **visible personality that adapts.**
+
+**Divergence → cousins.** When the internal pool goes **bimodal** (part favouring
+flower A, part B — e.g. A's nectar dried up), the swarm **buds a new swarm**
+carrying the second cluster (reuse the ✧ daughter pattern). Needs the internal
+variance.
+
+**Reuse vs. new.** *Reuse:* plant genomes/forms (`genome.ts`), pollination,
+day/night, Z-zoom + inspect, ✧ speciation, critters-as-predators. *New:* the
+flower map + sensor map + pixel-matcher; the swarm entity (cloud + gene pool);
+nectar meters; the metabolism/camouflage/predation math; behaviour genes.
+
+**Still open (smaller):** exact map size (≈7×7) and base-vs-flower pixel split;
+the metabolism/predation-drain constants (tune on the bench); whether behaviour
+genes get their own inspect readout; the dual-map (independent camouflage) and
+evolving-predator-search-image as explicit **v2** richness knobs.
 
 ---
 
