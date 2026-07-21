@@ -1335,6 +1335,8 @@ function buildMenuModel(): MenuModel {
 
 function menuLaunch(key: string): void {
   switch (key) {
+    case "B": openBackpackNow(); break;
+    case "G": openChartsNow(); break;
     case "C": openWebNow(); break;
     case "L": openIslePicker(); break;
     case "?": openHelp(); break;

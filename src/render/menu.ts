@@ -14,11 +14,13 @@ export interface MenuAction {
 // there's a seed to give back.
 export function menuLaunchers(pouchCount: number): MenuAction[] {
   const out: MenuAction[] = [
+    { key: "B", label: "the backpack — your seeds & tools" },
+    { key: "G", label: "the island's ledger — census & food web" },
     { key: "C", label: "the living web — this island's chains" },
     { key: "L", label: "the isles you've known" },
-    { key: "?", label: "the field guide" },
-    { key: "M", label: "the murmurs" },
     { key: "J", label: "the field journal" },
+    { key: "M", label: "the murmurs" },
+    { key: "?", label: "the field guide" },
     { key: "P", label: "save a postcard" },
     { key: "N", label: "name this world" },
   ];
