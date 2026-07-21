@@ -565,11 +565,24 @@ export class Renderer {
               : false;
             const sprite = getPlantSprite(p.genome, aquatic);
             const sway = p.genome.height > 0.3 ? swayOffset(timeMs, p.x, p.y) : 0;
-            ctx.drawImage(
-              sprite,
-              Math.round(p.x - PLANT_ANCHOR_X - camX) + sway,
-              Math.round(p.y - PLANT_ANCHOR_Y - camY),
-            );
+            // per-instance variation so a field of one kind never reads "stamped":
+            // a deterministic mirror on ~2 in 5, and a pixel or two of side jitter
+            // on all. Keyed to position, so it's stable frame-to-frame and reload
+            // to reload — and it never lifts a plant off the ground.
+            const gx = Math.round(p.x);
+            const gy = Math.round(p.y);
+            const jx = Math.round((hash2d(gx, gy, 0x31f7) - 0.5) * 3);
+            const dx = Math.round(p.x - PLANT_ANCHOR_X - camX) + sway + jx;
+            const dy = Math.round(p.y - PLANT_ANCHOR_Y - camY);
+            if (hash2d(gx, gy, 0x5eed1) < 0.42) {
+              ctx.save();
+              ctx.translate(dx + sprite.width, dy);
+              ctx.scale(-1, 1);
+              ctx.drawImage(sprite, 0, 0);
+              ctx.restore();
+            } else {
+              ctx.drawImage(sprite, dx, dy);
+            }
             if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
               glowers.push({ x: p.x, y: p.y, hue: p.genome.hue, genome: p.genome });
             }
