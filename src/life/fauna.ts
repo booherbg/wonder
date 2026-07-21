@@ -322,6 +322,8 @@ export interface Critter {
   curiosity: number; // 0..CURIOSITY_CAP — a small memory of shared stillness
   mood: CritterMood; // the drive that chose the current action — the legible why
   stuck?: number; // seconds of no headway toward a target — trips the unstick
+  path?: number[]; // a queued detour (tile indices) around an obstacle, first step first
+  pathGoal?: number; // the goal tile that detour was routed to; dropped if the goal moves
 }
 
 export const CRITTER_SPEED = 40; // px/s — unhurried
@@ -648,26 +650,47 @@ function critterWalkable(map: WorldMap, x: number, y: number): boolean {
   return isWalkable(map, x, y) && tileAt(map, x, y) !== Tile.ShallowWater;
 }
 
-function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
-  const dx = c.targetX - c.x;
-  const dy = c.targetY - c.y;
+// One frame's nudge toward a point. A critter enters open-sea shallows only to
+// leave them: it may step off a shallow tile it is already on (so it never
+// freezes there), but never walks fresh into the sea from dry ground. Returns
+// true once it is there.
+function stepToward(c: Critter, px: number, py: number, dt: number, map: WorldMap, speed: number): boolean {
+  const dx = px - c.x;
+  const dy = py - c.y;
   const dist = Math.hypot(dx, dy);
   if (dist < 2) return true;
   const step = Math.min(dist, speed * dt);
   const nx = c.x + (dx / dist) * step;
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
-  // a critter enters open-sea shallows only to leave them: it may step off a
-  // shallow tile it is already on (so it never freezes there), but never walks
-  // fresh into the sea from dry ground. Targets are land-only (critterWalkable);
-  // this is the movement half of that rule.
   const onShallow = tileAt(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE)) === Tile.ShallowWater;
   const canStep = (tx: number, ty: number): boolean =>
     isWalkable(map, tx, ty) && (onShallow || tileAt(map, tx, ty) !== Tile.ShallowWater);
   if (canStep(Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
   if (canStep(Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;
-  return Math.hypot(c.targetX - c.x, c.targetY - c.y) < 2;
+  return Math.hypot(px - c.x, py - c.y) < 2;
+}
+
+// Walk toward the current target. If a detour route is queued (routeToward laid
+// it after a stall), follow that around the obstacle first, tile by tile; only
+// once it is spent — the critter now on the goal tile — does the straight
+// approach resume and "arrived" become possible. The route is dropped the moment
+// the goal tile changes, so a fresh decision never chases a stale path.
+function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
+  const goalTile = Math.floor(c.targetY / TILE_SIZE) * map.width + Math.floor(c.targetX / TILE_SIZE);
+  if (c.pathGoal !== goalTile) {
+    c.path = undefined;
+    c.pathGoal = goalTile;
+  }
+  if (c.path && c.path.length > 0) {
+    const wp = c.path[0];
+    const wpX = ((wp % map.width) + 0.5) * TILE_SIZE;
+    const wpY = (((wp / map.width) | 0) + 0.5) * TILE_SIZE;
+    if (stepToward(c, wpX, wpY, dt, map, speed)) c.path.shift();
+    if (c.path.length > 0) return false; // still detouring — not yet arrived
+  }
+  return stepToward(c, c.targetX, c.targetY, dt, map, speed);
 }
 
 // Aim a pinned critter at the nearest walkable neighbour tile — cardinals
@@ -689,6 +712,56 @@ function stepOffWall(c: Critter, map: WorldMap): void {
       return;
     }
   }
+}
+
+// Pinned against rock with its goal on the far side, a critter shouldn't grind
+// (or side-step blindly): route AROUND it. A bounded 4-connected BFS over land
+// (critterWalkable) from the critter to its current goal tile, then aim it a few
+// steps along that path — so it walks the corner instead of into it. Only fired
+// on a real stall (see the stuck gate), and deterministic (fixed scan order, no
+// dice), so the seeded stream is untouched. Returns false when the goal isn't
+// reachable overland within the search box — then the caller side-steps instead.
+function routeToward(c: Critter, map: WorldMap): boolean {
+  const { width, height } = map;
+  const start = Math.floor(c.y / TILE_SIZE) * width + Math.floor(c.x / TILE_SIZE);
+  const goal = Math.floor(c.targetY / TILE_SIZE) * width + Math.floor(c.targetX / TILE_SIZE);
+  if (goal === start) return false;
+  const MAXR = 20; // search box half-width — a local detour, not island-wide A*
+  const sx = start % width;
+  const sy = (start / width) | 0;
+  const from = new Map<number, number>([[start, -1]]);
+  const queue = [start];
+  let head = 0;
+  let reached = false;
+  while (head < queue.length) {
+    const u = queue[head++];
+    if (u === goal) {
+      reached = true;
+      break;
+    }
+    const x = u % width;
+    const y = (u / width) | 0;
+    if (Math.abs(x - sx) > MAXR || Math.abs(y - sy) > MAXR) continue;
+    for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const v = ny * width + nx;
+      if (from.has(v) || !critterWalkable(map, nx, ny)) continue;
+      from.set(v, u);
+      queue.push(v);
+    }
+  }
+  if (!reached) return false;
+  // the full route becomes the critter's detour — first step first, the start
+  // tile (already underfoot) dropped. moveToward walks it; the goal and state are
+  // left untouched, so arrival still lands on the real target.
+  const path: number[] = [];
+  for (let cur = goal; cur !== start; cur = from.get(cur)!) path.push(cur);
+  path.reverse();
+  c.path = path;
+  c.pathGoal = goal;
+  return true;
 }
 
 export function updateCritter(
@@ -774,7 +847,7 @@ export function updateCritter(
     c.stuck = (c.stuck ?? 0) + dt;
     if (c.stuck >= STUCK_LIMIT) {
       c.stuck = 0;
-      stepOffWall(c, map);
+      if (!routeToward(c, map)) stepOffWall(c, map); // route around the obstacle, else side-step
       return;
     }
   } else {

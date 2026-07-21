@@ -126,3 +126,49 @@ test("a land critter never wades out into open-sea shallows", () => {
     expect(tileAt(map, tx, ty)).not.toBe(Tile.ShallowWater); // never sets foot in the open sea
   }
 });
+
+// A rock wall with a single gap stands between a critter and its den. Greedy
+// wall-sliding would grind at the stone forever; the critter must route AROUND —
+// up to the gap, through, and down the far side — to get home.
+test("a critter routes around a rock wall to reach its den", () => {
+  const w = 20;
+  const h = 20;
+  const tiles = new Uint8Array(w * h).fill(Tile.Grass);
+  for (let y = 0; y < h; y++) if (y !== 3) tiles[y * w + 10] = Tile.Rock; // wall at x=10, one gap at y=3
+  const map: WorldMap = {
+    width: w,
+    height: h,
+    seed: 1,
+    tiles,
+    elevation: new Float32Array(w * h),
+    rivers: [],
+    spawn: { x: 5, y: 10 },
+  };
+  const plants = generatePlantSpecies(1);
+  const flora = new Flora(map, plants, 1);
+  const sp = deer({ x: 15, y: 10 }); // den on the far side of the wall
+  const c: Critter = {
+    species: 0,
+    x: 5.5 * TILE_SIZE,
+    y: 10.5 * TILE_SIZE,
+    state: "idle",
+    targetX: 5.5 * TILE_SIZE,
+    targetY: 10.5 * TILE_SIZE,
+    stateTime: 0,
+    hopPhase: 0,
+    facing: 1,
+    energy: 0.05, // spent, so comfort pulls it home
+    curiosity: 0,
+    mood: "content",
+  };
+  const rng = makeRng(5);
+  let closest = Infinity;
+  for (let i = 0; i < 5000; i++) {
+    updateCritter(c, 1 / 30, map, flora, [sp], null, rng, { darkness: 1 });
+    const tx = Math.floor(c.x / TILE_SIZE);
+    const ty = Math.floor(c.y / TILE_SIZE);
+    expect(tileAt(map, tx, ty)).not.toBe(Tile.Rock); // never grinds into the stone
+    closest = Math.min(closest, Math.hypot(c.x / TILE_SIZE - 15.5, c.y / TILE_SIZE - 10.5));
+  }
+  expect(closest).toBeLessThan(2.5); // it wound its way home — impossible without routing around
+});
