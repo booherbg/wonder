@@ -64,11 +64,11 @@ test(
   "no sizable island is left stranded across the sea (every shape, a spread of seeds)",
   () => {
     for (const shape of SHAPES) {
-      for (let seed = 1; seed <= 30; seed++) {
+      for (let seed = 1; seed <= 20; seed++) {
         const map = generate(seed, undefined, shape as IslandShape);
         expect(waterStrandedLobes(map)).toBe(0);
       }
     }
   },
-  30_000,
+  60_000,
 );

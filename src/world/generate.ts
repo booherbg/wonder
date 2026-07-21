@@ -885,35 +885,49 @@ function connectLobes(tiles: Uint8Array, cfg: WorldConfig): void {
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         const v = ny * width + nx;
         const t = tiles[v] as Tile;
-        if (t !== Tile.DeepWater && !WALKABLE.has(t)) continue; // rock/cliff/snow wall off
-        const nd = d + (t === Tile.DeepWater ? 1 : 0);
+        // wading a deep tile costs 1; forcing a pass through rock/cliff/snow costs
+        // 2, so the flood prefers a water route and only tunnels stone when a
+        // basin is truly mountain-locked. Walkable ground is free.
+        const step = t === Tile.DeepWater ? 1 : WALKABLE.has(t) ? 0 : 2;
+        const nd = d + step;
         if (nd > MAX_BRIDGE) continue;
         if (dist[v] === -1 || nd < dist[v]) relax(v, nd, u);
       }
     }
   }
 
-  // For each sizable stranded lobe, wet the shortest crossing that reached it.
+  // The best-reached tile of each sizable stranded lobe, in one pass.
+  const bestTileOf = new Int32Array(sizes.length).fill(-1);
+  const bestDOf = new Int32Array(sizes.length).fill(MAX_BRIDGE + 1);
+  for (let i = 0; i < N; i++) {
+    const r = label[i];
+    if (r < 0 || r === main || sizes[r] < MIN_LOBE || dist[i] < 0) continue;
+    if (dist[i] < bestDOf[r]) {
+      bestDOf[r] = dist[i];
+      bestTileOf[r] = i;
+    }
+  }
+  // For each such lobe, carve the shortest crossing that reached it.
   for (let r = 0; r < sizes.length; r++) {
     if (r === main || sizes[r] < MIN_LOBE) continue;
-    let bestTile = -1;
-    let bestD = MAX_BRIDGE + 1;
-    for (let i = 0; i < N; i++) {
-      if (label[i] === r && dist[i] >= 0 && dist[i] < bestD) {
-        bestD = dist[i];
-        bestTile = i;
-      }
-    }
+    const bestTile = bestTileOf[r];
     if (bestTile === -1) continue; // no crossing within budget — this isle stays wild
     for (let cur = bestTile; cur !== -1; cur = parent[cur]) {
       const x = cur % width;
       const y = (cur / width) | 0;
-      // wet the crossing and a one-tile skirt, so the shoal reads as an isthmus
+      // a water crossing widens into a shoal (the crossing + a one-tile skirt, so
+      // it reads as an isthmus); a mountain crossing stays a narrow scree slot
+      // (the crossing tile only) — a walkable pass punched through the ring.
       for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
         const px = x + dx;
         const py = y + dy;
         if (px < 1 || py < 1 || px >= width - 1 || py >= height - 1) continue; // never the sea-border
-        if (tiles[py * width + px] === Tile.DeepWater) tiles[py * width + px] = Tile.ShallowWater;
+        const idx = py * width + px;
+        const t = tiles[idx] as Tile;
+        if (t === Tile.DeepWater) tiles[idx] = Tile.ShallowWater;
+        else if (dx === 0 && dy === 0 && (t === Tile.Rock || t === Tile.Cliff || t === Tile.Snow)) {
+          tiles[idx] = Tile.Scree;
+        }
       }
     }
   }
