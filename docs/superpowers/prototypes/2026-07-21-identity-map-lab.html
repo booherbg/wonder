@@ -1,0 +1,563 @@
+<!--
+  The Identity-Map Lab — a design prototype for Wonder's insect-swarm / identity-map matcher.
+  A live genetic-algorithm sandbox: insect swarms adapt pixel-genomes to mimic host plants,
+  plants co-evolve back toward their pollinators, predators cull the conspicuous
+  (foraged = population reduced, never death). John Holland ECHO-style tags in miniature.
+
+  Built 2026-07-21 during the Simulator brainstorm (Opus + Blaine).
+  Live artifact: https://claude.ai/code/artifact/e39f8fe3-ce0a-4580-a8a0-9bcee58a7d03
+  Design context: docs/superpowers/specs/2026-07-21-simulator-design.md  (§ Insect swarms)
+
+  Self-contained: open in any browser. No build, no dependencies.
+-->
+<title>The Identity-Map Lab — Wonder</title>
+<style>
+  :root {
+    --abyss: #060a10;
+    --tide: #0e1a24;
+    --tide-hi: #162a38;
+    --edge: #1f3646;
+    --ink: #e4ecf2;
+    --ink-dim: #93a6b3;
+    --lumen: 127, 224, 196;   /* mint */
+    --firefly: 244, 201, 121; /* gold */
+    --rose: 231, 143, 160;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 72% -10%, rgba(var(--lumen), 0.06), transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, rgba(var(--firefly), 0.05), transparent 55%),
+      var(--abyss);
+    color: var(--ink);
+    font-family: var(--serif);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 1180px; margin: 0 auto; padding: clamp(18px, 3vw, 34px);
+    display: flex; flex-direction: column; gap: 18px; min-height: 100%;
+  }
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: rgb(var(--lumen));
+  }
+  h1 {
+    font-size: clamp(26px, 4vw, 40px); font-weight: 600; letter-spacing: 0.02em;
+    font-variant: small-caps; margin: 0; text-wrap: balance; color: var(--ink);
+  }
+  .thesis { font-style: italic; color: var(--ink-dim); max-width: 70ch; margin: 2px 0 0; }
+  .thesis b { color: rgb(var(--firefly)); font-style: normal; font-weight: 600; }
+  .thesis .m { color: rgb(var(--lumen)); font-style: normal; }
+  .thesis .r { color: rgb(var(--rose)); font-style: normal; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; flex: 1; min-height: 0; }
+  @media (max-width: 820px) { .stage { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: linear-gradient(180deg, var(--tide) 0%, #0b141c 100%);
+    border: 1px solid var(--edge); border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(var(--lumen), 0.04), 0 18px 44px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(var(--lumen), 0.05);
+  }
+  .field { position: relative; overflow: hidden; min-height: 440px; }
+  #web { display: block; width: 100%; height: 100%; cursor: grab; }
+  .field-legend {
+    position: absolute; left: 14px; bottom: 12px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-dim); display: flex; gap: 14px; pointer-events: none; flex-wrap: wrap;
+  }
+  .field-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 2px; }
+
+  .plate { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .plate h2 {
+    font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-family: var(--mono); color: rgb(var(--lumen)); margin: 0 0 2px;
+    font-weight: 500; padding-bottom: 8px; border-bottom: 1px solid var(--edge);
+  }
+  .specimen-name { font-size: 19px; font-variant: small-caps; letter-spacing: 0.02em; }
+  .specimen-sub { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: -6px; }
+  .maps { display: flex; align-items: center; gap: 10px; }
+  .mapbox { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+  .mapbox canvas {
+    width: 100%; max-width: 108px; aspect-ratio: 1; image-rendering: pixelated;
+    border-radius: 3px; border: 1px solid var(--edge); background: #17252f;
+  }
+  .mapbox .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+  .arrow { color: rgb(var(--lumen)); font-size: 20px; opacity: 0.7; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 0; }
+  .stat { display: flex; flex-direction: column; gap: 1px; }
+  .stat .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+  .stat .v { font-family: var(--mono); font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stat .v.mint { color: rgb(var(--lumen)); }
+  .stat .v.gold { color: rgb(var(--firefly)); }
+  .stat .v.rose { color: rgb(var(--rose)); }
+  .spark-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .spark-wrap .cap { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+  #spark { width: 100%; height: 44px; display: block; }
+  .plate .note { font-style: italic; font-size: 12.5px; color: var(--ink-dim); line-height: 1.45; }
+
+  .rail { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 16px; }
+  .rail .group { display: flex; align-items: center; gap: 8px; }
+  button, .seg button {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em;
+    color: var(--ink); background: var(--tide-hi); border: 1px solid var(--edge);
+    border-radius: 3px; padding: 7px 12px; cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  button:hover { border-color: rgba(var(--lumen), 0.5); color: rgb(var(--lumen)); }
+  button:focus-visible { outline: 2px solid rgb(var(--lumen)); outline-offset: 2px; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .btn-primary { color: var(--abyss); background: rgb(var(--lumen)); border-color: rgb(var(--lumen)); font-weight: 600; }
+  .btn-primary:hover { background: #a2ecd6; color: var(--abyss); }
+  .toggle[aria-pressed="true"] { background: rgba(var(--rose), 0.18); color: rgb(var(--rose)); border-color: rgba(var(--rose), 0.55); }
+  .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 3px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; background: transparent; padding: 6px 10px; }
+  .seg button[aria-pressed="true"] { background: rgba(var(--lumen), 0.16); color: rgb(var(--lumen)); }
+  .rail label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); }
+  input[type="range"] { accent-color: rgb(var(--firefly)); width: 92px; vertical-align: middle; }
+  .clock { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .clock b { color: rgb(var(--firefly)); font-weight: 600; }
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Wonder · a genome you can watch</span>
+    <h1>The Identity-Map Lab</h1>
+    <p class="thesis">
+      Each swarm is a small <b>genetic algorithm</b> adapting toward its host —
+      <span class="m">coloring only the pixels worth paying for</span>. Now plants
+      <b>co-evolve</b> back toward their pollinators, and <span class="r">predators</span>
+      hunt whatever stands out — so camouflage buys food <em>and</em> survival. Clone
+      anyone to watch cousins diverge.
+    </p>
+  </header>
+
+  <div class="stage">
+    <div class="panel field">
+      <canvas id="web"></canvas>
+      <div class="field-legend">
+        <span><span class="dot" style="background:#f4c979"></span>host plant</span>
+        <span><span class="dot" style="background:#7fe0c4"></span>insect swarm</span>
+        <span><span class="dot" style="background:#e78fa0"></span>predator</span>
+        <span>edge = resemblance · click to inspect</span>
+      </div>
+    </div>
+
+    <aside class="panel plate">
+      <div>
+        <h2>The specimen</h2>
+        <div class="specimen-name" id="sp-name">—</div>
+        <div class="specimen-sub" id="sp-sub">select in the field</div>
+      </div>
+      <div class="maps">
+        <div class="mapbox"><canvas id="map-insect" width="7" height="7"></canvas><span class="cap" id="cap-a">swarm</span></div>
+        <span class="arrow">→</span>
+        <div class="mapbox"><canvas id="map-host" width="7" height="7"></canvas><span class="cap" id="cap-b">host</span></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="k">Resemblance</span><span class="v mint" id="st-match">—</span></div>
+        <div class="stat"><span class="k">Population</span><span class="v rose" id="st-health">—</span></div>
+        <div class="stat"><span class="k">Pixels paid</span><span class="v gold" id="st-paid">—</span></div>
+        <div class="stat"><span class="k">Generation</span><span class="v" id="st-gen">—</span></div>
+      </div>
+      <div class="spark-wrap">
+        <span class="cap">Resemblance over generations</span>
+        <canvas id="spark"></canvas>
+      </div>
+      <p class="note" id="sp-note">Pick a swarm or a plant. Ringed pixels are matches it's paying to keep.</p>
+    </aside>
+  </div>
+
+  <div class="panel rail">
+    <div class="group">
+      <button class="btn-primary" id="play">Pause</button>
+      <div class="seg" role="group" aria-label="Speed">
+        <button data-speed="1" aria-pressed="true">1×</button>
+        <button data-speed="2" aria-pressed="false">2×</button>
+        <button data-speed="4" aria-pressed="false">4×</button>
+      </div>
+    </div>
+    <div class="group">
+      <label for="mut">Mutation</label>
+      <input type="range" id="mut" min="1" max="12" value="5" />
+    </div>
+    <div class="group">
+      <button class="toggle" id="pred" aria-pressed="true">Predators</button>
+      <button id="clone" disabled>Clone</button>
+      <button id="add">+ Swarm</button>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="clock">gen <b id="clk-gen">0</b> · <span id="clk-swarms">0</span> swarms · <span id="clk-hosts">0</span> plants</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const G = 7, CELLS = G * G;
+  const PALETTE = ["#17252f", "#e2604f", "#f4c979", "#7fe0c4", "#b98ce0", "#4fb0c0", "#e78fa0"];
+  const NCOL = PALETTE.length - 1;
+  const BASE = 0.06, UPKEEP = 0.18, HIT = 0.9;
+  const POP = 14;
+
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const randCell = () => (Math.random() < 0.55 ? 0 : 1 + rnd(NCOL));
+
+  function fitness(g, host) {
+    let s = 0;
+    for (let i = 0; i < CELLS; i++) s += g[i] === 0 ? BASE : -UPKEEP + (host[i] === g[i] ? HIT : 0);
+    return s;
+  }
+  function resemblance(g, host) {
+    let need = 0, got = 0;
+    for (let i = 0; i < CELLS; i++) if (host[i] !== 0) { need++; if (g[i] === host[i]) got++; }
+    return need ? got / need : 0;
+  }
+  const paidCount = (g) => { let n = 0; for (let i = 0; i < CELLS; i++) if (g[i]) n++; return n; };
+  function mutate(src, rate) {
+    const g = src.slice(), flips = 1 + rnd(rate);
+    for (let k = 0; k < flips; k++) { const i = rnd(CELLS); g[i] = Math.random() < 0.4 ? 0 : 1 + rnd(NCOL); }
+    return g;
+  }
+
+  function motif(rows) {
+    const g = new Uint8Array(CELLS);
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) g[y * G + x] = rows[y].charCodeAt(x) - 48;
+    return g;
+  }
+  const HOST_SEED = [
+    { name: "Emberberry", hue: "#e2604f", rows: ["0000000","0011000","0121100","0122100","0011000","0002000","0000000"] },
+    { name: "Fen Frond", hue: "#7fe0c4", rows: ["0003000","0033000","0333300","0033000","0033300","0003000","0003000"] },
+    { name: "Violet Censer", hue: "#b98ce0", rows: ["0004000","0044400","0447400","0044400","0004000","0007000","0007000"] },
+    { name: "Tide Kelp", hue: "#4fb0c0", rows: ["0050500","0053500","0053500","0055500","0053500","0053500","0050500"] },
+  ];
+
+  const ADJ = ["ash","dusk","pale","green","amber","still","drift","ember","moss","veil","cinder","reed","hush","fen"];
+  const NOUN = ["midge","lacewing","gnat","mote-fly","silk-moth","chafer"];
+  let nameSeed = 0;
+  const coinSwarm = () => ADJ[nameSeed++ % ADJ.length] + " " + NOUN[rnd(NOUN.length)];
+
+  let hosts = [], swarms = [], gen = 0;
+
+  function makeSwarm(hostIdx) {
+    const pop = [];
+    for (let i = 0; i < POP; i++) {
+      const g = new Uint8Array(CELLS);
+      for (let c = 0; c < CELLS; c++) g[c] = randCell();
+      pop.push(g);
+    }
+    return { kind: "swarm", name: coinSwarm(), host: hostIdx, pop, best: pop[0],
+      match: 0, paid: 0, health: 1, x: 0.5, y: 0.5, orbit: Math.random() * 6.28, hist: [] };
+  }
+
+  const pollinatorsOf = (hi) => swarms.filter((s) => s.host === hi);
+
+  function evolveSwarm(sw) {
+    const host = hosts[sw.host].g;
+    sw.pop.sort((a, b) => fitness(b, host) - fitness(a, host));
+    // predators cull the visible: with predators on, fewer survive, weighted to camouflage
+    const keep = Math.max(3, Math.round((predatorsOn ? 0.36 : 0.5) * POP));
+    const survivors = sw.pop.slice(0, keep);
+    const rate = +mutInput.value;
+    const next = survivors.slice();
+    while (next.length < POP) next.push(mutate(survivors[rnd(survivors.length)], rate));
+    sw.pop = next;
+    sw.best = survivors[0];
+    sw.match = resemblance(sw.best, host);
+    sw.paid = paidCount(sw.best);
+    // population health: predators reduce the poorly-camouflaged; safe swarms recover
+    if (predatorsOn) sw.health += (sw.match - 0.55) * 0.12;
+    else sw.health += 0.06;
+    sw.health = Math.max(0.08, Math.min(1, sw.health));
+    sw.hist.push(sw.match);
+    if (sw.hist.length > 140) sw.hist.shift();
+    if (Math.random() < 0.0016 && hosts.length > 1) { // affinity drift → a cousin wanders
+      sw.host = rnd(hosts.length); sw.name = coinSwarm(); sw.hist = [];
+    }
+  }
+
+  function evolveHost(h, hi) {
+    // plants co-evolve TOWARD their pollinators (be matched → be pollinated), slowly.
+    // Same energy rule, viewed the other way: reward the host for looking like its swarms.
+    const polls = pollinatorsOf(hi);
+    if (!polls.length) return;
+    const score = (g) => polls.reduce((s, p) => s + fitness(g, p.best), 0);
+    for (let a = 0; a < 2; a++) { // a couple of gentle tries per generation
+      const cand = h.g.slice();
+      cand[rnd(CELLS)] = Math.random() < 0.5 ? 0 : 1 + rnd(NCOL);
+      if (score(cand) > score(h.g)) h.g = cand;
+    }
+  }
+
+  // ---- canvas ----
+  const web = document.getElementById("web");
+  const ctx = web.getContext("2d");
+  let W = 0, H = 0, dpr = 1;
+
+  function layoutHosts() {
+    const n = hosts.length;
+    if (n === 1) { hosts[0].hx = 0.5; hosts[0].hy = 0.42; return; }
+    const rx = 0.32, ry = 0.30;
+    hosts.forEach((h, i) => {
+      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+      h.hx = 0.5 + Math.cos(a) * rx;
+      h.hy = 0.5 + Math.sin(a) * ry;
+    });
+  }
+  function resize() {
+    const r = web.parentElement.getBoundingClientRect();
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = r.width; H = r.height;
+    web.width = W * dpr; web.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath(); c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+  }
+  function drawGenome(c, g, host, px, py, cell, ring) {
+    const gap = cell > 3 ? 0.6 : 0;
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      const i = y * G + x;
+      c.fillStyle = PALETTE[g[i]];
+      c.fillRect(px + x * cell, py + y * cell, cell - gap, cell - gap);
+      if (ring && host && host[i] !== 0 && g[i] === host[i]) {
+        c.strokeStyle = "rgba(127,224,196,0.9)"; c.lineWidth = Math.max(1, cell * 0.12);
+        c.strokeRect(px + x * cell + 0.5, py + y * cell + 0.5, cell - 1.6, cell - 1.6);
+      }
+    }
+  }
+
+  let selected = null, hover = null, t = 0;
+
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    const S = Math.min(W, H);
+
+    swarms.forEach((sw) => {
+      const h = hosts[sw.host];
+      const a = 0.08 + sw.match * 0.72;
+      ctx.strokeStyle = `rgba(127,224,196,${a})`;
+      ctx.lineWidth = 0.6 + sw.match * 2.4;
+      ctx.beginPath(); ctx.moveTo(sw.x * W, sw.y * H); ctx.lineTo(h.hx * W, h.hy * H); ctx.stroke();
+    });
+
+    // predators orbit their host, hunting the visible
+    if (predatorsOn) hosts.forEach((h, hi) => {
+      const pa = t * (reduced ? 0 : 1.1) + hi * 2.2;
+      const pr = S * 0.10;
+      const px = h.hx * W + Math.cos(pa) * pr, py = h.hy * H + Math.sin(pa) * pr * 0.9;
+      ctx.save(); ctx.shadowColor = "rgba(231,143,160,0.7)"; ctx.shadowBlur = 8;
+      ctx.fillStyle = "rgb(231,143,160)";
+      ctx.beginPath();
+      ctx.moveTo(px + 5, py); ctx.lineTo(px - 4, py - 3.5); ctx.lineTo(px - 4, py + 3.5);
+      ctx.closePath(); ctx.fill(); ctx.restore();
+    });
+
+    hosts.forEach((h, hi) => {
+      const cx = h.hx * W, cy = h.hy * H, size = S * 0.11, cell = size / G;
+      const sel = selected && selected.kind === "host" && selected.ref === h;
+      ctx.save(); ctx.shadowColor = "rgba(244,201,121,0.5)"; ctx.shadowBlur = sel ? 22 : 15;
+      ctx.fillStyle = sel ? "rgba(244,201,121,0.18)" : "rgba(244,201,121,0.10)";
+      roundRect(ctx, cx - size / 2 - 6, cy - size / 2 - 6, size + 12, size + 12, 6); ctx.fill(); ctx.restore();
+      drawGenome(ctx, h.g, null, cx - size / 2, cy - size / 2, cell, false);
+      ctx.fillStyle = "rgba(244,201,121,0.95)"; ctx.font = "600 12px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center"; ctx.fillText(h.name, cx, cy + size / 2 + 16);
+      h._sx = cx; h._sy = cy; h._sr = size / 2 + 6;
+    });
+
+    swarms.forEach((sw) => {
+      const cx = sw.x * W, cy = sw.y * H, size = S * 0.072 * (0.7 + sw.health * 0.3), cell = size / G;
+      const sel = selected && selected.kind === "swarm" && selected.ref === sw;
+      const hov = hover && hover.kind === "swarm" && hover.ref === sw;
+      ctx.save();
+      if (sel || hov) { ctx.shadowColor = "rgba(127,224,196,0.8)"; ctx.shadowBlur = sel ? 20 : 12; }
+      ctx.fillStyle = sel ? "rgba(127,224,196,0.16)" : "rgba(10,18,24,0.82)";
+      roundRect(ctx, cx - size / 2 - 4, cy - size / 2 - 4, size + 8, size + 8, 4); ctx.fill(); ctx.restore();
+      // health ring
+      const rr = size / 2 + 6;
+      ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 6.2832); ctx.strokeStyle = "rgba(31,54,70,0.9)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, rr, -1.5708, -1.5708 + sw.health * 6.2832);
+      ctx.strokeStyle = sw.health > 0.4 ? "rgba(127,224,196,0.85)" : "rgba(231,143,160,0.95)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = sel ? "rgba(127,224,196,0.9)" : "rgba(31,54,70,0.9)"; ctx.lineWidth = 1;
+      roundRect(ctx, cx - size / 2 - 4, cy - size / 2 - 4, size + 8, size + 8, 4); ctx.stroke();
+      drawGenome(ctx, sw.best, hosts[sw.host].g, cx - size / 2, cy - size / 2, cell, sel);
+      sw._sx = cx; sw._sy = cy; sw._sr = size / 2 + 8;
+    });
+  }
+
+  // ---- specimen plate ----
+  const mapI = document.getElementById("map-insect").getContext("2d");
+  const mapH = document.getElementById("map-host").getContext("2d");
+  const spark = document.getElementById("spark"), sctx = spark.getContext("2d");
+  const el = (id) => document.getElementById(id);
+
+  function bestPollinator(hi) {
+    let best = null, bm = -1;
+    pollinatorsOf(hi).forEach((p) => { if (p.match > bm) { bm = p.match; best = p; } });
+    return best;
+  }
+
+  function drawSpark(hist, ok) {
+    const w = spark.clientWidth, h = 44;
+    spark.width = w * dpr; spark.height = h * dpr; sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sctx.clearRect(0, 0, w, h);
+    sctx.strokeStyle = "rgba(31,54,70,0.8)"; sctx.lineWidth = 1;
+    sctx.beginPath(); sctx.moveTo(0, h - 0.5); sctx.lineTo(w, h - 0.5); sctx.stroke();
+    if (!hist || hist.length < 2) return;
+    const stepX = w / Math.max(1, hist.length - 1);
+    const path = () => { sctx.beginPath(); hist.forEach((v, i) => { const x = i * stepX, y = h - 2 - v * (h - 6); i ? sctx.lineTo(x, y) : sctx.moveTo(x, y); }); };
+    path(); sctx.lineTo((hist.length - 1) * stepX, h); sctx.lineTo(0, h); sctx.closePath();
+    sctx.fillStyle = "rgba(127,224,196,0.14)"; sctx.fill();
+    path(); sctx.strokeStyle = "rgba(127,224,196,0.95)"; sctx.lineWidth = 1.5; sctx.stroke();
+    const lv = hist[hist.length - 1];
+    sctx.fillStyle = "rgb(244,201,121)";
+    sctx.beginPath(); sctx.arc((hist.length - 1) * stepX, h - 2 - lv * (h - 6), 2.5, 0, 7); sctx.fill();
+  }
+
+  function paintPlate() {
+    if (!selected) return;
+    if (selected.kind === "swarm") {
+      const sw = selected.ref, host = hosts[sw.host];
+      drawGenome(mapI, sw.best, null, 0, 0, 1, false);
+      for (let i = 0; i < CELLS; i++) if (host.g[i] && sw.best[i] === host.g[i]) {
+        const x = i % G, y = (i / G) | 0; mapI.strokeStyle = "rgba(127,224,196,0.95)"; mapI.lineWidth = 0.14;
+        mapI.strokeRect(x + 0.07, y + 0.07, 0.86, 0.86);
+      }
+      drawGenome(mapH, host.g, null, 0, 0, 1, false);
+      el("cap-a").textContent = "swarm"; el("cap-b").textContent = "host";
+      el("sp-name").textContent = sw.name;
+      el("sp-sub").textContent = "host: " + host.name;
+      el("st-match").textContent = Math.round(sw.match * 100) + "%";
+      el("st-health").textContent = Math.round(sw.health * 100) + "%";
+      el("st-paid").textContent = sw.paid + " / " + CELLS;
+      el("st-gen").textContent = gen;
+      drawSpark(sw.hist);
+      el("sp-note").innerHTML = sw.match > 0.85
+        ? "A near-perfect mimic — it wears <em>" + host.name + "</em>, so predators pass it over. Ringed pixels are the ones it pays to keep."
+        : sw.match > 0.4 ? "Adapting — finding which pixels to color to match <em>" + host.name + "</em>, hunted for whatever still stands out."
+        : "Still a conspicuous generalist — cheap, unmatched, and easy prey. Give it generations.";
+    } else {
+      const h = selected.ref, hi = hosts.indexOf(h), polls = pollinatorsOf(hi), bp = bestPollinator(hi);
+      drawGenome(mapI, h.g, null, 0, 0, 1, false);
+      if (bp) drawGenome(mapH, bp.best, null, 0, 0, 1, false); else mapH.clearRect(0, 0, 7, 7);
+      el("cap-a").textContent = "plant"; el("cap-b").textContent = "top mimic";
+      el("sp-name").textContent = h.name;
+      el("sp-sub").textContent = polls.length + " pollinator" + (polls.length === 1 ? "" : "s");
+      const avg = polls.length ? polls.reduce((s, p) => s + p.match, 0) / polls.length : 0;
+      el("st-match").textContent = Math.round(avg * 100) + "%";
+      el("st-health").textContent = "—";
+      el("st-paid").textContent = paidCount(h.g) + " / " + CELLS;
+      el("st-gen").textContent = gen;
+      drawSpark(bp ? bp.hist : null);
+      el("sp-note").innerHTML = polls.length
+        ? "A host. It's <em>co-evolving</em> toward the swarms that pollinate it — a slow handshake. Right: its closest mimic."
+        : "A host with no pollinators yet. Clone a swarm onto it, or wait for a cousin to wander in.";
+    }
+  }
+
+  // ---- interaction ----
+  function pick(mx, my) {
+    let best = null, bd = 1e9;
+    swarms.forEach((sw) => { const d = Math.hypot(mx - sw._sx, my - sw._sy); if (d < sw._sr + 6 && d < bd) { bd = d; best = { kind: "swarm", ref: sw }; } });
+    hosts.forEach((h) => { const d = Math.hypot(mx - h._sx, my - h._sy); if (d < h._sr + 4 && d < bd) { bd = d; best = { kind: "host", ref: h }; } });
+    return best;
+  }
+  web.addEventListener("mousemove", (e) => {
+    const r = web.getBoundingClientRect();
+    hover = pick(e.clientX - r.left, e.clientY - r.top);
+    web.style.cursor = hover ? "pointer" : "grab";
+  });
+  web.addEventListener("click", (e) => {
+    const r = web.getBoundingClientRect();
+    const p = pick(e.clientX - r.left, e.clientY - r.top);
+    if (p) { selected = p; el("clone").disabled = false; paintPlate(); }
+  });
+
+  // ---- controls ----
+  let playing = true, speed = 1, predatorsOn = true;
+  const mutInput = document.getElementById("mut");
+  const playBtn = document.getElementById("play");
+  playBtn.addEventListener("click", () => { playing = !playing; playBtn.textContent = playing ? "Pause" : "Play"; });
+  document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+    speed = +b.dataset.speed; document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  }));
+  const predBtn = document.getElementById("pred");
+  predBtn.addEventListener("click", () => { predatorsOn = !predatorsOn; predBtn.setAttribute("aria-pressed", predatorsOn); });
+
+  function refreshClocks() {
+    el("clk-swarms").textContent = swarms.length;
+    el("clk-hosts").textContent = hosts.length;
+  }
+  document.getElementById("add").addEventListener("click", () => {
+    if (swarms.length >= 16) return;
+    const sw = makeSwarm(rnd(hosts.length)); swarms.push(sw); refreshClocks();
+  });
+  document.getElementById("clone").addEventListener("click", () => {
+    if (!selected) return;
+    if (selected.kind === "swarm" && swarms.length < 16) {
+      const s = selected.ref;
+      const c = makeSwarm(s.host);
+      c.pop = s.pop.map((g) => g.slice()); c.best = c.pop[0].slice();
+      c.name = s.name + " ii"; c.match = s.match; c.paid = s.paid; c.hist = [];
+      c.x = s.x + 0.03; c.y = s.y + 0.03;
+      swarms.push(c); selected = { kind: "swarm", ref: c };
+    } else if (selected.kind === "host" && hosts.length < 8) {
+      const h = selected.ref;
+      const nh = { name: h.name + " ii", hue: h.hue, g: h.g.slice() };
+      hosts.push(nh); layoutHosts(); selected = { kind: "host", ref: nh };
+    }
+    refreshClocks(); paintPlate();
+  });
+  document.getElementById("reset").addEventListener("click", start);
+
+  function start() {
+    hosts = HOST_SEED.map((s) => ({ name: s.name, hue: s.hue, g: motif(s.rows) }));
+    layoutHosts();
+    swarms = []; gen = 0; nameSeed = 0;
+    [2, 2, 1, 1].forEach((n, hi) => { for (let k = 0; k < n; k++) swarms.push(makeSwarm(hi)); });
+    selected = { kind: "swarm", ref: swarms[0] };
+    el("clone").disabled = false;
+    refreshClocks(); resize(); paintPlate();
+  }
+
+  // ---- loop ----
+  let acc = 0, last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    if (playing) {
+      acc += dt * speed;
+      const stepEvery = 0.28;
+      while (acc >= stepEvery) {
+        acc -= stepEvery; gen++;
+        swarms.forEach(evolveSwarm);
+        hosts.forEach(evolveHost);
+      }
+      el("clk-gen").textContent = gen;
+    }
+    swarms.forEach((sw, i) => {
+      const h = hosts[sw.host];
+      sw.orbit += dt * (reduced ? 0 : 0.25);
+      const ring = 0.10 + (1 - sw.match) * 0.07;
+      const tx = h.hx + Math.cos(sw.orbit + i) * ring, ty = h.hy + Math.sin(sw.orbit + i) * ring * 0.8;
+      const k = reduced ? 1 : 0.045;
+      sw.x += (tx - sw.x) * k; sw.y += (ty - sw.y) * k;
+    });
+    render();
+    if (playing && selected) paintPlate();
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener("resize", resize);
+  start();
+  requestAnimationFrame(frame);
+})();
+</script>
