@@ -47,7 +47,7 @@ import {
   openPicker,
   setIsleFeature,
 } from "../render/picker";
-import { darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
+import { DAY_MS, DUSK_MS, NIGHT_MS, darknessAt, isAuroraNight, isBiolumeNight, isBloomDay, msUntilDawn, rainAt } from "./daynight";
 import { loadExplored, markSeen, saveExplored } from "./explored";
 import {
   Toolbar,
@@ -569,7 +569,16 @@ let pools: TidePool[] = []; // the shore's small gardens, bared at low water
 let mat = { wood: 0, stone: 0, rush: 0 }; // materials the wanderer carries (seeds live in the pouch)
 let fire = false; // the camp fire, once built
 let bedroll = false; // the woven bedroll, once built — sleep skips to dawn
-let skyOffset = 0; // ms slept forward: the sky's clock runs ahead of the wall's
+// ms slept forward: the sky's clock runs ahead of the wall's. Dev aids seed it:
+// ?sky=<ms> lands the sky at a chosen hour (240000 dusk · 340000 night · 420000
+// dawn); ?night is shorthand for the middle of the night.
+const skyParam = new URL(location.href).searchParams.get("sky");
+let skyOffset =
+  skyParam !== null
+    ? Number(skyParam) || 0
+    : FORCE_NIGHT
+      ? DAY_MS + DUSK_MS + NIGHT_MS / 2
+      : 0;
 let saveAcc = 0;
 let rArmed = false;
 // the focus lens: Z kneels the view in close to watch the small lives work,

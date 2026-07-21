@@ -5,7 +5,7 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
-import { CYCLE_MS, DAY_MS, isBiolumeNight } from "../game/daynight";
+import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
 import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds, drawForegroundMotes } from "./ambient";
 import { drawBeast } from "./beastSprite";
@@ -769,7 +769,11 @@ export class Renderer {
     timeMs: number,
   ): void {
     const { ctx } = this;
-    ctx.fillStyle = `rgba(8, 14, 34, ${(darkness * 0.62).toFixed(3)})`;
+    // the sky's colour for the hour — a golden dusk, a blue night, a rosy dawn —
+    // in place of the old flat night-blue. timeMs is the sky clock, so the cast
+    // matches the darkness the scene was lit with.
+    const grade = skyGrade(timeMs);
+    ctx.fillStyle = `rgba(${grade.r}, ${grade.g}, ${grade.b}, ${grade.a.toFixed(3)})`;
     ctx.fillRect(0, 0, this.viewWidth, this.viewHeight);
 
     ctx.globalCompositeOperation = "lighter";
