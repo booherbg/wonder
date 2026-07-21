@@ -148,7 +148,7 @@ export function openHelp(firstVisit = false): void {
   const el = panel();
   el.innerHTML = "";
   const title = document.createElement("div");
-  title.className = "anth-title";
+  title.className = "codex-title";
   title.textContent = "field guide";
   el.appendChild(title);
   const epigraph = document.createElement("div");

@@ -16,8 +16,12 @@ Open http://localhost:5173.
 
 - **WASD / arrows** — walk
 - **E** — inspect the plants at your feet, up close (names, traits, drift)
-- **F** — gather a seed from the nearest plant
-- **G** — sow your oldest seed where you stand
+- **Space** — the one action, by your held tool: an empty hand gathers a seed,
+  the hoe tills soil, the pouch plants the loaded seed
+- **1 / 2 / 3** — pick hand · hoe · pouch (or cycle with `[` `]` / the wheel);
+  **Q** returns the loaded seed to the wind
+- **Tab** — the menu, and from it: the backpack (**B**), the island's ledger
+  (**G**), the map (**O**), the living web (**C**), journal, isles, field guide
 - **H** — found a home: a 3×3 garden bed where plants are tended
   (never thinned, twice the breeding rate)
 - **P** — save a postcard PNG of the current view

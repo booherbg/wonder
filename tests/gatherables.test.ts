@@ -7,7 +7,7 @@ import { gatherableLine } from "../src/render/inspect";
 // driftwood on the shore, fallen wood on the forest floor.
 
 test("a gatherable in reach names the key that takes it", () => {
-  expect(gatherableLine("driftwood", 1, true)).toBe("driftwood, salt-dried — G to gather");
+  expect(gatherableLine("driftwood", 1, true)).toBe("driftwood, salt-dried — space to gather");
 });
 
 test("a gatherable in view but out of reach nudges you closer", () => {
@@ -15,16 +15,16 @@ test("a gatherable in view but out of reach nudges you closer", () => {
 });
 
 test("forest wood reads as fallen wood, not driftwood", () => {
-  expect(gatherableLine("fallenwood", 1, true)).toBe("fallen wood, dry — G to gather");
-  expect(gatherableLine("fallenwood", 3, true)).toBe("fallen wood, dry (3) — G to gather");
+  expect(gatherableLine("fallenwood", 1, true)).toBe("fallen wood, dry — space to gather");
+  expect(gatherableLine("fallenwood", 3, true)).toBe("fallen wood, dry (3) — space to gather");
 });
 
 test("more than one is counted; a lone one reads singular", () => {
-  expect(gatherableLine("stone", 3, true)).toBe("loose stones, sun-warm (3) — G to gather");
-  expect(gatherableLine("stone", 1, true)).toBe("a loose stone, sun-warm — G to gather");
+  expect(gatherableLine("stone", 3, true)).toBe("loose stones, sun-warm (3) — space to gather");
+  expect(gatherableLine("stone", 1, true)).toBe("a loose stone, sun-warm — space to gather");
 });
 
 test("each material keeps its own island voice", () => {
-  expect(gatherableLine("rush", 2, true)).toBe("marsh rushes, cut green and soft (2) — G to gather");
+  expect(gatherableLine("rush", 2, true)).toBe("marsh rushes, cut green and soft (2) — space to gather");
   expect(gatherableLine("rush", 1, false)).toBe("a marsh rush, cut green and soft — a step closer to gather");
 });

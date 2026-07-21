@@ -55,8 +55,7 @@ function sectionTitle(el: HTMLElement, text: string): void {
 // quieter than a section: a place-name, not a chapter
 function islandHeader(el: HTMLElement, text: string): void {
   const header = document.createElement("div");
-  header.className = "anth-title";
-  header.style.opacity = "0.45";
+  header.className = "journal-isle";
   header.textContent = text;
   el.appendChild(header);
 }
@@ -312,7 +311,10 @@ function plantCard(e: JournalEntry, scene: JournalScene): HTMLElement {
 export function openJournal(scene: JournalScene): void {
   const el = panel();
   el.innerHTML = "";
-  sectionTitle(el, "field journal");
+  const title = document.createElement("div");
+  title.className = "codex-title";
+  title.textContent = "field journal";
+  el.appendChild(title);
   const epigraph = document.createElement("div");
   epigraph.className = "anth-epigraph";
   epigraph.textContent = "a memoir, not a checklist — there is nothing to finish.";

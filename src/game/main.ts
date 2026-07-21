@@ -1048,7 +1048,7 @@ function openInspectAtPlayer(record = true): void {
   }
   // gatherables near the wanderer: counted within reach of a lean (E), and
   // marked reachable when a node is within arm's reach of the hand — so
-  // the pick-up tell can say "G to gather" truthfully, never a step too soon
+  // the pick-up tell can say "space to gather" truthfully, never a step too soon
   const mats = { driftwood: 0, fallenwood: 0, stone: 0, rush: 0 };
   const matReach = { driftwood: false, fallenwood: false, stone: false, rush: false };
   for (const m of materials) {
