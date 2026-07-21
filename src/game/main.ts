@@ -39,6 +39,7 @@ import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
+import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
 import {
   closePicker,
   featurePhrase,
@@ -55,6 +56,7 @@ import {
   cycleSlot,
   emptyToolbar,
   gatherSeed,
+  loadSeed,
   loaded,
   migrate,
   plantLoaded,
@@ -489,6 +491,29 @@ function openChartsNow(): void {
   closeWeb();
   closeMenu();
   openCharts(buildChartsView());
+}
+
+// the backpack (B): the bank browsed by kind, with counts and which is loaded
+function buildBackpackView(): BackpackView {
+  const loadedSp = loaded(bar)?.species;
+  return {
+    varietals: bar.bank.map((v) => ({
+      species: v.species,
+      name: species[v.species]?.name ?? `#${v.species}`,
+      hue: species[v.species]?.archetype.hue ?? 0,
+      sat: species[v.species]?.archetype.sat ?? 0.6,
+      count: v.genomes.length,
+      loaded: v.species === loadedSp,
+    })),
+    materials: { wood: mat.wood, stone: mat.stone, rush: mat.rush },
+  };
+}
+
+function openBackpackNow(): void {
+  closeInspect();
+  closeMenu();
+  closeCharts();
+  openBackpack(buildBackpackView());
 }
 
 // the debug readout: the numbers behind the living world
@@ -1406,6 +1431,32 @@ function openWebNow(): void {
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
+  // the backpack is a modal: while it's open, keys drive its cursor, not the world
+  if (isBackpackOpen()) {
+    if (k === "arrowup" || k === "w") backpackMove(-1);
+    else if (k === "arrowdown" || k === "s") backpackMove(1);
+    else if (k === "enter") {
+      const sp = backpackSpecies();
+      if (sp !== null) {
+        bar = loadSeed(bar, sp); // load the varietal under the cursor
+        openBackpack(buildBackpackView());
+        renderHud();
+      }
+    } else if (k === "q") {
+      const sp = backpackSpecies();
+      if (sp !== null) {
+        const t = takeSeed(bar, sp); // toss one of it to the wind
+        if (t) bar = t[0];
+        openBackpack(buildBackpackView());
+        renderHud();
+        persist();
+      }
+    } else if (k === "b" || k === "escape") {
+      closeBackpack();
+    }
+    e.preventDefault();
+    return;
+  }
   if (k === "`" || k === "~") {
     // the debug readout: everything the sim knows, for the curious
     devOn = !devOn;
@@ -1518,6 +1569,8 @@ window.addEventListener("keydown", (e) => {
     // the island's ledger: the census & food-web charts, at a glance
     if (isChartsOpen()) closeCharts();
     else openChartsNow();
+  } else if (k === "b") {
+    openBackpackNow(); // the backpack — browse & load the seed bank
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -1603,6 +1656,8 @@ window.addEventListener("beforeunload", () => {
 });
 
 function input(): InputState {
+  // the backpack's cursor owns the arrows while it's open — the wanderer holds still
+  if (isBackpackOpen()) return { up: false, down: false, left: false, right: false };
   return {
     up: keys.has("w") || keys.has("arrowup"),
     down: keys.has("s") || keys.has("arrowdown"),

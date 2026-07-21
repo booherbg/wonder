@@ -330,6 +330,51 @@
       #charts .ch-chain.muted { color: rgba(228, 236, 242, 0.45); }
       #charts .ch-loop { font: 10px ui-monospace, Menlo, monospace; color: #f4c979; letter-spacing: 0.08em; }
       #charts .ch-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); text-align: center; margin-top: 16px; }
+      /* the backpack (B) — a JRPG inventory screen: browse & load the seed bank */
+      #backpack {
+        display: none;
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(720px, 92vw); max-height: 86vh; overflow-y: auto;
+        background: linear-gradient(180deg, rgba(23, 42, 54, 0.97), rgba(8, 15, 22, 0.98));
+        border-radius: 4px; padding: 20px 24px; color: #e4ecf2; font-family: Georgia, "Iowan Old Style", serif;
+        box-shadow: 0 0 0 1px rgba(127, 224, 196, 0.22), 0 0 0 5px rgba(6, 10, 16, 0.6), 0 34px 90px -20px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(127, 224, 196, 0.14);
+      }
+      #backpack .bp-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid rgba(127, 224, 196, 0.16); padding-bottom: 10px; margin-bottom: 12px; }
+      #backpack .bp-title { font-variant: small-caps; letter-spacing: 0.08em; font-size: 20px; color: #e8f2ee; }
+      #backpack .bp-sub { font: 11px ui-monospace, Menlo, monospace; letter-spacing: 0.06em; color: rgba(228, 236, 242, 0.5); }
+      #backpack .bp-body { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; min-height: 288px; }
+      #backpack .bp-section { font: 10px ui-monospace, Menlo, monospace; letter-spacing: 0.24em; text-transform: uppercase; color: #7fe0c4; opacity: 0.7; margin: 13px 0 5px; display: flex; align-items: center; gap: 8px; }
+      #backpack .bp-section:first-child { margin-top: 0; }
+      #backpack .bp-section::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(127, 224, 196, 0.2), transparent); }
+      #backpack .bp-row { display: grid; grid-template-columns: 14px 16px 1fr auto; align-items: center; gap: 9px; padding: 5px 10px 5px 6px; border-radius: 6px; cursor: pointer; color: rgba(228, 236, 242, 0.72); font-size: 14.5px; }
+      #backpack .bp-row.static { cursor: default; color: rgba(228, 236, 242, 0.5); }
+      #backpack .bp-row:not(.static):hover { background: rgba(127, 224, 196, 0.05); }
+      #backpack .bp-row.sel { background: linear-gradient(90deg, rgba(127, 224, 196, 0.14), rgba(127, 224, 196, 0.02) 80%); color: #e8f2ee; }
+      #backpack .bp-cur { color: #7fe0c4; text-align: center; filter: drop-shadow(0 0 5px #7fe0c4); }
+      #backpack .bp-dot { width: 13px; height: 13px; border-radius: 4px; box-shadow: 0 0 7px currentColor; justify-self: center; }
+      #backpack .bp-tool { justify-self: center; font-size: 13px; opacity: 0.7; }
+      #backpack .bp-name { font-family: Georgia, serif; display: flex; align-items: baseline; gap: 8px; }
+      #backpack .bp-tag { font: 9px ui-monospace, Menlo, monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #f4c979; border: 1px solid rgba(244, 201, 121, 0.4); border-radius: 3px; padding: 1px 5px; }
+      #backpack .bp-ct { font: 13px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.55); font-variant-numeric: tabular-nums; }
+      #backpack .bp-row.sel .bp-ct { color: #f4c979; }
+      #backpack .bp-empty, #backpack .bp-empty2 { font: italic 12.5px Georgia, serif; color: rgba(228, 236, 242, 0.45); padding: 4px 8px; display: block; }
+      #backpack .bp-mats { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 2px 8px; font: 12px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.6); }
+      #backpack .bp-mat b { color: #e8f2ee; font-weight: 400; }
+      #backpack .bp-plate { border-left: 1px solid rgba(127, 224, 196, 0.12); padding-left: 16px; display: flex; flex-direction: column; }
+      #backpack .bp-plate-dot { align-self: center; width: 56px; height: 56px; border-radius: 12px; margin-top: 8px; box-shadow: 0 0 24px currentColor, inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+      #backpack .bp-plate-name { font-variant: small-caps; letter-spacing: 0.05em; font-size: 22px; text-align: center; color: #e8f2ee; margin: 14px 0 2px; }
+      #backpack .bp-plate-kind { font: 10px ui-monospace, Menlo, monospace; letter-spacing: 0.2em; text-transform: uppercase; color: #7fe0c4; opacity: 0.7; text-align: center; margin-bottom: 12px; }
+      #backpack .bp-rule { height: 1px; background: linear-gradient(90deg, transparent, rgba(127, 224, 196, 0.3), transparent); margin-bottom: 13px; }
+      #backpack .bp-plate-lore { font: italic 14px Georgia, serif; line-height: 1.6; color: rgba(228, 236, 242, 0.82); }
+      #backpack .bp-plate-lore b { font-style: normal; color: #7fe0c4; }
+      #backpack .bp-plate-acts { margin-top: auto; padding-top: 16px; display: flex; gap: 10px; }
+      #backpack .bp-act { font: 11px ui-monospace, Menlo, monospace; letter-spacing: 0.06em; color: rgba(228, 236, 242, 0.7); background: rgba(127, 224, 196, 0.08); border: 1px solid rgba(127, 224, 196, 0.25); border-radius: 5px; padding: 6px 12px; }
+      #backpack .bp-act b { color: #7fe0c4; font-weight: 400; }
+      #backpack .bp-act.done, #backpack .bp-act.done b { color: #f4c979; border-color: rgba(244, 201, 121, 0.3); }
+      #backpack .bp-act.ghost { color: rgba(231, 154, 162, 0.85); border-color: rgba(231, 154, 162, 0.28); }
+      #backpack .bp-act.ghost b { color: #e79aa2; }
+      #backpack .bp-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); text-align: center; margin-top: 14px; }
+      @media (max-width: 560px) { #backpack .bp-body { grid-template-columns: 1fr; } #backpack .bp-plate { border-left: none; border-top: 1px solid rgba(127, 224, 196, 0.12); padding-left: 0; padding-top: 12px; } }
     </style>
   </head>
   <body>
@@ -346,6 +391,7 @@
     <div id="menu"></div>
     <div id="web"></div>
     <div id="charts"></div>
+    <div id="backpack"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

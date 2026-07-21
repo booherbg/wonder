@@ -36,6 +36,7 @@ export function helpSections(): HelpSection[] {
         { key: "space", text: "the one action — the hand gathers, the hoe tills, the pouch plants your loaded seed" },
         { key: "1 2 3", text: "hold the hand, the hoe, or the seed pouch (the wheel and [ ] cycle too)" },
         { key: "3 again", text: "already on the pouch, press 3 to load the next kind of seed you carry" },
+        { key: "B", text: "the backpack — browse your seed bank and load a kind into the pouch" },
         { key: "Q", text: "give the loaded seed back to the wind" },
         { key: "H", text: "make this place home; beside home, H tends the camp" },
         { key: "J", text: "the field journal — it writes itself as you look" },
