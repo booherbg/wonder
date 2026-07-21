@@ -1,6 +1,6 @@
 import { Rng, makeRng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
-import { WALKABLE, WorldMap, isWalkable } from "../world/types";
+import { Tile, WALKABLE, WorldMap, isWalkable, tileAt } from "../world/types";
 import { Flora, Plant } from "./flora";
 import { Genome, PlantForm } from "./genome";
 import { PlantSpecies } from "./species";
@@ -519,7 +519,7 @@ function findDen(
     const p = homes[Math.floor(rng() * homes.length)];
     const tx = Math.floor(p.x / TILE_SIZE) + Math.floor(rng() * 5) - 2;
     const ty = Math.floor(p.y / TILE_SIZE) + Math.floor(rng() * 5) - 2;
-    if (isWalkable(map, tx, ty)) return { x: tx, y: ty };
+    if (critterWalkable(map, tx, ty)) return { x: tx, y: ty };
   }
   return { ...map.spawn };
 }
@@ -537,7 +537,7 @@ export function spawnCritters(
     for (let attempt = 0; attempt < n * 8 && placed < n; attempt++) {
       const tx = sp.den.x + Math.floor(rng() * 7) - 3;
       const ty = sp.den.y + Math.floor(rng() * 7) - 3;
-      if (!isWalkable(map, tx, ty)) continue;
+      if (!critterWalkable(map, tx, ty)) continue;
       out.push({
         species: sp.id,
         x: (tx + 0.5) * TILE_SIZE,
@@ -640,6 +640,14 @@ export function releaseCompanion(critters: Critter[]): Critter | null {
 const STUCK_EPS = 0.25; // px moved in a frame below which it counts as no headway
 const STUCK_LIMIT = 0.6; // seconds pinned before it breaks free
 
+// Critters keep to land: they wade marsh and shore grass but never strike out
+// into open-sea shallows, where a land animal only ends up looking stranded.
+// The wanderer still wades freely — this is a critter-only rule, stricter than
+// the map's isWalkable, so no deer goes swimming off into the sea.
+function critterWalkable(map: WorldMap, x: number, y: number): boolean {
+  return isWalkable(map, x, y) && tileAt(map, x, y) !== Tile.ShallowWater;
+}
+
 function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
   const dx = c.targetX - c.x;
   const dy = c.targetY - c.y;
@@ -649,8 +657,15 @@ function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED
   const nx = c.x + (dx / dist) * step;
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
-  if (isWalkable(map, Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
-  if (isWalkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
+  // a critter enters open-sea shallows only to leave them: it may step off a
+  // shallow tile it is already on (so it never freezes there), but never walks
+  // fresh into the sea from dry ground. Targets are land-only (critterWalkable);
+  // this is the movement half of that rule.
+  const onShallow = tileAt(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE)) === Tile.ShallowWater;
+  const canStep = (tx: number, ty: number): boolean =>
+    isWalkable(map, tx, ty) && (onShallow || tileAt(map, tx, ty) !== Tile.ShallowWater);
+  if (canStep(Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
+  if (canStep(Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;
   return Math.hypot(c.targetX - c.x, c.targetY - c.y) < 2;
 }
@@ -667,7 +682,7 @@ function stepOffWall(c: Critter, map: WorldMap): void {
     [-1, -1], [1, -1], [-1, 1], [1, 1],
   ];
   for (const [dx, dy] of ring) {
-    if (isWalkable(map, cx + dx, cy + dy)) {
+    if (critterWalkable(map, cx + dx, cy + dy)) {
       c.targetX = (cx + dx + 0.5) * TILE_SIZE;
       c.targetY = (cy + dy + 0.5) * TILE_SIZE;
       c.state = "idle";
@@ -925,7 +940,7 @@ export function homePoint(
   const lean = HOME_LEAN * clamp01(bond);
   const x = dx + (camp.x - dx) * lean;
   const y = dy + (camp.y - dy) * lean;
-  if (isWalkable(map, Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return { x, y };
+  if (critterWalkable(map, Math.floor(x / TILE_SIZE), Math.floor(y / TILE_SIZE))) return { x, y };
   return { x: camp.x, y: camp.y };
 }
 
@@ -962,7 +977,7 @@ function wander(
     tx = Math.round(tx + (Math.floor(lean.x / TILE_SIZE) - tx) * lean.pull);
     ty = Math.round(ty + (Math.floor(lean.y / TILE_SIZE) - ty) * lean.pull);
   }
-  if (isWalkable(map, tx, ty)) {
+  if (critterWalkable(map, tx, ty)) {
     c.targetX = (tx + 0.5) * TILE_SIZE;
     c.targetY = (ty + 0.5) * TILE_SIZE;
   }

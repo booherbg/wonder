@@ -47,11 +47,15 @@ test(
     // never authored — it falls out of this seed's trait mix.
     expect(rich.sawFeederSubstrate).toBe(true);
 
-    // seed 42 — the study's known-flat island: its feeders sit at hues no
-    // disperser's food shares, so byproducts land but nothing germinates.
+    // seed 42 — a plainer island: fewer of its disperser-eaten plants stamp a
+    // substrate a feeder can take, so far less germinates than on the champion.
     const flat = simulate(42);
-    expect(flat.germinations).toBeLessThan(rich.germinations); // emergence tracks the seed, not code
-    expect(flat.germinations).toBeLessThan(5); // the flat isle stays nearly bare of chains
+    // emergence tracks the seed's trait mix, not code: the champion germinates
+    // markedly more than a plain isle. (Seed 42 once read a fluke ~0, but that
+    // near-zero leaned on critters wandering uselessly out into the sea; now
+    // that a land animal forages the land instead of the ocean it emerges a
+    // modest handful — still well shy of the champion. rich >> flat is the claim.)
+    expect(flat.germinations).toBeLessThan(rich.germinations * 0.6);
   },
   30_000,
 );
