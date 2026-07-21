@@ -393,6 +393,16 @@
       #map .map-legend .star { color: #ffd45e; }
       #map .map-legend .till { color: #7fe0c4; }
       #map .map-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); margin-top: 8px; }
+      /* the ecology overlay legend (V) */
+      #ovlegend {
+        display: none; position: fixed; left: 12px; top: 12px; z-index: 6;
+        background: rgba(6, 10, 16, 0.74); border: 1px solid rgba(127, 224, 196, 0.2); border-radius: 6px;
+        padding: 8px 12px; font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.82);
+        user-select: none; line-height: 1.75;
+      }
+      #ovlegend .ovl-title { color: #7fe0c4; letter-spacing: 0.16em; text-transform: uppercase; font-size: 9px; margin-bottom: 5px; }
+      #ovlegend .ovl-row { display: flex; align-items: center; gap: 8px; }
+      #ovlegend .ovl-row i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; box-shadow: 0 0 5px currentColor; }
     </style>
   </head>
   <body>
@@ -411,6 +421,7 @@
     <div id="charts"></div>
     <div id="backpack"></div>
     <div id="map"></div>
+    <div id="ovlegend"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

@@ -49,6 +49,7 @@ export interface Scene {
   tide?: number; // 0 = full sea .. 1 = the sea drawn all the way back
   pools?: TidePool[]; // small gardens the low tide bares along the sand
   sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
+  overlay?: boolean; // the ecology overlay (V): critter drives + chain hotspots, drawn spatially
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -800,6 +801,47 @@ export class Renderer {
     // then the lens itself, its edges easing dark
     drawForegroundMotes(ctx, camX, camY, this.viewWidth, this.viewHeight, darkness, rain, timeMs);
     drawVignette(ctx, this.viewWidth, this.viewHeight, darkness, Math.min(1, this.zoomLevel - 1));
+    if (scene.overlay) this.drawEcologyOverlay(scene, camX, camY, timeMs);
+  }
+
+  // The ecology overlay (V): the sim's spatial "why" made visible — each critter
+  // ringed in the colour of the drive it wears right now, and the chain hotspots
+  // (a disperser's byproduct, where a matching feeder can wake) pulsing on the
+  // ground. A toggle, so the world reads plainly the rest of the time.
+  private drawEcologyOverlay(scene: Scene, camX: number, camY: number, timeMs: number): void {
+    const ctx = this.ctx;
+    const mood: Record<string, string> = {
+      content: "rgba(127,224,196,0.9)",
+      hungry: "rgba(244,169,76,0.95)",
+      drowsy: "rgba(138,159,224,0.95)",
+      weary: "rgba(176,146,196,0.95)",
+      curious: "rgba(244,201,121,1)",
+      wary: "rgba(231,154,162,0.95)",
+    };
+    const pulse = 0.5 + 0.5 * Math.sin(timeMs / 480);
+    if (scene.flora) {
+      for (const s of scene.flora.substrates) {
+        const sx = Math.round(s.x - camX);
+        const sy = Math.round(s.y - camY);
+        if (sx < -8 || sx > this.viewWidth + 8 || sy < -8 || sy > this.viewHeight + 8) continue;
+        ctx.fillStyle = `hsla(${Math.round(s.hue * 360)}, 72%, 62%, ${(0.3 + 0.35 * pulse).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.5 + pulse * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (scene.critters) {
+      ctx.lineWidth = 1.5;
+      for (const c of scene.critters) {
+        const cx = Math.round(c.x - camX);
+        const cy = Math.round(c.y - 8 - camY);
+        if (cx < -12 || cx > this.viewWidth + 12 || cy < -12 || cy > this.viewHeight + 12) continue;
+        ctx.strokeStyle = mood[c.mood] ?? "rgba(255,255,255,0.7)";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
   }
 
   // Wading, not floating: any segment standing in shallow water rings the

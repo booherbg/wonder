@@ -1582,6 +1582,11 @@ window.addEventListener("keydown", (e) => {
       closeInspect();
       openIslandMap();
     }
+  } else if (k === "v") {
+    // the ecology overlay: each critter ringed in its drive, the chains glowing
+    overlayOn = !overlayOn;
+    renderOverlayLegend();
+    flashHud(overlayOn ? "ecology overlay on — drives ringed, chain hotspots aglow" : "ecology overlay off");
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -1692,6 +1697,30 @@ function drawOverview(): void {
   }
   ctx.fillStyle = "#ff5050";
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
+}
+
+let overlayOn = false; // the ecology overlay (V): critter drives + chain hotspots
+
+// show or hide the ecology overlay's legend (a small DOM card, top-left)
+function renderOverlayLegend(): void {
+  const el = document.getElementById("ovlegend")!;
+  if (!overlayOn) {
+    el.style.display = "none";
+    return;
+  }
+  const rows: [string, string][] = [
+    ["#7fe0c4", "content"],
+    ["#f4a94c", "hungry"],
+    ["#8a9fe0", "drowsy"],
+    ["#b092c4", "weary"],
+    ["#f4c979", "curious"],
+    ["#e79aa2", "wary"],
+    ["#b4dcff", "chain hotspot"],
+  ];
+  el.innerHTML =
+    `<div class="ovl-title">ecology overlay</div>` +
+    rows.map(([c, l]) => `<div class="ovl-row"><i style="color:${c};background:${c}"></i>${l}</div>`).join("");
+  el.style.display = "block";
 }
 
 // ── the corner minimap ──────────────────────────────────────────────────
@@ -2086,6 +2115,7 @@ function frame(now: number): void {
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
       tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
+      overlay: overlayOn,
     },
     sky,
   );

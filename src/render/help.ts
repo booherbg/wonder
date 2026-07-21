@@ -31,6 +31,7 @@ export function helpSections(): HelpSection[] {
         { key: "C", text: "the living web — this island's food chains, drawn: who eats and spreads what" },
         { key: "G", text: "the island's ledger — the census & food web as charts: who rises, dominates, fades" },
         { key: "O", text: "the island's map — the whole isle drawn in full colour, your gardens and camp marked" },
+        { key: "V", text: "the ecology overlay — each critter ringed in the drive it wears, chain hotspots aglow" },
         { key: "K", text: "show or hide the little island map in the corner — a star marks your camp" },
         { key: "E", text: "lean close — what grows and moves nearby shows itself" },
         { key: "Z", text: "lean the view in close — watch the small lives up close" },
