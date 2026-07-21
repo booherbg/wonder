@@ -375,18 +375,22 @@ export class Renderer {
       const gx = (scene.home.x - 1) * TILE_SIZE - camX;
       const gy = (scene.home.y - 1) * TILE_SIZE - camY;
       const size = 3 * TILE_SIZE;
-      // the same turned, furrowed earth as any tile the wanderer tills by hand
-      // (see the soilTiles pass below) — the home bed is worked ground too, so
-      // it reads as one continuous material with a patch you till beside it.
+      // rich, cleared earth the wanderer keeps — a TENDED home plot, not raked
+      // furrows (you never hoed it): a soft dapple of turned soil and pebbles,
+      // deterministic so it holds still, and plainly not a hand-tilled bed.
       for (let ty = 0; ty < 3; ty++) {
         for (let tx = 0; tx < 3; tx++) {
           const dx = Math.round(gx + tx * TILE_SIZE);
           const dy = Math.round(gy + ty * TILE_SIZE);
-          ctx.fillStyle = "rgba(58, 38, 22, 0.55)"; // turned earth
+          ctx.fillStyle = "rgba(74, 52, 32, 0.42)"; // rich tended earth
           ctx.fillRect(dx + 1, dy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
-          ctx.fillStyle = "rgba(32, 20, 11, 0.5)"; // furrows raked across it
-          for (let fy = dy + 4; fy < dy + TILE_SIZE - 2; fy += 4) {
-            ctx.fillRect(dx + 2, fy, TILE_SIZE - 4, 1);
+          for (let s = 0; s < 4; s++) {
+            const hx = hash2d(scene.home.x + tx * 3 + s * 5, scene.home.y + ty * 7 + s, 5);
+            const hy = hash2d(scene.home.y + ty * 4 + s * 3, scene.home.x + tx * 2 + s, 9);
+            const px = dx + 2 + Math.floor(hx * (TILE_SIZE - 4));
+            const py = dy + 2 + Math.floor(hy * (TILE_SIZE - 4));
+            ctx.fillStyle = s % 2 === 0 ? "rgba(98, 76, 50, 0.5)" : "rgba(38, 26, 15, 0.5)"; // pebble / clod
+            ctx.fillRect(px, py, 1, 1);
           }
         }
       }

@@ -5,7 +5,7 @@ import { Flora } from "../src/life/flora";
 import { PlantForm } from "../src/life/genome";
 import { generatePlantSpecies } from "../src/life/species";
 import { TILE_SIZE } from "../src/world/config";
-import { Tile, WorldMap, isWalkable, tileAt } from "../src/world/types";
+import { Tile, WALKABLE, WorldMap, isWalkable, tileAt } from "../src/world/types";
 
 // Deep water walling the east and south of a shallow tile makes a concave
 // corner. A critter whose den lies across that water walks straight at it and
@@ -119,22 +119,31 @@ test("a land critter never wades out into open-sea shallows", () => {
     mood: "content",
   };
   const rng = makeRng(3);
+  const isOpenSea = (tx: number, ty: number): boolean => {
+    if (tileAt(map, tx, ty) !== Tile.ShallowWater) return false;
+    for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
+      const t = tileAt(map, tx + dx, ty + dy);
+      if (t !== Tile.ShallowWater && t !== Tile.DeepWater && WALKABLE.has(t)) return false; // a shore edge
+    }
+    return true;
+  };
   for (let i = 0; i < 800; i++) {
     updateCritter(c, 1 / 30, map, flora, [sp], null, rng, { darkness: 1 });
     const tx = Math.floor(c.x / TILE_SIZE);
     const ty = Math.floor(c.y / TILE_SIZE);
-    expect(tileAt(map, tx, ty)).not.toBe(Tile.ShallowWater); // never sets foot in the open sea
+    expect(isOpenSea(tx, ty)).toBe(false); // it may wade the shore, but never the open sea
   }
 });
 
-// A rock wall with a single gap stands between a critter and its den. Greedy
-// wall-sliding would grind at the stone forever; the critter must route AROUND —
-// up to the gap, through, and down the far side — to get home.
-test("a critter routes around a rock wall to reach its den", () => {
+// A cliff wall with a single gap stands between a critter and its den. Greedy
+// wall-sliding would grind at the rock forever; the critter must route AROUND —
+// up to the gap, through, and down the far side — to get home. (Cliff, not Rock:
+// bare Rock is walkable now, so it's the sheer Cliff faces that still wall off.)
+test("a critter routes around a cliff wall to reach its den", () => {
   const w = 20;
   const h = 20;
   const tiles = new Uint8Array(w * h).fill(Tile.Grass);
-  for (let y = 0; y < h; y++) if (y !== 3) tiles[y * w + 10] = Tile.Rock; // wall at x=10, one gap at y=3
+  for (let y = 0; y < h; y++) if (y !== 3) tiles[y * w + 10] = Tile.Cliff; // wall at x=10, one gap at y=3
   const map: WorldMap = {
     width: w,
     height: h,
@@ -167,7 +176,7 @@ test("a critter routes around a rock wall to reach its den", () => {
     updateCritter(c, 1 / 30, map, flora, [sp], null, rng, { darkness: 1 });
     const tx = Math.floor(c.x / TILE_SIZE);
     const ty = Math.floor(c.y / TILE_SIZE);
-    expect(tileAt(map, tx, ty)).not.toBe(Tile.Rock); // never grinds into the stone
+    expect(tileAt(map, tx, ty)).not.toBe(Tile.Cliff); // never grinds into the cliff
     closest = Math.min(closest, Math.hypot(c.x / TILE_SIZE - 15.5, c.y / TILE_SIZE - 10.5));
   }
   expect(closest).toBeLessThan(2.5); // it wound its way home — impossible without routing around

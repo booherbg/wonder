@@ -2,12 +2,12 @@ import { expect, test } from "vitest";
 import { PLAYER_SPEED, Player } from "../src/game/player";
 import { Tile, WorldMap } from "../src/world/types";
 
-// '.' grass, '#' rock, '~' deep water — 16px tiles
+// '.' grass, '#' cliff (impassable), '"' bare rock (walkable), '~' deep water — 16px tiles
 function mapFrom(rows: string[]): WorldMap {
   const height = rows.length;
   const width = rows[0].length;
   const tiles = new Uint8Array(width * height);
-  const chars: Record<string, Tile> = { ".": Tile.Grass, "#": Tile.Rock, "~": Tile.DeepWater };
+  const chars: Record<string, Tile> = { ".": Tile.Grass, "#": Tile.Cliff, '"': Tile.Rock, "~": Tile.DeepWater };
   rows.forEach((row, y) => {
     for (let x = 0; x < width; x++) tiles[y * width + x] = chars[row[x]];
   });
@@ -35,11 +35,18 @@ test("diagonal movement is normalized (not faster)", () => {
   expect(dist).toBeCloseTo(PLAYER_SPEED * 0.1, 5);
 });
 
-test("rock blocks movement", () => {
+test("a cliff face blocks movement", () => {
   const map = mapFrom(["....", "..#.", "....", "...."]);
   const p = new Player(24, 24); // feet box sits inside tile (1,1)
-  p.update(0.1, { ...IDLE, right: true }, map); // tile (2,1) is rock
+  p.update(0.1, { ...IDLE, right: true }, map); // tile (2,1) is a cliff
   expect(p.x).toBe(24);
+});
+
+test("bare rock is walkable — you scramble over the stone", () => {
+  const map = mapFrom(["....", '..".', "....", "...."]);
+  const p = new Player(24, 24);
+  p.update(0.1, { ...IDLE, right: true }, map); // tile (2,1) is bare rock
+  expect(p.x).toBeGreaterThan(24);
 });
 
 test("deep water blocks movement", () => {
@@ -53,7 +60,7 @@ test("slides along a wall (blocked axis stops, free axis moves)", () => {
   const map = mapFrom(["....", "..#.", "....", "...."]);
   const p = new Player(24, 24);
   p.update(0.1, { ...IDLE, right: true, down: true }, map);
-  expect(p.x).toBe(24); // blocked by rock
+  expect(p.x).toBe(24); // blocked by the cliff
   expect(p.y).toBeGreaterThan(24); // still slides down
 });
 

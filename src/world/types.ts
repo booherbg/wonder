@@ -71,6 +71,7 @@ export const WALKABLE: ReadonlySet<Tile> = new Set([
   Tile.Grass,
   Tile.Forest,
   Tile.Marsh,
+  Tile.Rock, // bare stone is scrambleable — only Cliff faces and Snow wall you off
   Tile.Scree,
   Tile.Highland,
 ]);

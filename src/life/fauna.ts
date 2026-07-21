@@ -642,12 +642,19 @@ export function releaseCompanion(critters: Critter[]): Critter | null {
 const STUCK_EPS = 0.25; // px moved in a frame below which it counts as no headway
 const STUCK_LIMIT = 0.6; // seconds pinned before it breaks free
 
-// Critters keep to land: they wade marsh and shore grass but never strike out
-// into open-sea shallows, where a land animal only ends up looking stranded.
-// The wanderer still wades freely — this is a critter-only rule, stricter than
-// the map's isWalkable, so no deer goes swimming off into the sea.
+// Where a critter will set foot: dry ground always, and a shallow tile only at
+// the SHORE — one that fronts dry, walkable land. So it wades in to reach food
+// growing at the water's edge, but never strikes out into open-sea shallows
+// where a land animal would only end up stranded. (The wanderer wades freely;
+// this is a critter-only rule.)
 function critterWalkable(map: WorldMap, x: number, y: number): boolean {
-  return isWalkable(map, x, y) && tileAt(map, x, y) !== Tile.ShallowWater;
+  if (!isWalkable(map, x, y)) return false;
+  if (tileAt(map, x, y) !== Tile.ShallowWater) return true; // dry, walkable ground
+  for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
+    const t = tileAt(map, x + dx, y + dy);
+    if (t !== Tile.ShallowWater && t !== Tile.DeepWater && WALKABLE.has(t)) return true; // a shore edge
+  }
+  return false; // open-sea shallow: no dry neighbour — off-limits
 }
 
 // One frame's nudge toward a point. A critter enters open-sea shallows only to
@@ -663,9 +670,12 @@ function stepToward(c: Critter, px: number, py: number, dt: number, map: WorldMa
   const nx = c.x + (dx / dist) * step;
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
-  const onShallow = tileAt(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE)) === Tile.ShallowWater;
+  // step onto land or a shore-shallow (critterWalkable); only when already stuck
+  // on a bad tile — an open-sea shallow it somehow reached — may it step onto any
+  // walkable tile to escape back toward shore.
+  const onBad = !critterWalkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE));
   const canStep = (tx: number, ty: number): boolean =>
-    isWalkable(map, tx, ty) && (onShallow || tileAt(map, tx, ty) !== Tile.ShallowWater);
+    critterWalkable(map, tx, ty) || (onBad && isWalkable(map, tx, ty));
   if (canStep(Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
   if (canStep(Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;

@@ -23,11 +23,11 @@ test("tileAt reads row-major and returns DeepWater out of bounds", () => {
   expect(tileAt(map, 0, 2)).toBe(Tile.DeepWater);
 });
 
-test("walkability: shallow water, sand, grass, forest walk; deep water, rock, snow block", () => {
+test("walkability: shallows, sand, grass, forest, bare rock walk; deep water, cliff, snow block", () => {
   const map = tinyMap();
   expect(isWalkable(map, 0, 0)).toBe(false); // deep water
   expect(isWalkable(map, 1, 0)).toBe(true); // shallow water (wading)
   expect(isWalkable(map, 0, 1)).toBe(true); // grass
-  expect(isWalkable(map, 1, 1)).toBe(false); // rock
+  expect(isWalkable(map, 1, 1)).toBe(true); // bare rock is scrambleable now (only Cliff/Snow wall off)
   expect(isWalkable(map, -1, -1)).toBe(false); // out of bounds
 });
