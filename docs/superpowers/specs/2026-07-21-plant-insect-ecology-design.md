@@ -202,6 +202,19 @@ abstract byproduct/substrate chains (`foodweb.ts`, the shipped design-B). Those 
 
 ---
 
+## Rendering & scale (Blaine, 2026-07-21)
+
+- **Beautiful coloration, not a dust cloud.** Both the **individual insects** and
+  the **swarm as a whole** are drawn with real colour pulled from the sensor map
+  (`appearanceColors`) — a swarm of a well-adapted kind is a shimmer of its
+  flower's palette, each member distinct (draw from the gene-pool variants), with a
+  cohesive, lovely cloud silhouette. Never a grey particle fog.
+- **A population of swarms.** A world holds *many* swarms (of many kinds), not one;
+  they home, forage, boom, and split (divergence).
+- **Levers on size.** How big a swarm can grow is a **lever** — `Swarm.cap` in
+  `swarm.ts` (default `SWARM_CAP`), surfaced later in the Simulator's pressures
+  panel so you can dial swarm sizes per kind or globally.
+
 ## Balance & resilience
 
 - **Facultative pollination** + a **self-seed floor** → no plant mass-dies (no
