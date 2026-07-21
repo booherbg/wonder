@@ -16,6 +16,7 @@ export function menuLaunchers(pouchCount: number): MenuAction[] {
   const out: MenuAction[] = [
     { key: "B", label: "the backpack — your seeds & tools" },
     { key: "G", label: "the island's ledger — census & food web" },
+    { key: "O", label: "the island's map — the whole isle drawn" },
     { key: "C", label: "the living web — this island's chains" },
     { key: "L", label: "the isles you've known" },
     { key: "J", label: "the field journal" },

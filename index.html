@@ -377,6 +377,22 @@
       #backpack .bp-act.ghost b { color: #e79aa2; }
       #backpack .bp-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); text-align: center; margin-top: 14px; }
       @media (max-width: 560px) { #backpack .bp-body { grid-template-columns: 1fr; } #backpack .bp-plate { border-left: none; border-top: 1px solid rgba(127, 224, 196, 0.12); padding-left: 0; padding-top: 12px; } }
+      /* the island's map (O) — the full-colour isle, promoted from ?overview */
+      #map {
+        display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        max-width: 94vw; max-height: 92vh; overflow: auto; text-align: center;
+        background: linear-gradient(180deg, rgba(23, 42, 54, 0.97), rgba(8, 15, 22, 0.98));
+        border-radius: 4px; padding: 18px 20px 16px; color: #e4ecf2; font-family: Georgia, "Iowan Old Style", serif;
+        box-shadow: 0 0 0 1px rgba(127, 224, 196, 0.22), 0 0 0 5px rgba(6, 10, 16, 0.6), 0 34px 90px -20px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(127, 224, 196, 0.14);
+      }
+      #map .map-head { display: flex; align-items: baseline; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+      #map .map-title { font-variant: small-caps; letter-spacing: 0.08em; font-size: 19px; color: #e8f2ee; }
+      #map .map-sub { font: 11px ui-monospace, Menlo, monospace; letter-spacing: 0.05em; color: rgba(228, 236, 242, 0.5); }
+      #map canvas { display: block; margin: 0 auto; border-radius: 3px; box-shadow: 0 0 0 1px rgba(127, 224, 196, 0.16), 0 8px 30px -10px rgba(0, 0, 0, 0.7); }
+      #map .map-legend { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.55); margin-top: 12px; }
+      #map .map-legend .star { color: #ffd45e; }
+      #map .map-legend .till { color: #7fe0c4; }
+      #map .map-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); margin-top: 8px; }
     </style>
   </head>
   <body>
@@ -394,6 +410,7 @@
     <div id="web"></div>
     <div id="charts"></div>
     <div id="backpack"></div>
+    <div id="map"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

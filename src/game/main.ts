@@ -1337,6 +1337,7 @@ function menuLaunch(key: string): void {
   switch (key) {
     case "B": openBackpackNow(); break;
     case "G": openChartsNow(); break;
+    case "O": openIslandMap(); break;
     case "C": openWebNow(); break;
     case "L": openIslePicker(); break;
     case "?": openHelp(); break;
@@ -1573,6 +1574,14 @@ window.addEventListener("keydown", (e) => {
     else openChartsNow();
   } else if (k === "b") {
     openBackpackNow(); // the backpack — browse & load the seed bank
+  } else if (k === "o") {
+    // the island's map, large
+    if (isIslandMapOpen()) closeIslandMap();
+    else {
+      closeMenu();
+      closeInspect();
+      openIslandMap();
+    }
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -1596,6 +1605,7 @@ window.addEventListener("keydown", (e) => {
     closeMenu();
     closeWeb();
     closeCharts();
+    closeIslandMap();
   } else if (k === "p") {
     savePostcard();
   } else if (k === "n") {
@@ -1752,6 +1762,58 @@ function drawMinimap(): void {
     ctx.fillText("★", hx, hy);
   }
   ctx.restore();
+}
+
+// ── the island's map (O) ──────────────────────────────────────────────────
+// The full-colour isle the corner map inks, opened large: your gardens marked,
+// basecamp starred, and you a bright dot. Promotes the ?overview dev view into
+// a real map, so the whole shape reads at a glance — no near-black fog void.
+function isIslandMapOpen(): boolean {
+  return document.getElementById("map")!.style.display === "block";
+}
+function closeIslandMap(): void {
+  document.getElementById("map")!.style.display = "none";
+}
+function openIslandMap(): void {
+  if (minimapCacheSeed !== currentSeed || !minimapCache) buildMinimapCache();
+  const el = document.getElementById("map")!;
+  const maxDim = Math.min(560, Math.round(window.innerHeight * 0.62));
+  const scale = maxDim / Math.max(map.width, map.height);
+  const w = Math.round(map.width * scale);
+  const h = Math.round(map.height * scale);
+  el.innerHTML =
+    `<div class="map-head"><span class="map-title">the island's map</span>` +
+    `<span class="map-sub">${worldName ?? "this island"} · ${map.shape ?? "?"} · ${map.width}×${map.height}</span></div>` +
+    `<canvas id="map-canvas" width="${w}" height="${h}"></canvas>` +
+    `<div class="map-legend"><span>&#9679; you</span> &nbsp;·&nbsp; <span class="star">&#9733;</span> your camp &nbsp;·&nbsp; <span class="till">&#9642;</span> tilled</div>` +
+    `<div class="map-hint">O or Esc to close</div>`;
+  const g = (document.getElementById("map-canvas") as HTMLCanvasElement).getContext("2d")!;
+  g.imageSmoothingEnabled = true;
+  g.drawImage(minimapCache!, 0, 0, w, h);
+  g.fillStyle = "rgba(127, 224, 196, 0.7)"; // your tilled gardens
+  const cell = Math.max(1, Math.ceil(scale));
+  for (const key of flora.soilTileKeys()) {
+    g.fillRect(Math.round((key % map.width) * scale), Math.round(Math.floor(key / map.width) * scale), cell, cell);
+  }
+  if (home) {
+    const hx = (home.x + 0.5) * scale;
+    const hy = (home.y + 0.5) * scale;
+    g.font = "15px Georgia, serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillStyle = "rgba(0,0,0,0.8)";
+    g.fillText("★", hx + 1, hy + 1);
+    g.fillStyle = "#ffd45e";
+    g.fillText("★", hx, hy);
+  }
+  g.beginPath();
+  g.arc((player.x / TILE_SIZE) * scale, (player.y / TILE_SIZE) * scale, 3.5, 0, Math.PI * 2);
+  g.fillStyle = "#ffffff";
+  g.fill();
+  g.lineWidth = 1.5;
+  g.strokeStyle = "rgba(0,0,0,0.7)";
+  g.stroke();
+  el.style.display = "block";
 }
 
 let slowCheckAcc = 0;
