@@ -265,29 +265,48 @@ export class Renderer {
         const h = hash2d(m.x, m.y, 7);
         const ox = 3 + h * 8;
         const oy = 4 + hash2d(m.y, m.x, 9) * 8;
+        // a soft warm halo — the "something to take" tell; reads on dark/mid ground
+        const hcx = mx + ox + 2;
+        const hcy = my + oy + 2;
+        const warm = m.kind === "stone" ? "220, 231, 245" : "255, 223, 158";
+        const halo = ctx.createRadialGradient(hcx, hcy, 0, hcx, hcy, 10);
+        halo.addColorStop(0, `rgba(${warm}, 0.6)`);
+        halo.addColorStop(1, `rgba(${warm}, 0)`);
+        ctx.fillStyle = halo;
+        ctx.fillRect(Math.round(mx + ox - 8), Math.round(my + oy - 8), 20, 20);
+        // a dark rim so a pale piece still reads on pale sand (halo covers dark ground)
+        const rim = "rgba(28, 21, 15, 0.82)";
         if (m.kind === "wood") {
-          ctx.fillStyle = "hsl(24, 35%, 32%)";
-          if (h < 0.5) {
-            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 5, 2);
-            ctx.fillStyle = "hsl(24, 30%, 22%)";
-            ctx.fillRect(Math.round(mx + ox + 4), Math.round(my + oy), 1, 2);
-          } else {
-            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 2, 5);
-            ctx.fillStyle = "hsl(24, 30%, 22%)";
-            ctx.fillRect(Math.round(mx + ox), Math.round(my + oy + 4), 2, 1);
-          }
+          const lie = h < 0.5;
+          const bw = lie ? 6 : 3;
+          const bh = lie ? 3 : 6;
+          ctx.fillStyle = rim;
+          ctx.fillRect(Math.round(mx + ox - 1), Math.round(my + oy - 1), bw + 2, bh + 2);
+          ctx.fillStyle = "hsl(34, 45%, 63%)"; // sun-bleached driftwood
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), bw, bh);
+          ctx.fillStyle = "hsl(26, 34%, 40%)"; // grain
+          if (lie) ctx.fillRect(Math.round(mx + ox + bw - 1), Math.round(my + oy), 1, bh);
+          else ctx.fillRect(Math.round(mx + ox), Math.round(my + oy + bh - 1), bw, 1);
+          ctx.fillStyle = "hsl(44, 62%, 89%)"; // glint
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), lie ? 2 : 1, lie ? 1 : 2);
         } else if (m.kind === "rush") {
-          // rushes stand rather than lie: green stems, brown cattail heads
-          ctx.fillStyle = "hsl(85, 28%, 36%)";
-          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 3), 1, 5);
-          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 2), 1, 4);
-          ctx.fillStyle = "hsl(30, 42%, 30%)";
-          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 5), 1, 2);
-          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 4), 1, 2);
+          // bright stems over a dark shadow-stem, gold heads — reads over water & marsh
+          ctx.fillStyle = rim;
+          ctx.fillRect(Math.round(mx + ox - 1), Math.round(my + oy - 6), 2, 9);
+          ctx.fillRect(Math.round(mx + ox + 2), Math.round(my + oy - 5), 2, 8);
+          ctx.fillStyle = "hsl(100, 46%, 56%)"; // bright stems
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 4), 1, 6);
+          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 3), 1, 5);
+          ctx.fillStyle = "hsl(40, 72%, 56%)"; // gold cattail heads
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy - 6), 1, 2);
+          ctx.fillRect(Math.round(mx + ox + 3), Math.round(my + oy - 5), 1, 2);
         } else {
-          ctx.fillStyle = "hsl(215, 8%, 52%)";
-          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 2, 2);
-          ctx.fillStyle = "hsl(215, 10%, 66%)";
+          // loose cobbles, sun-warm — pale grey, dark rim, a bright facet
+          ctx.fillStyle = rim;
+          ctx.fillRect(Math.round(mx + ox - 1), Math.round(my + oy - 1), 5, 5);
+          ctx.fillStyle = "hsl(212, 12%, 65%)";
+          ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 3, 3);
+          ctx.fillStyle = "hsl(210, 18%, 87%)"; // bright facet
           ctx.fillRect(Math.round(mx + ox), Math.round(my + oy), 1, 1);
         }
       }
