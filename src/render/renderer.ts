@@ -356,8 +356,21 @@ export class Renderer {
       const gx = (scene.home.x - 1) * TILE_SIZE - camX;
       const gy = (scene.home.y - 1) * TILE_SIZE - camY;
       const size = 3 * TILE_SIZE;
-      ctx.fillStyle = "rgba(70, 46, 26, 0.22)"; // turned earth
-      ctx.fillRect(Math.round(gx), Math.round(gy), size, size);
+      // the same turned, furrowed earth as any tile the wanderer tills by hand
+      // (see the soilTiles pass below) — the home bed is worked ground too, so
+      // it reads as one continuous material with a patch you till beside it.
+      for (let ty = 0; ty < 3; ty++) {
+        for (let tx = 0; tx < 3; tx++) {
+          const dx = Math.round(gx + tx * TILE_SIZE);
+          const dy = Math.round(gy + ty * TILE_SIZE);
+          ctx.fillStyle = "rgba(58, 38, 22, 0.55)"; // turned earth
+          ctx.fillRect(dx + 1, dy + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+          ctx.fillStyle = "rgba(32, 20, 11, 0.5)"; // furrows raked across it
+          for (let fy = dy + 4; fy < dy + TILE_SIZE - 2; fy += 4) {
+            ctx.fillRect(dx + 2, fy, TILE_SIZE - 4, 1);
+          }
+        }
+      }
       ctx.fillStyle = "hsl(28, 32%, 34%)";
       for (const [ox, oy] of [[0, 0], [size - 2, 0], [0, size - 2], [size - 2, size - 2]]) {
         ctx.fillRect(Math.round(gx + ox), Math.round(gy + oy), 2, 2); // corner stones
