@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { campActionRows, menuLaunchers } from "../src/render/menu";
+import { SIMULATOR_KEY, campActionRows, menuLaunchers } from "../src/render/menu";
 import { BEDROLL_COST, FIRE_COST } from "../src/game/materials";
 
 const cost = { fire: FIRE_COST, bedroll: BEDROLL_COST };
@@ -7,8 +7,15 @@ const cost = { fire: FIRE_COST, bedroll: BEDROLL_COST };
 test("launchers name each tucked-away action and its key; toss only with seeds", () => {
   const none = menuLaunchers(0).map((a) => a.key);
   // the menu is the hub: the backpack, ledger, and map lead, then the cards
-  expect(none).toEqual(["B", "G", "O", "C", "L", "J", "M", "?", "P", "N"]);
+  expect(none).toEqual(["B", "G", "O", "C", "L", "J", "M", "?", SIMULATOR_KEY, "P", "N"]);
   expect(menuLaunchers(2).map((a) => a.key)).toContain("Q");
+});
+
+test("the simulator has a door in the menu — a reachable bench, not a secret url", () => {
+  const sim = menuLaunchers(0).find((a) => a.key === SIMULATOR_KEY);
+  expect(sim).toBeDefined();
+  expect(sim!.label).toContain("simulator");
+  expect(sim!.label).toContain("bench");
 });
 
 test("a fire action greys out until you carry enough, and quotes the true cost", () => {

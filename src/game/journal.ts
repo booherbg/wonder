@@ -261,6 +261,89 @@ export function recordCritterMeeting(m: CritterMeeting, kv: KV | null = defaultK
   }
 }
 
+// ── the insect clouds ──────────────────────────────────────────────────
+// The journal's third shelf: the swarms you've leaned close to (E) or clicked.
+// Each page keeps the cloud's codex name, the bloom it was working, how far
+// its colour had come toward that flower, and the fullest cloud ever
+// witnessed. Met means inspected, exactly as with critters — a kind you've
+// never stood beside has no page. Its own shelf, so older journals load
+// untouched.
+
+export interface SwarmEntry {
+  key: string; // `${seed}:swarm:${swarmId}` — one entry per cloud per island
+  seed: number;
+  island: string;
+  swarmId: number;
+  name: string; // the codex name the kind wears (cousins carry their ✧)
+  hostName: string; // the flowering plant it was working when last met
+  bestResemblance: number; // 0..1 — the closest to its flower ever witnessed
+  population: number; // the fullest cloud ever witnessed
+  firstMetAt: number; // epoch ms
+  meetings: number;
+}
+
+export const SWARM_JOURNAL_KEY = "wander.journal.swarms";
+export const SWARM_JOURNAL_CAP = 200;
+
+export function loadSwarmJournal(kv: KV | null = defaultKV()): SwarmEntry[] {
+  try {
+    const raw = kv?.getItem(SWARM_JOURNAL_KEY);
+    const arr = raw ? (JSON.parse(raw) as SwarmEntry[]) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface SwarmMeeting {
+  seed: number;
+  island: string;
+  swarmId: number;
+  name: string;
+  hostName: string;
+  resemblance: number; // 0..1 at this meeting
+  population: number;
+  at: number; // epoch ms
+}
+
+// Leaning close (E) with a cloud adrift in reach — or clicking one — begins
+// its page; meeting the same cloud again only deepens it: the host it works
+// now, the best match and fullest cloud ever seen.
+export function recordSwarmMeeting(m: SwarmMeeting, kv: KV | null = defaultKV()): void {
+  if (!kv) return;
+  try {
+    const all = loadSwarmJournal(kv);
+    const key = `${m.seed}:swarm:${m.swarmId}`;
+    const existing = all.find((e) => e.key === key);
+    if (existing) {
+      existing.meetings++;
+      existing.hostName = m.hostName; // a cloud may drift to a new bloom
+      existing.bestResemblance = Math.max(existing.bestResemblance, r3(m.resemblance));
+      existing.population = Math.max(existing.population, Math.round(m.population));
+    } else {
+      all.push({
+        key,
+        seed: m.seed,
+        island: m.island,
+        swarmId: m.swarmId,
+        name: m.name,
+        hostName: m.hostName,
+        bestResemblance: r3(m.resemblance),
+        population: Math.round(m.population),
+        firstMetAt: m.at,
+        meetings: 1,
+      });
+    }
+    const kept =
+      all.length > SWARM_JOURNAL_CAP
+        ? [...all].sort((a, b) => b.firstMetAt - a.firstMetAt).slice(0, SWARM_JOURNAL_CAP)
+        : all;
+    kv.setItem(SWARM_JOURNAL_KEY, JSON.stringify(kept));
+  } catch {
+    // storage full or unavailable: the meeting still happened
+  }
+}
+
 // ── the island itself ──────────────────────────────────────────────────
 // What makes THIS island itself: which grounds it holds, which landforms it
 // was born with. Nothing here is witnessed or earned — the place simply is —

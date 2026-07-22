@@ -349,3 +349,72 @@ test("pollination only ever ADDS flowering plants — bounded, additive, never h
     expect(bucket.length).toBeLessThanOrEqual(flora.tuning.maxPerTile);
   }
 });
+
+// ── events: the layer's best moments now have a witness path ──────────────────
+// A bloom visibly thickening under a well-matched cloud (a boom) and a cousin
+// budding off both emit a small event the game loop drains and surfaces. Pure
+// bookkeeping: rare (once per swarm; divergence on its slow cadence), drained
+// destructively, and never a draw on the seeded stream.
+
+test("a well-matched cloud's boom is emitted once per swarm, named, and drained by takeEvents", () => {
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(generate(SEED), species, SEED);
+  const layer = new SwarmLayer(SEED, species, flora);
+  // pin every swarm to a perfect match + a full cloud so pollination fires hard
+  for (const ent of layer.swarms) {
+    const flower = layer.flowers.get(ent.home!.species)!;
+    ent.sw.pool = ent.sw.pool.map(() => flower.map.slice());
+    ent.sw.sensor = flower.map.slice();
+    ent.sw.population = ent.sw.cap;
+  }
+  expect(layer.takeEvents()).toEqual([]); // nothing notable has happened yet
+  const events: ReturnType<typeof layer.takeEvents> = [];
+  for (let t = 0; t < 200; t++) {
+    layer.tick(flora);
+    events.push(...layer.takeEvents()); // drain as the game loop does
+  }
+  const booms = events.filter((e) => e.kind === "boom");
+  expect(booms.length).toBeGreaterThan(0); // the boom found its witness
+  // once per swarm, never a spam: no cloud booms twice
+  const names = booms.map((b) => b.name);
+  expect(new Set(names).size).toBe(names.length);
+  for (const b of booms) {
+    expect(layer.swarms.some((s) => s.name === b.name)).toBe(true); // a real cloud's codex name
+    expect(species[b.hostSpecies]).toBeDefined(); // a real flowering kind thickened
+  }
+  expect(layer.takeEvents()).toEqual([]); // drained means drained
+});
+
+test("a budded cousin is emitted as an event, named with its ✧ and homed on the second species", () => {
+  const { flora, layer } = build();
+  // the same bimodal forcing the divergence test uses, against the nearest other bloom
+  let ent = null as (typeof layer.swarms)[number] | null;
+  let other = null as ReturnType<typeof flora.plantsNear>[number] | null;
+  for (const e of layer.swarms) {
+    const near = flora
+      .plantsNear(e.home!.x, e.home!.y, 10 * 16)
+      .filter((p) => isBloom(p) && layer.flowers.has(p.species) && p.species !== e.home!.species)
+      .sort(
+        (a, b) =>
+          (a.x - e.home!.x) ** 2 + (a.y - e.home!.y) ** 2 - ((b.x - e.home!.x) ** 2 + (b.y - e.home!.y) ** 2),
+      );
+    if (near.length) {
+      ent = e;
+      other = near[0];
+      break;
+    }
+  }
+  expect(ent).not.toBeNull();
+  const flowerHome = layer.flowers.get(ent!.home!.species)!;
+  const flowerOther = layer.flowers.get(other!.species)!;
+  ent!.sw.pool = ent!.sw.pool.map((_, i) => (i % 2 === 0 ? flowerHome.map.slice() : flowerOther.map.slice()));
+  layer.takeEvents(); // start clean
+  const cousin = layer.budCousin(ent!, flora);
+  expect(cousin).not.toBeNull();
+  const events = layer.takeEvents();
+  expect(events.length).toBe(1);
+  expect(events[0].kind).toBe("cousin");
+  expect(events[0].name).toBe(cousin!.name); // the island-born mark rides along
+  expect(events[0].name).toContain("✧");
+  expect(events[0].hostSpecies).toBe(other!.species); // toward the second flower, truthfully
+});

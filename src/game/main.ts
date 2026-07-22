@@ -29,6 +29,7 @@ import {
   recordForage,
   recordSpread,
   recordSighting,
+  recordSwarmMeeting,
 } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
@@ -37,7 +38,7 @@ import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
 import { SwarmLayer, swarmPalette } from "./swarms";
-import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
+import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { PollinationLink, WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
@@ -67,7 +68,7 @@ import {
 } from "./toolbar";
 import { BEDROLL_COST, FIRE_COST, MaterialNode, isTillable, placeMaterials } from "./materials";
 import { TIDE_LOW, TidePool, exposureAt, placeTidePools, tideAt } from "./tide";
-import { MurmurEngine, loadAnthology } from "./murmurs";
+import { MurmurEngine, loadAnthology, markSwarmMet, swarmMetOn } from "./murmurs";
 import {
   MAX_SAVED_WORLDS,
   SavedWorld,
@@ -610,6 +611,7 @@ let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
 let swarmLayer!: SwarmLayer; // insect swarms homing on the island's blooms — regenerated from seed each load
+let swarmMetHere = false; // the once-per-island cloud cue: already spoken on this island?
 let lastCamX = 0; // the frame's camera, stashed so a canvas click can hit-test the world
 let lastCamY = 0;
 let trust: Map<number, number> = new Map(); // per-kind bond, this island; wander.trust
@@ -820,6 +822,9 @@ function loadWorld(seed: number): void {
     swarmLayer.tick(flora);
     sampleSwarms();
   }
+  swarmLayer.takeEvents(); // moments from before the wanderer arrived went unwitnessed
+  // has this island already pointed at its clouds? remembered across sittings
+  swarmMetHere = swarmMetOn(seed);
   clearCritterSpriteCache();
   simAcc = 0;
   saveAcc = 0;
@@ -854,6 +859,7 @@ function loadWorld(seed: number): void {
   walkTx = Math.floor(player.x / TILE_SIZE);
   walkTy = Math.floor(player.y / TILE_SIZE);
   exploredDirty = markSeen(explored, map.width, map.height, walkTx, walkTy);
+  swarmCardPinned = false; // a pinned card never rides to another island
   closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
@@ -1016,7 +1022,12 @@ function openIslePicker(): void {
 // every step of a following panel
 let lastInspectX = -999;
 let lastInspectY = -999;
+// A clicked swarm's card is pinned: the follow-you plant inspect must not
+// clobber it on the next step — it holds until closed (Esc) or the wanderer
+// deliberately re-examines with E.
+let swarmCardPinned = false;
 function openInspectAtPlayer(record = true): void {
+  swarmCardPinned = false; // a deliberate lean-in supersedes a pinned swarm card
   const nearby = flora
     .plantsNear(player.x, player.y, INSPECT_RANGE)
     .sort(
@@ -1053,6 +1064,16 @@ function openInspectAtPlayer(record = true): void {
   const beastNear =
     beast && Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE ? beast : null;
   const shown = [...groups.values()].slice(0, 10);
+  // the colourful clouds drifting within reach — each surfaced as a codex card
+  // of its appearance genome, host bloom, population, resemblance and personality
+  const swarmsNear = swarmLayer
+    .near(player.x, player.y, SWARM_REACH)
+    .flatMap((ent) => {
+      const view = swarmLayer.inspect(ent, species);
+      return view ? [{ ent, view }] : [];
+    })
+    .slice(0, 6);
+  const swarmViews = swarmsNear.map((p) => p.view);
   // leaning close writes the journal — but only on the deliberate lean-in,
   // never on the steps of a panel that follows you as you wander
   if (record) {
@@ -1077,6 +1098,26 @@ function openInspectAtPlayer(record = true): void {
         critter: sp,
         at: Date.now(),
       });
+    }
+    // and the clouds: a swarm you've leaned close to becomes a page — its
+    // name, the bloom it works, how far it has come to match it
+    for (const { ent, view } of swarmsNear) {
+      recordSwarmMeeting({
+        seed: currentSeed,
+        island: islandName(currentSeed),
+        swarmId: ent.id,
+        name: view.name,
+        hostName: view.hostName,
+        resemblance: view.resemblance,
+        population: view.population,
+        at: Date.now(),
+      });
+    }
+    // a lean-in that met a cloud counts as the island's introduction —
+    // the once-per-island cue has nothing left to teach
+    if (swarmsNear.length > 0 && !swarmMetHere) {
+      swarmMetHere = true;
+      markSwarmMet(currentSeed);
     }
   }
   // the hour, and everything near that isn't a plant, a critter, or a seed —
@@ -1153,14 +1194,6 @@ function openInspectAtPlayer(record = true): void {
   // the same closeness H uses for tending, so looking, building, and the
   // menu all agree (campViewAtHome is shared with the Tab menu)
   const camp: CampView | undefined = campViewAtHome() ?? undefined;
-
-  // the colourful clouds drifting within reach — each surfaced as a codex card
-  // of its appearance genome, host bloom, population, resemblance and personality
-  const swarmViews = swarmLayer
-    .near(player.x, player.y, SWARM_REACH)
-    .map((e) => swarmLayer.inspect(e, species))
-    .filter((v): v is NonNullable<typeof v> => v !== null)
-    .slice(0, 6);
 
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
@@ -1414,6 +1447,16 @@ function menuLaunch(key: string): void {
     case "P": savePostcard(); break;
     case "N": nameWorld(); break;
     case "Q": tossSeed(); break;
+    case SIMULATOR_KEY: {
+      // the simulator: a bench for the living map, one door away. It takes
+      // over the page (?sim=1), so the island is saved first; the seed rides
+      // along in the URL and the way back is just dropping the flag.
+      persist();
+      const url = new URL(location.href);
+      url.searchParams.set("sim", "1");
+      location.href = url.toString();
+      break;
+    }
   }
 }
 
@@ -1739,6 +1782,7 @@ window.addEventListener("keydown", (e) => {
     if (isMenuOpen()) closeMenu();
     else openMenuNow();
   } else if (k === "escape") {
+    swarmCardPinned = false; // a pinned swarm card closes like any other
     closeInspect();
     closeAnthology();
     closeJournal();
@@ -1758,6 +1802,7 @@ window.addEventListener("keydown", (e) => {
     if (focusOn) flashHud("you lean in close — Z to stand back");
   } else if (k === "e") {
     if (isInspectOpen()) {
+      swarmCardPinned = false;
       closeInspect();
     } else {
       closeWeb();
@@ -1813,7 +1858,29 @@ canvas.addEventListener("click", (e) => {
   const ent = swarmLayer.pick(wx, wy, 1.4 * TILE_SIZE);
   if (!ent) return;
   const view = swarmLayer.inspect(ent, species);
-  if (view) openSwarmCard(view);
+  if (!view) return;
+  openSwarmCard(view);
+  // pin the card so the follow-you plant inspect can't clobber it: anchor the
+  // follow check here and hold the pin until Esc closes it or E re-examines
+  lastInspectX = player.x;
+  lastInspectY = player.y;
+  swarmCardPinned = true;
+  // clicking a cloud is meeting it — it earns its journal page, and the
+  // once-per-island cue has nothing left to teach
+  recordSwarmMeeting({
+    seed: currentSeed,
+    island: islandName(currentSeed),
+    swarmId: ent.id,
+    name: view.name,
+    hostName: view.hostName,
+    resemblance: view.resemblance,
+    population: view.population,
+    at: Date.now(),
+  });
+  if (!swarmMetHere) {
+    swarmMetHere = true;
+    markSwarmMet(currentSeed);
+  }
 });
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {
@@ -2034,6 +2101,14 @@ function offerMurmurMoments(dt: number): void {
     if (critters.some((c) => Math.hypot(c.x - player.x, c.y - player.y) < 2.5 * TILE_SIZE)) {
       murmurs.offer("critter");
     }
+    // the first time a cloud drifts within reach on this island, the island
+    // points at it — once, quietly, and never again here (across sittings too)
+    if (!swarmMetHere && swarmLayer.near(player.x, player.y, SWARM_REACH).length > 0) {
+      swarmMetHere = true;
+      markSwarmMet(currentSeed);
+      flashHud("a cloud of colour works the blooms nearby — lean close (E) or click it");
+      murmurs.offer("swarm");
+    }
     // standing truly still, watching: learn who eats what — if that plant
     // already has a page in the journal
     if (stillTime >= 1) {
@@ -2142,9 +2217,11 @@ function frame(now: number): void {
     if (markSeen(explored, map.width, map.height, walkTx, walkTy)) exploredDirty = true;
   }
   // the inspect panel follows you: walk with it open and it re-reads what's
-  // around, without re-writing the journal each step
+  // around, without re-writing the journal each step — unless a clicked
+  // swarm's card is pinned, which holds until it's closed or E re-examines
   if (
     isInspectOpen() &&
+    !swarmCardPinned &&
     Math.hypot(player.x - lastInspectX, player.y - lastInspectY) > TILE_SIZE * 0.5
   ) {
     openInspectAtPlayer(false);
@@ -2169,6 +2246,23 @@ function frame(now: number): void {
     flashHud(`${ev.name} — a new kind, arisen from ${ev.parentName}`);
     murmurs.offer("speciation");
     remember(`${ev.name} arose here`);
+  }
+  // the swarm layer's best moments, given a witness: a bloom visibly thickening
+  // under a well-matched cloud, a cousin budding off toward a second flower.
+  // Rare by construction (once per swarm; divergence on a slow cadence), so
+  // each earns one quiet line — and a boom writes the host plant's page the
+  // way a watched disperser does ("spread by …"), if that kind has a page.
+  for (const ev of swarmLayer.takeEvents()) {
+    const host = species[ev.hostSpecies]?.name ?? "its flower";
+    if (ev.kind === "boom") {
+      flashHud(`${host} thickens where ${ev.name} works`);
+      recordSpread(currentSeed, ev.hostSpecies, ev.name);
+      murmurs.offer("swarm");
+    } else {
+      flashHud(`a cousin — ${ev.name} drifts off toward ${host}`);
+      remember(`${ev.name} budded off toward ${host}`);
+      murmurs.offer("speciation");
+    }
   }
   saveAcc += dt;
   if (saveAcc >= 10) {

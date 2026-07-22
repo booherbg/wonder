@@ -36,6 +36,7 @@ export type MurmurTag =
   | "confluence" // standing where two rivers become one
   | "rain" // out in a real shower
   | "bloom" // the fungi answering yesterday's rain
+  | "swarm" // meeting the insect clouds that work the blooms
   | "skerries" // wandering an archipelago where every islet drifts alone
   | "fire" // the first fire at your own camp
   | "rest" // a bedroll of woven rushes beside the fire
@@ -309,6 +310,21 @@ export const MURMURS: Murmur[] = [
     tag: "bloom",
   },
   {
+    text: "i can understand how a flower and a bee might slowly become, either simultaneously or one after the other, modified and adapted in the most perfect manner to each other.",
+    attribution: "— charles darwin, on the origin of species (1859)",
+    tag: "swarm",
+  },
+  {
+    text: "to the bee, a flower is the fountain of life, and to the flower, a bee is a messenger of love.",
+    attribution: "— kahlil gibran, the prophet (1923)",
+    tag: "swarm",
+  },
+  {
+    text: "the pedigree of honey does not concern the bee; a clover, any time, to him is aristocracy.",
+    attribution: "— emily dickinson (c. 1884)",
+    tag: "swarm",
+  },
+  {
     text: "we seem to be brought somewhat near to that great fact — that mystery of mysteries — the first appearance of new beings on this earth.",
     attribution: "— charles darwin, voyage of the beagle (1839)",
     tag: "skerries",
@@ -423,6 +439,41 @@ export function recordInAnthology(
     kv.setItem(ANTHOLOGY_KEY, JSON.stringify(all.slice(-ANTHOLOGY_CAP)));
   } catch {
     // storage full or unavailable: the words were still given
+  }
+}
+
+// ── first meetings, once per island ───────────────────────────────────────────
+// The island points at its insect clouds exactly once: the first time a swarm
+// drifts within reach on a given island the game offers a cue, and never again
+// there — remembered across sittings, so a reload doesn't re-teach what the
+// wanderer already knows. Pure KV bookkeeping, unit-testable like the anthology.
+
+export const SWARM_MET_KEY = "wander.swarmMet";
+export const SWARM_MET_CAP = 64; // islands remembered; the oldest quietly forgotten
+
+// the islands already introduced, read tolerantly — a corrupt store reads empty
+function swarmMetList(kv: KV | null): number[] {
+  try {
+    const raw = kv?.getItem(SWARM_MET_KEY);
+    const arr: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((s): s is number => typeof s === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function swarmMetOn(seed: number, kv: KV | null = defaultKV()): boolean {
+  return swarmMetList(kv).includes(seed);
+}
+
+export function markSwarmMet(seed: number, kv: KV | null = defaultKV()): void {
+  if (!kv) return;
+  const list = swarmMetList(kv).filter((s) => s !== seed);
+  list.push(seed);
+  try {
+    kv.setItem(SWARM_MET_KEY, JSON.stringify(list.slice(-SWARM_MET_CAP)));
+  } catch {
+    // storage full or unavailable: the cue may speak once more next sitting — harmless
   }
 }
 

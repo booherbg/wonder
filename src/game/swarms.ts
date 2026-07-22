@@ -84,6 +84,20 @@ const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination event
 const POLLINATE_SPREAD_RADIUS = 6; // tiles a pollinated seed may drift (wider than reseedRadius)
 const POLLINATE_MAX_SAME = 2; // most same-species a pollinated seed will add on one tile (< flora.maxPerTile)
 
+// ── events (the layer's notable moments, for the game to witness) ─────────────
+// The layer's best beats — a flower visibly thickening under a well-matched
+// cloud, a cousin budding off toward a second species — used to happen in
+// silence. Now each is emitted once as a small event the game loop drains
+// (takeEvents, mirroring flora's) and surfaces quietly. Pure bookkeeping on the
+// side: no event ever draws from the seeded stream or touches the sim.
+export interface SwarmEvent {
+  kind: "boom" | "cousin";
+  name: string; // the swarm at the centre of it
+  hostSpecies: number; // boom: the flowering kind that thickened · cousin: its new host
+}
+export const BOOM_POLLINATIONS = 3; // spreads before a swarm's work reads as a visible boom
+const EVENT_QUEUE_CAP = 8; // undrained moments beyond this quietly age out
+
 // A mote is one slot of render bookkeeping (the gene pool is the sim): the
 // renderer draws the first few as full generative insects and the rest as the
 // faint 1px dust that says "many" without clutter. Wall-clock animation only.
@@ -105,6 +119,7 @@ export interface WorldSwarm {
   orbit: number; // slow orbit phase around the home flower
   motes: Mote[];
   home: { x: number; y: number; species: number } | null; // the bloom it works
+  pollinated: number; // successful spreads so far — crossing BOOM_POLLINATIONS emits its boom
 }
 
 // ── names, in the codex voice ─────────────────────────────────────────────────
@@ -193,6 +208,7 @@ export class SwarmLayer {
   readonly flowers: Map<number, Flower>;
   readonly swarms: WorldSwarm[] = [];
   predation = WORLD_PREDATION; // gentle ambient insectivory; the sim swaps its own value in
+  private readonly events: SwarmEvent[] = []; // notable moments awaiting a witness
   private rng: Rng;
   private readonly seed: number;
   private readonly species: readonly PlantSpecies[]; // the SHARED list — grows as daughters speciate
@@ -294,6 +310,7 @@ export class SwarmLayer {
         orbit: ang,
         motes,
         home: { x: anchor.x, y: anchor.y, species: anchor.species },
+        pollinated: 0,
       };
       const flower = this.flowerFor(anchor.species)!;
       for (let w = 0; w < WARM_TICKS; w++) stepSwarm(ent.sw, flower, this.rng);
@@ -352,7 +369,13 @@ export class SwarmLayer {
           const fill = ent.sw.population / ent.sw.cap; // a fuller cloud pollinates more
           if (this.rng() < POLLINATE_CHANCE * match * match * fill) {
             // wider, lower-density reseed so the boom spreads instead of tiling a slab
-            if (flora.pollinateSpread(host, POLLINATE_SPREAD_RADIUS, POLLINATE_MAX_SAME)) pollinations++;
+            if (flora.pollinateSpread(host, POLLINATE_SPREAD_RADIUS, POLLINATE_MAX_SAME)) {
+              pollinations++;
+              // enough spreads to read on the ground → one boom event, once per swarm
+              if (++ent.pollinated === BOOM_POLLINATIONS) {
+                this.emit({ kind: "boom", name: ent.name, hostSpecies: host.species });
+              }
+            }
           }
         }
       }
@@ -406,9 +429,24 @@ export class SwarmLayer {
       orbit: ang,
       motes,
       home: { x: other.x, y: other.y, species: other.species },
+      pollinated: 0,
     };
     this.swarms.push(cousin);
+    this.emit({ kind: "cousin", name: cousin.name, hostSpecies: other.species });
     return cousin;
+  }
+
+  // Queue a notable moment for the game loop to witness; bounded, so a layer
+  // ticked without a drain (a warm fast-forward) never hoards stale news.
+  private emit(ev: SwarmEvent): void {
+    this.events.push(ev);
+    if (this.events.length > EVENT_QUEUE_CAP) this.events.shift();
+  }
+
+  /** Drain the notable moments since the last drain — the game loop's witness
+   *  path (murmur / HUD / journal), exactly like flora.takeEvents. */
+  takeEvents(): SwarmEvent[] {
+    return this.events.splice(0);
   }
 
   // Per-frame drift: each cloud eases into a slow orbit around its home bloom —

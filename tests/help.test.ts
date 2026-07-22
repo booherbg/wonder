@@ -60,6 +60,30 @@ test("the guide teaches tilling and planting, and why", () => {
   expect(camp).toContain("habitat");
 });
 
+test("the living web teaches the insect clouds: what they do and how to meet one", () => {
+  const web = helpSections().find((s) => s.title === "the living web")!.entries.map((e) => e.text).join(" ");
+  // the swarms are named, their adaptation and the reciprocal boom said plainly
+  expect(web).toContain("clouds of insects");
+  expect(web).toContain("swarm");
+  expect(web).toContain("colour of the flower");
+  expect(web).toContain("thickens");
+  // and both ways to meet one are taught: the lean-in and the click
+  expect(web).toContain("lean close (E)");
+  expect(web).toContain("click");
+});
+
+test("the guide no longer lies about predation — insectivory presses the exposed, gently", () => {
+  const web = helpSections().find((s) => s.title === "the living web")!.entries.map((e) => e.text).join(" ");
+  // the old line ("nothing hunts here") is gone…
+  expect(web).not.toContain("nothing hunts");
+  // …and the truth holds the peaceful register: nothing dies, numbers ebb and refill,
+  // a conspicuous cloud is thinned and a matched one is spared
+  expect(web).toContain("nothing dies");
+  expect(web).toContain("thinned");
+  expect(web).toContain("fills again");
+  expect(web).toContain("passed over");
+});
+
 test("things to seek leaves doors ajar: night, tide, drift, other islands", () => {
   const seek = helpSections().find((s) => s.title === "things to seek")!.entries.map((e) => e.text).join(" ");
   expect(seek).toContain("night");

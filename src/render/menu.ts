@@ -10,8 +10,10 @@ export interface MenuAction {
 }
 
 // The tucked-away actions, each naming the key that also triggers it — so the
-// menu teaches the shortcuts rather than hiding them. Toss only appears when
-// there's a seed to give back.
+// menu teaches the shortcuts rather than hiding them. The simulator is a door,
+// not a shortcut: it leaves the island for the bench (its ↗ says so). Toss
+// only appears when there's a seed to give back.
+export const SIMULATOR_KEY = "↗"; // the launch token main.ts dispatches on
 export function menuLaunchers(pouchCount: number): MenuAction[] {
   const out: MenuAction[] = [
     { key: "B", label: "the backpack — your seeds & tools" },
@@ -22,6 +24,7 @@ export function menuLaunchers(pouchCount: number): MenuAction[] {
     { key: "J", label: "the field journal" },
     { key: "M", label: "the murmurs" },
     { key: "?", label: "the field guide" },
+    { key: SIMULATOR_KEY, label: "the simulator — a bench for the living map" },
     { key: "P", label: "save a postcard" },
     { key: "N", label: "name this world" },
   ];

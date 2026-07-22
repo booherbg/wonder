@@ -97,7 +97,11 @@ export function helpSections(): HelpSection[] {
         },
         {
           text:
-            "the critters follow simple wants — food by day, their den by dark, a sidle toward you when you hold still. nothing hunts here, and nothing starves.",
+            "clouds of insects work the blooms too — swarms, each slowly wearing the colour of the flower it feeds on. a cloud that has come to match its bloom pays it back: where it works, that kind thickens and spreads. lean close (E) or click a drifting cloud to meet it by name.",
+        },
+        {
+          text:
+            "the critters follow simple wants — food by day, their den by dark, a sidle toward you when you hold still. nothing dies here and nothing starves — though unseen beaks do press the insect clouds: a swarm that stands out against its bloom is gently thinned, one that matches it is passed over, and a thinned cloud fills again.",
         },
         {
           text:
