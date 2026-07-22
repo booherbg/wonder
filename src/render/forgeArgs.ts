@@ -23,8 +23,8 @@ export interface ForgeState {
 // part of WorldConfig) — it shares this table so forge.ts's slider and
 // forgeArgs()'s clamp read the same bound instead of duplicating it.
 export const FORGE_BOUNDS: Record<string, [number, number]> = {
-  width: [64, 512],
-  height: [64, 512],
+  width: [96, 400],
+  height: [96, 400],
   warm: [0, 50000],
   elevationScale: [8, 400],
   elevationOctaves: [1, 8],
@@ -38,16 +38,16 @@ export const FORGE_BOUNDS: Record<string, [number, number]> = {
   snowLevel: [0, 1],
   forestMoisture: [0, 1],
   marshMoisture: [0, 1],
-  riverCount: [0, 40],
+  riverCount: [0, 24],
   riverMinSpringElevation: [0, 1],
-  riverMaxSteps: [100, 10000],
+  riverMaxSteps: [100, 6000],
   fallMinDrop: [0, 1],
   fallMaxCount: [0, 40],
   fallMinSpacing: [0, 500],
   craterChance: [0, 1],
-  minLandFraction: [0, 1],
-  minWalkableRegion: [0, 20000],
-  maxGenerationAttempts: [1, 256],
+  minLandFraction: [0, 0.45],
+  minWalkableRegion: [0, 3000],
+  maxGenerationAttempts: [1, 24],
 };
 
 function clamp(v: number, lo: number, hi: number): number {

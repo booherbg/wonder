@@ -82,8 +82,32 @@ function randomInRange(field: string, bounds: readonly [number, number]): number
   return Math.round(v);
 }
 
+// order-sensitive band fields and the viability guards: randomizing these
+// independently is how a random roll used to produce an unviable island (a
+// snowLevel below seaLevel, a minWalkableRegion no map could satisfy, ...).
+// Randomize-all leaves them unset so forgeArgs() falls back to DEFAULT_CONFIG,
+// which is known-viable, while everything else still rolls freely.
+const RANDOMIZE_SKIP = new Set([
+  "minLandFraction",
+  "minWalkableRegion",
+  "maxGenerationAttempts",
+  "seaLevel",
+  "shoreLevel",
+  "beachLevel",
+  "rockLevel",
+  "snowLevel",
+]);
+
 let live: ForgeState | null = null;
 let liveHandlers: ForgeHandlers | null = null;
+let noticeEl: HTMLElement | null = null; // the "no island took shape" line under the actions
+
+// Sets (or clears, with "") the forge's notice line — the error net's mouthpiece:
+// a bad config re-opens/stays in the forge with a word about it instead of
+// throwing uncaught into a white screen. A no-op if the panel isn't mounted.
+export function forgeNotice(msg: string): void {
+  if (noticeEl) noticeEl.textContent = msg;
+}
 
 function row(parent: HTMLElement, cls = "forge-row"): HTMLElement {
   const r = document.createElement("div");
@@ -122,6 +146,7 @@ function fineInput(field: keyof WorldConfig): HTMLInputElement {
 function render(): void {
   const el = panel();
   el.innerHTML = "";
+  noticeEl = null; // the old element (if any) just left the DOM with el.innerHTML
   const state = live!;
   const handlers = liveHandlers!;
 
@@ -321,8 +346,10 @@ function render(): void {
     state.seed = handlers.rerollSeed();
     state.shape = "roll"; // let the fresh seed roll shape/relief at generation
     state.relief = "roll";
+    state.cfg = {}; // drop any previously-rolled band/guard overrides — back to DEFAULT_CONFIG for those
     for (const [field, bounds] of Object.entries(FORGE_BOUNDS)) {
       if (field === "warm") continue; // handled below — it's ForgeState.warm, not a cfg field
+      if (RANDOMIZE_SKIP.has(field)) continue; // left unset ⇒ forgeArgs() uses the viable DEFAULT_CONFIG value
       const v = randomInRange(field, bounds);
       if (field === "width" || field === "height") (state as any)[field] = v;
       else (state.cfg as any)[field] = v;
@@ -350,6 +377,13 @@ function render(): void {
   hint.className = "forge-hint";
   hint.textContent = "esc to close";
   actions.appendChild(hint);
+
+  // the error net's mouthpiece — empty until forgeNotice() has something to
+  // say (a config that couldn't take shape); cleared fresh on every re-render
+  noticeEl = document.createElement("div");
+  noticeEl.className = "forge-notice";
+  noticeEl.textContent = "";
+  el.appendChild(noticeEl);
 
   el.scrollTop = 0;
 }

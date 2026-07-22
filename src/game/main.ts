@@ -93,7 +93,7 @@ const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev ai
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
-import { closeForge, isForgeOpen, openForge } from "../render/forge";
+import { closeForge, forgeNotice, isForgeOpen, openForge } from "../render/forge";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -1406,9 +1406,20 @@ if (NOMENU) {
 // does not touch currentSeed/map/flora or any ledger/persist path — nothing
 // here is played, so nothing here is saved. Warmth isn't previewed (it
 // seeds life density at spawn, not terrain), so it has no effect here.
+// A config that can't take shape (fine-grain edits can still push the
+// guards past what any map satisfies) throws inside generate() — caught
+// here so a bad roll leaves the panel open with a word about it instead of
+// an uncaught exception the canvas paints as a white screen.
 function previewForge(state: ForgeState): void {
   const { seed, gen } = forgeArgs(state);
-  const m = generate(seed, gen.config, gen.shape, gen.relief);
+  let m: WorldMap;
+  try {
+    m = generate(seed, gen.config, gen.shape, gen.relief);
+  } catch {
+    forgeNotice("no island took shape at these settings — reroll or ease the guards");
+    return;
+  }
+  forgeNotice("");
   const canvas = document.querySelector("#forge .forge-mini") as HTMLCanvasElement | null;
   if (canvas) paintMiniMap(m, canvas);
 }
@@ -1476,6 +1487,17 @@ function openForgeFromTitle(): void {
 }
 function onForgeGenerate(state: ForgeState): void {
   const { seed, gen } = forgeArgs(state);
+  // pre-validate BEFORE tearing down the title: a throw here must leave the
+  // forge (and the backdrop under it) exactly as they were, not mid-teardown
+  // with nothing loaded. generate() is a pure function of (seed, config,
+  // shape, relief), so this exact call is what loadWorld's own generate()
+  // will make below — if it doesn't throw here, it won't throw there either.
+  try {
+    generate(seed, gen.config, gen.shape, gen.relief);
+  } catch {
+    forgeNotice("no island took shape here — try another seed or ease the guards");
+    return; // stay in the forge; the title/backdrop are untouched
+  }
   closeForge();
   leaveTitle(); // titleActive → false: loadWorld records lastSeed, backdrop not persisted
   loadWorld(seed, gen);
