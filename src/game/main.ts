@@ -35,7 +35,8 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
-import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect } from "../render/inspect";
+import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
+import { SwarmLayer } from "./swarms";
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
@@ -176,6 +177,7 @@ let worldPlayMs = 0;
 const GATHER_RANGE = 24; // px — materials' reach
 const PLANT_REACH = 2 * TILE_SIZE; // px — plants forgive a step's distance
 const INSPECT_RANGE = 2.5 * TILE_SIZE;
+const SWARM_REACH = 6 * TILE_SIZE; // a drifting cloud is examinable from further than a rooted plant
 
 let bar: Toolbar = emptyToolbar();
 const murmurs = new MurmurEngine();
@@ -580,6 +582,9 @@ let flora!: Flora;
 let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
+let swarmLayer!: SwarmLayer; // insect swarms homing on the island's blooms — regenerated from seed each load
+let lastCamX = 0; // the frame's camera, stashed so a canvas click can hit-test the world
+let lastCamY = 0;
 let trust: Map<number, number> = new Map(); // per-kind bond, this island; wander.trust
 let companionKind: number | null = null; // the kind at your heel — one friend at a time
 let beast: Beast | null = null;
@@ -769,6 +774,14 @@ function loadWorld(seed: number): void {
   beastSows = [];
   flocks = generateFlocks(seed, map);
   birdRng = makeRng(seed ^ 0xb12d);
+  // the insect swarms: a bounded set scattered near the island's blooms, each
+  // homing on its nearest flowering plant and adapting its colour toward it.
+  // Purely additive — its own salted Rng, so the world/flora/critters above are
+  // byte-identical with or without it; regenerated from seed each load.
+  swarmLayer = new SwarmLayer(currentSeed, species, flora, {
+    x: (map.spawn.x + 0.5) * TILE_SIZE,
+    y: (map.spawn.y + 0.5) * TILE_SIZE,
+  });
   clearCritterSpriteCache();
   simAcc = 0;
   saveAcc = 0;
@@ -1103,6 +1116,14 @@ function openInspectAtPlayer(record = true): void {
   // menu all agree (campViewAtHome is shared with the Tab menu)
   const camp: CampView | undefined = campViewAtHome() ?? undefined;
 
+  // the colourful clouds drifting within reach — each surfaced as a codex card
+  // of its appearance genome, host bloom, population, resemblance and personality
+  const swarmViews = swarmLayer
+    .near(player.x, player.y, SWARM_REACH)
+    .map((e) => swarmLayer.inspect(e, species))
+    .filter((v): v is NonNullable<typeof v> => v !== null)
+    .slice(0, 6);
+
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(
@@ -1176,6 +1197,7 @@ function openInspectAtPlayer(record = true): void {
       return "at your heel";
     },
     companionKind,
+    swarmViews,
   );
   lastInspectX = player.x;
   lastInspectY = player.y;
@@ -1675,6 +1697,17 @@ window.addEventListener(
   { passive: false },
 );
 window.addEventListener("resize", () => renderer.resize());
+// clicking a drifting swarm opens its codex card — the world-side of the E lean-in
+canvas.addEventListener("click", (e) => {
+  if (e.target !== canvas) return; // a click on an open panel isn't a world click
+  const rect = canvas.getBoundingClientRect();
+  const wx = lastCamX + ((e.clientX - rect.left) / rect.width) * renderer.viewWidth;
+  const wy = lastCamY + ((e.clientY - rect.top) / rect.height) * renderer.viewHeight;
+  const ent = swarmLayer.pick(wx, wy, 1.4 * TILE_SIZE);
+  if (!ent) return;
+  const view = swarmLayer.inspect(ent, species);
+  if (view) openSwarmCard(view);
+});
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {
   if (explored) saveExplored(currentSeed, explored, map.width, map.height);
@@ -2020,6 +2053,7 @@ function frame(now: number): void {
       bloom: bloomToday,
       aurora: auroraTonight && darknessAt(sky) > 0.6,
     });
+    swarmLayer.tick(flora); // each heartbeat, every swarm feeds + adapts on its nearest bloom
     census.sample(flora.tick, flora.speciesCounts);
     simAcc -= SIM_MS;
   }
@@ -2100,6 +2134,9 @@ function frame(now: number): void {
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
+  lastCamX = camX;
+  lastCamY = camY;
+  swarmLayer.animate(dt); // the clouds ease into orbit around their home blooms
   const darkness = darknessNow;
   if (darkness > 0.6) {
     murmurs.offer("night");
@@ -2123,7 +2160,7 @@ function frame(now: number): void {
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
       tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
-      overlay: overlayOn,
+      overlay: overlayOn, swarms: swarmLayer,
     },
     sky,
   );

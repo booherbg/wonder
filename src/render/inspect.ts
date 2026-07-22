@@ -1,4 +1,6 @@
 import { INV_CAP, Seed } from "../game/inventory";
+import type { SwarmInspect } from "../game/swarms";
+import { IdMap, MAP_G, appearanceColors } from "../life/idmap";
 import { Beast, beastSegments } from "../life/beast";
 import { COMPANION_TRUST, CritterMood, CritterRole, CritterSpecies, bestOffering, trustWord } from "../life/fauna";
 import { Plant } from "../life/flora";
@@ -280,6 +282,97 @@ export function roleLine(role: CritterRole): string {
     : "a spreader — its visits carry a favorite's seed to new ground";
 }
 
+// A map rendered to a crisp 7×7 pixel patch as a data URL — the swarm's
+// appearance genome, drawn from the same appearanceColors its motes wear. Cells
+// in `ring` (the flower-accent jackpots this map has come to match) wear a gold
+// frame, so you can watch camouflage land pixel by pixel.
+function genomePatch(map: IdMap, ring?: Set<number>): string {
+  const cell = 20;
+  const c = document.createElement("canvas");
+  c.width = MAP_G * cell;
+  c.height = MAP_G * cell;
+  const g = c.getContext("2d")!;
+  const cols = appearanceColors(map);
+  for (let y = 0; y < MAP_G; y++) {
+    for (let x = 0; x < MAP_G; x++) {
+      const i = y * MAP_G + x;
+      g.fillStyle = cols[i];
+      g.fillRect(x * cell, y * cell, cell - 1, cell - 1);
+      if (ring?.has(i)) {
+        g.strokeStyle = "rgba(244, 201, 121, 0.95)";
+        g.lineWidth = 2;
+        g.strokeRect(x * cell + 1, y * cell + 1, cell - 3, cell - 3);
+      }
+    }
+  }
+  return c.toDataURL();
+}
+
+function pct(v: number): string {
+  return Math.round(v * 100) + "%";
+}
+
+// The behaviour genes said in words — personality read straight off the cloud's
+// motion: how far it roams, how it holds under threat, how tight it flies.
+function behaviourLine(b: { range: number; nerve: number; cohesion: number }): string {
+  const roam = b.range < 0.34 ? "a homebody" : b.range > 0.66 ? "a wanderer" : "roams middling";
+  const nerve = b.nerve < 0.34 ? "skittish" : b.nerve > 0.66 ? "bold" : "steady";
+  const cloud = b.cohesion < 0.34 ? "a loose cloud" : b.cohesion > 0.66 ? "a tight cloud" : "an easy cloud";
+  return `${roam} · ${nerve} · ${cloud}`;
+}
+
+// One codex card for a swarm: its appearance genome (accent-matches ringed
+// gold), the bloom it works, its population, how far it has come to resemble
+// that flower, and its personality.
+function swarmCard(view: SwarmInspect): HTMLElement {
+  const card = document.createElement("div");
+  card.className = "inspect-card";
+  card.style.width = "150px";
+  const ring = new Set<number>();
+  for (let i = 0; i < view.sensor.length; i++) {
+    if (view.accent[i] && view.sensor[i] === view.flowerMap[i]) ring.add(i);
+  }
+  const img = document.createElement("img");
+  img.src = genomePatch(view.sensor, ring);
+  img.style.cssText =
+    "width: 120px; height: 120px; image-rendering: pixelated; display: block; margin: 0 auto 4px;" +
+    " border-radius: 3px; box-shadow: 0 0 0 1px rgba(127,224,196,0.2);";
+  card.appendChild(img);
+
+  const name = document.createElement("div");
+  name.className = "inspect-name";
+  name.textContent = "a swarm";
+  card.appendChild(name);
+
+  const lines = [
+    `works ${view.hostName}`,
+    `${Math.round(view.population)} strong · ${pct(view.resemblance)} its flower`,
+    behaviourLine(view.behavior),
+  ];
+  for (const line of lines) {
+    const d = document.createElement("div");
+    d.className = "inspect-traits";
+    d.textContent = line;
+    card.appendChild(d);
+  }
+  return card;
+}
+
+// The click-to-inspect: a lone swarm's card, opened on its own in the same
+// codex plate the lean-in (E) uses.
+export function openSwarmCard(view: SwarmInspect): void {
+  const el = panel();
+  el.innerHTML = "";
+  sectionTitle(el, "a swarm, adrift");
+  const g = grid(el);
+  g.appendChild(swarmCard(view));
+  const hint = document.createElement("div");
+  hint.className = "inspect-hint";
+  hint.textContent = "its colours are its map — watch them drift toward its flower · Esc to close";
+  el.appendChild(hint);
+  el.style.display = "block";
+}
+
 function panel(): HTMLElement {
   return document.getElementById("inspect")!;
 }
@@ -364,6 +457,7 @@ export function openInspect(
   camp?: CampView,
   onAdopt?: AdoptFromCard,
   companion?: number | null,
+  swarms: SwarmInspect[] = [],
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -516,6 +610,13 @@ export function openInspect(
       card.appendChild(traits);
       g.appendChild(card);
     }
+  }
+
+  // swarms drifting within reach — the colourful clouds working the blooms
+  if (swarms.length > 0) {
+    sectionTitle(el, swarms.length > 1 ? "swarms adrift here" : "a swarm adrift here");
+    const g = grid(el);
+    for (const view of swarms) g.appendChild(swarmCard(view));
   }
 
   if (pouch.length > 0) {

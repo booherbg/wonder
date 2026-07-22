@@ -7,6 +7,7 @@ import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
+import { MOTES_MAX, SwarmLayer, swarmPalette, tint } from "../game/swarms";
 import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds, drawForegroundMotes } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from "./depth";
@@ -50,6 +51,7 @@ export interface Scene {
   pools?: TidePool[]; // small gardens the low tide bares along the sand
   sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
   overlay?: boolean; // the ecology overlay (V): critter drives + chain hotspots, drawn spatially
+  swarms?: SwarmLayer | null; // the insect swarms homing on the island's flowering plants
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -833,11 +835,71 @@ export class Renderer {
     );
     this.pollinators.draw(ctx, camX, camY, darkness);
 
+    // the insect swarms: cohesive clouds of individually-coloured motes hovering
+    // over the blooms they work, each mote pulled from the swarm's own gene pool
+    // so a cloud's palette drifts toward its flower's as it adapts. Above the
+    // scene with the other aerial life, under the foreground fluff and lens.
+    this.drawSwarms(scene, camX, camY, darkness, timeMs);
+
     // depth pass: the nearest air — drifting fluff with true parallax — and
     // then the lens itself, its edges easing dark
     drawForegroundMotes(ctx, camX, camY, this.viewWidth, this.viewHeight, darkness, rain, timeMs);
     drawVignette(ctx, this.viewWidth, this.viewHeight, darkness, Math.min(1, this.zoomLevel - 1));
     if (scene.overlay) this.drawEcologyOverlay(scene, camX, camY, timeMs);
+  }
+
+  // The insect swarms, drawn in world space (the same camera transform the scene
+  // uses): a soft colour halo pulled from the swarm's dominant genome, then the
+  // individuals — each mote coloured from a pool variant, so the cloud reads as
+  // many related insects and its palette shifts live as the pool adapts toward
+  // its flower. Density rides the population; cohesion tightens or loosens the
+  // cloud. Peaceful, cosmetic-feeling, never a grey dust fog.
+  private drawSwarms(scene: Scene, camX: number, camY: number, darkness: number, timeMs: number): void {
+    const layer = scene.swarms;
+    if (!layer) return;
+    const ctx = this.ctx;
+    const t = timeMs / 1000;
+    const lit = 1 - 0.4 * darkness; // insects dim a little into the dark
+    for (const ent of layer.swarms) {
+      const cx = ent.x - camX;
+      const cy = ent.y - camY;
+      const sw = ent.sw;
+      const cohesion = sw.behavior.cohesion;
+      const baseR = (1.5 - cohesion * 0.6) * TILE_SIZE * 0.8; // world-px cloud radius
+      const halo = baseR * 2.1;
+      if (cx < -halo || cx > this.viewWidth + halo || cy < -halo || cy > this.viewHeight + halo) continue;
+      const pal = swarmPalette(sw);
+      const frac = Math.max(0, Math.min(1, sw.population / sw.cap));
+      const shown = Math.round(6 + frac * (MOTES_MAX - 6));
+      // the aggregate glow: the cloud's colour, read at a glance
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, halo);
+      glow.addColorStop(0, tint(pal[0], 0.34 * lit));
+      glow.addColorStop(0.5, tint(pal[0], 0.14 * lit));
+      glow.addColorStop(1, tint(pal[0], 0));
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - halo, cy - halo, halo * 2, halo * 2);
+      // the individuals — a soft outer wing plus a crisp bright core, so each
+      // insect reads as a little coloured mote, not a flat dot
+      ctx.globalAlpha = lit;
+      for (let i = 0; i < shown; i++) {
+        const m = ent.motes[i];
+        const a = m.a + t * m.spd * (1 + (i % 3) * 0.15);
+        const rr = baseR * (0.3 + m.r * (1 + (1 - cohesion) * 0.8));
+        const mx = cx + Math.cos(a) * rr;
+        const my = cy + Math.sin(a) * rr * 0.82;
+        const rad = 0.9 + m.z * 1.4;
+        const col = pal[i % pal.length];
+        ctx.fillStyle = tint(col, 0.16 * lit);
+        ctx.beginPath();
+        ctx.arc(mx, my, rad * 1.3, 0, Math.PI * 2); // the soft wing-blur
+        ctx.fill();
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(mx, my, rad, 0, Math.PI * 2); // the crisp body
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
   }
 
   // The ecology overlay (V): the sim's spatial "why" made visible — each critter
