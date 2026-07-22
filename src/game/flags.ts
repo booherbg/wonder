@@ -23,3 +23,13 @@ export function resolveChains(param: string | null, stored: string | null): bool
   if (fromStored !== null) return fromStored;
   return true;
 }
+
+// The last island entered, remembered so the front door can offer "continue".
+// Written by main.ts on world entry (never for the title backdrop); read here.
+export const LAST_SEED_KEY = "wander.lastSeed";
+
+export function parseLastSeed(stored: string | null): number | null {
+  if (stored === null || stored === "") return null;
+  const n = Number(stored);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
