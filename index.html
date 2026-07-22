@@ -308,6 +308,10 @@
         margin-top: 26px; font: 10px var(--mono); letter-spacing: 0.04em;
         color: rgba(var(--lumen), 0.32); user-select: text;
       }
+      /* the front door is up: the backdrop plays on, but its HUD stays hidden */
+      body.titling #hud, body.titling #seed-label, body.titling #dev, body.titling #murmur {
+        display: none !important;
+      }
       #web {
         display: none;
         position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);

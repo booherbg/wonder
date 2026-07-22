@@ -21,7 +21,7 @@ import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
 import { Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { CHAINS_KEY, resolveChains } from "./flags";
+import { CHAINS_KEY, LAST_SEED_KEY, parseLastSeed, resolveChains } from "./flags";
 import {
   loadCritterJournal,
   loadJournal,
@@ -38,6 +38,7 @@ import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthol
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
+import { TitleRowId, TitleState, hideTitle, isTitleOpen, showTitle } from "../render/title";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
 import { SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
@@ -108,6 +109,26 @@ if (new URL(location.href).searchParams.has("sim")) {
 
 const SIM_MS = 2000; // one flora heartbeat every 2s
 const SWARM_WARM_MAX = 1000; // heartbeats the swarm layer lives through a ?warm fast-forward (bounded)
+
+const BACKDROP_SEED = 42; // a lush, high-diversity island; tuned by screenshot in Step 9
+const BACKDROP_WARM = 1200; // heartbeats pre-run so it greets you already alive
+
+let titleActive = false; // true only while the front door is up over its backdrop
+
+function readLastSeed(): number | null {
+  try {
+    return parseLastSeed(localStorage.getItem(LAST_SEED_KEY));
+  } catch {
+    return null;
+  }
+}
+function writeLastSeed(seed: number): void {
+  try {
+    localStorage.setItem(LAST_SEED_KEY, String(seed));
+  } catch {
+    // storage off
+  }
+}
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(v, hi));
@@ -694,6 +715,7 @@ let focusEase = FORCE_FOCUS ? 1 : 0; // 0 = the wide world .. 1 = leaned all the
 const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
 function persist(): void {
+  if (titleActive) return; // never autosave the title backdrop
   try {
     const s = packWorld(
       currentSeed,
@@ -766,6 +788,7 @@ function loadWorld(seed: number): void {
     }
   }
   currentSeed = seed;
+  if (!titleActive) writeLastSeed(seed); // the backdrop is not a played session
   census.reset(); // a new island begins its own history
   species = generatePlantSpecies(seed);
   if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
@@ -1316,45 +1339,85 @@ function openInspectAtPlayer(record = true): void {
   lastInspectY = player.y;
 }
 
-// explicit ?seed= loads exactly; only a truly fresh arrival is a floored search
-loadWorld(seedFromUrl() ?? newIslandSeed());
-// dev aid: ?at=tx,ty drops the wanderer at a tile (screenshot tours)
-const at = new URL(location.href).searchParams.get("at");
-if (at) {
-  const [tx, ty] = at.split(",").map(Number);
-  if (Number.isFinite(tx) && Number.isFinite(ty)) {
-    player.x = (tx + 0.5) * TILE_SIZE;
-    player.y = (ty + 0.5) * TILE_SIZE;
-  }
+// The front door: with no ?nomenu, boot a curated backdrop island and raise
+// the title over it; ?nomenu=1 skips straight to ordinary play (today's exact
+// dev/deep-link behavior, for screenshot tours and links that must land in a
+// world). titleActive is set FIRST, before the backdrop's loadWorld, so its
+// lastSeed write and persist() are both skipped for a session nobody played.
+const NOMENU = new URL(location.href).searchParams.has("nomenu");
+if (!NOMENU) {
+  titleActive = true;
+  document.body.classList.add("titling");
 }
+loadWorld(NOMENU ? (seedFromUrl() ?? newIslandSeed()) : BACKDROP_SEED);
 const renderer = new Renderer(canvas, map);
-// dev aid: ?inspect=1 opens the inspect panel on load (screenshot tours)
-if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
-// dev aid: ?journal=1 opens the almanac on load (screenshot tours)
-if (new URL(location.href).searchParams.has("journal")) openAlmanac();
-// dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
-if (new URL(location.href).searchParams.has("isles")) openIslePicker();
 
-// TEMPORARY (removed in Task 4): screenshot the title overlay over a live island
-if (new URL(location.href).searchParams.has("title")) {
-  import("../render/title").then(({ showTitle }) =>
-    showTitle(
-      { lastSeed: currentSeed, lastName: islandName(currentSeed), savedCount: 3 },
-      { choose: (id) => console.log("chose", id) },
-    ),
-  );
+if (NOMENU) {
+  // dev aid: ?at=tx,ty drops the wanderer at a tile (screenshot tours)
+  const at = new URL(location.href).searchParams.get("at");
+  if (at) {
+    const [tx, ty] = at.split(",").map(Number);
+    if (Number.isFinite(tx) && Number.isFinite(ty)) {
+      player.x = (tx + 0.5) * TILE_SIZE;
+      player.y = (ty + 0.5) * TILE_SIZE;
+    }
+  }
+  // dev aid: ?inspect=1 opens the inspect panel on load (screenshot tours)
+  if (new URL(location.href).searchParams.has("inspect")) openInspectAtPlayer();
+  // dev aid: ?journal=1 opens the almanac on load (screenshot tours)
+  if (new URL(location.href).searchParams.has("journal")) openAlmanac();
+  // dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
+  if (new URL(location.href).searchParams.has("isles")) openIslePicker();
+} else {
+  for (let i = 0; i < BACKDROP_WARM; i++) flora.simTick(); // greet the wanderer already alive
+  showTitle(currentTitleState(), { choose: onChoose });
 }
 
-// the very first arrival, ever: the field guide opens itself once, with a
-// line of welcome. after that it waits behind ? and never speaks unasked.
-const SEEN_KEY = "wander.seen";
-try {
-  if (!localStorage.getItem(SEEN_KEY)) {
-    localStorage.setItem(SEEN_KEY, "1");
-    openHelp(true);
+// the front door's state: the island last entered (if any, for "continue")
+// and how many isles are saved (the picker's size). Read fresh at mount and
+// at every re-mount, so a world entered mid-session shows up next time.
+function currentTitleState(): TitleState {
+  const last = readLastSeed();
+  return {
+    lastSeed: last,
+    lastName: last === null ? null : islandName(last),
+    savedCount: savedIndex().length,
+  };
+}
+
+function leaveTitle(): void {
+  titleActive = false;
+  document.body.classList.remove("titling");
+  hideTitle();
+}
+
+function onChoose(id: TitleRowId): void {
+  if (id === "sim") {
+    const u = new URL(location.href);
+    u.searchParams.set("sim", "1");
+    location.href = u.toString();
+    return;
   }
-} catch {
-  // storage unavailable: no welcome, but ? still answers
+  if (id === "guide") {
+    // over the backdrop: titleActive stays true, and frame() re-mounts the
+    // title itself once the guide closes (Esc or ?) — no keydown hook needed
+    hideTitle();
+    openHelp();
+    return;
+  }
+  leaveTitle(); // titleActive now false → the loads below record lastSeed + the camera follows the player
+  if (id === "continue") {
+    const s = readLastSeed();
+    if (s !== null) {
+      loadWorld(s);
+      renderer.setMap(map);
+    }
+  } else if (id === "new") {
+    loadWorld(newIslandSeed());
+    renderer.setMap(map);
+  } else if (id === "isles") {
+    openIslePicker(); // its pick handler loadWorld+setMap's; cancel lands you on the (playable) backdrop — acceptable v1
+  }
 }
 
 const keys = new Set<string>();
@@ -1616,6 +1679,13 @@ function openWebNow(): void {
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
+  // the front door swallows input while it's up; its own click handlers drive
+  // the rows, and the field guide (opened over the backdrop) still gets keys
+  // so Esc/? can close it back to the title
+  if (titleActive && !isHelpOpen()) {
+    e.preventDefault();
+    return;
+  }
   // the backpack is a modal: while it's open, keys drive its cursor, not the world
   if (isBackpackOpen()) {
     if (k === "arrowup" || k === "w") backpackMove(-1);
@@ -2211,7 +2281,7 @@ function frame(now: number): void {
   }
   // the sky's clock: wall time plus every night slept through
   const sky = now + skyOffset;
-  player.update(dt, input(), map);
+  if (!titleActive) player.update(dt, input(), map);
   // the fog-of-war map: crossing into a new tile inks it and the glance
   // around it — a handful of bit-sets on a crossing, nothing at all between
   const walkNowX = Math.floor(player.x / TILE_SIZE);
@@ -2356,18 +2426,28 @@ function frame(now: number): void {
   focusEase = easeToward(focusEase, focusOn ? 1 : 0, dt, 4);
   renderer.setZoom(1 + (FOCUS_ZOOM - 1) * focusEase);
   const focus = FOLLOW_BEAST && beast ? beast : player;
+  // while the front door is up, the camera drifts slowly over the backdrop
+  // island rather than following the (stationary) wanderer
+  const focusX = titleActive ? (map.width / 2) * TILE_SIZE + Math.sin(now / 9000) * 90 : focus.x;
+  const focusY = titleActive ? (map.height / 2) * TILE_SIZE + Math.cos(now / 11000) * 60 : focus.y;
   const camX = clamp(
-    focus.x - renderer.viewWidth / 2,
+    focusX - renderer.viewWidth / 2,
     0,
     map.width * TILE_SIZE - renderer.viewWidth,
   );
   const camY = clamp(
-    focus.y - renderer.viewHeight / 2,
+    focusY - renderer.viewHeight / 2,
     0,
     map.height * TILE_SIZE - renderer.viewHeight,
   );
   lastCamX = camX;
   lastCamY = camY;
+  // the title re-mounts itself the frame after the field guide closes (it was
+  // left hidden, not torn down, so Esc from the guide returns here with no
+  // keydown hooks needed)
+  if (titleActive && !isTitleOpen() && !isHelpOpen()) {
+    showTitle(currentTitleState(), { choose: onChoose });
+  }
   swarmLayer.animate(dt); // the clouds ease into orbit around their home blooms
   const darkness = darknessNow;
   if (darkness > 0.6) {
