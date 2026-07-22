@@ -562,7 +562,11 @@ home-lab/v2; title screen = *live rich-biome backdrop*; ambient roles = *opt-in,
 off by default*; pause = *halts the sim engine*; every introduced kind lands in
 the **drawer** with live status; **intent 2 (wild & evolutionary) is now a
 first-class layer** (roll foodchains, pressures panel, richness meter, curate
-emergent).
+emergent); **audience** = *dev-bench first, but open to anyone, and eventually
+fully polished for all players* (build for capability now, graduate to polish);
+**core content** = the plant/insect ecology
+([`2026-07-21-plant-insect-ecology-design.md`](2026-07-21-plant-insect-ecology-design.md)),
+built in isolation on the construct first, reconciled with live worlds later.
 
 ---
 
