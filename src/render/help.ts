@@ -1,4 +1,5 @@
 import { BEDROLL_COST, FIRE_COST } from "../game/materials";
+import { formatStamp } from "../version";
 
 // The field guide, kept behind ?: the verbs, the way to a camp, and a few
 // doors left ajar. A pocket card, not a curriculum — nothing in it is
@@ -206,6 +207,11 @@ export function openHelp(firstVisit = false): void {
   hint.className = "anth-hint";
   hint.textContent = "? or Esc to close";
   el.appendChild(hint);
+  // the build stamp — which version you're wandering, said quietly at the foot
+  const stamp = document.createElement("div");
+  stamp.className = "build-stamp";
+  stamp.textContent = formatStamp();
+  el.appendChild(stamp);
   el.style.display = "block";
   el.scrollTop = 0;
 }

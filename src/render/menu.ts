@@ -4,6 +4,8 @@
 // only the verbs you reach for constantly; the rest tucks in here, discoverable
 // without crowding the world.
 
+import { formatStamp } from "../version";
+
 export interface MenuAction {
   key: string; // the shortcut that also does this, shown on the row
   label: string;
@@ -193,6 +195,11 @@ export function openMenu(model: MenuModel, handlers: MenuHandlers): void {
   hint.className = "anth-hint";
   hint.textContent = "Tab or Esc to close";
   el.appendChild(hint);
+  // the build stamp — which version you're wandering, said quietly at the foot
+  const stamp = document.createElement("div");
+  stamp.className = "build-stamp";
+  stamp.textContent = formatStamp();
+  el.appendChild(stamp);
   el.style.display = "block";
   el.scrollTop = 0;
 }

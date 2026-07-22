@@ -236,6 +236,11 @@
       }
       #help .help-refs:hover { color: rgba(167, 236, 214, 1); text-decoration: underline; }
       #help .anth-hint { font: 11px monospace; opacity: 0.45; margin-top: 14px; text-align: center; }
+      /* the build stamp — which version you're playing, whispered at a card's foot */
+      #help .build-stamp, #menu .build-stamp {
+        font: 10px var(--mono); letter-spacing: 0.04em; text-align: center;
+        color: rgba(var(--lumen), 0.32); margin-top: 8px; user-select: text;
+      }
       #menu {
         display: none;
         position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
