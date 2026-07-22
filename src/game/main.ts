@@ -92,6 +92,7 @@ const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
+import { GenArgs } from "../render/forgeArgs";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -767,20 +768,21 @@ function loadSave(seed: number): SavedWorld | null {
   }
 }
 
-function loadWorld(seed: number): void {
+function loadWorld(seed: number, gen?: GenArgs): void {
   // the map you drew of the island you're leaving keeps its ink
   if (explored) saveExplored(currentSeed, explored, map.width, map.height);
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
   // dev aid + the seed of the future terrain slider: ?shape=twin|lowland|...
   const shapeParam = new URL(location.href).searchParams.get("shape");
-  const forcedShape = SHAPES.includes(shapeParam as IslandShape)
-    ? (shapeParam as IslandShape)
-    : undefined;
+  const urlShape = SHAPES.includes(shapeParam as IslandShape) ? (shapeParam as IslandShape) : undefined;
+  const cfg = gen?.config ?? DEFAULT_CONFIG;
+  const useShape = gen ? gen.shape : urlShape;
+  const useRelief = gen?.relief; // undefined ⇒ generate rolls it (today's behavior)
   let attempts = 0;
   for (;;) {
     try {
-      map = generate(seed, DEFAULT_CONFIG, forcedShape);
+      map = generate(seed, cfg, useShape, useRelief);
       break;
     } catch {
       if (++attempts >= 5) throw new Error("no island found on five voyages");
@@ -846,7 +848,9 @@ function loadWorld(seed: number): void {
   // dev aid + a seed of the "run N generations first" control: ?warm=3000
   // fast-forwards the island's life before you arrive (bounded, so a typo
   // can't hang the load)
-  const warm = Math.min(50000, Number(new URL(location.href).searchParams.get("warm") ?? 0) || 0);
+  const warm = gen
+    ? gen.warm
+    : Math.min(50000, Number(new URL(location.href).searchParams.get("warm") ?? 0) || 0);
   for (let i = 0; i < warm; i++) {
     flora.simTick();
     census.sample(flora.tick, flora.speciesCounts);
