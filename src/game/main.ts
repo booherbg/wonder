@@ -93,6 +93,14 @@ import { easeToward } from "../render/depth";
 import { OVERVIEW_COLORS } from "../render/palette";
 import { Renderer, SOW_LINGER_MS } from "../render/renderer";
 import { InputState, Player } from "./player";
+import { startSimulator } from "./simulator";
+
+// The Simulator (?sim=1) is a separate mode: it takes over the page entirely and
+// the normal island never boots, so ordinary play is byte-for-byte unchanged.
+// Everything below is the game, run only when we're NOT in the Simulator.
+if (new URL(location.href).searchParams.has("sim")) {
+  startSimulator();
+} else {
 
 const SIM_MS = 2000; // one flora heartbeat every 2s
 
@@ -2123,3 +2131,5 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+} // end normal-play boot (skipped in ?sim=1 Simulator mode)

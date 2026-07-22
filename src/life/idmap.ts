@@ -99,9 +99,11 @@ export function resemblance(sensor: IdMap, flowerMap: IdMap): number {
 }
 
 /** Render a map to per-cell CSS colours (neutral = a dim ground tone). The creature's
- *  visible colours are derived from its map — genome → look. */
+ *  visible colours are derived from its map — genome → look. `hsl` takes 0..1 for every
+ *  channel, so hues (kept in degrees for readability above) divide down by 360. */
 export function appearanceColors(map: IdMap): string[] {
   const out: string[] = new Array(MAP_CELLS);
-  for (let i = 0; i < MAP_CELLS; i++) out[i] = map[i] === 0 ? hsl(200, 12, 14) : hsl(HUES[map[i]], 62, 58);
+  for (let i = 0; i < MAP_CELLS; i++)
+    out[i] = map[i] === 0 ? hsl(200 / 360, 0.12, 0.14) : hsl(HUES[map[i]] / 360, 0.62, 0.58);
   return out;
 }
