@@ -1033,6 +1033,21 @@ function savedIndex(): number[] {
   }
 }
 
+// The TRUE count of genuinely-saved worlds — unlike savedIndex(), this never
+// injects currentSeed. savedIndex()'s "the island underfoot counts too" rule
+// is right during ordinary play but wrong for the front door: while titling,
+// currentSeed is the backdrop, which is never a played session.
+function savedWorldCount(): number {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0).length
+      : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function openIslePicker(): void {
   localStorage.setItem("wander.pickerSeen", "1"); // the way back has been found
   persist(); // the island underfoot takes its place in the ledger first
@@ -1381,7 +1396,7 @@ function currentTitleState(): TitleState {
   return {
     lastSeed: last,
     lastName: last === null ? null : islandName(last),
-    savedCount: savedIndex().length,
+    savedCount: savedWorldCount(),
   };
 }
 
@@ -1394,6 +1409,7 @@ function leaveTitle(): void {
 function onChoose(id: TitleRowId): void {
   if (id === "sim") {
     const u = new URL(location.href);
+    u.searchParams.delete("seed"); // the backdrop's loadWorld wrote ?seed=42 — don't leak it into the sim
     u.searchParams.set("sim", "1");
     location.href = u.toString();
     return;
@@ -1405,7 +1421,14 @@ function onChoose(id: TitleRowId): void {
     openHelp();
     return;
   }
-  leaveTitle(); // titleActive now false → the loads below record lastSeed + the camera follows the player
+  if (id === "isles") {
+    // open the picker with titleActive STILL true, so its lead-in persist() is
+    // skipped — the backdrop is never written to the saved-worlds ledger.
+    openIslePicker(); // its pick handler loadWorld+setMap's; cancel lands you on the (playable) backdrop
+    leaveTitle();
+    return;
+  }
+  leaveTitle(); // continue/new: a real session now — loadWorld records lastSeed, the camera follows the player
   if (id === "continue") {
     const s = readLastSeed();
     if (s !== null) {
@@ -1415,8 +1438,6 @@ function onChoose(id: TitleRowId): void {
   } else if (id === "new") {
     loadWorld(newIslandSeed());
     renderer.setMap(map);
-  } else if (id === "isles") {
-    openIslePicker(); // its pick handler loadWorld+setMap's; cancel lands you on the (playable) backdrop — acceptable v1
   }
 }
 
@@ -1908,6 +1929,7 @@ window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 window.addEventListener(
   "wheel",
   (e) => {
+    if (titleActive) return; // the front door swallows input too
     // let an open card scroll; the wheel only cycles the hotbar out in the world
     if (aPanelIsOpen()) return;
     bar = cycleSlot(bar, e.deltaY > 0 ? 1 : -1);
@@ -1954,7 +1976,7 @@ canvas.addEventListener("click", (e) => {
 });
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {
-  if (explored) saveExplored(currentSeed, explored, map.width, map.height);
+  if (!titleActive && explored) saveExplored(currentSeed, explored, map.width, map.height);
 });
 
 function input(): InputState {
@@ -2371,7 +2393,7 @@ function frame(now: number): void {
     // the walked map is written only when fresh ground was seen
     if (explored && exploredDirty) {
       exploredDirty = false;
-      saveExplored(currentSeed, explored, map.width, map.height);
+      if (!titleActive) saveExplored(currentSeed, explored, map.width, map.height);
     }
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
@@ -2476,7 +2498,9 @@ function frame(now: number): void {
     },
     sky,
   );
-  drawMinimap(); // the little island map + basecamp star, over the scene
+  // the corner minimap is drawn straight onto the canvas (not a DOM node the
+  // titling CSS can hide) — gate it here so the front door reads clean
+  if (!titleActive) drawMinimap(); // the little island map + basecamp star, over the scene
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
