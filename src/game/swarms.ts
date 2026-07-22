@@ -15,7 +15,7 @@
 // therefore home on the very blooms the butterflies visit.
 
 import { makeRng, Rng } from "../core/rng";
-import { IdMap, MAP_CELLS, appearanceColors, resemblance } from "../life/idmap";
+import { IdMap, MAP_CELLS, appearanceColors, metabolicEfficiency, resemblance } from "../life/idmap";
 import { Flower, Swarm, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm } from "../life/genome";
@@ -36,6 +36,25 @@ const LIVELY_POP = 38; // a swarm arrives already a lush cloud, not a lone speck
 const HOME_SCAN_PX = 10 * TILE_SIZE; // how far a swarm looks for a flowering plant to work
 const RING_MIN_PX = 1.5 * TILE_SIZE; // a well-adapted swarm hugs its bloom this close
 const RING_RANGE_PX = 1.7 * TILE_SIZE; // a poorly-adapted one ranges out this much further
+
+// ── pollination (the reciprocal boom) ─────────────────────────────────────────
+// The payoff the plant gets back. A well-matched, well-fed swarm now and then
+// POLLINATES the flower it works — it trips that plant's ordinary propagation
+// (the very drifted, same-species reseed a disperser critter triggers, via
+// flora.propagate), so a faithful insect+flower pair spreads faster. It's a
+// facultative accelerant, never a lifeline: flora keeps self-seeding on its own
+// (flora.simTick), so a flower with no swarm still persists — just spreads
+// slower. Gated three ways so it stays a gentle nudge, never a firehose:
+//   • a metabolic-match floor — only a swarm genuinely adapted to its flower
+//     pollinates; a crumbs-fed stray does not,
+//   • a per-swarm chance that climbs with match quality (squared) × how full the
+//     cloud is, so the best-fed, best-fit pairs boom and the rest barely nudge,
+//   • an island-wide cap on pollination events per heartbeat.
+// Bounded on the far side too: propagate routes through addPlant, so per-tile +
+// global caps hold the ceiling — a saturated neighbourhood simply refuses.
+const POLLINATE_MATCH_MIN = 0.3; // metabolic efficiency a swarm needs before it pollinates at all
+const POLLINATE_CHANCE = 0.5; // scales the per-swarm, per-heartbeat pollination probability
+const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination events each heartbeat
 
 // A mote is one drawn insect: bookkeeping for the render only (the gene pool is
 // the sim). Its orbit within the cloud animates on the wall clock.
@@ -174,10 +193,11 @@ export class SwarmLayer {
     }
   }
 
-  // The nearest flowering plant to a swarm — its home this heartbeat. Falls back
-  // to the last home if none is in reach (a bloom may have died under it), so a
-  // swarm keeps its bond to a patch rather than blinking away.
-  private nearestBloom(ent: WorldSwarm, flora: Flora): WorldSwarm["home"] {
+  // The nearest flowering plant to a swarm — the live bloom it works this
+  // heartbeat, handed back as the actual Plant so pollination can trip its
+  // propagation. Null if none is in reach (a bloom may have died under the
+  // cloud); the caller keeps the swarm's last home in that case.
+  private nearestBloomPlant(ent: WorldSwarm, flora: Flora): Plant | null {
     let best: Plant | null = null;
     let bd = Infinity;
     for (const p of flora.plantsNear(ent.x, ent.y, HOME_SCAN_PX)) {
@@ -188,18 +208,35 @@ export class SwarmLayer {
         best = p;
       }
     }
-    return best ? { x: best.x, y: best.y, species: best.species } : ent.home;
+    return best;
   }
 
   // One island heartbeat: each swarm homes on its nearest flowering plant and
-  // feeds + adapts there via the tested core (no predation in v1). Deterministic
-  // — only the swarm salt's Rng, never flora's. Reading flora, never writing it.
+  // feeds + adapts there via the tested core (no predation in v1), and a
+  // well-matched, well-fed swarm now and then POLLINATES that plant — tripping
+  // its ordinary propagation so a faithful pair spreads faster (the reciprocal
+  // boom). Deterministic: the pollination *decision* is drawn only from the
+  // swarm salt's Rng; the reseed placement reuses flora's own propagate. Bounded
+  // + facultative (see the pollination constants) — flora self-seeds without us.
   tick(flora: Flora): void {
+    let pollinations = 0; // island-wide events this heartbeat, held under the cap
     for (const ent of this.swarms) {
-      ent.home = this.nearestBloom(ent, flora);
+      const host = this.nearestBloomPlant(ent, flora);
+      if (host) ent.home = { x: host.x, y: host.y, species: host.species };
+      // no bloom in reach: keep the bond to the last patch rather than blink away
       if (!ent.home) continue;
       const flower = this.flowers.get(ent.home.species);
-      if (flower) stepSwarm(ent.sw, flower, this.rng);
+      if (!flower) continue;
+      stepSwarm(ent.sw, flower, this.rng);
+      if (host && pollinations < MAX_POLLINATIONS_PER_TICK) {
+        const match = metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
+        if (match >= POLLINATE_MATCH_MIN) {
+          const fill = ent.sw.population / ent.sw.cap; // a fuller cloud pollinates more
+          if (this.rng() < POLLINATE_CHANCE * match * match * fill) {
+            if (flora.propagate(host)) pollinations++; // reuse the tested reseed path
+          }
+        }
+      }
     }
   }
 

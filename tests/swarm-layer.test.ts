@@ -121,24 +121,58 @@ test("the swarm layer is deterministic from the seed", () => {
   }
 });
 
-test("the swarm layer never disturbs the flora it rides on (seed-safe)", () => {
+test("the swarm layer's construction never perturbs the flora it scatters over (seed-safe)", () => {
   const map = generate(SEED);
   const species = generatePlantSpecies(SEED);
   // a control flora, untouched by any swarm layer
   const control = new Flora(map, species, SEED);
   const controlSnapshot = control.all.map((p) => `${p.species}:${p.x}:${p.y}`).join("|");
 
-  // a second flora that carries a swarm layer, ticked hard
+  // a second flora that carries a swarm layer, built + animated
   const map2 = generate(SEED);
   const species2 = generatePlantSpecies(SEED);
   const flora = new Flora(map2, species2, SEED);
   const before = flora.all.map((p) => `${p.species}:${p.x}:${p.y}`).join("|");
   const layer = new SwarmLayer(SEED, species2, flora);
   layer.animate(0.5);
+
+  // building the layer + animating reads flora but never writes it — the layer
+  // lives off its own salted Rng, so worldgen/flora scatter byte-identically
+  // with or without it (the pollination write only ever happens on tick, below)
+  expect(flora.all.map((p) => `${p.species}:${p.x}:${p.y}`).join("|")).toBe(before);
+  expect(before).toBe(controlSnapshot);
+});
+
+test("pollination only ever ADDS flowering plants — bounded, additive, never harms flora", () => {
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(generate(SEED), species, SEED);
+  const layer = new SwarmLayer(SEED, species, flora);
+  // pin every swarm to a perfect match + a full cloud so pollination fires hard
+  for (const ent of layer.swarms) {
+    const flower = layer.flowers.get(ent.home!.species)!;
+    ent.sw.pool = ent.sw.pool.map(() => flower.map.slice());
+    ent.sw.sensor = flower.map.slice();
+    ent.sw.population = ent.sw.cap;
+  }
+  const originals = new Set(flora.all);
+  const hosted = new Set(layer.flowers.keys()); // the flowering (pollinatable) species
+  const nonHostBefore = new Map<number, number>();
+  for (const [sp, n] of flora.speciesCounts) if (!hosted.has(sp)) nonHostBefore.set(sp, n);
+  const before = flora.count;
+
   for (let t = 0; t < 200; t++) layer.tick(flora);
 
-  // flora is byte-identical to before the swarm layer touched it...
-  expect(flora.all.map((p) => `${p.species}:${p.x}:${p.y}`).join("|")).toBe(before);
-  // ...and identical to a flora that never had a swarm layer at all
-  expect(before).toBe(controlSnapshot);
+  // never removes: every original plant still stands, unharmed
+  for (const p of originals) expect(flora.all.includes(p)).toBe(true);
+  // it grew — the reciprocal boom put more flowers on the island...
+  expect(flora.count).toBeGreaterThan(before);
+  // ...and ONLY through the hosted (flowering) species: a non-flowering kind,
+  // which no swarm works, is left exactly as it was — pollination is targeted
+  for (const [sp, n] of flora.speciesCounts) {
+    if (!hosted.has(sp)) expect(n).toBe(nonHostBefore.get(sp) ?? 0);
+  }
+  // finite space is still the whole ceiling — no tile over the per-tile cap
+  for (const [, bucket] of flora.byTile) {
+    expect(bucket.length).toBeLessThanOrEqual(flora.tuning.maxPerTile);
+  }
 });

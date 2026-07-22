@@ -8,7 +8,7 @@ import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
 import { MOTES_MAX, SwarmLayer, swarmPalette, tint } from "../game/swarms";
-import { Dragonflies, FishSchool, FrogPatch, Pollinators, drawClouds, drawForegroundMotes } from "./ambient";
+import { Dragonflies, FishSchool, FrogPatch, drawClouds, drawForegroundMotes } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from "./depth";
 import { TILE_SIZE } from "../world/config";
@@ -66,7 +66,6 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private atlas: HTMLCanvasElement;
   private playerSprite: HTMLCanvasElement;
-  private pollinators = new Pollinators();
   private fishes = new FishSchool();
   private frogs = new FrogPatch();
   private dragonflies = new Dragonflies();
@@ -823,19 +822,10 @@ export class Renderer {
     this.dragonflies.update(map, camX, camY, this.viewWidth, this.viewHeight, darkness, timeMs);
     this.dragonflies.draw(ctx, camX, camY);
 
-    // butterflies and moths ride above everything, even the dark
-    this.pollinators.update(
-      scene.flora,
-      camX,
-      camY,
-      this.viewWidth,
-      this.viewHeight,
-      darkness,
-      timeMs,
-    );
-    this.pollinators.draw(ctx, camX, camY, darkness);
-
-    // the insect swarms: cohesive clouds of individually-coloured motes hovering
+    // the insect swarms ARE the island's pollinators now — the cosmetic
+    // butterflies that used to ride above the blooms have been retired so the
+    // world shows one kind of pollinator, the real one:
+    // cohesive clouds of individually-coloured motes hovering
     // over the blooms they work, each mote pulled from the swarm's own gene pool
     // so a cloud's palette drifts toward its flower's as it adapts. Above the
     // scene with the other aerial life, under the foreground fluff and lens.

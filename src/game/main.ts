@@ -104,6 +104,7 @@ if (new URL(location.href).searchParams.has("sim")) {
 } else {
 
 const SIM_MS = 2000; // one flora heartbeat every 2s
+const SWARM_WARM_MAX = 1000; // heartbeats the swarm layer lives through a ?warm fast-forward (bounded)
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(v, hi));
@@ -782,6 +783,11 @@ function loadWorld(seed: number): void {
     x: (map.spawn.x + 0.5) * TILE_SIZE,
     y: (map.spawn.y + 0.5) * TILE_SIZE,
   });
+  // let the swarms live the tail of a ?warm fast-forward too (the flora warm
+  // above ran before they existed), so a well-matched cloud's pollination has
+  // had time to thicken the flowers it works before the wanderer arrives —
+  // the reciprocal boom, visible on landing. Bounded, and a no-op when warm=0.
+  for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) swarmLayer.tick(flora);
   clearCritterSpriteCache();
   simAcc = 0;
   saveAcc = 0;
