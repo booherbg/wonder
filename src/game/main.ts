@@ -1335,6 +1335,16 @@ if (new URL(location.href).searchParams.has("journal")) openAlmanac();
 // dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
 if (new URL(location.href).searchParams.has("isles")) openIslePicker();
 
+// TEMPORARY (removed in Task 4): screenshot the title overlay over a live island
+if (new URL(location.href).searchParams.has("title")) {
+  import("../render/title").then(({ showTitle }) =>
+    showTitle(
+      { lastSeed: currentSeed, lastName: islandName(currentSeed), savedCount: 3 },
+      { choose: (id) => console.log("chose", id) },
+    ),
+  );
+}
+
 // the very first arrival, ever: the field guide opens itself once, with a
 // line of welcome. after that it waits behind ? and never speaks unasked.
 const SEEN_KEY = "wander.seen";

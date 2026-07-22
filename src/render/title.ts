@@ -1,6 +1,8 @@
 // The front door (title screen): the rows are data (this file, testable),
 // the screen is DOM (below, Task 3) — the split menu.ts uses.
 
+import { formatStamp } from "../version";
+
 export type TitleRowId = "continue" | "new" | "isles" | "sim" | "guide";
 
 export interface TitleRow {
@@ -26,4 +28,36 @@ export function titleRows(state: TitleState): TitleRow[] {
   rows.push({ id: "sim", label: "the simulator" });
   rows.push({ id: "guide", label: "the field guide" });
   return rows;
+}
+
+export interface TitleHandlers {
+  choose: (id: TitleRowId) => void;
+}
+
+function panel(): HTMLElement {
+  return document.getElementById("title")!;
+}
+
+export function isTitleOpen(): boolean {
+  return panel().classList.contains("on");
+}
+
+export function hideTitle(): void {
+  panel().classList.remove("on");
+}
+
+// The front door, mounted: the rows for this wanderer's state, each a door.
+export function showTitle(state: TitleState, handlers: TitleHandlers): void {
+  const el = panel();
+  const rows = el.querySelector(".title-rows") as HTMLElement;
+  rows.innerHTML = "";
+  for (const r of titleRows(state)) {
+    const row = document.createElement("div");
+    row.className = "title-row";
+    row.textContent = r.label;
+    row.addEventListener("click", () => handlers.choose(r.id));
+    rows.appendChild(row);
+  }
+  (el.querySelector(".title-stamp") as HTMLElement).textContent = formatStamp();
+  el.classList.add("on");
 }
