@@ -1400,6 +1400,21 @@ if (NOMENU) {
   showTitle(currentTitleState(), { choose: onChoose });
 }
 
+// dev aid: ?forge=1 opens the forge panel (screenshot tours, over the title
+// or the world alike) — Task 3 of FORGE; the mount and its stub handlers go
+// away in Task 5 once the real launcher wires it up.
+if (new URL(location.href).searchParams.has("forge")) {
+  import("../render/forge").then(({ openForge }) =>
+    import("../render/forgeArgs").then(({ defaultForgeState }) =>
+      openForge(defaultForgeState(currentSeed), {
+        preview: () => {},
+        generate: () => {},
+        rerollSeed: () => 12345,
+      }),
+    ),
+  );
+}
+
 // the front door's state: the island last entered (if any, for "continue")
 // and how many isles are saved (the picker's size). Read fresh at mount and
 // at every re-mount, so a world entered mid-session shows up next time.

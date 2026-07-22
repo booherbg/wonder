@@ -460,6 +460,81 @@
       #map .map-legend .star { color: #ffd45e; }
       #map .map-legend .till { color: rgb(var(--lumen)); }
       #map .map-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); margin-top: 8px; }
+      /* the forge — shape a new island before you sail it */
+      #forge {
+        display: none;
+        position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        z-index: 21; /* the title screen (z-index 20) must not bleed through */
+        width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
+        background: var(--panel); box-shadow: var(--frame);
+        border-radius: var(--radius);
+        padding: 18px 22px; color: var(--ink); font-family: var(--serif);
+      }
+      #forge.on { display: block; }
+      #forge .forge-title { font-variant: small-caps; letter-spacing: 0.08em; font-size: 19px; color: var(--ink-bright); }
+      #forge .forge-epigraph {
+        font: italic 12px Georgia, serif; opacity: 0.5;
+        margin: 4px 0 14px; padding-bottom: 10px;
+        border-bottom: 1px solid rgba(var(--lumen), 0.14);
+      }
+      #forge .forge-preview { display: flex; justify-content: center; margin-bottom: 14px; }
+      #forge .forge-mini {
+        width: 180px; height: 180px; image-rendering: pixelated;
+        border-radius: 3px; background: rgba(var(--abyss), 0.5);
+        box-shadow: 0 0 0 1px rgba(var(--lumen), 0.2), inset 0 0 24px rgba(0, 0, 0, 0.4);
+      }
+      #forge .forge-head { display: flex; flex-direction: column; gap: 2px; }
+      #forge .forge-row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; padding: 6px 2px;
+      }
+      #forge .forge-row + .forge-row { border-top: 1px solid rgba(var(--lumen), 0.08); }
+      #forge .forge-label { font: 13px var(--serif); color: rgba(228, 236, 242, 0.72); flex: 0 0 auto; }
+      #forge .forge-inline { display: flex; align-items: center; gap: 8px; }
+      #forge .forge-num, #forge .forge-select {
+        font: 13px var(--mono); color: var(--ink-bright);
+        background: rgba(8, 15, 22, 0.6); border: 1px solid rgba(var(--lumen), 0.22);
+        border-radius: 4px; padding: 4px 7px;
+      }
+      #forge .forge-num { width: 84px; }
+      #forge .forge-num.forge-seed { width: 108px; }
+      #forge .forge-num.forge-size { width: 66px; }
+      #forge .forge-select { min-width: 190px; }
+      #forge .forge-num:focus, #forge .forge-select:focus { outline: none; border-color: rgb(var(--lumen)); }
+      #forge .forge-by { opacity: 0.5; font: 12px var(--mono); }
+      #forge .forge-range { width: 190px; accent-color: rgb(var(--lumen)); }
+      #forge .forge-readout { font: 11px var(--mono); color: rgba(228, 236, 242, 0.55); min-width: 74px; text-align: right; }
+      #forge .forge-btn {
+        font: 12px var(--mono); color: var(--ink);
+        background: rgba(var(--lumen), 0.08); border: 1px solid rgba(var(--lumen), 0.28);
+        border-radius: 5px; padding: 5px 10px; cursor: pointer;
+      }
+      #forge .forge-btn:hover { background: rgba(var(--lumen), 0.16); }
+      #forge .forge-reroll { padding: 4px 9px; font-size: 13px; }
+      #forge .forge-fine { margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(var(--lumen), 0.14); }
+      #forge .forge-fine summary {
+        cursor: pointer; font: 11px var(--mono); letter-spacing: 0.2em; text-transform: uppercase;
+        color: rgb(var(--lumen)); opacity: 0.8; user-select: none;
+      }
+      #forge .forge-fine summary:hover { opacity: 1; }
+      #forge .forge-fine-title {
+        font: 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+        color: rgba(228, 236, 242, 0.42); margin: 14px 0 2px;
+      }
+      #forge .forge-fine-title:first-of-type { margin-top: 12px; }
+      #forge .forge-fine-row { padding: 4px 2px; }
+      #forge .forge-fine-row .forge-label { font: 12px var(--serif); opacity: 0.62; }
+      #forge .forge-fine-row .forge-num { width: 96px; }
+      #forge .forge-actions {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+        margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(var(--lumen), 0.14);
+      }
+      #forge .forge-act.forge-generate {
+        color: rgb(var(--lumen)); border-color: rgba(var(--lumen), 0.5);
+        background: rgba(var(--lumen), 0.14);
+      }
+      #forge .forge-act.forge-generate:hover { background: rgba(var(--lumen), 0.22); }
+      #forge .forge-hint { margin-left: auto; font: 11px var(--mono); color: rgba(228, 236, 242, 0.4); }
       /* the ecology overlay legend (V) */
       #ovlegend {
         display: none; position: fixed; left: 12px; top: 12px; z-index: 6;
@@ -495,6 +570,7 @@
     <div id="backpack"></div>
     <div id="map"></div>
     <div id="ovlegend"></div>
+    <div id="forge"></div>
     <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>
