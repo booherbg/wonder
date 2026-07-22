@@ -36,9 +36,9 @@ import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
-import { SwarmLayer } from "./swarms";
+import { SwarmLayer, swarmPalette } from "./swarms";
 import { MenuHandlers, MenuModel, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
-import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
+import { PollinationLink, WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
 import {
@@ -171,6 +171,29 @@ let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
 // the living history: how many of each plant kind, sampled over island-time
 const census = new CensusLog();
+// and the pollinators' history: total swarm population over island-time, a light
+// rolling sampler on its OWN advancing clock (swarms tick during ?warm and play,
+// never while you're away), mirroring the census cadence so the two charts read
+// on the same footing. Reset with the island; sampled beside each swarm heartbeat.
+const SWARM_SAMPLE_INTERVAL = 40; // ticks between samples, matching CensusLog's default
+const SWARM_HISTORY_CAP = 100; // samples kept — a bounded history like the census
+const swarmHistory: number[] = [];
+let swarmSampleTick = 0;
+let lastSwarmSample = -Infinity;
+function resetSwarmHistory(): void {
+  swarmHistory.length = 0;
+  swarmSampleTick = 0;
+  lastSwarmSample = -Infinity;
+}
+function sampleSwarms(): void {
+  swarmSampleTick++;
+  if (swarmSampleTick - lastSwarmSample < SWARM_SAMPLE_INTERVAL) return;
+  lastSwarmSample = swarmSampleTick;
+  let pop = 0;
+  for (const e of swarmLayer.swarms) pop += e.sw.population;
+  swarmHistory.push(Math.round(pop));
+  if (swarmHistory.length > SWARM_HISTORY_CAP) swarmHistory.shift();
+}
 // this world's identity: a name you gave it, and the real time you've spent here
 let worldName: string | null = null;
 let worldPlayMs = 0;
@@ -482,6 +505,7 @@ function buildChartsView(): ChartsView {
       text: `${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}`,
       closes: l.closes,
     }));
+  const pol = buildPollen();
   return {
     name: worldName ?? "this island",
     timeLabel: `${fmtDur(worldPlayMs)} here`,
@@ -494,6 +518,8 @@ function buildChartsView(): ChartsView {
     biomes: biomeMakeup(),
     substrates: flora.substrates.length,
     germinations: flora.germinations,
+    pollinators: { swarms: pol.cloudsTotal, population: pol.population, species: pol.species },
+    swarmCounts: [...swarmHistory],
   };
 }
 
@@ -787,7 +813,13 @@ function loadWorld(seed: number): void {
   // above ran before they existed), so a well-matched cloud's pollination has
   // had time to thicken the flowers it works before the wanderer arrives —
   // the reciprocal boom, visible on landing. Bounded, and a no-op when warm=0.
-  for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) swarmLayer.tick(flora);
+  // Sample the pollinators' history as they warm, so the ledger's swarm chart
+  // already carries a curve on landing (mirrors the census warm above).
+  resetSwarmHistory();
+  for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) {
+    swarmLayer.tick(flora);
+    sampleSwarms();
+  }
   clearCritterSpriteCache();
   simAcc = 0;
   saveAcc = 0;
@@ -1417,10 +1449,73 @@ function openMenuNow(): void {
   openMenu(buildMenuModel(), menuHandlers);
 }
 
-// The player's web view: the chains as drawable links — the species themselves,
-// grounded with how many live on the island now and whether a byproduct of the
-// source is on the ground this moment (so you can go watch the loop close).
-// Ordered live-first, then loops, then the rest; capped so the panel reads.
+// The pollination web: the island's insect swarms grouped by the flowering kind
+// they work, each edge grounded with live counts (insects aloft; the flowering
+// kind's plants now) and coloured by the swarm's real adaptation. This is the
+// PRIMARY relationship both the living web (C) and the ledger (G) now lead with.
+// Grouped by host species so the clouds working one bloom read as a single edge.
+function buildPollen(): {
+  links: PollinationLink[];
+  cloudsTotal: number;
+  population: number;
+  species: number;
+} {
+  interface Group {
+    host: PlantSpecies;
+    population: number;
+    swarmCount: number;
+    resSum: number;
+    bestPop: number;
+    colors: string[];
+  }
+  const groups = new Map<number, Group>();
+  let population = 0;
+  for (const ent of swarmLayer.swarms) {
+    population += ent.sw.population;
+    // inspect gives us the resemblance + population + a live host in one call
+    const info = swarmLayer.inspect(ent, species);
+    if (!info || !ent.home) continue;
+    const sid = ent.home.species;
+    const host = species[sid];
+    if (!host) continue;
+    let g = groups.get(sid);
+    if (!g) {
+      g = { host, population: 0, swarmCount: 0, resSum: 0, bestPop: -1, colors: [] };
+      groups.set(sid, g);
+    }
+    g.population += info.population;
+    g.swarmCount++;
+    g.resSum += info.resemblance;
+    // the most-populous cloud carries the group's palette — its adaptation, shown
+    if (info.population > g.bestPop) {
+      g.bestPop = info.population;
+      g.colors = swarmPalette(ent.sw, 5);
+    }
+  }
+  const links: PollinationLink[] = [...groups.values()].map((g) => ({
+    host: g.host,
+    hostName: g.host.name,
+    hostCount: flora.speciesCounts.get(g.host.id) ?? 0,
+    swarmCount: g.swarmCount,
+    population: Math.round(g.population),
+    colors: g.colors,
+    matched: g.resSum / g.swarmCount >= 0.5, // visibly like the flower → pollinates
+  }));
+  // matched-first, then the biggest booms — the living headline leads
+  links.sort((a, b) => Number(b.matched) - Number(a.matched) || b.population - a.population);
+  return {
+    links,
+    cloudsTotal: swarmLayer.swarms.length,
+    population: Math.round(population),
+    species: links.length,
+  };
+}
+
+// The player's web view: the pollinators leading, then the byproduct chains as
+// drawable links — the species themselves, grounded with how many live on the
+// island now and whether a byproduct of the source is on the ground this moment
+// (so you can go watch the loop close). Ordered live-first, then loops, then the
+// rest; capped so the panel reads.
 function buildWebView(): WebView {
   const count = (id: number): number => flora.speciesCounts.get(id) ?? 0;
   // A chain is truly firing only where a substrate the FEEDER could actually
@@ -1444,7 +1539,9 @@ function buildWebView(): WebView {
   }));
   links.sort((a, b) => Number(b.live) - Number(a.live) || Number(b.closes) - Number(a.closes));
   const CAP = 8;
+  const POLLEN_CAP = 6;
   const score = Math.round(chainScoreNow());
+  const pol = buildPollen();
   return {
     island: worldName ?? islandName(currentSeed),
     score,
@@ -1452,6 +1549,10 @@ function buildWebView(): WebView {
     spreaders: critterSpecies.filter((c) => c.role === "disperser").length,
     grazers: critterSpecies.filter((c) => c.role === "grazer").length,
     kinds: [...flora.speciesCounts.values()].filter((n) => n > 0).length,
+    pollen: pol.links.slice(0, POLLEN_CAP),
+    pollenMore: Math.max(0, pol.links.length - POLLEN_CAP),
+    swarmClouds: pol.cloudsTotal,
+    bloomsWorked: pol.species,
     links: links.slice(0, CAP),
     more: Math.max(0, links.length - CAP),
   };
@@ -2060,6 +2161,7 @@ function frame(now: number): void {
       aurora: auroraTonight && darknessAt(sky) > 0.6,
     });
     swarmLayer.tick(flora); // each heartbeat, every swarm feeds + adapts on its nearest bloom
+    sampleSwarms(); // and the pollinators' history keeps pace with the census
     census.sample(flora.tick, flora.speciesCounts);
     simAcc -= SIM_MS;
   }

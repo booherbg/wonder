@@ -25,6 +25,8 @@ export interface ChartsView {
   biomes: { name: string; share: number; color: string }[];
   substrates: number;
   germinations: number;
+  pollinators: { swarms: number; population: number; species: number }; // insect swarms working the blooms now
+  swarmCounts: number[]; // total swarm population over island-time (oldest → newest)
 }
 
 // genome hue → a legible line colour (mid-light, saturated enough to read on the
@@ -43,9 +45,11 @@ function statTiles(v: ChartsView): string {
     ${tile(v.totals.kinds, "living kinds")}
     ${tile(v.totals.arose, "arose here")}
     ${tile(v.totals.lost, "lost")}
-    ${tile(v.chains.chains, "web links")}
+    ${tile(v.pollinators.swarms, "swarms aloft")}
     ${tile(v.richness.word, `richness · ${v.richness.score}`, true)}
   </div>`;
+  // note: the byproduct-chain link count still reads in the food-web section below
+  // (demoted, not lost) — the tile row now leads with the living pollinators.
 }
 
 // A multi-series line chart: each dominant lineage in its own plant-colour,
@@ -148,6 +152,63 @@ function biomeBar(v: ChartsView): string {
   return `<div class="ch-bar">${segs}</div>${legend ? `<div class="ch-legend">${legend}</div>` : ""}`;
 }
 
+// The pollinators aloft: a caption of the swarms working the blooms right now,
+// and — once there's enough history — a single gold line of total swarm
+// population over island-time, mirroring the census population chart's shape so
+// the reciprocal boom (a well-matched pair swelling) actually reads.
+function swarmChart(v: ChartsView): string {
+  const p = v.pollinators;
+  if (p.swarms === 0 && v.swarmCounts.length === 0)
+    return `<div class="ch-chain muted">no swarms aloft — this island's blooms still wait for pollinators</div>`;
+  const caption =
+    `<div class="ch-web-stats">` +
+    `<span><b>${p.swarms}</b> swarms aloft</span>` +
+    `<span><b>${p.population.toLocaleString()}</b> insects</span>` +
+    `<span>working <b>${p.species}</b> ${p.species === 1 ? "bloom" : "blooms"}</span>` +
+    `</div>`;
+  const counts = v.swarmCounts;
+  if (counts.length < 2) return caption; // not enough history for a line yet
+
+  const W = 700;
+  const H = 150;
+  const padL = 46;
+  const padR = 20;
+  const padT = 12;
+  const padB = 22;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = counts.length;
+  const maxY = Math.max(1, ...counts);
+  const x = (i: number) => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
+  const y = (c: number) => padT + plotH - Math.min(1, c / maxY) * plotH;
+  const GOLD = "#f4c979"; // the firefly gold — a pollinator's hue, set apart from the plant lines
+
+  const gridVals = [0, Math.round(maxY / 2), maxY];
+  const grid = gridVals
+    .map(
+      (gv) =>
+        `<line x1="${padL}" y1="${y(gv)}" x2="${padL + plotW}" y2="${y(gv)}" class="ch-grid"/>` +
+        `<text x="${padL - 6}" y="${y(gv) + 3}" class="ch-axis" text-anchor="end">${gv.toLocaleString()}</text>`,
+    )
+    .join("");
+  const d = counts.map((c, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(" ");
+  const area = `${d} L${x(n - 1).toFixed(1)} ${y(0).toFixed(1)} L${x(0).toFixed(1)} ${y(0).toFixed(1)} Z`;
+  const lastX = x(n - 1);
+  const lastY = y(counts[n - 1]);
+
+  return (
+    caption +
+    `<svg class="ch-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="total swarm population over island-time">
+      ${grid}
+      <path d="${area}" fill="${GOLD}" opacity="0.1"/>
+      <path d="${d}" class="ch-line" style="stroke:${GOLD}" fill="none"/>
+      <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" fill="${GOLD}"/>
+      <text x="${padL}" y="${H - 6}" class="ch-axis" text-anchor="start">first log</text>
+      <text x="${padL + plotW}" y="${H - 6}" class="ch-axis" text-anchor="end">now</text>
+    </svg>`
+  );
+}
+
 function foodWeb(v: ChartsView): string {
   const rows = v.links.length
     ? v.links
@@ -193,6 +254,8 @@ export function openCharts(v: ChartsView): void {
     <div class="ch-section">population over island-time</div>
     ${populationChart(v)}
     ${seriesLegend(v.series)}
+    <div class="ch-section">the pollinators aloft</div>
+    ${swarmChart(v)}
     <div class="ch-section">the biomes underfoot</div>
     ${biomeBar(v)}
     <div class="ch-section">the food web</div>
