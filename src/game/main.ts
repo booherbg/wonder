@@ -2350,6 +2350,9 @@ function frame(now: number): void {
     heartbeat = true;
   }
   for (const ev of flora.takeEvents()) {
+    // still drained every frame (so the queue never grows unbounded) — the
+    // backdrop is never a played session, so it earns no flash/murmur/memory
+    if (titleActive) continue;
     flashHud(`${ev.name} — a new kind, arisen from ${ev.parentName}`);
     murmurs.offer("speciation");
     remember(`${ev.name} arose here`);
@@ -2364,6 +2367,8 @@ function frame(now: number): void {
   // stays discoverable later. Rare by construction (once per swarm; divergence
   // on a slow cadence).
   for (const ev of swarmLayer.takeEvents()) {
+    // still drained every frame; the backdrop just isn't witnessed
+    if (titleActive) continue;
     const host = species[ev.hostSpecies]?.name ?? "its flower";
     const witnessed = eventInView(ev, lastCamX, lastCamY, renderer.viewWidth, renderer.viewHeight);
     if (ev.kind === "boom") {
@@ -2385,7 +2390,7 @@ function frame(now: number): void {
   // the courted cloud: the first time a swarm is found working a bloom the
   // wanderer's own hand set down, the loop's one big player verb is named —
   // once per island, checked only on a heartbeat (homes move only then)
-  if (heartbeat && !courtshipSpoken && sownBlooms.size > 0) {
+  if (!titleActive && heartbeat && !courtshipSpoken && sownBlooms.size > 0) {
     const suitor = courtingSwarm(swarmLayer.swarms, sownBlooms);
     if (suitor) {
       courtshipSpoken = true;
@@ -2428,15 +2433,16 @@ function frame(now: number): void {
     // if you stand still and watch it set a far-carried seed down, the plant's
     // page learns the beast's name — "spread by <name>", long-distance dispersal
     // made legible (and only for a kind you've already met — recordSpread no-ops
-    // otherwise)
+    // otherwise). Never for the backdrop: it's never a played session.
     if (
+      !titleActive &&
       dropped &&
       stillTime >= 1 &&
       Math.hypot(beast.x - player.x, beast.y - player.y) < 6 * TILE_SIZE
     ) {
       recordSpread(currentSeed, dropped.species, beast.name);
     }
-    if (!beast.seen && Math.hypot(beast.x - player.x, beast.y - player.y) < 5 * TILE_SIZE) {
+    if (!titleActive && !beast.seen && Math.hypot(beast.x - player.x, beast.y - player.y) < 5 * TILE_SIZE) {
       beast.seen = true;
       flashHud(`${beast.name}, passes`);
       murmurs.offer("beast");
@@ -2447,10 +2453,14 @@ function frame(now: number): void {
     updateFlock(f, dt, map, player, darknessNow, birdRng);
     if (f.startled) {
       f.startled = false;
-      murmurs.offer("birds");
+      if (!titleActive) murmurs.offer("birds");
     }
   }
-  offerMurmurMoments(dt);
+  // the tile/critter/feature/weather murmurs, the swarm-cue first-meeting
+  // (markSwarmMet/recordSwarmMeeting), and the meal/germination witnessing
+  // (recordForage/recordSpread) all live in here — none of it for the
+  // backdrop, which is never a played session
+  if (!titleActive) offerMurmurMoments(dt);
   // the focus lens eases in and out; the camera math below sees only the
   // smaller view and keeps itself centered on the wanderer (or the beast)
   focusEase = easeToward(focusEase, focusOn ? 1 : 0, dt, 4);
@@ -2479,8 +2489,8 @@ function frame(now: number): void {
     showTitle(currentTitleState(), { choose: onChoose });
   }
   swarmLayer.animate(dt); // the clouds ease into orbit around their home blooms
-  const darkness = darknessNow;
-  if (darkness > 0.6) {
+  const darkness = darknessNow; // still drives the visual lighting below, titling or not
+  if (!titleActive && darkness > 0.6) {
     murmurs.offer("night");
     if (auroraTonight) {
       murmurs.offer("aurora");
