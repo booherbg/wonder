@@ -13,6 +13,8 @@
 //              "Escape,j"          close welcome, then open the journal
 //              "ArrowRight,ArrowRight,e"  step east twice, then inspect
 //
+// Pass menu=1 to screenshot the front door; otherwise shots land in-world (nomenu=1).
+//
 // Needs (one time): npm i -D playwright && npx playwright install chromium
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
@@ -26,7 +28,10 @@ const waitMs = Number(process.argv[4] ?? 3000);
 const width = Number(process.argv[5] ?? 960);
 const height = Number(process.argv[6] ?? 640);
 const keys = (process.argv[7] ?? "").split(",").map((k) => k.trim()).filter(Boolean);
-const query = rawQuery ? (rawQuery.startsWith("?") ? rawQuery : "?" + rawQuery) : "";
+const base = rawQuery ? (rawQuery.startsWith("?") ? rawQuery.slice(1) : rawQuery) : "";
+const params = new URLSearchParams(base);
+if (!params.has("nomenu") && !base.includes("menu")) params.set("nomenu", "1"); // skip the front door unless the caller opts into it with `menu`
+const query = "?" + params.toString();
 const PORT = 5178;
 
 await mkdir(dirname(out), { recursive: true }).catch(() => {});
