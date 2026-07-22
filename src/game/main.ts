@@ -1707,9 +1707,10 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   // the front door swallows input while it's up; its own click handlers drive
-  // the rows, and the field guide (opened over the backdrop) still gets keys
-  // so Esc/? can close it back to the title
-  if (titleActive && !isHelpOpen()) {
+  // the rows. While the field guide is open over the backdrop, only the two
+  // keys that close it (Esc, ?) pass through — every other world hotkey stays
+  // swallowed, so a stray key can't touch the (unplayed) backdrop world.
+  if (titleActive && (!isHelpOpen() || (k !== "escape" && k !== "?"))) {
     e.preventDefault();
     return;
   }
@@ -1947,6 +1948,7 @@ window.addEventListener(
 window.addEventListener("resize", () => renderer.resize());
 // clicking a drifting swarm opens its codex card — the world-side of the E lean-in
 canvas.addEventListener("click", (e) => {
+  if (titleActive) return; // the front door (incl. guide-over-backdrop) swallows world clicks
   if (e.target !== canvas) return; // a click on an open panel isn't a world click
   const rect = canvas.getBoundingClientRect();
   const wx = lastCamX + ((e.clientX - rect.left) / rect.width) * renderer.viewWidth;
