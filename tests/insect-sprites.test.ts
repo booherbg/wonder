@@ -4,8 +4,12 @@ import { MAP_CELLS, appearanceColors } from "../src/life/idmap";
 import { BehaviorGenes } from "../src/life/swarm";
 import {
   FlightField,
+  FORM_FAMILY,
+  INSECT_FORMS,
   INSECT_PLANS,
+  InsectForm,
   MARK_CELLS,
+  ROTATING_FORMS,
   insectMorphOf,
   insectPalette,
   insectPose,
@@ -24,42 +28,81 @@ const behavior = (range = 0.5, nerve = 0.5, cohesion = 0.5): BehaviorGenes => ({
   cohesion,
 });
 
-test("insectMorphOf is deterministic and always lands a real plan", () => {
+test("insectMorphOf is deterministic and always lands a real form under a real family", () => {
   const b = behavior(0.31, 0.62, 0.77);
   expect(insectMorphOf(b)).toEqual(insectMorphOf({ ...b }));
   const r = makeRng(7);
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 300; i++) {
     const m = insectMorphOf(behavior(r(), r(), r()));
-    expect(INSECT_PLANS).toContain(m.plan);
+    expect(INSECT_FORMS).toContain(m.form); // one of the seventeen silhouettes
+    expect(INSECT_PLANS).toContain(m.plan); // named by one of the five families
+    expect(m.plan).toBe(FORM_FAMILY[m.form]); // and the family always fits the form
   }
 });
 
-test("the morph space is used: many behaviours grow many plans", () => {
-  const r = makeRng(99);
-  const seen = new Set<string>();
-  for (let i = 0; i < 300; i++) seen.add(insectMorphOf(behavior(r(), r(), r())).plan);
-  expect(seen.size).toBeGreaterThanOrEqual(4);
+test("the seventeen-shape space is complete and honestly named", () => {
+  expect(INSECT_FORMS.length).toBe(17);
+  expect(new Set(INSECT_FORMS).size).toBe(17); // no dupes
+  // every form maps to a real family; every family is actually used by some form
+  const families = new Set<string>();
+  for (const f of INSECT_FORMS) {
+    expect(INSECT_PLANS).toContain(FORM_FAMILY[f]);
+    families.add(FORM_FAMILY[f]);
+  }
+  expect([...families].sort()).toEqual([...INSECT_PLANS].sort());
+  // the rotating (needle / twig) forms are a real subset of the shape space
+  expect(ROTATING_FORMS.size).toBeGreaterThan(0);
+  for (const f of ROTATING_FORMS) expect(INSECT_FORMS).toContain(f as InsectForm);
 });
 
-test("behaviour tilts the dice: tight cohesion leans compact, high range leans long-winged", () => {
+test("every form is reachable: some behaviour in the cube grows each of the seventeen", () => {
+  const seen = new Set<InsectForm>();
+  for (let ri = 0; ri <= 10; ri++)
+    for (let ni = 0; ni <= 10; ni++)
+      for (let ci = 0; ci <= 10; ci++)
+        seen.add(insectMorphOf(behavior(ri / 10, ni / 10, ci / 10)).form);
+  for (const f of INSECT_FORMS) expect(seen).toContain(f);
+});
+
+test("the morph space is used: many behaviours grow a wide spread of forms", () => {
+  const r = makeRng(99);
+  const seen = new Set<string>();
+  for (let i = 0; i < 300; i++) seen.add(insectMorphOf(behavior(r(), r(), r())).form);
+  expect(seen.size).toBeGreaterThanOrEqual(14); // a dozen-plus distinct kinds in the wild
+});
+
+test("behaviour tilts the dice: cohesion→compact, range→long-winged, nerve→darters, low-all→specks", () => {
+  const compact = (f: string): boolean =>
+    ["beetle", "ladybird", "bumblebee", "hoverer"].includes(f);
+  const long = (f: string): boolean => ["moth", "cicada", "damsel", "lacewing", "mayfly"].includes(f);
+  const darter = (f: string): boolean => ["skipper", "wasp", "mantis", "leafhopper"].includes(f);
   const r = makeRng(41);
   let compactTight = 0;
   let compactLoose = 0;
   let longRangy = 0;
   let longHomebody = 0;
-  const N = 400;
+  let boldDart = 0;
+  let mildDart = 0;
+  let lowSpeck = 0;
+  let highSpeck = 0;
+  const N = 500;
   for (let i = 0; i < N; i++) {
     const nerve = r();
     const roll = r();
-    const compact = (p: string): boolean => p === "beetle" || p === "hoverer";
-    const long = (p: string): boolean => p === "moth" || p === "damsel";
-    if (compact(insectMorphOf(behavior(0.3, nerve, 0.9)).plan)) compactTight++;
-    if (compact(insectMorphOf(behavior(0.3, nerve, 0.1)).plan)) compactLoose++;
-    if (long(insectMorphOf(behavior(0.9, nerve, roll * 0.5)).plan)) longRangy++;
-    if (long(insectMorphOf(behavior(0.1, nerve, roll * 0.5)).plan)) longHomebody++;
+    if (compact(insectMorphOf(behavior(0.3, nerve, 0.9)).form)) compactTight++;
+    if (compact(insectMorphOf(behavior(0.3, nerve, 0.1)).form)) compactLoose++;
+    if (long(insectMorphOf(behavior(0.9, nerve, roll * 0.5)).form)) longRangy++;
+    if (long(insectMorphOf(behavior(0.1, nerve, roll * 0.5)).form)) longHomebody++;
+    if (darter(insectMorphOf(behavior(roll * 0.5, 0.9, 0.3)).form)) boldDart++;
+    if (darter(insectMorphOf(behavior(roll * 0.5, 0.1, 0.3)).form)) mildDart++;
+    if (insectMorphOf(behavior(r() * 0.35, r() * 0.35, r() * 0.35)).form === "midge") lowSpeck++;
+    if (insectMorphOf(behavior(0.5 + r() * 0.5, 0.5 + r() * 0.5, 0.5 + r() * 0.5)).form === "midge")
+      highSpeck++;
   }
-  expect(compactTight).toBeGreaterThan(compactLoose);
-  expect(longRangy).toBeGreaterThan(longHomebody);
+  expect(compactTight).toBeGreaterThan(compactLoose); // tight cohesion clusters into compact bodies
+  expect(longRangy).toBeGreaterThan(longHomebody); // wide range grows long-winged roamers
+  expect(boldDart).toBeGreaterThan(mildDart); // bold nerve grows darters and hunters
+  expect(lowSpeck).toBeGreaterThan(highSpeck); // low-everything leans toward the dust-mote midge
 });
 
 test("insectPalette is honest: body = the map's dominant colour, marks = real cells", () => {
