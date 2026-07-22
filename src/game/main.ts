@@ -92,7 +92,8 @@ const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
-import { ForgeState, GenArgs, forgeArgs } from "../render/forgeArgs";
+import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
+import { closeForge, isForgeOpen, openForge } from "../render/forge";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -1412,23 +1413,6 @@ function previewForge(state: ForgeState): void {
   if (canvas) paintMiniMap(m, canvas);
 }
 
-// dev aid: ?forge=1 opens the forge panel (screenshot tours, over the title
-// or the world alike) — Task 3 of FORGE; the mount and its stub handlers go
-// away in Task 5 once the real launcher wires it up.
-if (new URL(location.href).searchParams.has("forge")) {
-  import("../render/forge").then(({ openForge }) =>
-    import("../render/forgeArgs").then(({ defaultForgeState }) => {
-      const state = defaultForgeState(currentSeed);
-      openForge(state, {
-        preview: previewForge,
-        generate: () => {},
-        rerollSeed: () => 12345,
-      });
-      previewForge(state); // paint the panel's canvas immediately for the screenshot tour
-    }),
-  );
-}
-
 // the front door's state: the island last entered (if any, for "continue")
 // and how many isles are saved (the picker's size). Read fresh at mount and
 // at every re-mount, so a world entered mid-session shows up next time.
@@ -1471,17 +1455,31 @@ function onChoose(id: TitleRowId): void {
     leaveTitle();
     return;
   }
-  leaveTitle(); // continue/new: a real session now — loadWorld records lastSeed, the camera follows the player
+  if (id === "new") { openForgeFromTitle(); return; }
+  leaveTitle(); // continue: a real session now — loadWorld records lastSeed, the camera follows the player
   if (id === "continue") {
     const s = readLastSeed();
     if (s !== null) {
       loadWorld(s);
       renderer.setMap(map);
     }
-  } else if (id === "new") {
-    loadWorld(newIslandSeed());
-    renderer.setMap(map);
   }
+}
+
+function openForgeFromTitle(): void {
+  hideTitle(); // the forge sits over the live backdrop; titleActive stays true
+  openForge(defaultForgeState(newIslandSeed()), {
+    preview: previewForge,
+    generate: onForgeGenerate,
+    rerollSeed: newIslandSeed,
+  });
+}
+function onForgeGenerate(state: ForgeState): void {
+  const { seed, gen } = forgeArgs(state);
+  closeForge();
+  leaveTitle(); // titleActive → false: loadWorld records lastSeed, backdrop not persisted
+  loadWorld(seed, gen);
+  renderer.setMap(map);
 }
 
 const keys = new Set<string>();
@@ -1742,6 +1740,7 @@ function openWebNow(): void {
 
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
+  if (isForgeOpen()) { if (k === "escape") closeForge(); return; } // forge inputs get their keystrokes; Esc closes it (frame re-mounts the title)
   keys.add(k);
   // the front door swallows input while it's up; its own click handlers drive
   // the rows. While the field guide is open over the backdrop, only the two
@@ -2535,7 +2534,7 @@ function frame(now: number): void {
   // the title re-mounts itself the frame after the field guide closes (it was
   // left hidden, not torn down, so Esc from the guide returns here with no
   // keydown hooks needed)
-  if (titleActive && !isTitleOpen() && !isHelpOpen()) {
+  if (titleActive && !isTitleOpen() && !isHelpOpen() && !isForgeOpen()) {
     showTitle(currentTitleState(), { choose: onChoose });
   }
   swarmLayer.animate(dt); // the clouds ease into orbit around their home blooms
