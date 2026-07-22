@@ -18,10 +18,14 @@ export interface ForgeState {
   cfg: Partial<WorldConfig>;
 }
 
-// Bounds for each clamped field: [min, max]
+// Bounds for each clamped field: [min, max]. Most keys are WorldConfig
+// fields; "warm" is the one GenArgs-only exception (ForgeState.warm, not
+// part of WorldConfig) — it shares this table so forge.ts's slider and
+// forgeArgs()'s clamp read the same bound instead of duplicating it.
 export const FORGE_BOUNDS: Record<string, [number, number]> = {
   width: [64, 512],
   height: [64, 512],
+  warm: [0, 50000],
   elevationScale: [8, 400],
   elevationOctaves: [1, 8],
   moistureScale: [8, 400],
@@ -81,7 +85,7 @@ export function forgeArgs(state: ForgeState): { seed: number; gen: GenArgs } {
       config: cfg,
       shape: state.shape === "roll" ? undefined : state.shape,
       relief: state.relief === "roll" ? undefined : state.relief,
-      warm: clamp(state.warm, 0, 50000),
+      warm: clampBound("warm", state.warm),
     },
   };
 }

@@ -15,10 +15,6 @@ export interface ForgeHandlers {
   rerollSeed: () => number;
 }
 
-// FORGE_BOUNDS has no "warm" entry (it's a GenArgs field, not a WorldConfig
-// one) — this mirrors the clamp forgeArgs() itself applies to state.warm.
-const WARM_BOUNDS: [number, number] = [0, 50000];
-
 // integer WorldConfig/ForgeState fields — these get step="1"; every other
 // numeric field is either a [0,1] level/probability (fine step) or a scale
 // (step of 1, but fractional values are still legal — just not spun to by
@@ -274,8 +270,9 @@ function render(): void {
     const range = document.createElement("input");
     range.type = "range";
     range.className = "forge-range";
-    range.min = String(WARM_BOUNDS[0]);
-    range.max = String(WARM_BOUNDS[1]);
+    const warmBounds = FORGE_BOUNDS.warm;
+    range.min = String(warmBounds[0]);
+    range.max = String(warmBounds[1]);
     range.step = "100";
     range.value = String(state.warm);
     const readout = document.createElement("span");
@@ -322,12 +319,15 @@ function render(): void {
   randomizeAll.textContent = "⟳ randomize all";
   randomizeAll.addEventListener("click", () => {
     state.seed = handlers.rerollSeed();
+    state.shape = "roll"; // let the fresh seed roll shape/relief at generation
+    state.relief = "roll";
     for (const [field, bounds] of Object.entries(FORGE_BOUNDS)) {
+      if (field === "warm") continue; // handled below — it's ForgeState.warm, not a cfg field
       const v = randomInRange(field, bounds);
       if (field === "width" || field === "height") (state as any)[field] = v;
       else (state.cfg as any)[field] = v;
     }
-    state.warm = randomInRange("warm", WARM_BOUNDS);
+    state.warm = randomInRange("warm", FORGE_BOUNDS.warm);
     render(); // knobs moved out from under the panel — rebuild it in place
   });
   actions.appendChild(randomizeAll);

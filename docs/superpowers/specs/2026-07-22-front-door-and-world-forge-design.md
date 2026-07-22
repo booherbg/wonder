@@ -99,6 +99,15 @@ generator; `maxGenerationAttempts`/reroll guards stay in force. The forge produc
 (`{seed, shape, relief, config, warm}`) that both preview and generate consume — the same path
 `loadWorld` will use — so it is testable as pure `GenArgs → WorldMap` with no UI.
 
+**Shipped.** The tuning surface lives in `src/render/forgeArgs.ts`: `FORGE_BOUNDS` is the single
+table of `[min, max]` pairs — every `WorldConfig` field plus `warm` (`ForgeState.warm`, the one
+non-`WorldConfig` entry, sharing the table rather than a duplicated constant) — that both
+`forgeArgs()`'s clamp and the panel's inputs read, so a bound only ever needs changing in one
+place. `src/render/forge.ts` is the panel itself: headline knobs, the fine-grain fold, and the
+**⟳ randomize all** action, which rerolls the seed, every numbered knob within its `FORGE_BOUNDS`,
+and resets `shape`/`relief` to `"roll"` so the fresh seed rolls its own silhouette at generation
+rather than leaving stale selects behind.
+
 ## The living backdrop
 
 Behind the menu, a **live, pre-warmed rich-biome island** plays — reusing the real renderer over
