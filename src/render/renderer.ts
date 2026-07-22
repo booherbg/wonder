@@ -8,6 +8,7 @@ import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
 import { resemblance } from "../life/idmap";
+import { conspicuousness } from "../life/swarm";
 import { SwarmLayer, dominantColor, tint } from "../game/swarms";
 import { Dragonflies, FishSchool, FrogPatch, drawClouds, drawForegroundMotes } from "./ambient";
 import { CALM, FlightField, blitInsect, getInsectSprites, insectPose } from "./insectSprites";
@@ -57,6 +58,12 @@ export interface Scene {
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
+
+// The ecology overlay's exposure ramp for the insect swarms: cool where a
+// cloud has come to hide in its flower's colours, warm where it stands plain.
+// The rings and the DOM legend share these exact stops — one ramp, two places.
+const SWARM_HIDDEN_RGB = [96, 196, 222] as const; // #60c4de — safe, sky-cool
+const SWARM_EXPOSED_RGB = [244, 122, 92] as const; // #f47a5c — at-risk, ember-warm
 
 // The swarm harmonizer. Genome swatches arrive at bench saturation
 // (hsl(H, 62%, 58%)) — right for the Simulator's dark field, garish over the
@@ -940,9 +947,13 @@ export class Renderer {
   }
 
   // The ecology overlay (V): the sim's spatial "why" made visible — each critter
-  // ringed in the colour of the drive it wears right now, and the chain hotspots
+  // ringed in the colour of the drive it wears right now, the chain hotspots
   // (a disperser's byproduct, where a matching feeder can wake) pulsing on the
-  // ground. A toggle, so the world reads plainly the rest of the time.
+  // ground, and each insect swarm ringed in the colour of its EXPOSURE — warm
+  // where the cloud stands plain against its bloom (an insectivore's easy meal),
+  // cool where the genome has come to hide in the flower's own colours — with a
+  // faint dashed thread to the bloom it works, the pollination bond said
+  // spatially. A toggle, so the world reads plainly the rest of the time.
   private drawEcologyOverlay(scene: Scene, camX: number, camY: number, timeMs: number): void {
     const ctx = this.ctx;
     const mood: Record<string, string> = {
@@ -977,6 +988,67 @@ export class Renderer {
         ctx.stroke();
       }
     }
+    // the pollinators join the reading: each swarm a dashed ring (a cloud, not
+    // a body) in its exposure colour — conspicuousness against the very flower
+    // it works, the number predation actually reads — sized gently by how many
+    // fly. The dashed thread to the home bloom is the pollination bond.
+    if (scene.swarms) {
+      const layer = scene.swarms;
+      for (const ent of layer.swarms) {
+        const sx = Math.round(ent.x - camX);
+        const sy = Math.round(ent.y - camY);
+        if (sx < -48 || sx > this.viewWidth + 48 || sy < -48 || sy > this.viewHeight + 48) continue;
+        const flower = ent.home ? layer.flowerFor(ent.home.species) : null;
+        const exposed = flower ? conspicuousness(ent.sw, flower) : 1; // homeless = fully plain
+        const mix = (a: number, b: number): number => Math.round(a + (b - a) * exposed);
+        const ring = `rgba(${mix(SWARM_HIDDEN_RGB[0], SWARM_EXPOSED_RGB[0])}, ${mix(
+          SWARM_HIDDEN_RGB[1],
+          SWARM_EXPOSED_RGB[1],
+        )}, ${mix(SWARM_HIDDEN_RGB[2], SWARM_EXPOSED_RGB[2])}, 0.95)`;
+        if (ent.home) {
+          const hx = Math.round(ent.home.x - camX);
+          const hy = Math.round(ent.home.y - 5 - camY); // the bloom's crown, as the perch line
+          ctx.strokeStyle = `rgba(${mix(SWARM_HIDDEN_RGB[0], SWARM_EXPOSED_RGB[0])}, ${mix(
+            SWARM_HIDDEN_RGB[1],
+            SWARM_EXPOSED_RGB[1],
+          )}, ${mix(SWARM_HIDDEN_RGB[2], SWARM_EXPOSED_RGB[2])}, ${(0.18 + 0.16 * pulse).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+        }
+        const frac = Math.max(0, Math.min(1, ent.sw.population / ent.sw.cap));
+        ctx.strokeStyle = ring;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 8 + frac * 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      this.ensureSwarmLegendRows();
+    }
+  }
+
+  // The overlay legend is a small DOM card the game rebuilds when V toggles;
+  // the swarm rows are appended here, idempotently, so the legend teaches the
+  // pollinator reading too (rebuilds wipe them; the next frame restores them).
+  private ensureSwarmLegendRows(): void {
+    const legend = document.getElementById("ovlegend");
+    if (!legend || legend.style.display === "none" || legend.querySelector("[data-swarm-rows]")) return;
+    const hex = (c: readonly [number, number, number]): string =>
+      "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+    const warm = hex(SWARM_EXPOSED_RGB);
+    const cool = hex(SWARM_HIDDEN_RGB);
+    const rows = document.createElement("div");
+    rows.setAttribute("data-swarm-rows", "");
+    rows.innerHTML =
+      `<div class="ovl-row"><i style="color:${warm};background:${warm}"></i>swarm, plain to see</div>` +
+      `<div class="ovl-row"><i style="color:${cool};background:${cool}"></i>swarm, hidden in its bloom</div>` +
+      `<div class="ovl-row"><i style="color:${cool};background:linear-gradient(90deg,${cool},${warm})"></i>thread: the bloom it works</div>`;
+    legend.appendChild(rows);
   }
 
   // Wading, not floating: any segment standing in shallow water rings the

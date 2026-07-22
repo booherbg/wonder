@@ -315,11 +315,26 @@ function pct(v: number): string {
 
 // The behaviour genes said in words — personality read straight off the cloud's
 // motion: how far it roams, how it holds under threat, how tight it flies.
-function behaviourLine(b: { range: number; nerve: number; cohesion: number }): string {
-  const roam = b.range < 0.34 ? "a homebody" : b.range > 0.66 ? "a wanderer" : "roams middling";
-  const nerve = b.nerve < 0.34 ? "skittish" : b.nerve > 0.66 ? "bold" : "steady";
-  const cloud = b.cohesion < 0.34 ? "a loose cloud" : b.cohesion > 0.66 ? "a tight cloud" : "an easy cloud";
-  return `${roam} · ${nerve} · ${cloud}`;
+// THE shared gene→word bridge: the world's examine card and the Simulator
+// bench both speak these words at these cutoffs, so "a homebody" means the
+// same number everywhere a wanderer meets it. One vocabulary, one set of
+// thresholds — don't grow a second.
+export function behaviourWords(b: { range: number; nerve: number; cohesion: number }): {
+  range: string;
+  nerve: string;
+  cohesion: string;
+} {
+  return {
+    range: b.range < 0.34 ? "a homebody" : b.range > 0.66 ? "a wanderer" : "roams middling",
+    nerve: b.nerve < 0.34 ? "skittish" : b.nerve > 0.66 ? "bold" : "steady",
+    cohesion: b.cohesion < 0.34 ? "a loose cloud" : b.cohesion > 0.66 ? "a tight cloud" : "an easy cloud",
+  };
+}
+
+// the world card's one-line reading, built from the very same words
+export function behaviourLine(b: { range: number; nerve: number; cohesion: number }): string {
+  const w = behaviourWords(b);
+  return `${w.range} · ${w.nerve} · ${w.cohesion}`;
 }
 
 // One codex card for a swarm — PORTRAIT-FIRST, exactly as the critter cards

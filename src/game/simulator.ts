@@ -26,6 +26,7 @@ import {
   getInsectSprites,
   insectPose,
 } from "../render/insectSprites";
+import { behaviourWords } from "../render/inspect";
 
 // ── the field ────────────────────────────────────────────────────────────
 // A fixed logical meadow measured in tiles; the view fits the whole field into
@@ -745,6 +746,16 @@ function buildChrome(): Chrome {
   const head = (name: string, sub: string): string =>
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 19px; color: var(--ink-bright);">${name}</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">${sub}</div>`;
+  // a behaviour-gene row: the world card's word leads (behaviourWords — the
+  // shared gene→word bridge, same cutoffs as the examine card), the bench's
+  // exact figure sits beside it. A wanderer who met "a homebody" in the wild
+  // finds the very phrase here, with the number under it made plain.
+  const gene = (k: string, word: string, v: string): string =>
+    `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 3px 0;">` +
+    `<span style="font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(228,236,242,0.5);">${k}</span>` +
+    `<span style="text-align: right; white-space: nowrap;">` +
+    `<span style="font: italic 12.5px var(--serif); color: var(--ink-bright);">${word}</span>` +
+    ` <span style="font: 12px var(--mono); color: rgba(228,236,242,0.55);">${v}</span></span></div>`;
 
   // the representative insect, drawn from the very sprite the bench flies
   const insectCanvas = (sw: Swarm): string => {
@@ -761,6 +772,7 @@ function buildChrome(): Chrome {
   chrome.showSwarm = (sw, flower) => {
     const res = flower ? Math.round(resemblance(sw.sensor, flower.map) * 100) : 0;
     const b = sw.behavior;
+    const w = behaviourWords(b); // the world card's words, the bench's numbers
     plate.innerHTML =
       head("a swarm", "adapting cloud") +
       title("the insect") +
@@ -770,9 +782,9 @@ function buildChrome(): Chrome {
       title("readout") +
       stat("population", String(Math.round(sw.population)), "mint") +
       stat("resemblance", flower ? res + "%" : "—", "gold") +
-      stat("range", pct(b.range)) +
-      stat("nerve", pct(b.nerve)) +
-      stat("cohesion", pct(b.cohesion)) +
+      gene("range", w.range, pct(b.range)) +
+      gene("nerve", w.nerve, pct(b.nerve)) +
+      gene("cohesion", w.cohesion, pct(b.cohesion)) +
       `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">the insect is drawn from its map — body from the dominant colour, wing patches from real cells — so as the pool adapts you watch the bug become its flower.</div>`;
     plate.style.display = "block";
   };
