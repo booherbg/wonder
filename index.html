@@ -92,8 +92,10 @@
         display: flex; flex-wrap: wrap; gap: 14px; justify-content: center;
       }
       #inspect .inspect-card { width: 110px; text-align: center; }
-      #inspect canvas { image-rendering: pixelated; width: 96px; height: 168px; }
-      #inspect canvas.critter-canvas { width: 96px; height: auto; margin-top: 40px; }
+      /* every card's canvas is drawn at its own true size (cropped to sprite
+         bounds in inspect.ts) — no shared frame, so no stretching, no dead bands */
+      #inspect canvas { image-rendering: pixelated; }
+      #inspect canvas.critter-canvas { width: 96px; height: auto; }
       #inspect .inspect-name { margin-top: 4px; color: var(--ink-bright); }
       #inspect .inspect-traits { opacity: 0.65; margin-top: 2px; line-height: 1.5; }
       #inspect .inspect-gather {
@@ -105,6 +107,15 @@
       #inspect .inspect-gather:hover:enabled { background: rgba(var(--lumen), 0.16); }
       #inspect .inspect-gather:disabled { opacity: 0.5; cursor: default; }
       #inspect .inspect-hint { opacity: 0.45; margin-top: 12px; text-align: center; }
+      /* the fold made honest: a soft fade + "more ↓" while the card holds more below */
+      #inspect .inspect-more {
+        position: sticky; bottom: -14px; margin: 0 -16px -14px; padding: 26px 0 6px;
+        text-align: center; pointer-events: none;
+        font: 11px var(--mono); letter-spacing: 0.08em; color: rgba(var(--lumen), 0.85);
+        background: linear-gradient(180deg, rgba(8, 15, 22, 0), var(--tide-lo) 72%);
+        opacity: 1; transition: opacity 0.25s ease;
+      }
+      #inspect .inspect-more.gone { opacity: 0; }
       #murmur {
         position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%);
         max-width: min(640px, 84vw); text-align: center;

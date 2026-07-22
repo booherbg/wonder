@@ -108,6 +108,14 @@ function swarmPalette(sw: Swarm, k = 4): string[] {
   return out.length ? out : [dominantColor(sw.sensor)];
 }
 
+// The way back: drop the ?sim flag and the island resumes — it was saved on
+// the way in, and its seed rides the URL, so the bench is never a one-way door.
+function leaveBench(): void {
+  const url = new URL(location.href);
+  url.searchParams.delete("sim");
+  location.href = url.toString();
+}
+
 export function startSimulator(): void {
   const canvas = document.getElementById("game") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d")!;
@@ -329,8 +337,14 @@ export function startSimulator(): void {
       tick();
       refreshToolbar();
     } else if (e.key === "Escape") {
-      selected = null;
-      renderInspect();
+      // Esc closes the current thing: a selection first; with nothing
+      // selected, the bench itself — back to the island
+      if (selected) {
+        selected = null;
+        renderInspect();
+      } else {
+        leaveBench();
+      }
     } else if (e.key === "1") {
       tool = "select";
       refreshToolbar();
@@ -606,9 +620,17 @@ function buildChrome(): Chrome {
   eyebrow.innerHTML =
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 22px; color: var(--ink-bright); margin-top: 2px;">the identity-map bench</div>` +
-    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px;">place flowers &amp; swarms, run time, watch each cloud adapt its colour toward its flower.</div>`;
+    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px;">place flowers &amp; swarms, run time, watch each cloud adapt its colour toward its flower. Esc, with nothing selected, sails you home.</div>`;
   eyebrow.style.cssText = "position: fixed; left: 18px; top: 16px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);
+
+  // the way back, always visible in the header: the bench is a door, not a
+  // trap — dropping the ?sim flag lands on the island saved on the way in
+  const back = document.createElement("button");
+  back.textContent = "back to the island ↩";
+  back.style.cssText = btn(false) + " position: fixed; right: 18px; top: 18px; z-index: 6;";
+  back.onclick = leaveBench;
+  document.body.appendChild(back);
 
   const bar = document.createElement("div");
   bar.style.cssText =

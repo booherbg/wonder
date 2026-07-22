@@ -25,11 +25,13 @@ import { CHAINS_KEY, resolveChains } from "./flags";
 import {
   loadCritterJournal,
   loadJournal,
+  loadSwarmJournal,
   recordCritterMeeting,
   recordForage,
   recordSpread,
   recordSighting,
   recordSwarmMeeting,
+  swarmCueDue,
 } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
@@ -210,13 +212,13 @@ let stillTime = 0;
 let hudMsg = "";
 let hudMsgTimer: ReturnType<typeof setTimeout> | null = null;
 
-function flashHud(msg: string): void {
+function flashHud(msg: string, ms = 2600): void {
   hudMsg = msg;
   if (hudMsgTimer) clearTimeout(hudMsgTimer);
   hudMsgTimer = setTimeout(() => {
     hudMsg = "";
     renderHud();
-  }, 2600);
+  }, ms);
   renderHud();
 }
 
@@ -921,6 +923,7 @@ function openAlmanac(): void {
   openJournal({
     entries: loadJournal(),
     critters: loadCritterJournal(),
+    swarms: loadSwarmJournal(),
     map,
     species,
     critterSpecies,
@@ -1111,6 +1114,8 @@ function openInspectAtPlayer(record = true): void {
         resemblance: view.resemblance,
         population: view.population,
         at: Date.now(),
+        sensor: view.sensor,
+        behavior: view.behavior,
       });
     }
     // a lean-in that met a cloud counts as the island's introduction —
@@ -1482,6 +1487,17 @@ const menuHandlers: MenuHandlers = {
   },
 };
 
+// any codex panel standing open over the world — the welcome card above all.
+// One answer for everyone who must wait their turn behind a card: the wheel
+// keeps its scroll, and the one-line cues hold until they can actually be seen.
+function aPanelIsOpen(): boolean {
+  return (
+    isMenuOpen() || isInspectOpen() || isHelpOpen() || isAnthologyOpen() ||
+    isJournalOpen() || isWebOpen() || isPickerOpen() || isChartsOpen() ||
+    isBackpackOpen() || isIslandMapOpen()
+  );
+}
+
 function openMenuNow(): void {
   closeInspect();
   closeAnthology();
@@ -1837,11 +1853,7 @@ window.addEventListener(
   "wheel",
   (e) => {
     // let an open card scroll; the wheel only cycles the hotbar out in the world
-    if (
-      isMenuOpen() || isInspectOpen() || isHelpOpen() || isAnthologyOpen() ||
-      isJournalOpen() || isWebOpen() || isPickerOpen()
-    )
-      return;
+    if (aPanelIsOpen()) return;
     bar = cycleSlot(bar, e.deltaY > 0 ? 1 : -1);
     renderHud();
     e.preventDefault();
@@ -1876,6 +1888,8 @@ canvas.addEventListener("click", (e) => {
     resemblance: view.resemblance,
     population: view.population,
     at: Date.now(),
+    sensor: view.sensor,
+    behavior: view.behavior,
   });
   if (!swarmMetHere) {
     swarmMetHere = true;
@@ -2102,11 +2116,14 @@ function offerMurmurMoments(dt: number): void {
       murmurs.offer("critter");
     }
     // the first time a cloud drifts within reach on this island, the island
-    // points at it — once, quietly, and never again here (across sittings too)
-    if (!swarmMetHere && swarmLayer.near(player.x, player.y, SWARM_REACH).length > 0) {
-      swarmMetHere = true;
+    // points at it — once, quietly, and never again here (across sittings
+    // too). Never under an open panel (the welcome card above all): the cue
+    // waits, and is only marked spoken once it has actually shown — a
+    // first-meeting line burned behind a card would be gone forever.
+    if (swarmCueDue(swarmMetHere, aPanelIsOpen(), swarmLayer.near(player.x, player.y, SWARM_REACH).length)) {
+      flashHud("a cloud of colour works the blooms nearby — lean close (E) or click it", 5200);
+      swarmMetHere = true; // marked only now the cue is truly on screen
       markSwarmMet(currentSeed);
-      flashHud("a cloud of colour works the blooms nearby — lean close (E) or click it");
       murmurs.offer("swarm");
     }
     // standing truly still, watching: learn who eats what — if that plant

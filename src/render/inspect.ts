@@ -9,10 +9,39 @@ import { PlantSpecies } from "../life/species";
 import { Tile } from "../world/types";
 import { drawBeast } from "./beastSprite";
 import { getCritterSprites } from "./critterSprites";
-import { INSECT_SPRITE, getInsectSprites } from "./insectSprites";
-import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
+import { getInsectSprites } from "./insectSprites";
+import { getPlantSprite } from "./plantSprites";
 
 const ZOOM = 6;
+
+// A sprite pressed to its true bounds: the transparent sky above a low moss
+// is not part of the specimen. Scans the alpha channel once (sprites are a
+// few hundred pixels) and returns a crisp canvas of just the inked rows and
+// columns at the given zoom — so no codex card carries a dead band.
+function croppedSprite(src: HTMLCanvasElement, zoom: number): HTMLCanvasElement {
+  const g = src.getContext("2d")!;
+  const data = g.getImageData(0, 0, src.width, src.height).data;
+  let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1;
+  for (let y = 0; y < src.height; y++) {
+    for (let x = 0; x < src.width; x++) {
+      if (data[(y * src.width + x) * 4 + 3] === 0) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) { x0 = 0; y0 = 0; x1 = src.width - 1; y1 = src.height - 1; } // a blank sprite keeps its frame
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const out = document.createElement("canvas");
+  out.width = w * zoom;
+  out.height = h * zoom;
+  const ctx = out.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, x0, y0, w, h, 0, 0, out.width, out.height);
+  return out;
+}
 
 // One card per species with a count of how many stand nearby.
 export interface PlantGroup {
@@ -346,16 +375,11 @@ function swarmCard(view: SwarmInspect): HTMLElement {
   card.className = "inspect-card";
   card.style.width = "150px";
 
-  // the portrait: the very insect flying outside, ~12× the world sprite
+  // the portrait: the very insect flying outside, ~12× the world sprite —
+  // square-true and pressed to its inked bounds, never stretched to a plant's frame
   const sprites = getInsectSprites({ sensor: view.sensor, behavior: view.behavior });
-  const Z = 12;
-  const canvas = document.createElement("canvas");
-  canvas.width = INSECT_SPRITE * Z;
-  canvas.height = INSECT_SPRITE * Z;
+  const canvas = croppedSprite(sprites.wingA, 12);
   canvas.style.cssText = "display: block; margin: 0 auto 4px; image-rendering: pixelated;";
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(sprites.wingA, 0, 0, canvas.width, canvas.height);
   card.appendChild(canvas);
 
   const name = document.createElement("div");
@@ -408,10 +432,27 @@ export function openSwarmCard(view: SwarmInspect): void {
   hint.textContent = "its wings are its map — watch a bug become its flower · Esc to close";
   el.appendChild(hint);
   el.style.display = "block";
+  armScrollHint(el);
 }
 
 function panel(): HTMLElement {
   return document.getElementById("inspect")!;
+}
+
+// The fold made honest: when a card runs taller than its window, a soft
+// fade and a quiet "more ↓" sit at the bottom edge until the reader nears
+// it — nothing below the fold is a secret anymore.
+function armScrollHint(el: HTMLElement): void {
+  const hint = document.createElement("div");
+  hint.className = "inspect-more";
+  hint.textContent = "more ↓";
+  el.appendChild(hint);
+  const update = (): void => {
+    const below = el.scrollHeight - el.clientHeight - el.scrollTop;
+    hint.classList.toggle("gone", below < 24);
+  };
+  el.onscroll = update; // the one panel, re-armed on every open — never a listener pile
+  requestAnimationFrame(update); // measured only once layout has settled
 }
 
 export function isInspectOpen(): boolean {
@@ -444,14 +485,10 @@ function plantCard(
 ): HTMLElement {
   const card = document.createElement("div");
   card.className = "inspect-card";
-  const canvas = document.createElement("canvas");
-  canvas.width = PLANT_SPRITE_W * ZOOM;
-  canvas.height = PLANT_SPRITE_H * ZOOM;
-  const ctx = canvas.getContext("2d")!;
-  ctx.imageSmoothingEnabled = false;
   const aquatic = sp.habitat === Tile.ShallowWater;
-  ctx.drawImage(getPlantSprite(genome, aquatic), 0, 0, canvas.width, canvas.height);
-  card.appendChild(canvas);
+  // the specimen at codex zoom, pressed to its inked bounds — a low moss no
+  // longer carries the whole empty sky of a towering tree's frame above it
+  card.appendChild(croppedSprite(getPlantSprite(genome, aquatic), ZOOM));
 
   const name = document.createElement("div");
   name.className = "inspect-name";
@@ -673,4 +710,5 @@ export function openInspect(
   hint.textContent = "E or Esc to close · space gathers · Q tosses a seed";
   el.appendChild(hint);
   el.style.display = "block";
+  armScrollHint(el);
 }

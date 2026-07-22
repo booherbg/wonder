@@ -85,7 +85,10 @@ test("corrupt storage reads as an empty journal", () => {
 // Leaning close to a swarm (or clicking one) writes it a page: its codex
 // name, the bloom it works, the best match and fullest cloud ever witnessed.
 
-import { SWARM_JOURNAL_KEY, SwarmMeeting, loadSwarmJournal, recordSwarmMeeting } from "../src/game/journal";
+import { SWARM_JOURNAL_KEY, SwarmMeeting, loadSwarmJournal, recordSwarmMeeting, swarmCueDue } from "../src/game/journal";
+
+// a 7×7 appearance genome, as the world hands it over (an IdMap is a Uint8Array)
+const SENSOR = Uint8Array.from({ length: 49 }, (_, i) => (i % 5 === 0 ? 3 : 0));
 
 function swarmMeeting(overrides: Partial<SwarmMeeting> = {}): SwarmMeeting {
   return {
@@ -97,6 +100,8 @@ function swarmMeeting(overrides: Partial<SwarmMeeting> = {}): SwarmMeeting {
     resemblance: 0.4,
     population: 38,
     at: 1000,
+    sensor: SENSOR,
+    behavior: { range: 0.2, nerve: 0.7, cohesion: 0.5 },
     ...overrides,
   };
 }
@@ -133,4 +138,32 @@ test("the swarm shelf shrugs off corrupt or missing storage", () => {
   kv.map.set(SWARM_JOURNAL_KEY, "]not json[");
   expect(loadSwarmJournal(kv)).toEqual([]);
   recordSwarmMeeting(swarmMeeting(), null); // no storage: the meeting still happened
+});
+
+test("a page keeps enough genome to draw the portrait — and the freshest sketch wins", () => {
+  const kv = fakeKV();
+  recordSwarmMeeting(swarmMeeting(), kv);
+  let [page] = loadSwarmJournal(kv);
+  expect(page.sensor).toEqual(Array.from(SENSOR)); // a plain array, so JSON keeps it whole
+  expect(page.behavior).toEqual({ range: 0.2, nerve: 0.7, cohesion: 0.5 });
+  // met again, the cloud's colour has drifted: the page re-sketches it
+  const drifted = Uint8Array.from(SENSOR);
+  drifted[0] = 5;
+  recordSwarmMeeting(swarmMeeting({ sensor: drifted, at: 2000 }), kv);
+  [page] = loadSwarmJournal(kv);
+  expect(page.sensor?.[0]).toBe(5);
+});
+
+// ── the first-meeting cue's gate ───────────────────────────────────────
+// The introduction line may only fire when it can be SEEN — never under an
+// open panel (the welcome card above all), never twice, never with no cloud.
+
+test("the cue waits behind an open panel instead of burning itself unseen", () => {
+  expect(swarmCueDue(false, true, 3)).toBe(false); // the welcome card is up: hold
+  expect(swarmCueDue(false, false, 3)).toBe(true); // the card closed: now it may speak
+});
+
+test("the cue speaks once per island, and only with a cloud truly near", () => {
+  expect(swarmCueDue(true, false, 3)).toBe(false); // already spoken here
+  expect(swarmCueDue(false, false, 0)).toBe(false); // no cloud in reach
 });

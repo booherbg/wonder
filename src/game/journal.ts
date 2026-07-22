@@ -280,6 +280,11 @@ export interface SwarmEntry {
   population: number; // the fullest cloud ever witnessed
   firstMetAt: number; // epoch ms
   meetings: number;
+  // enough genome to draw the portrait from memory on any later island —
+  // the freshest sketch, exactly as plant pages keep theirs. Absent on
+  // pages written before the shelf learned to draw; those stay words-only.
+  sensor?: number[]; // the 7×7 appearance genome, cell by cell
+  behavior?: { range: number; nerve: number; cohesion: number };
 }
 
 export const SWARM_JOURNAL_KEY = "wander.journal.swarms";
@@ -304,6 +309,8 @@ export interface SwarmMeeting {
   resemblance: number; // 0..1 at this meeting
   population: number;
   at: number; // epoch ms
+  sensor: ArrayLike<number>; // the cloud's appearance genome as met (IdMap)
+  behavior: { range: number; nerve: number; cohesion: number };
 }
 
 // Leaning close (E) with a cloud adrift in reach — or clicking one — begins
@@ -315,11 +322,17 @@ export function recordSwarmMeeting(m: SwarmMeeting, kv: KV | null = defaultKV())
     const all = loadSwarmJournal(kv);
     const key = `${m.seed}:swarm:${m.swarmId}`;
     const existing = all.find((e) => e.key === key);
+    const sketch = {
+      sensor: Array.from(m.sensor),
+      behavior: { range: r3(m.behavior.range), nerve: r3(m.behavior.nerve), cohesion: r3(m.behavior.cohesion) },
+    };
     if (existing) {
       existing.meetings++;
       existing.hostName = m.hostName; // a cloud may drift to a new bloom
       existing.bestResemblance = Math.max(existing.bestResemblance, r3(m.resemblance));
       existing.population = Math.max(existing.population, Math.round(m.population));
+      existing.sensor = sketch.sensor; // the freshest sketch, as plant pages keep theirs
+      existing.behavior = sketch.behavior;
     } else {
       all.push({
         key,
@@ -332,6 +345,7 @@ export function recordSwarmMeeting(m: SwarmMeeting, kv: KV | null = defaultKV())
         population: Math.round(m.population),
         firstMetAt: m.at,
         meetings: 1,
+        ...sketch,
       });
     }
     const kept =
@@ -342,6 +356,16 @@ export function recordSwarmMeeting(m: SwarmMeeting, kv: KV | null = defaultKV())
   } catch {
     // storage full or unavailable: the meeting still happened
   }
+}
+
+// ── the first-meeting cue ──────────────────────────────────────────────
+// The one line that introduces the clouds may only speak when it can be
+// SEEN: never under an open panel (the welcome card above all), never once
+// the island has already pointed, and only with a cloud truly in reach.
+// The caller marks the island met AFTER the cue shows — a cue that fired
+// behind a card would otherwise burn the introduction unseen, forever.
+export function swarmCueDue(alreadyMet: boolean, panelOpen: boolean, cloudsNear: number): boolean {
+  return !alreadyMet && !panelOpen && cloudsNear > 0;
 }
 
 // ── the island itself ──────────────────────────────────────────────────

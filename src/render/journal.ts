@@ -1,5 +1,5 @@
 import { isSeen, seenFraction } from "../game/explored";
-import { CritterEntry, JournalEntry, islandCharacter } from "../game/journal";
+import { CritterEntry, JournalEntry, SwarmEntry, islandCharacter } from "../game/journal";
 import { CritterSpecies } from "../life/fauna";
 import { hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -7,6 +7,7 @@ import { IslandShape, SHAPE_PHRASE } from "../world/generate";
 import { islandName } from "../world/name";
 import { WorldMap } from "../world/types";
 import { critterPortrait, getCritterSprites } from "./critterSprites";
+import { getInsectSprites } from "./insectSprites";
 import { trustLine } from "./inspect";
 import { OVERVIEW_COLORS, PALETTE } from "./palette";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
@@ -31,6 +32,7 @@ export function closeJournal(): void {
 export interface JournalScene {
   entries: JournalEntry[]; // plant pages, every island
   critters: CritterEntry[]; // creature pages, every island
+  swarms: SwarmEntry[]; // insect-cloud pages, every island
   map: WorldMap; // the island underfoot
   species: PlantSpecies[]; // its living plant kinds, for endemic notes
   critterSpecies: CritterSpecies[]; // its living critter kinds, for fresh sprites
@@ -305,6 +307,46 @@ function plantCard(e: JournalEntry, scene: JournalScene): HTMLElement {
   return card;
 }
 
+// ── a cloud's page said in lines: its bloom, the meetings, and the best
+// ever witnessed — the closest match and the fullest cloud. Pure, so a
+// test can read a whole page at a glance (the campLines pattern).
+export function swarmPageLines(e: SwarmEntry): string[] {
+  return [
+    `works ${e.hostName}`,
+    e.meetings === 1 ? "met once" : `met ${e.meetings} times`,
+    `${Math.round(e.bestResemblance * 100)}% come to match its flower, at its closest`,
+    `the fullest cloud seen: ${e.population} aloft`,
+  ];
+}
+
+// ── a cloud's page: the insect itself, then what watching has taught.
+// The portrait is drawn from the very sprite the island flies — the page
+// keeps the genome, so far islands' clouds still show their faces.
+const INSECT_ZOOM = 8;
+
+function swarmCard(e: SwarmEntry): HTMLElement {
+  const card = document.createElement("div");
+  card.className = "inspect-card";
+  if (e.sensor && e.behavior) {
+    const sprite = getInsectSprites({ sensor: Uint8Array.from(e.sensor), behavior: e.behavior }).wingA;
+    const canvas = document.createElement("canvas");
+    canvas.width = sprite.width * INSECT_ZOOM;
+    canvas.height = sprite.height * INSECT_ZOOM;
+    canvas.style.display = "block";
+    canvas.style.margin = "6px auto 0";
+    const ctx = canvas.getContext("2d")!;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sprite, 0, 0, canvas.width, canvas.height);
+    card.appendChild(canvas);
+  }
+  const name = document.createElement("div");
+  name.className = "inspect-name";
+  name.textContent = e.name;
+  card.appendChild(name);
+  for (const line of swarmPageLines(e)) traits(card, line);
+  return card;
+}
+
 // The journal, opened: an almanac of THIS island — its character, the
 // creatures met, the growing things sketched — in the order a wanderer
 // would ask: where am I, who lives here, what grows.
@@ -330,6 +372,16 @@ export function openJournal(scene: JournalScene): void {
     islandHeader(el, island);
     const g = grid(el);
     for (const e of list) g.appendChild(critterCard(e, scene));
+  }
+
+  sectionTitle(el, "the insect clouds");
+  if (scene.swarms.length === 0) {
+    empty(el, "none yet — lean close (E) when a cloud of colour works the blooms.");
+  }
+  for (const [island, list] of byIsland(scene.swarms)) {
+    islandHeader(el, island);
+    const g = grid(el);
+    for (const e of list) g.appendChild(swarmCard(e));
   }
 
   sectionTitle(el, "growing things");
