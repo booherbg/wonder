@@ -940,8 +940,12 @@ function loadWorld(seed: number): void {
             : "welcome back",
     );
   }
-  if (awayBorn) murmurs.offer("speciation");
-  murmurs.offer("island");
+  // never for the backdrop: it's not a played session, and murmurs.offer()
+  // writes into the (cross-island) anthology under the island's name
+  if (!titleActive) {
+    if (awayBorn) murmurs.offer("speciation");
+    murmurs.offer("island");
+  }
 }
 
 // Weather memory: rare events accrete onto the island, worded once each,
