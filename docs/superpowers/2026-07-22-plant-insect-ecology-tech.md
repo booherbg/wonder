@@ -276,9 +276,11 @@ divergence:
 | **range** | homebody ↔ wanderer | render motion: dart length / how far the cloud roams its bloom |
 | **cohesion** | loose ↔ tight | render motion: how tightly the insects cluster |
 
-`range` and `cohesion` currently express in *motion + the sprite roll* (which body
-plan), not yet in the sim numbers — that's where you'd wire more trade-offs (e.g.
-wanderers reaching farther flowers, tight clouds harder for predators to pick from).
+`range` and `cohesion` currently express in *motion + the sprite roll* (which of the
+17 body forms — tight cohesion favours beetle/ladybird/bumblebee, wide range favours
+moth/damsel/lacewing, bold nerve favours wasp/mantis/skipper), not yet in the sim
+numbers — that's where you'd wire more trade-offs (e.g. wanderers reaching farther
+flowers, tight clouds harder for predators to pick from).
 The examine card renders these as words ("a homebody · bold · an easy cloud").
 
 ---
@@ -338,21 +340,39 @@ island loads already booming.
 
 ## 11. What you see (and where to look in-game)
 
-- **In the world:** clouds of generative insects flit and **perch on the blooms they
-  work**; a well-adapted cloud takes on its flower's palette (so it gets *subtler* as
-  it succeeds — camouflage working). ![world](images/plant-insect/06-world.png)
+- **In the world:** clouds of **generative insects** — **17 body forms** (moth,
+  cicada, beetle, ladybird, firefly, weevil, hoverer, wasp, bumblebee, midge, damsel,
+  lacewing, mayfly, skipper, leafhopper, mantis, walkingstick), each rolled from a
+  swarm's behaviour genes and coloured/patterned from its genome — flit and **perch on
+  the blooms they work**. A well-adapted cloud takes on its flower's palette (so it
+  gets *subtler* as it succeeds — camouflage working); fireflies glow at night. At a
+  wanderer's distance they're motes — lean the view (`Z`) or examine to see the bug.
+  ![world](images/plant-insect/06-world.png)
 - **Lean close (`E`) or click a cloud:** its examine card — a **portrait** of the
   actual bug, its name, host flower, population ("N aloft"), resemblance ("% come to
   match its flower"), and personality, with the genome grid as a small inset.
   ![examine card](images/plant-insect/02-examine-card.png)
-- **First meeting:** a HUD cue + a murmur point you at the swarms.
+- **First meeting:** a HUD cue + a murmur point you at the swarms; the field guide
+  (`?`) has an entry teaching the clouds and the `Z` lean.
   ![first meeting](images/plant-insect/05-first-meeting.png)
+- **Court a cloud:** **sow a flower where a cloud drifts** and a matched swarm will
+  come to work it (and thicken that kind) — the game announces the first time a swarm
+  takes to a bloom you planted. This is the feature's main *player verb*.
+- **The Field Journal (`J`):** the clouds you've met become pages (portrait, host,
+  best match, fullest cloud) alongside the plants and critters.
+- **The `V` ecology overlay:** each swarm is ringed by **exposure** (cool = hidden in
+  its flower's colours, warm = plain to see — the number predation reads), with a
+  thread to a bloom when a cloud has drifted off to home on it.
 - **`C` the living web:** leads with **swarm → pollinates → bloom → nectar feeds the
-  swarm**; the old substrate chains sit demoted below.
+  swarm**; single clouds are **named** and drawn as their actual insect; the old
+  substrate chains sit demoted below.
   ![living web](images/plant-insect/04-living-web.png)
-- **`G` the ledger:** a swarm-population line over island-time (the boom as a curve).
+- **`G` the ledger:** "the pollinators aloft" plots **each named swarm's match-% over
+  island-time**, climbing toward a dashed "matched — pollinates above" (50%) rule — so
+  you watch adaptation happen (above the plant-population census).
 - **`?sim=1` / Tab → the Simulator:** place flowers & swarms, run time, toggle
-  Predators, dial the size Cap, watch a cloud find and *become* its flower.
+  Predators, dial the size Cap, watch a cloud find and *become* its flower — and
+  "back to the island ↩" when you're done.
 
 ---
 
