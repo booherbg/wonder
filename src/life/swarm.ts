@@ -27,18 +27,39 @@ export function makeFlower(rng: Rng, flowerSize: number): Flower {
   return { map, accent, nectar: 1 };
 }
 
+/** A swarm's personality — heritable, mutable, and (in the game) read straight off how
+ *  the cloud moves. Selection acts on these at the multi-swarm layer; here we hold + evolve
+ *  them, and `nerve` already trades feeding against exposure below. */
+export interface BehaviorGenes {
+  range: number; // 0 homebody .. 1 wanderer (spatial foraging reach — expressed in the render layer)
+  nerve: number; // 0 skittish .. 1 bold (bold feeds more but is exposed more)
+  cohesion: number; // 0 loose .. 1 tight cloud (expressed in the render layer)
+}
+
+const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+
+export function randomBehavior(rng: Rng): BehaviorGenes {
+  return { range: rng(), nerve: rng(), cohesion: rng() };
+}
+
+export function mutateBehavior(b: BehaviorGenes, rng: Rng, amount = 0.1): BehaviorGenes {
+  const nudge = () => (rng() * 2 - 1) * amount;
+  return { range: clamp01(b.range + nudge()), nerve: clamp01(b.nerve + nudge()), cohesion: clamp01(b.cohesion + nudge()) };
+}
+
 export interface Swarm {
   pool: IdMap[]; // ~POOL_SIZE varied sensor maps
   sensor: IdMap; // the current best (representative body/appearance)
   population: number; // 0..cap
   energy: number; // 0..1 metabolic reserve
   cap: number; // the size lever — how large this swarm can grow
+  behavior: BehaviorGenes; // personality (nerve trades feeding vs. exposure)
 }
 
 export function makeSwarm(rng: Rng, poolSize = POOL_SIZE, cap = SWARM_CAP): Swarm {
   const pool: IdMap[] = [];
   for (let i = 0; i < poolSize; i++) pool.push(randomSensorMap(rng));
-  return { pool, sensor: pool[0], population: 10, energy: 0.5, cap };
+  return { pool, sensor: pool[0], population: 10, energy: 0.5, cap, behavior: randomBehavior(rng) };
 }
 
 /** One generation: score the pool against the flower, keep the top half, refill by mutation. */
@@ -60,7 +81,8 @@ export function regenNectar(flower: Flower): void {
 export function feedSwarm(sw: Swarm, flower: Flower): number {
   const drawn = Math.min(flower.nectar, NECTAR_DRAW);
   flower.nectar -= drawn;
-  const gain = drawn * metabolicEfficiency(sw.sensor, flower.map, flower.accent) * FEED_VALUE;
+  const boldness = 0.6 + 0.4 * sw.behavior.nerve; // a bold swarm works the flower harder
+  const gain = drawn * metabolicEfficiency(sw.sensor, flower.map, flower.accent) * FEED_VALUE * boldness;
   sw.energy = Math.min(1, sw.energy + gain);
   return gain;
 }
@@ -83,7 +105,8 @@ export function conspicuousness(sw: Swarm, flower: Flower): number {
  *  `pressure` (0..1) is local predator presence. A camouflaged swarm is spared;
  *  no discrete kills — the population dips and (fed + hidden) regrows. Returns the loss. */
 export function applyPredation(sw: Swarm, flower: Flower, pressure: number): number {
-  const taken = sw.population * conspicuousness(sw, flower) * pressure * PREDATION_RATE;
+  const exposure = 0.4 + 0.6 * sw.behavior.nerve; // a skittish swarm flees, a bold one lingers exposed
+  const taken = sw.population * conspicuousness(sw, flower) * pressure * PREDATION_RATE * exposure;
   sw.population = Math.max(0, sw.population - taken);
   return taken;
 }
@@ -96,4 +119,35 @@ export function stepSwarm(sw: Swarm, flower: Flower, rng: Rng, predation = 0): v
   evolveSwarm(sw, flower, rng);
   updatePopulation(sw);
   if (predation > 0) applyPredation(sw, flower, predation);
+}
+
+function refill(pool: IdMap[], rng: Rng): IdMap[] {
+  const out = pool.slice();
+  while (out.length < POOL_SIZE) out.push(mutateMap(out[Math.floor(rng() * out.length)], rng, MUTATE_FLIPS));
+  return out;
+}
+
+/** Divergence → cousins. When a swarm's gene pool has split into two clusters, one
+ *  favouring flower A and one flower B, the B-cluster buds off as a new swarm. Returns the
+ *  new swarm, or null if the pool isn't genuinely bimodal (no forced split). */
+export function divergeSwarm(sw: Swarm, flowerA: Flower, flowerB: Flower, rng: Rng): Swarm | null {
+  const forA: IdMap[] = [], forB: IdMap[] = [];
+  for (const g of sw.pool) {
+    const ra = matchReward(g, flowerA.map, flowerA.accent);
+    const rb = matchReward(g, flowerB.map, flowerB.accent);
+    (rb > ra ? forB : forA).push(g);
+  }
+  if (forA.length < 2 || forB.length < 2) return null; // not bimodal — nothing to split
+  sw.pool = refill(forA, rng);
+  sw.sensor = sw.pool[0];
+  const child: Swarm = {
+    pool: refill(forB, rng),
+    sensor: forB[0],
+    population: sw.population * 0.4,
+    energy: sw.energy,
+    cap: sw.cap,
+    behavior: mutateBehavior(sw.behavior, rng, 0.15),
+  };
+  sw.population *= 0.6;
+  return child;
 }
