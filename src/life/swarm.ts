@@ -1,5 +1,5 @@
 import { Rng } from "../core/rng";
-import { IdMap, randomSensorMap, makeFlowerSignature, mutateMap, matchReward, metabolicEfficiency } from "./idmap";
+import { IdMap, randomSensorMap, makeFlowerSignature, mutateMap, matchReward, metabolicEfficiency, resemblance } from "./idmap";
 
 // The ecology entities. A Flower is a plant's identity map + a nectar meter. A
 // Swarm is a single spatial cloud carrying a small internal gene pool (bookkeeping,
@@ -14,6 +14,7 @@ export const NECTAR_DRAW = 0.25; // most an insect can take in one feed
 export const FEED_VALUE = 4; // energy per unit nectar at full metabolic efficiency
 export const LIVING_COST = 0.02; // energy burned per tick just living
 export const SWARM_CAP = 100; // default population ceiling; per-swarm `cap` is the size lever
+export const PREDATION_RATE = 0.02; // fractional population loss per tick at full exposure × pressure
 
 export interface Flower {
   map: IdMap; // full appearance signature (base + flower accent)
@@ -72,10 +73,27 @@ export function updatePopulation(sw: Swarm): void {
   sw.population = Math.max(0, Math.min(sw.cap, sw.population));
 }
 
-/** One tick: the flower refreshes a little nectar, the swarm feeds, its pool evolves, it lives. */
-export function stepSwarm(sw: Swarm, flower: Flower, rng: Rng): void {
+/** How much a swarm stands out on the plant it's on (0 hidden .. 1 exposed).
+ *  Camouflage is free from the same map: matching the flower it feeds on hides it. */
+export function conspicuousness(sw: Swarm, flower: Flower): number {
+  return 1 - resemblance(sw.sensor, flower.map);
+}
+
+/** Gentle, non-wiping predation: an insectivore thins the *conspicuous* fraction.
+ *  `pressure` (0..1) is local predator presence. A camouflaged swarm is spared;
+ *  no discrete kills — the population dips and (fed + hidden) regrows. Returns the loss. */
+export function applyPredation(sw: Swarm, flower: Flower, pressure: number): number {
+  const taken = sw.population * conspicuousness(sw, flower) * pressure * PREDATION_RATE;
+  sw.population = Math.max(0, sw.population - taken);
+  return taken;
+}
+
+/** One tick: nectar refreshes, the swarm feeds, its pool evolves, it lives, and — if
+ *  predators are present — the conspicuous fraction is thinned. */
+export function stepSwarm(sw: Swarm, flower: Flower, rng: Rng, predation = 0): void {
   regenNectar(flower);
   feedSwarm(sw, flower);
   evolveSwarm(sw, flower, rng);
   updatePopulation(sw);
+  if (predation > 0) applyPredation(sw, flower, predation);
 }
