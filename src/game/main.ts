@@ -1033,25 +1033,26 @@ function savedIndex(): number[] {
   }
 }
 
-// The TRUE count of genuinely-saved worlds — unlike savedIndex(), this never
-// injects currentSeed. savedIndex()'s "the island underfoot counts too" rule
-// is right during ordinary play but wrong for the front door: while titling,
+// The raw saved-worlds list — unlike savedIndex(), this never injects
+// currentSeed. savedIndex()'s "the island underfoot counts too" rule is right
+// during ordinary play but wrong for the front door: while titling,
 // currentSeed is the backdrop, which is never a played session.
-function savedWorldCount(): number {
+function savedSeeds(): number[] {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
-    return Array.isArray(raw)
-      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0).length
-      : 0;
+    return Array.isArray(raw) ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0) : [];
   } catch {
-    return 0;
+    return [];
   }
 }
+function savedWorldCount(): number {
+  return savedSeeds().length;
+}
 
-function openIslePicker(): void {
+function openIslePicker(fromTitle = false): void {
   localStorage.setItem("wander.pickerSeen", "1"); // the way back has been found
-  persist(); // the island underfoot takes its place in the ledger first
-  const index = savedIndex();
+  if (!fromTitle) persist(); // never the title backdrop
+  const index = fromTitle ? savedSeeds() : savedIndex();
   const rows = isleRows(
     index,
     currentSeed,
@@ -1066,15 +1067,18 @@ function openIslePicker(): void {
   openPicker(
     rows,
     (seed) => {
-      persist();
+      if (!fromTitle) persist(); // from the title: don't save the backdrop (titleActive is already false, so loadWorld still records lastSeed)
       loadWorld(seed);
       renderer.setMap(map);
     },
     (seed) => {
       // forget a world: drop its save and its ledger row, then re-open the panel
       localStorage.removeItem(worldKey(seed));
-      localStorage.setItem(WORLD_INDEX_KEY, JSON.stringify(savedIndex().filter((s) => s !== seed)));
-      openIslePicker();
+      localStorage.setItem(
+        WORLD_INDEX_KEY,
+        JSON.stringify((fromTitle ? savedSeeds() : savedIndex()).filter((s) => s !== seed)),
+      );
+      openIslePicker(fromTitle);
     },
   );
   // far islands learn their standout feature one per beat, never all at once
@@ -1422,9 +1426,11 @@ function onChoose(id: TitleRowId): void {
     return;
   }
   if (id === "isles") {
-    // open the picker with titleActive STILL true, so its lead-in persist() is
-    // skipped — the backdrop is never written to the saved-worlds ledger.
-    openIslePicker(); // its pick handler loadWorld+setMap's; cancel lands you on the (playable) backdrop
+    // fromTitle=true: its lead-in, pick, and forget paths all skip persist()/
+    // savedIndex() so the backdrop is never written to the saved-worlds ledger
+    // or listed as a row. leaveTitle() still fires here (not inside the
+    // picker) so loadWorld correctly records lastSeed once a world is picked.
+    openIslePicker(true); // its pick handler loadWorld+setMap's; cancel lands you on the (playable) backdrop
     leaveTitle();
     return;
   }
