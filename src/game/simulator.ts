@@ -9,13 +9,23 @@
 // logic is driven by a persistent Rng — never Math.random.
 //
 // Rendering is the point (Blaine's ask): flowers are crisp pixel blooms of their
-// map's appearanceColors; swarms are cohesive clouds of individual insects tinted
-// from the swarm's own gene pool, so a cloud's colour visibly drifts toward its
-// flower's palette as it adapts. Art direction: the naturalist's-codex tokens.
+// map's appearanceColors; swarms are little generative insects (render/
+// insectSprites) grown from each swarm's genome — body from the map's dominant
+// colour, wing patches from real sensor cells — darting, hovering and perching
+// on the bloom they work, so a cloud visibly becomes its flower as it adapts.
+// Art direction: the naturalist's-codex tokens.
 
 import { makeRng, Rng, hash2d } from "../core/rng";
 import { appearanceColors, resemblance, MAP_G, MAP_CELLS, IdMap } from "../life/idmap";
 import { Flower, Swarm, SWARM_CAP, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
+import {
+  CALM,
+  FlightField,
+  INSECT_SPRITE,
+  blitInsect,
+  getInsectSprites,
+  insectPose,
+} from "../render/insectSprites";
 
 // ── the field ────────────────────────────────────────────────────────────
 // A fixed logical meadow measured in tiles; the view fits the whole field into
@@ -37,6 +47,7 @@ interface Mote {
 }
 interface SwarmEnt {
   sw: Swarm;
+  id: number; // placement order — the per-swarm flight salt
   x: number; // tile coords (the cloud's home drifts to orbit its flower)
   y: number;
   orbit: number; // slow orbit phase around the nearest flower
@@ -135,6 +146,7 @@ export function startSimulator(): void {
   function addFlower(x: number, y: number, size: number): void {
     flowers.push({ fl: makeFlower(rng, size), x, y });
   }
+  let nextSwarmId = 0;
   function addSwarm(x: number, y: number): void {
     const sw = makeSwarm(rng);
     sw.cap = capValue; // honour the current size-cap slider
@@ -142,7 +154,7 @@ export function startSimulator(): void {
     for (let i = 0; i < MOTES_MAX; i++) {
       motes.push({ a: rng() * Math.PI * 2, r: 0.35 + rng() * 0.65, spd: 0.25 + rng() * 0.55, z: rng() });
     }
-    swarms.push({ sw, x, y, orbit: rng() * Math.PI * 2, motes });
+    swarms.push({ sw, id: nextSwarmId++, x, y, orbit: rng() * Math.PI * 2, motes });
   }
 
   // ── pressures (the bench's live levers) ──────────────────────────────────
@@ -342,6 +354,7 @@ export function startSimulator(): void {
     const w = window.innerWidth;
     const h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false; // the insects are pixel art — keep them crisp
     ctx.fillStyle = "#0a0e14";
     ctx.fillRect(0, 0, w, h);
     if (ground) ctx.drawImage(ground, offX, offY);
@@ -367,7 +380,8 @@ export function startSimulator(): void {
       drawFlower(ctx, f, sx(f.x), sy(f.y) + bob, selF);
     }
 
-    // swarms: cohesive clouds of individual insects, coloured from the genome
+    // swarms: the same little generative insects the island flies — grown from
+    // each swarm's genome, darting, hovering and perching on the bloom they work
     for (const s of swarms) {
       const f = nearestFlowerFor(s);
       // the cloud gently orbits its nearest flower, so it reads as "visiting" it
@@ -380,48 +394,67 @@ export function startSimulator(): void {
         s.y += (ty - s.y) * 0.02;
       }
       const selS = selected !== null && selected.kind === "swarm" && selected.ref === s;
-      drawSwarm(ctx, s, sx(s.x), sy(s.y), nowS, selS);
+      drawSwarm(ctx, s, sx(s.x), sy(s.y), f, nowS, selS);
     }
   }
 
-  function drawSwarm(c: CanvasRenderingContext2D, s: SwarmEnt, cx: number, cy: number, nowS: number, sel: boolean): void {
+  function drawSwarm(
+    c: CanvasRenderingContext2D,
+    s: SwarmEnt,
+    cx: number,
+    cy: number,
+    f: FlowerEnt | null,
+    nowS: number,
+    sel: boolean,
+  ): void {
     const sw = s.sw;
     const pal = swarmPalette(sw);
     const frac = Math.max(0, Math.min(1, sw.population / sw.cap));
-    const shown = Math.round(4 + frac * (MOTES_MAX - 4));
     const cohesion = sw.behavior.cohesion;
     const baseR = scale * (1.5 - cohesion * 0.7); // tighter cohesion = smaller cloud
-    // an aggregate halo so the cloud has body and a colour you read at a glance
-    const glow = c.createRadialGradient(cx, cy, 0, cx, cy, baseR * 2.2);
-    glow.addColorStop(0, tint(pal[0], sel ? 0.34 : 0.22));
+    // a soft halo so the cloud reads at a glance against the dark bench
+    const glow = c.createRadialGradient(cx, cy, 0, cx, cy, baseR * 2);
+    glow.addColorStop(0, tint(pal[0], sel ? 0.3 : 0.18));
     glow.addColorStop(1, tint(pal[0], 0));
     c.fillStyle = glow;
     c.beginPath();
-    c.arc(cx, cy, baseR * 2.2, 0, Math.PI * 2);
+    c.arc(cx, cy, baseR * 2, 0, Math.PI * 2);
     c.fill();
-    // the individuals
-    c.save();
-    for (let i = 0; i < shown; i++) {
-      const m = s.motes[i];
-      const a = m.a + nowS * m.spd * (1 + (i % 3) * 0.15);
+    // the dust of many-ness behind the full insects, scaled by population
+    const insects = Math.round(5 + frac * 9);
+    const dust = Math.min(s.motes.length - insects, Math.round(frac * 14));
+    for (let i = 0; i < dust; i++) {
+      const m = s.motes[insects + i];
+      const a = m.a + (CALM ? 0 : nowS * m.spd * (1 + (i % 3) * 0.15));
       const rr = baseR * (0.35 + m.r * (1 + (1 - cohesion) * 0.8));
-      const mx = cx + Math.cos(a) * rr;
-      const my = cy + Math.sin(a) * rr * 0.82;
-      const col = pal[i % pal.length];
-      c.fillStyle = col;
-      c.shadowColor = col;
-      c.shadowBlur = 6;
-      const rad = 1.5 + m.z * 1.3;
-      c.beginPath();
-      c.arc(mx, my, rad, 0, Math.PI * 2);
-      c.fill();
+      c.fillStyle = tint(pal[i % pal.length], 0.4);
+      c.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.82), 1, 1);
     }
-    c.restore();
+    // the insects — the very sprites the world and the codex cards share,
+    // scaled to the bench (integer, nearest-neighbour: still pixel art)
+    const sprites = getInsectSprites(sw);
+    const k = Math.max(2, Math.round(scale / 9));
+    const patchHalf = (Math.max(3, Math.round(scale * 0.42)) * MAP_G) / 2;
+    const field: FlightField = {
+      cx,
+      cy,
+      homeX: f ? sx(f.x) : undefined,
+      homeY: f ? sy(f.y) - patchHalf - 2 : undefined, // the bloom patch's crown
+      baseR,
+      range: sw.behavior.range,
+      nerve: sw.behavior.nerve,
+      calm: CALM,
+      salt: s.id * 0x9e37 + 1,
+    };
+    for (let i = 0; i < insects; i++) {
+      const pose = insectPose(i, nowS, field);
+      blitInsect(c, sprites, pose.x, pose.y, pose.frame, pose.heading, k);
+    }
     if (sel) {
       c.strokeStyle = "rgba(127, 224, 196, 0.9)";
       c.lineWidth = 1.5;
       c.beginPath();
-      c.arc(cx, cy, baseR * 2.2 + 3, 0, Math.PI * 2);
+      c.arc(cx, cy, baseR * 2 + 3, 0, Math.PI * 2);
       c.stroke();
     }
   }
@@ -698,6 +731,9 @@ function buildChrome(): Chrome {
     `<div style="font: 10px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: rgb(var(--lumen)); opacity: 0.75; margin: 14px 0 6px;">${t}</div>`;
   const portrait = (src: string): string =>
     `<img src="${src}" style="width: 154px; height: 154px; image-rendering: pixelated; display: block; margin: 0 auto; border-radius: 3px; box-shadow: 0 0 0 1px rgba(127,224,196,0.2);" />`;
+  // a demoted little genome plate — the map behind the insect, not the lead
+  const inset = (src: string): string =>
+    `<img src="${src}" style="width: 84px; height: 84px; image-rendering: pixelated; display: block; margin: 0 auto; border-radius: 2px; box-shadow: 0 0 0 1px rgba(127,224,196,0.16);" />`;
   const stat = (k: string, v: string, cls = "ink"): string => {
     const col = cls === "mint" ? "rgb(var(--lumen))" : cls === "gold" ? "rgb(var(--firefly))" : "var(--ink-bright)";
     return (
@@ -710,20 +746,34 @@ function buildChrome(): Chrome {
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 19px; color: var(--ink-bright);">${name}</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">${sub}</div>`;
 
+  // the representative insect, drawn from the very sprite the bench flies
+  const insectCanvas = (sw: Swarm): string => {
+    const k = 14;
+    const c = document.createElement("canvas");
+    c.width = INSECT_SPRITE * k;
+    c.height = INSECT_SPRITE * k;
+    const g = c.getContext("2d")!;
+    g.imageSmoothingEnabled = false;
+    g.drawImage(getInsectSprites(sw).wingA, 0, 0, c.width, c.height);
+    return c.toDataURL();
+  };
+
   chrome.showSwarm = (sw, flower) => {
     const res = flower ? Math.round(resemblance(sw.sensor, flower.map) * 100) : 0;
     const b = sw.behavior;
     plate.innerHTML =
       head("a swarm", "adapting cloud") +
-      title("appearance genome") +
-      portrait(genomeCanvas(sw.sensor)) +
+      title("the insect") +
+      portrait(insectCanvas(sw)) +
+      title("its map · the appearance genome") +
+      inset(genomeCanvas(sw.sensor)) +
       title("readout") +
       stat("population", String(Math.round(sw.population)), "mint") +
       stat("resemblance", flower ? res + "%" : "—", "gold") +
       stat("range", pct(b.range)) +
       stat("nerve", pct(b.nerve)) +
       stat("cohesion", pct(b.cohesion)) +
-      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">its colours drift toward the nearest flower's as its pool adapts — the map above is what you see rendered on the cloud.</div>`;
+      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">the insect is drawn from its map — body from the dominant colour, wing patches from real cells — so as the pool adapts you watch the bug become its flower.</div>`;
     plate.style.display = "block";
   };
   chrome.showFlower = (fl) => {

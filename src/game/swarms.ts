@@ -16,7 +16,8 @@
 
 import { makeRng, Rng } from "../core/rng";
 import { IdMap, MAP_CELLS, appearanceColors, metabolicEfficiency, resemblance } from "../life/idmap";
-import { Flower, Swarm, makeFlower, makeSwarm, stepSwarm, divergeSwarm } from "../life/swarm";
+import { BehaviorGenes, Flower, Swarm, makeFlower, makeSwarm, stepSwarm, divergeSwarm } from "../life/swarm";
+import { InsectPlan, insectMorphOf } from "../render/insectSprites";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -29,7 +30,7 @@ const SWARM_SALT = 0x5a12b; // the swarm layer's own life (spawn + tick + adapt)
 
 export const MIN_SWARMS = 4;
 export const MAX_SWARMS = 8;
-export const MOTES_MAX = 42; // insects drawn in the densest cloud
+export const MOTES_MAX = 42; // flight bookkeeping slots per cloud (insects + the 1px dust of many-ness)
 const SWARM_CAP = 96; // the size lever for a world swarm (near the core default)
 const WARM_TICKS = 20; // heartbeats a swarm has already lived when the island loads
 const LIVELY_POP = 38; // a swarm arrives already a lush cloud, not a lone speck
@@ -83,8 +84,9 @@ const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination event
 const POLLINATE_SPREAD_RADIUS = 6; // tiles a pollinated seed may drift (wider than reseedRadius)
 const POLLINATE_MAX_SAME = 2; // most same-species a pollinated seed will add on one tile (< flora.maxPerTile)
 
-// A mote is one drawn insect: bookkeeping for the render only (the gene pool is
-// the sim). Its orbit within the cloud animates on the wall clock.
+// A mote is one slot of render bookkeeping (the gene pool is the sim): the
+// renderer draws the first few as full generative insects and the rest as the
+// faint 1px dust that says "many" without clutter. Wall-clock animation only.
 interface Mote {
   a: number; // orbit angle around the cloud centre
   r: number; // 0..1 radial offset within the cloud
@@ -96,6 +98,8 @@ interface Mote {
 // on the island and a flowering plant it's homing on.
 export interface WorldSwarm {
   sw: Swarm;
+  id: number; // creation order — a stable identity (names, per-swarm flight salt)
+  name: string; // the codex name its kind wears — every species here is named
   x: number; // world px — the cloud centre, drifting to orbit its home bloom
   y: number;
   orbit: number; // slow orbit phase around the home flower
@@ -103,9 +107,44 @@ export interface WorldSwarm {
   home: { x: number; y: number; species: number } | null; // the bloom it works
 }
 
+// ── names, in the codex voice ─────────────────────────────────────────────────
+// The game names every species (Silvelash Bell, Pomo Hopper); the swarms wear
+// the same register — a coined word and a bug-epithet cut from the insect's own
+// body plan (the plan is stable for a swarm's life, so the name always fits the
+// creature you see). Seeded off the island seed + creation index on a PRIVATE
+// rng, so naming never draws from the layer's seeded stream. A budded cousin
+// carries the ✧ the flora's island-born daughters wear.
+
+const BUG_SYLLABLES = [
+  "thi", "mo", "vel", "sa", "lu", "pi", "fer", "ola", "da", "myr",
+  "cin", "ra", "eth", "um", "bre", "os", "ni", "tal", "wis", "ke",
+];
+
+const PLAN_EPITHETS: Record<InsectPlan, readonly string[]> = {
+  moth: ["moth", "duskwing", "silkwing", "flit"],
+  beetle: ["beetle", "domeback", "shieldwing", "lacquerwing"],
+  hoverer: ["hummer", "hoverling", "nectarwhirr", "bee"],
+  damsel: ["darner", "needlewing", "threadwing", "damsel"],
+  skipper: ["skipper", "flickerwing", "dartwing", "glancer"],
+};
+
+/** A deterministic codex name for the swarm created `index`-th on this island.
+ *  Pure — its own hash-seeded rng, never a draw from the layer's stream. */
+export function swarmName(seed: number, index: number, behavior: BehaviorGenes, cousin = false): string {
+  const r = makeRng((seed ^ 0xb0661e ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0);
+  const syl = () => BUG_SYLLABLES[Math.floor(r() * BUG_SYLLABLES.length)];
+  let word = syl() + syl();
+  if (r() < 0.35) word += syl();
+  const pool = PLAN_EPITHETS[insectMorphOf(behavior).plan];
+  const epithet = pool[Math.floor(r() * pool.length)];
+  const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+  return `${cap(word)} ${cap(epithet)}${cousin ? " ✧" : ""}`;
+}
+
 // The inspect readout for one swarm — the codex card's data (built here so the
 // idmap math stays out of the render layer). resemblance is 0..1.
 export interface SwarmInspect {
+  name: string; // the codex name the kind wears
   sensor: IdMap; // the 7×7 appearance genome (rendered via appearanceColors)
   population: number;
   hostName: string; // the flowering plant it works
@@ -245,8 +284,11 @@ export class SwarmLayer {
         motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
       }
       const ang = this.rng() * Math.PI * 2;
+      const id = this.swarms.length;
       const ent: WorldSwarm = {
         sw,
+        id,
+        name: swarmName(this.seed, id, sw.behavior),
         x: anchor.x + Math.cos(ang) * RING_MIN_PX,
         y: anchor.y + Math.sin(ang) * RING_MIN_PX,
         orbit: ang,
@@ -354,8 +396,11 @@ export class SwarmLayer {
     for (let m = 0; m < MOTES_MAX; m++) {
       motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
     }
+    const id = this.swarms.length;
     const cousin: WorldSwarm = {
       sw: child,
+      id,
+      name: swarmName(this.seed, id, child.behavior, true), // ✧ — arose here, budded
       x: other.x + Math.cos(ang) * RING_MIN_PX,
       y: other.y + Math.sin(ang) * RING_MIN_PX,
       orbit: ang,
@@ -415,6 +460,7 @@ export class SwarmLayer {
     const host = species[ent.home.species];
     if (!flower || !host) return null;
     return {
+      name: ent.name,
       sensor: ent.sw.sensor,
       population: ent.sw.population,
       hostName: host.name,

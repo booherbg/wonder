@@ -9,6 +9,7 @@ import { PlantSpecies } from "../life/species";
 import { Tile } from "../world/types";
 import { drawBeast } from "./beastSprite";
 import { getCritterSprites } from "./critterSprites";
+import { INSECT_SPRITE, getInsectSprites } from "./insectSprites";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
 
 const ZOOM = 6;
@@ -321,32 +322,36 @@ function behaviourLine(b: { range: number; nerve: number; cohesion: number }): s
   return `${roam} · ${nerve} · ${cloud}`;
 }
 
-// One codex card for a swarm: its appearance genome (accent-matches ringed
-// gold), the bloom it works, its population, how far it has come to resemble
-// that flower, and its personality.
+// One codex card for a swarm — PORTRAIT-FIRST, exactly as the critter cards
+// lead with the critter: the representative insect itself, drawn from the very
+// sprite the world flies (getInsectSprites of the same sensor + behaviour), at
+// codex scale. The raw 7×7 genome grid is demoted to a small labelled inset.
 function swarmCard(view: SwarmInspect): HTMLElement {
   const card = document.createElement("div");
   card.className = "inspect-card";
   card.style.width = "150px";
-  const ring = new Set<number>();
-  for (let i = 0; i < view.sensor.length; i++) {
-    if (view.accent[i] && view.sensor[i] === view.flowerMap[i]) ring.add(i);
-  }
-  const img = document.createElement("img");
-  img.src = genomePatch(view.sensor, ring);
-  img.style.cssText =
-    "width: 120px; height: 120px; image-rendering: pixelated; display: block; margin: 0 auto 4px;" +
-    " border-radius: 3px; box-shadow: 0 0 0 1px rgba(127,224,196,0.2);";
-  card.appendChild(img);
+
+  // the portrait: the very insect flying outside, ~12× the world sprite
+  const sprites = getInsectSprites({ sensor: view.sensor, behavior: view.behavior });
+  const Z = 12;
+  const canvas = document.createElement("canvas");
+  canvas.width = INSECT_SPRITE * Z;
+  canvas.height = INSECT_SPRITE * Z;
+  canvas.style.cssText = "display: block; margin: 0 auto 4px; image-rendering: pixelated;";
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sprites.wingA, 0, 0, canvas.width, canvas.height);
+  card.appendChild(canvas);
 
   const name = document.createElement("div");
   name.className = "inspect-name";
-  name.textContent = "a swarm";
+  name.textContent = view.name;
   card.appendChild(name);
 
   const lines = [
     `works ${view.hostName}`,
-    `${Math.round(view.population)} strong · ${pct(view.resemblance)} its flower`,
+    `${Math.round(view.population)} aloft`,
+    `${pct(view.resemblance)} come to match its flower`,
     behaviourLine(view.behavior),
   ];
   for (const line of lines) {
@@ -355,6 +360,23 @@ function swarmCard(view: SwarmInspect): HTMLElement {
     d.textContent = line;
     card.appendChild(d);
   }
+
+  // the genome, demoted to a small inset: its map beside its flower's matches
+  const ring = new Set<number>();
+  for (let i = 0; i < view.sensor.length; i++) {
+    if (view.accent[i] && view.sensor[i] === view.flowerMap[i]) ring.add(i);
+  }
+  const img = document.createElement("img");
+  img.src = genomePatch(view.sensor, ring);
+  img.style.cssText =
+    "width: 56px; height: 56px; image-rendering: pixelated; display: block; margin: 6px auto 2px;" +
+    " border-radius: 2px; box-shadow: 0 0 0 1px rgba(127,224,196,0.18);";
+  card.appendChild(img);
+  const caption = document.createElement("div");
+  caption.className = "inspect-traits";
+  caption.style.opacity = "0.7";
+  caption.textContent = "its map · gold = its flower, matched";
+  card.appendChild(caption);
   return card;
 }
 
@@ -363,12 +385,12 @@ function swarmCard(view: SwarmInspect): HTMLElement {
 export function openSwarmCard(view: SwarmInspect): void {
   const el = panel();
   el.innerHTML = "";
-  sectionTitle(el, "a swarm, adrift");
+  sectionTitle(el, `${view.name}, adrift`);
   const g = grid(el);
   g.appendChild(swarmCard(view));
   const hint = document.createElement("div");
   hint.className = "inspect-hint";
-  hint.textContent = "its colours are its map — watch them drift toward its flower · Esc to close";
+  hint.textContent = "its wings are its map — watch a bug become its flower · Esc to close";
   el.appendChild(hint);
   el.style.display = "block";
 }
