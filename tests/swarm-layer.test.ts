@@ -7,6 +7,8 @@ import { isBloom } from "../src/render/ambient";
 import {
   MAX_SWARMS,
   MIN_SWARMS,
+  SPARSE_SWARMS,
+  SWARM_COUNT_CAP,
   SwarmLayer,
   buildFlowerMaps,
   canFlower,
@@ -75,17 +77,18 @@ test("swarms spawn only on/near flowering plants", () => {
   }
 });
 
-test("a swarm re-homes onto the nearest flowering plant each heartbeat", () => {
+test("a swarm re-homes onto the nearest flowering plant each heartbeat (off its sim home)", () => {
   const { flora, layer } = build();
   const ent = layer.swarms[0];
   const blooms = flora.all.filter((p) => isBloom(p) && layer.flowers.has(p.species));
-  // teleport the cloud onto a DIFFERENT bloom, well away from its current home
-  const target = blooms.find((p) => Math.hypot(p.x - ent.x, p.y - ent.y) > 4 * 16);
+  // move the swarm's SIM-OWNED home onto a DIFFERENT bloom, well away from the old
+  // one. Re-homing must follow the sim home, NEVER the animated cloud position —
+  // so this drives ent.home (not ent.x/ent.y), which no longer feeds the sim.
+  const target = blooms.find((p) => Math.hypot(p.x - ent.home!.x, p.y - ent.home!.y) > 4 * 16);
   expect(target).toBeDefined();
-  ent.x = target!.x;
-  ent.y = target!.y;
+  ent.home = { x: target!.x, y: target!.y, species: target!.species };
   layer.tick(flora);
-  // the nearest flowering plant to that spot is the target itself (distance 0)
+  // the nearest flowering plant to that home is the target itself (distance 0)
   expect(ent.home).not.toBeNull();
   expect(ent.home!.x).toBe(target!.x);
   expect(ent.home!.y).toBe(target!.y);
@@ -107,6 +110,97 @@ test("swarms adapt: feeding + evolving lifts resemblance toward the host flower"
   // the host name resolves to the flowering species it works
   expect(view!.hostName.length).toBeGreaterThan(0);
   expect(flower.map.length).toBe(view!.sensor.length);
+});
+
+// Bloom-poor island (finding 4): when NO flowering plant is currently in bloom
+// but the island still holds flowering-capable plants (a few succulents not yet
+// blossoming, say), the sky must not be empty — a couple of swarms seed on those
+// flowering plants island-wide. Only a truly flowerless island stays bare.
+test("a bloom-poor island still gets a little life — swarms fall back to not-yet-blooming flowering plants", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flowers = buildFlowerMaps(SEED, species);
+  // a flowering species that actually has plants scattered on this island
+  const scatter = new Flora(map, species, SEED);
+  const flSpecies = [...flowers.keys()].find((id) => scatter.all.some((p) => p.species === id))!;
+  const samples = scatter.all.filter((p) => p.species === flSpecies).slice(0, 10);
+  expect(samples.length).toBeGreaterThan(0);
+  // rebuild a flora holding ONLY those plants, each re-formed as a NOT-blooming
+  // succulent (low petals + glow → isBloom false), so bloomCandidates is empty
+  // while the flowering species is still present
+  const restored = {
+    tick: 0,
+    plants: samples.map((p) => ({
+      species: p.species,
+      genome: { ...p.genome, form: PlantForm.Succulent, petals: 3, glow: 0.1 },
+      x: p.x,
+      y: p.y,
+      born: 0,
+    })),
+  };
+  const flora = new Flora(map, species, SEED, {}, restored);
+  expect(flora.all.length).toBeGreaterThan(0);
+  expect(flora.all.every((p) => !isBloom(p))).toBe(true); // nothing is in bloom
+
+  const layer = new SwarmLayer(SEED, species, flora, { x: samples[0].x, y: samples[0].y });
+  // the sky isn't empty: a couple of swarms seeded on the flowering plants
+  expect(layer.swarms.length).toBeGreaterThan(0);
+  expect(layer.swarms.length).toBeLessThanOrEqual(SPARSE_SWARMS);
+  for (const ent of layer.swarms) {
+    expect(ent.home).not.toBeNull();
+    expect(flowers.has(ent.home!.species)).toBe(true);
+  }
+  // and ticking is safe (no bloom in reach → keeps its bond, never crashes)
+  layer.tick(flora);
+  for (const ent of layer.swarms) expect(ent.home).not.toBeNull();
+});
+
+// The other edge: an island with truly zero flowering plants carries no swarms
+// (an empty sky is correct there) — the fallback never invents life from nothing.
+test("an island with no flowering plants at all carries no swarms", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const nonFlowering = species.find((s) => !canFlower(s.archetype.form))!;
+  const scatter = new Flora(map, species, SEED);
+  const samples = scatter.all.filter((p) => p.species === nonFlowering.id).slice(0, 8);
+  expect(samples.length).toBeGreaterThan(0);
+  const restored = {
+    tick: 0,
+    plants: samples.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: 0 })),
+  };
+  const flora = new Flora(map, species, SEED, {}, restored);
+  const layer = new SwarmLayer(SEED, species, flora, { x: samples[0].x, y: samples[0].y });
+  expect(layer.swarms.length).toBe(0);
+});
+
+// Daughter species born during play (finding 5): buildFlowerMaps runs once at
+// load, so a flowering kind that speciates later has no map yet. flowerFor builds
+// (and caches) one the first time the daughter is met, so evolved daughters can
+// host swarms too — deterministic (seeded off the species id, not when it's built).
+test("a flowering daughter species that speciates during play gets a lazy flower map and can host swarms", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED); // the SHARED list, as flora mutates on speciation
+  const flora = new Flora(map, species, SEED);
+  const layer = new SwarmLayer(SEED, species, flora);
+
+  const daughterId = species.length;
+  expect(layer.flowers.has(daughterId)).toBe(false); // no map at load — it doesn't exist yet
+
+  // a flowering daughter arises: appended to the shared list exactly as flora's
+  // speciateFrom does (same id = list length, form inherited from a flowering parent)
+  const parent = species.find((s) => canFlower(s.archetype.form))!;
+  species.push({ ...parent, id: daughterId, name: parent.name + " ✧", parent: parent.id });
+
+  // met for the first time → its map is built lazily, cached, and correctly sized
+  const flower = layer.flowerFor(daughterId);
+  expect(flower).not.toBeNull();
+  expect(layer.flowers.has(daughterId)).toBe(true);
+  expect(flower!.accent.reduce((n, v) => n + v, 0)).toBe(flowerSizeFor(species[daughterId]));
+
+  // deterministic: an independent layer builds a byte-identical map for that id
+  const twin = new SwarmLayer(SEED, species, new Flora(map, species, SEED)).flowerFor(daughterId)!;
+  expect([...twin.map]).toEqual([...flower!.map]);
+  expect([...twin.accent]).toEqual([...flower!.accent]);
 });
 
 test("the swarm layer is deterministic from the seed", () => {
@@ -141,6 +235,85 @@ test("the swarm layer's construction never perturbs the flora it scatters over (
   // with or without it (the pollination write only ever happens on tick, below)
   expect(flora.all.map((p) => `${p.species}:${p.x}:${p.y}`).join("|")).toBe(before);
   expect(before).toBe(controlSnapshot);
+});
+
+// Predation is now actually wired into the world tick: a gentle ambient
+// insectivory pressure that thins the CONSPICUOUS and spares the camouflaged.
+// This pins that it is applied (a pressured world runs thinner) and that it is
+// non-wiping (never erases a swarm) and bounded (population stays in [0, cap]).
+test("predation is applied through the world tick — a pressured island is thinner, never wiped", () => {
+  const make = () => {
+    const map = generate(SEED);
+    const sp = generatePlantSpecies(SEED);
+    const flora = new Flora(map, sp, SEED);
+    return { flora, layer: new SwarmLayer(SEED, sp, flora) };
+  };
+  const hunted = make(); // full ambient pressure
+  hunted.layer.predation = 1;
+  const spared = make(); // identical island, predators off
+  spared.layer.predation = 0;
+  const sumPop = (l: SwarmLayer): number => l.swarms.reduce((n, e) => n + e.sw.population, 0);
+
+  for (let t = 0; t < 40; t++) {
+    hunted.flora.simTick();
+    hunted.layer.tick(hunted.flora);
+    spared.flora.simTick();
+    spared.layer.tick(spared.flora);
+  }
+
+  // the pressure genuinely bit (predation is invoked), yet never wiped a cloud
+  expect(sumPop(hunted.layer)).toBeLessThan(sumPop(spared.layer));
+  expect(sumPop(hunted.layer)).toBeGreaterThan(0);
+  for (const e of hunted.layer.swarms) {
+    expect(e.sw.population).toBeGreaterThanOrEqual(0);
+    expect(e.sw.population).toBeLessThanOrEqual(e.sw.cap);
+  }
+});
+
+// Divergence → cousins is now invoked from the world tick, and directly
+// exercisable via budCousin. A genuinely bimodal pool (half its home flower,
+// half a different nearby flowering species) buds a cousin homed on the second
+// species; a unimodal pool forces no split; and it stays under the count cap.
+test("divergence buds a cousin from a bimodal pool — invoked, homed on the second species, bounded", () => {
+  const { flora, layer } = build();
+  // find a swarm whose home has a SECOND flowering species within reach, picking
+  // the NEAREST such (exactly as budCousin does) so the bimodal split is against
+  // the very species budCousin will home the cousin on
+  let ent = null as (typeof layer.swarms)[number] | null;
+  let other = null as ReturnType<typeof flora.plantsNear>[number] | null;
+  for (const e of layer.swarms) {
+    const near = flora
+      .plantsNear(e.home!.x, e.home!.y, 10 * 16)
+      .filter((p) => isBloom(p) && layer.flowers.has(p.species) && p.species !== e.home!.species)
+      .sort(
+        (a, b) =>
+          (a.x - e.home!.x) ** 2 + (a.y - e.home!.y) ** 2 - ((b.x - e.home!.x) ** 2 + (b.y - e.home!.y) ** 2),
+      );
+    if (near.length) {
+      ent = e;
+      other = near[0];
+      break;
+    }
+  }
+  expect(ent).not.toBeNull();
+  expect(other).not.toBeNull();
+  const flowerHome = layer.flowers.get(ent!.home!.species)!;
+  const flowerOther = layer.flowers.get(other!.species)!;
+  // force a genuinely bimodal pool: half perfectly matching home, half the other
+  ent!.sw.pool = ent!.sw.pool.map((_, i) => (i % 2 === 0 ? flowerHome.map.slice() : flowerOther.map.slice()));
+
+  const before = layer.swarms.length;
+  const cousin = layer.budCousin(ent!, flora);
+  expect(cousin).not.toBeNull();
+  expect(layer.swarms.length).toBe(before + 1);
+  expect(layer.swarms.length).toBeLessThanOrEqual(SWARM_COUNT_CAP);
+  expect(cousin!.home!.species).toBe(other!.species); // the cousin works the SECOND species
+  expect(cousin!.sw.population).toBeGreaterThan(0);
+  expect(cousin!.sw.population).toBeLessThanOrEqual(cousin!.sw.cap); // bounded, no runaway
+
+  // a unimodal pool (all home) forces no split — divergence stays rare
+  ent!.sw.pool = ent!.sw.pool.map(() => flowerHome.map.slice());
+  expect(layer.budCousin(ent!, flora)).toBeNull();
 });
 
 test("pollination only ever ADDS flowering plants — bounded, additive, never harms flora", () => {

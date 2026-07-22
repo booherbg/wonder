@@ -15,7 +15,7 @@
 
 import { makeRng, Rng, hash2d } from "../core/rng";
 import { appearanceColors, resemblance, MAP_G, MAP_CELLS, IdMap } from "../life/idmap";
-import { Flower, Swarm, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
+import { Flower, Swarm, SWARM_CAP, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
 
 // ── the field ────────────────────────────────────────────────────────────
 // A fixed logical meadow measured in tiles; the view fits the whole field into
@@ -24,6 +24,9 @@ const FIELD_W = 40;
 const FIELD_H = 40;
 const TICK_MS = 260; // sim heartbeat at 1× — a few generations a second
 const MOTES_MAX = 40; // insects drawn in the densest cloud
+const SIM_PREDATION = 0.8; // predation pressure the bench applies when Predators is ON (0..1)
+const CAP_MIN = 20; // swarm-size cap slider bounds (the Swarm.cap lever)
+const CAP_MAX = 140;
 
 // ── placed entities (the spatial glue over the core) ──────────────────────
 interface Mote {
@@ -134,11 +137,22 @@ export function startSimulator(): void {
   }
   function addSwarm(x: number, y: number): void {
     const sw = makeSwarm(rng);
+    sw.cap = capValue; // honour the current size-cap slider
     const motes: Mote[] = [];
     for (let i = 0; i < MOTES_MAX; i++) {
       motes.push({ a: rng() * Math.PI * 2, r: 0.35 + rng() * 0.65, spd: 0.25 + rng() * 0.55, z: rng() });
     }
     swarms.push({ sw, x, y, orbit: rng() * Math.PI * 2, motes });
+  }
+
+  // ── pressures (the bench's live levers) ──────────────────────────────────
+  // Declared before the seed content is placed, since addSwarm reads capValue.
+  let predatorsOn = false; // gentle insectivory: thins the conspicuous, spares the camouflaged
+  let capValue = SWARM_CAP; // the Swarm.cap size lever, dialled by the slider
+
+  function setCap(v: number): void {
+    capValue = Math.round(v);
+    for (const s of swarms) s.sw.cap = capValue; // re-cap every cloud on the bench
   }
 
   // seed content so the bench is alive on arrival: three distinct flower kinds
@@ -156,10 +170,33 @@ export function startSimulator(): void {
   addSwarm(16, 22);
 
   // ── selection / placement ───────────────────────────────────────────────
-  type Tool = "select" | "flower" | "swarm";
+  type Tool = "select" | "flower" | "swarm" | "erase";
   let tool: Tool = "select";
   type Sel = { kind: "swarm"; ref: SwarmEnt } | { kind: "flower"; ref: FlowerEnt } | null;
   let selected: Sel = null;
+
+  // Erase whatever sits nearest a point — the tool that reaches the 0-flower /
+  // 0-swarm edge. Clears the selection if it pointed at what was removed.
+  function eraseAt(x: number, y: number): void {
+    let bd = Infinity;
+    let hitSwarm = -1;
+    let hitFlower = -1;
+    for (let i = 0; i < swarms.length; i++) {
+      const d = Math.hypot(swarms[i].x - x, swarms[i].y - y);
+      if (d < HIT_SWARM && d < bd) { bd = d; hitSwarm = i; hitFlower = -1; }
+    }
+    for (let i = 0; i < flowers.length; i++) {
+      const d = Math.hypot(flowers[i].x - x, flowers[i].y - y);
+      if (d < HIT_FLOWER && d < bd) { bd = d; hitFlower = i; hitSwarm = -1; }
+    }
+    if (hitSwarm >= 0) {
+      const [gone] = swarms.splice(hitSwarm, 1);
+      if (selected && selected.kind === "swarm" && selected.ref === gone) selected = null;
+    } else if (hitFlower >= 0) {
+      const [gone] = flowers.splice(hitFlower, 1);
+      if (selected && selected.kind === "flower" && selected.ref === gone) selected = null;
+    }
+  }
 
   // ── time controls ───────────────────────────────────────────────────────
   let playing = true;
@@ -175,9 +212,10 @@ export function startSimulator(): void {
    *  This is the whole loop — the core does the feeding, evolving and population;
    *  the Simulator only chooses the flower by proximity. */
   function tick(): void {
+    const pressure = predatorsOn ? SIM_PREDATION : 0;
     for (const s of swarms) {
       const f = nearestFlowerFor(s);
-      if (f) stepSwarm(s.sw, f.fl, rng);
+      if (f) stepSwarm(s.sw, f.fl, rng, pressure);
     }
   }
 
@@ -200,8 +238,17 @@ export function startSimulator(): void {
     speed = s;
     refreshToolbar();
   };
+  ui.onPredators = () => {
+    predatorsOn = !predatorsOn;
+    refreshToolbar();
+  };
+  ui.onCap = (v) => {
+    setCap(v);
+    if (selected) renderInspect();
+    refreshToolbar();
+  };
   function refreshToolbar(): void {
-    ui.setState({ playing, speed, tool });
+    ui.setState({ playing, speed, tool, predatorsOn, cap: capValue });
   }
   refreshToolbar();
 
@@ -232,6 +279,11 @@ export function startSimulator(): void {
     }
     if (tool === "swarm") {
       addSwarm(p.x, p.y);
+      return;
+    }
+    if (tool === "erase") {
+      eraseAt(p.x, p.y);
+      renderInspect();
       return;
     }
     // select mode: nearest swarm, then nearest flower, then close
@@ -274,6 +326,12 @@ export function startSimulator(): void {
       refreshToolbar();
     } else if (e.key === "3") {
       tool = "swarm";
+      refreshToolbar();
+    } else if (e.key === "4") {
+      tool = "erase";
+      refreshToolbar();
+    } else if (e.key === "p" || e.key === "P") {
+      predatorsOn = !predatorsOn;
       refreshToolbar();
     }
   });
@@ -487,12 +545,15 @@ function buildGround(scale: number): HTMLCanvasElement {
 
 // ── the DOM chrome: a codex-styled toolbar + inspect panel ──────────────────
 
+type ToolName = "select" | "flower" | "swarm" | "erase";
 interface Chrome {
-  onTool: (t: "select" | "flower" | "swarm") => void;
+  onTool: (t: ToolName) => void;
   onPlay: () => void;
   onStep: () => void;
   onSpeed: (s: number) => void;
-  setState: (s: { playing: boolean; speed: number; tool: "select" | "flower" | "swarm" }) => void;
+  onPredators: () => void;
+  onCap: (v: number) => void;
+  setState: (s: { playing: boolean; speed: number; tool: ToolName; predatorsOn: boolean; cap: number }) => void;
   showSwarm: (sw: Swarm, flower: Flower | null) => void;
   showFlower: (fl: Flower) => void;
   hideInspect: () => void;
@@ -554,10 +615,11 @@ function buildChrome(): Chrome {
   });
   bar.appendChild(sep());
   bar.appendChild(label("place"));
-  const toolDefs: { t: "select" | "flower" | "swarm"; name: string }[] = [
+  const toolDefs: { t: ToolName; name: string }[] = [
     { t: "select", name: "Select" },
     { t: "flower", name: "+ Flower" },
     { t: "swarm", name: "+ Swarm" },
+    { t: "erase", name: "Erase" },
   ];
   const toolBtns = toolDefs.map(({ t, name }) => {
     const b = mkBtn(name);
@@ -567,6 +629,28 @@ function buildChrome(): Chrome {
   playBtn.onclick = () => chrome.onPlay();
   stepBtn.onclick = () => chrome.onStep();
 
+  // ── pressures: predators toggle + the swarm-size cap lever ──────────────────
+  bar.appendChild(sep());
+  bar.appendChild(label("pressures"));
+  const predBtn = mkBtn("Predators");
+  predBtn.onclick = () => chrome.onPredators();
+  const capWrap = document.createElement("label");
+  capWrap.style.cssText = `${MONO} display: flex; align-items: center; gap: 6px; color: rgba(228,236,242,0.6);`;
+  const capText = document.createElement("span");
+  capText.style.cssText = "text-transform: uppercase; color: rgba(228,236,242,0.4);";
+  const capSlider = document.createElement("input");
+  capSlider.type = "range";
+  capSlider.min = String(CAP_MIN);
+  capSlider.max = String(CAP_MAX);
+  capSlider.value = String(SWARM_CAP);
+  capSlider.style.cssText = "width: 84px; accent-color: rgb(var(--lumen)); cursor: pointer;";
+  capSlider.oninput = () => chrome.onCap(Number(capSlider.value));
+  const capNum = document.createElement("span");
+  capNum.style.cssText = "color: var(--ink-bright); min-width: 26px; text-align: right;";
+  capText.textContent = "cap";
+  capWrap.append(capText, capSlider, capNum);
+  bar.appendChild(capWrap);
+
   // the inspect panel — a codex plate on the right (the swarm/flower portrait)
   const plate = document.createElement("div");
   plate.style.cssText =
@@ -575,10 +659,14 @@ function buildChrome(): Chrome {
     " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
   document.body.appendChild(plate);
 
-  chrome.setState = ({ playing, speed, tool }) => {
+  chrome.setState = ({ playing, speed, tool, predatorsOn, cap }) => {
     playBtn.textContent = playing ? "Pause" : "Play";
     for (const { s, b } of speedBtns) b.style.cssText = btn(s === speed);
     for (const { t, b } of toolBtns) b.style.cssText = btn(t === tool);
+    predBtn.style.cssText = btn(predatorsOn);
+    predBtn.textContent = predatorsOn ? "Predators ON" : "Predators";
+    capNum.textContent = String(cap);
+    if (Number(capSlider.value) !== cap) capSlider.value = String(cap);
   };
   chrome.hideInspect = () => {
     plate.style.display = "none";
@@ -653,6 +741,8 @@ function buildChrome(): Chrome {
   chrome.onPlay = () => {};
   chrome.onStep = () => {};
   chrome.onSpeed = () => {};
+  chrome.onPredators = () => {};
+  chrome.onCap = () => {};
   return chrome;
 }
 

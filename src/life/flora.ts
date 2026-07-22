@@ -387,6 +387,37 @@ export class Flora {
     return false;
   }
 
+  // A pollinator's spread — like propagate, but WIDER and LOWER-density, so a
+  // pollination boom reads as natural, airy spread rather than a rigid
+  // single-species carpet. It drifts the child across `radius` tiles (wider than
+  // the self-seed reseedRadius) and refuses any tile that already holds `maxSame`
+  // of this species — a per-cloud density cap set BELOW the per-tile cap, so a
+  // neighbourhood fills loosely. Still bounded: it routes through addPlant, so the
+  // per-tile + global caps and habitat gate all hold on top. Draws only from the
+  // sim rng, exactly as propagate does. Returns true if a seed took root.
+  pollinateSpread(p: Plant, radius: number, maxSame: number): boolean {
+    const t = this.tuning;
+    const px = Math.floor(p.x / TILE_SIZE);
+    const py = Math.floor(p.y / TILE_SIZE);
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const tx = px + Math.floor(this.rng() * (2 * radius + 1)) - radius;
+      const ty = py + Math.floor(this.rng() * (2 * radius + 1)) - radius;
+      // per-cloud density cap: this bloom won't stack past `maxSame` on one tile,
+      // holding the boom below flora's own per-tile ceiling so it stays open
+      const bucket = this.byTile.get(ty * this.map.width + tx);
+      if (bucket) {
+        let same = 0;
+        for (const q of bucket) if (q.species === p.species) same++;
+        if (same >= maxSame) continue;
+      }
+      const x = tx * TILE_SIZE + 3 + this.rng() * (TILE_SIZE - 6);
+      const y = ty * TILE_SIZE + 5 + this.rng() * (TILE_SIZE - 6);
+      const genome = mutate(p.genome, this.rng, t.mutationAmount);
+      if (this.addPlant(p.species, genome, x, y, this.tick)) return true;
+    }
+    return false;
+  }
+
   // One heartbeat of the island (~2s): a budgeted sample of plants ages,
   // dies, and reseeds nearby with drifted genomes. Rain quickens everything
   // a little; the day after rain, the fungi answer threefold; children born

@@ -16,7 +16,7 @@
 
 import { makeRng, Rng } from "../core/rng";
 import { IdMap, MAP_CELLS, appearanceColors, metabolicEfficiency, resemblance } from "../life/idmap";
-import { Flower, Swarm, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
+import { Flower, Swarm, makeFlower, makeSwarm, stepSwarm, divergeSwarm } from "../life/swarm";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -36,6 +36,26 @@ const LIVELY_POP = 38; // a swarm arrives already a lush cloud, not a lone speck
 const HOME_SCAN_PX = 10 * TILE_SIZE; // how far a swarm looks for a flowering plant to work
 const RING_MIN_PX = 1.5 * TILE_SIZE; // a well-adapted swarm hugs its bloom this close
 const RING_RANGE_PX = 1.7 * TILE_SIZE; // a poorly-adapted one ranges out this much further
+export const SPARSE_SWARMS = 2; // bloom-poor island: seed at least this many so the sky isn't empty
+
+// ── predation (gentle ambient insectivory) ────────────────────────────────────
+// A small, always-on predation pressure standing in for generic insectivores. It
+// feeds through the tested core's applyPredation: cull ∝ conspicuousness, so a
+// swarm well-camouflaged against its host flower is spared and a conspicuous one
+// is gently thinned — camouflage/adaptation buys survival. Non-wiping by
+// construction (the core caps the drain and an adapting swarm regrows), so no
+// swarm is ever erased; it just presses the boom to stay honest.
+export const WORLD_PREDATION = 0.6; // 0..1 ambient pressure in a real world (the Simulator toggles its own)
+
+// ── divergence → cousins (bounded budding) ────────────────────────────────────
+// When a swarm's internal gene pool is genuinely bimodal — part favouring its
+// home flower, part a DIFFERENT nearby flowering species — the second cluster
+// buds off as a cousin swarm on that other species (the tested core's
+// divergeSwarm). Kept rare (attempted on a slow cadence) and bounded (a hard
+// ceiling on total swarms), so a world grows a handful of cousins over time,
+// never a runaway.
+export const SWARM_COUNT_CAP = 24; // hard ceiling on total swarms (initial spawns + budded cousins)
+const DIVERGE_INTERVAL = 50; // heartbeats between divergence attempts
 
 // ── pollination (the reciprocal boom) ─────────────────────────────────────────
 // The payoff the plant gets back. A well-matched, well-fed swarm now and then
@@ -55,6 +75,13 @@ const RING_RANGE_PX = 1.7 * TILE_SIZE; // a poorly-adapted one ranges out this m
 const POLLINATE_MATCH_MIN = 0.3; // metabolic efficiency a swarm needs before it pollinates at all
 const POLLINATE_CHANCE = 0.5; // scales the per-swarm, per-heartbeat pollination probability
 const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination events each heartbeat
+// The boom reads as natural SPREAD, not a tiled slab: a pollinated reseed drifts
+// wider than flora's own self-seed radius and thins out under a per-cloud density
+// cap set BELOW flora's per-tile cap — so a species fills a neighbourhood loosely
+// (open, airy) rather than stacking a rigid single-species carpet. Still bounded:
+// it routes through flora's addPlant, so per-tile + global caps hold on top.
+const POLLINATE_SPREAD_RADIUS = 6; // tiles a pollinated seed may drift (wider than reseedRadius)
+const POLLINATE_MAX_SAME = 2; // most same-species a pollinated seed will add on one tile (< flora.maxPerTile)
 
 // A mote is one drawn insect: bookkeeping for the render only (the gene pool is
 // the sim). Its orbit within the cloud animates on the wall clock.
@@ -126,7 +153,11 @@ export function buildFlowerMaps(seed: number, species: readonly PlantSpecies[]):
 export class SwarmLayer {
   readonly flowers: Map<number, Flower>;
   readonly swarms: WorldSwarm[] = [];
+  predation = WORLD_PREDATION; // gentle ambient insectivory; the sim swaps its own value in
   private rng: Rng;
+  private readonly seed: number;
+  private readonly species: readonly PlantSpecies[]; // the SHARED list — grows as daughters speciate
+  private ticks = 0; // sim heartbeats elapsed (drives the divergence cadence)
 
   constructor(
     seed: number,
@@ -134,24 +165,59 @@ export class SwarmLayer {
     flora: Flora,
     focus?: { x: number; y: number }, // world px — the arrival point; some swarms gather here
   ) {
+    this.seed = seed;
+    this.species = species;
     this.flowers = buildFlowerMaps(seed, species);
     this.rng = makeRng((seed ^ SWARM_SALT) >>> 0);
     this.spawn(flora, focus);
   }
 
+  // The flower map for a flowering SPECIES, built lazily and cached. Daughters that
+  // speciate DURING play (flora.speciateFrom appends to the shared species list)
+  // get their own map the first time a swarm meets them — so an evolved flowering
+  // kind can host swarms too, not just the species present at load. Deterministic:
+  // seeded off the flower salt + the species id exactly as buildFlowerMaps does, so
+  // when it is built never changes what it is. Null for a non-flowering kind.
+  flowerFor(speciesId: number): Flower | null {
+    const cached = this.flowers.get(speciesId);
+    if (cached) return cached;
+    const sp = this.species[speciesId];
+    if (!sp || !canFlower(sp.archetype.form)) return null;
+    const rng = makeRng((this.seed ^ FLOWER_SALT ^ Math.imul(speciesId + 1, 0x9e3779b1)) >>> 0);
+    const flower = makeFlower(rng, flowerSizeFor(sp));
+    this.flowers.set(speciesId, flower);
+    return flower;
+  }
+
   // The flowering plants a swarm can actually work: the isBloom rule (the same
-  // one the cosmetic pollinators use) AND a species we hold a flower map for.
+  // one the cosmetic pollinators use) AND a species we hold (or can build) a
+  // flower map for.
   private bloomCandidates(flora: Flora): Plant[] {
-    return flora.all.filter((p) => isBloom(p) && this.flowers.has(p.species));
+    return flora.all.filter((p) => isBloom(p) && this.flowerFor(p.species) !== null);
+  }
+
+  // Any plant of a flowering species, whether or not it is CURRENTLY in bloom —
+  // the fallback pool for a bloom-poor island (trees/ferns/fungi/kelp with only a
+  // few shrubs/succulents not yet blossoming), so the sky still carries a little
+  // life. If this is empty too, the island truly has no flowering plants → no swarms.
+  private floweringPlants(flora: Flora): Plant[] {
+    return flora.all.filter((p) => this.flowerFor(p.species) !== null);
   }
 
   // Scatter a bounded set of swarms, each anchored beside a flowering plant, and
   // let each already live a short while against that bloom — so an island loads
   // with clouds that are already colouring toward their flowers, not blank.
   private spawn(flora: Flora, focus?: { x: number; y: number }): void {
-    const blooms = this.bloomCandidates(flora);
-    if (blooms.length === 0) return; // an island with no blossom carries no swarms
-    const count = MIN_SWARMS + Math.floor(this.rng() * (MAX_SWARMS - MIN_SWARMS + 1));
+    // Prefer plants actually in bloom; on a bloom-poor island fall back to any
+    // flowering-species plant island-wide, so every island with SOME flowering
+    // plant gets a little life (only a truly flowerless island stays empty).
+    const inBloom = this.bloomCandidates(flora);
+    const sparse = inBloom.length === 0;
+    const blooms = sparse ? this.floweringPlants(flora) : inBloom;
+    if (blooms.length === 0) return; // no flowering plants at all — an empty sky is right here
+    const count = sparse
+      ? Math.min(blooms.length, SPARSE_SWARMS) // just a couple of clouds on the nearest flowering plants
+      : MIN_SWARMS + Math.floor(this.rng() * (MAX_SWARMS - MIN_SWARMS + 1));
     // a "near pool": the blooms closest to the arrival point, so the island reads
     // alive right where the wanderer lands. Roughly half the swarms gather here;
     // the rest scatter island-wide. Deterministic (a stable sort off the seed).
@@ -187,22 +253,28 @@ export class SwarmLayer {
         motes,
         home: { x: anchor.x, y: anchor.y, species: anchor.species },
       };
-      const flower = this.flowers.get(anchor.species)!;
+      const flower = this.flowerFor(anchor.species)!;
       for (let w = 0; w < WARM_TICKS; w++) stepSwarm(ent.sw, flower, this.rng);
       this.swarms.push(ent);
     }
   }
 
-  // The nearest flowering plant to a swarm — the live bloom it works this
-  // heartbeat, handed back as the actual Plant so pollination can trip its
-  // propagation. Null if none is in reach (a bloom may have died under the
-  // cloud); the caller keeps the swarm's last home in that case.
+  // The nearest flowering plant to a swarm's SIM-OWNED home — the live bloom it
+  // works this heartbeat, handed back as the actual Plant so pollination can trip
+  // its propagation. Scanned around `ent.home` (the fixed anchor the sim keeps),
+  // NEVER around the animated `ent.x/ent.y` — so which plant is fed/pollinated is
+  // decided purely by the sim, independent of frame rate (finding 1). Null if none
+  // is in reach (a bloom may have died under the cloud); the caller keeps the
+  // swarm's last home in that case.
   private nearestBloomPlant(ent: WorldSwarm, flora: Flora): Plant | null {
+    if (!ent.home) return null;
+    const hx = ent.home.x;
+    const hy = ent.home.y;
     let best: Plant | null = null;
     let bd = Infinity;
-    for (const p of flora.plantsNear(ent.x, ent.y, HOME_SCAN_PX)) {
-      if (!isBloom(p) || !this.flowers.has(p.species)) continue;
-      const d = (p.x - ent.x) ** 2 + (p.y - ent.y) ** 2;
+    for (const p of flora.plantsNear(hx, hy, HOME_SCAN_PX)) {
+      if (!isBloom(p) || this.flowerFor(p.species) === null) continue;
+      const d = (p.x - hx) ** 2 + (p.y - hy) ** 2;
       if (d < bd) {
         bd = d;
         best = p;
@@ -212,12 +284,16 @@ export class SwarmLayer {
   }
 
   // One island heartbeat: each swarm homes on its nearest flowering plant and
-  // feeds + adapts there via the tested core (no predation in v1), and a
-  // well-matched, well-fed swarm now and then POLLINATES that plant — tripping
-  // its ordinary propagation so a faithful pair spreads faster (the reciprocal
-  // boom). Deterministic: the pollination *decision* is drawn only from the
-  // swarm salt's Rng; the reseed placement reuses flora's own propagate. Bounded
-  // + facultative (see the pollination constants) — flora self-seeds without us.
+  // feeds + adapts there via the tested core — with a gentle ambient predation
+  // pressure, so a conspicuous (poorly camouflaged) cloud is thinned and matching
+  // its host buys safety. A well-matched, well-fed swarm now and then POLLINATES
+  // that plant, spreading its seed wide and airy (the reciprocal boom, read as
+  // spread not a slab). And, on a slow cadence, a bimodal swarm may bud a cousin
+  // onto a second nearby flowering species (divergence). Deterministic: every
+  // decision draws only from the swarm salt's Rng and the SIM-OWNED home — never
+  // the animated cloud position — so the sequence is frame-rate-independent.
+  // Bounded + facultative throughout (see the constants) — flora self-seeds
+  // without us, caps hold on the far side, and predation never wipes.
   tick(flora: Flora): void {
     let pollinations = 0; // island-wide events this heartbeat, held under the cap
     for (const ent of this.swarms) {
@@ -225,19 +301,69 @@ export class SwarmLayer {
       if (host) ent.home = { x: host.x, y: host.y, species: host.species };
       // no bloom in reach: keep the bond to the last patch rather than blink away
       if (!ent.home) continue;
-      const flower = this.flowers.get(ent.home.species);
+      const flower = this.flowerFor(ent.home.species);
       if (!flower) continue;
-      stepSwarm(ent.sw, flower, this.rng);
+      stepSwarm(ent.sw, flower, this.rng, this.predation);
       if (host && pollinations < MAX_POLLINATIONS_PER_TICK) {
         const match = metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
         if (match >= POLLINATE_MATCH_MIN) {
           const fill = ent.sw.population / ent.sw.cap; // a fuller cloud pollinates more
           if (this.rng() < POLLINATE_CHANCE * match * match * fill) {
-            if (flora.propagate(host)) pollinations++; // reuse the tested reseed path
+            // wider, lower-density reseed so the boom spreads instead of tiling a slab
+            if (flora.pollinateSpread(host, POLLINATE_SPREAD_RADIUS, POLLINATE_MAX_SAME)) pollinations++;
           }
         }
       }
     }
+    // divergence → cousins, on a slow cadence and one bud at a time: rare, bounded
+    this.ticks++;
+    if (this.ticks % DIVERGE_INTERVAL === 0 && this.swarms.length < SWARM_COUNT_CAP) {
+      for (const ent of [...this.swarms]) {
+        if (this.budCousin(ent, flora)) break; // at most one cousin per attempt
+      }
+    }
+  }
+
+  // Try to bud a cousin off `ent`: when its internal pool is genuinely bimodal —
+  // part favouring its home flower, part a DIFFERENT nearby flowering species — the
+  // tested core's divergeSwarm splits the second cluster off as a new swarm homed
+  // on that other species. Bounded by SWARM_COUNT_CAP; returns the cousin, or null
+  // when at the cap, no second species is near, or the pool isn't truly bimodal
+  // (no forced split). Public so the divergence path is directly exercisable.
+  budCousin(ent: WorldSwarm, flora: Flora): WorldSwarm | null {
+    if (this.swarms.length >= SWARM_COUNT_CAP || !ent.home) return null;
+    const homeFlower = this.flowerFor(ent.home.species);
+    if (!homeFlower) return null;
+    // the nearest flowering plant of a DIFFERENT species to home on
+    let other: Plant | null = null;
+    let bd = Infinity;
+    for (const p of flora.plantsNear(ent.home.x, ent.home.y, HOME_SCAN_PX)) {
+      if (p.species === ent.home.species || !isBloom(p) || this.flowerFor(p.species) === null) continue;
+      const d = (p.x - ent.home.x) ** 2 + (p.y - ent.home.y) ** 2;
+      if (d < bd) {
+        bd = d;
+        other = p;
+      }
+    }
+    if (!other) return null;
+    const otherFlower = this.flowerFor(other.species)!;
+    const child = divergeSwarm(ent.sw, homeFlower, otherFlower, this.rng);
+    if (!child) return null; // pool wasn't genuinely bimodal — nothing forced
+    const ang = this.rng() * Math.PI * 2;
+    const motes: Mote[] = [];
+    for (let m = 0; m < MOTES_MAX; m++) {
+      motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
+    }
+    const cousin: WorldSwarm = {
+      sw: child,
+      x: other.x + Math.cos(ang) * RING_MIN_PX,
+      y: other.y + Math.sin(ang) * RING_MIN_PX,
+      orbit: ang,
+      motes,
+      home: { x: other.x, y: other.y, species: other.species },
+    };
+    this.swarms.push(cousin);
+    return cousin;
   }
 
   // Per-frame drift: each cloud eases into a slow orbit around its home bloom —
@@ -247,7 +373,7 @@ export class SwarmLayer {
     for (const ent of this.swarms) {
       ent.orbit += dt * 0.6;
       if (!ent.home) continue;
-      const flower = this.flowers.get(ent.home.species);
+      const flower = this.flowerFor(ent.home.species);
       const res = flower ? resemblance(ent.sw.sensor, flower.map) : 0;
       const ring = RING_MIN_PX + (1 - res) * RING_RANGE_PX;
       const tx = ent.home.x + Math.cos(ent.orbit) * ring;
@@ -285,7 +411,7 @@ export class SwarmLayer {
   // has come to resemble it, and its personality. Null if it has no live host.
   inspect(ent: WorldSwarm, species: readonly PlantSpecies[]): SwarmInspect | null {
     if (!ent.home) return null;
-    const flower = this.flowers.get(ent.home.species);
+    const flower = this.flowerFor(ent.home.species);
     const host = species[ent.home.species];
     if (!flower || !host) return null;
     return {

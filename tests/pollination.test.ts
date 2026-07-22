@@ -4,7 +4,7 @@ import { generateCritterSpecies, spawnCritters, updateCritter } from "../src/lif
 import { Flora } from "../src/life/flora";
 import { generatePlantSpecies } from "../src/life/species";
 import { generate } from "../src/world/generate";
-import { SwarmLayer } from "../src/game/swarms";
+import { SWARM_COUNT_CAP, SwarmLayer } from "../src/game/swarms";
 
 // The reciprocal boom, guarded. The swarm layer now PAYS its flower back: a
 // well-matched, well-fed swarm pollinates the plant it works — tripping that
@@ -105,4 +105,41 @@ test("an island run with the swarm layer stays bounded — under the cap, no col
   // and no cloud explodes past its size lever
   for (const e of layer.swarms) expect(e.sw.population).toBeLessThanOrEqual(e.sw.cap);
   expect(maxPop).toBeLessThanOrEqual(layer.swarms[0].sw.cap);
+  // divergence buds cousins over the run, but bounded — never a runaway population
+  expect(layer.swarms.length).toBeLessThanOrEqual(SWARM_COUNT_CAP);
+});
+
+// (d) Frame-rate independence (finding 1). Which plant a swarm feeds and
+// pollinates is decided off its SIM-OWNED home, never the wall-clock-animated
+// cloud position — so interleaving any number of uneven render frames between
+// sim heartbeats must not change the sim by a single draw. Two byte-identical
+// islands live the exact same heartbeats; one is also animated hard, as a fast
+// frame rate would. The flora sequence (which pollination writes) and every
+// swarm's state must come out identical.
+test("live pollination is frame-rate-independent: render animation never perturbs the sim", () => {
+  const snapshot = (withAnimate: boolean) => {
+    const species = generatePlantSpecies(SEED);
+    const flora = new Flora(generate(SEED), species, SEED);
+    const layer = new SwarmLayer(SEED, species, flora);
+    for (let t = 0; t < 400; t++) {
+      flora.simTick();
+      layer.tick(flora); // the sim heartbeat: feed, adapt, pollinate, diverge
+      if (withAnimate) {
+        // many uneven render frames easing the visual clouds all over the island
+        for (let f = 0; f < 6; f++) layer.animate(0.008 + f * 0.005);
+      }
+    }
+    return {
+      plants: flora.all.map((p) => `${p.species}:${p.x}:${p.y}`).sort().join("|"),
+      count: layer.swarms.length,
+      pops: layer.swarms.map((e) => Math.round(e.sw.population * 1e6)),
+      sensors: layer.swarms.map((e) => [...e.sw.sensor].join(",")),
+    };
+  };
+  const still = snapshot(false);
+  const animated = snapshot(true);
+  expect(animated.count).toBe(still.count);
+  expect(animated.pops).toEqual(still.pops);
+  expect(animated.sensors).toEqual(still.sensors);
+  expect(animated.plants).toBe(still.plants); // the flora sequence never diverged
 });
