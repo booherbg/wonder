@@ -92,7 +92,7 @@ const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
-import { GenArgs } from "../render/forgeArgs";
+import { ForgeState, GenArgs, forgeArgs } from "../render/forgeArgs";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -1400,18 +1400,32 @@ if (NOMENU) {
   showTitle(currentTitleState(), { choose: onChoose });
 }
 
+// the forge's live preview: generates a throwaway island from the panel's
+// current knobs and paints it into the panel's own canvas. Deliberately
+// does not touch currentSeed/map/flora or any ledger/persist path — nothing
+// here is played, so nothing here is saved. Warmth isn't previewed (it
+// seeds life density at spawn, not terrain), so it has no effect here.
+function previewForge(state: ForgeState): void {
+  const { seed, gen } = forgeArgs(state);
+  const m = generate(seed, gen.config, gen.shape, gen.relief);
+  const canvas = document.querySelector("#forge .forge-mini") as HTMLCanvasElement | null;
+  if (canvas) paintMiniMap(m, canvas);
+}
+
 // dev aid: ?forge=1 opens the forge panel (screenshot tours, over the title
 // or the world alike) — Task 3 of FORGE; the mount and its stub handlers go
 // away in Task 5 once the real launcher wires it up.
 if (new URL(location.href).searchParams.has("forge")) {
   import("../render/forge").then(({ openForge }) =>
-    import("../render/forgeArgs").then(({ defaultForgeState }) =>
-      openForge(defaultForgeState(currentSeed), {
-        preview: () => {},
+    import("../render/forgeArgs").then(({ defaultForgeState }) => {
+      const state = defaultForgeState(currentSeed);
+      openForge(state, {
+        preview: previewForge,
         generate: () => {},
         rerollSeed: () => 12345,
-      }),
-    ),
+      });
+      previewForge(state); // paint the panel's canvas immediately for the screenshot tour
+    }),
   );
 }
 
@@ -2021,18 +2035,31 @@ function input(): InputState {
   };
 }
 
+// A bare terrain thumbnail: the same tile→colour mapping the O-key overview
+// and corner minimap use, scaled to fit whatever canvas it's given. No
+// camp/spawn markers — those are player-state, and callers who want them
+// (drawOverview, buildMinimapCache) draw them on top after this returns.
+// Used by both the overview/minimap and the forge's live island preview,
+// which paints a throwaway WorldMap that was never played.
+function paintMiniMap(m: WorldMap, canvas: HTMLCanvasElement): void {
+  const ctx = canvas.getContext("2d")!;
+  const s = Math.max(1, Math.floor(Math.min(canvas.width / m.width, canvas.height / m.height)));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < m.height; y++) {
+    for (let x = 0; x < m.width; x++) {
+      ctx.fillStyle = OVERVIEW_COLORS[m.tiles[y * m.width + x]];
+      ctx.fillRect(x * s, y * s, s, s);
+    }
+  }
+}
+
 // dev aid: ?overview=1 renders the whole island at a glance (worldgen tuning)
 function drawOverview(): void {
   const ctx = canvas.getContext("2d")!;
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  paintMiniMap(map, canvas);
   const s = Math.max(1, Math.floor(Math.min(canvas.width / map.width, canvas.height / map.height)));
-  for (let y = 0; y < map.height; y++) {
-    for (let x = 0; x < map.width; x++) {
-      ctx.fillStyle = OVERVIEW_COLORS[map.tiles[y * map.width + x]];
-      ctx.fillRect(x * s, y * s, s, s);
-    }
-  }
   ctx.fillStyle = "#ff5050";
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
 }
