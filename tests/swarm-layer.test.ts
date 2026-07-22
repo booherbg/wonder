@@ -11,8 +11,12 @@ import {
   SWARM_COUNT_CAP,
   SwarmLayer,
   buildFlowerMaps,
+  buildPollen,
   canFlower,
+  courtingSwarm,
+  eventInView,
   flowerSizeFor,
+  sowKey,
 } from "../src/game/swarms";
 
 // The world swarm layer is a purely additive life/visual layer bolted onto a
@@ -417,4 +421,107 @@ test("a budded cousin is emitted as an event, named with its ✧ and homed on th
   expect(events[0].name).toBe(cousin!.name); // the island-born mark rides along
   expect(events[0].name).toContain("✧");
   expect(events[0].hostSpecies).toBe(other!.species); // toward the second flower, truthfully
+  // and the moment carries its place — the second bloom itself, for the witness gate
+  expect(events[0].x).toBe(cousin!.home!.x);
+  expect(events[0].y).toBe(cousin!.home!.y);
+});
+
+// ── witnessing: the pure gate the game loop asks before it speaks ──────────────
+// A boom/cousin flash used to fire from anywhere ("X thickens…" with the swarm
+// three bays away, nothing to see). eventInView is the camera-side predicate:
+// on or a breath beyond the screen counts as a witness; the rest leave traces.
+
+test("eventInView: on-screen and margin moments are witnessed, far ones are not", () => {
+  const cam = { x: 1000, y: 800, w: 480, h: 320 };
+  // squarely on screen
+  expect(eventInView({ x: 1200, y: 900 }, cam.x, cam.y, cam.w, cam.h)).toBe(true);
+  // just past the edge but inside the default 2-tile margin — still a witness
+  expect(eventInView({ x: cam.x - 16, y: 900 }, cam.x, cam.y, cam.w, cam.h)).toBe(true);
+  expect(eventInView({ x: cam.x + cam.w + 30, y: 900 }, cam.x, cam.y, cam.w, cam.h)).toBe(true);
+  // beyond the margin on any axis — unseen, no matter the other axis
+  expect(eventInView({ x: cam.x - 40, y: 900 }, cam.x, cam.y, cam.w, cam.h)).toBe(false);
+  expect(eventInView({ x: 1200, y: cam.y + cam.h + 40 }, cam.x, cam.y, cam.w, cam.h)).toBe(false);
+  // a custom margin widens or narrows the witness box
+  expect(eventInView({ x: cam.x - 40, y: 900 }, cam.x, cam.y, cam.w, cam.h, 48)).toBe(true);
+  expect(eventInView({ x: cam.x - 8, y: 900 }, cam.x, cam.y, cam.w, cam.h, 0)).toBe(false);
+});
+
+test("a boom event carries the place it happened — the host bloom's own coordinates", () => {
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(generate(SEED), species, SEED);
+  const layer = new SwarmLayer(SEED, species, flora);
+  for (const ent of layer.swarms) {
+    const flower = layer.flowers.get(ent.home!.species)!;
+    ent.sw.pool = ent.sw.pool.map(() => flower.map.slice());
+    ent.sw.sensor = flower.map.slice();
+    ent.sw.population = ent.sw.cap;
+  }
+  const events: ReturnType<typeof layer.takeEvents> = [];
+  for (let t = 0; t < 200; t++) {
+    layer.tick(flora);
+    events.push(...layer.takeEvents());
+  }
+  const booms = events.filter((e) => e.kind === "boom");
+  expect(booms.length).toBeGreaterThan(0);
+  for (const b of booms) {
+    // the moment's place is a real plant of the very kind that thickened
+    expect(flora.all.some((p) => p.species === b.hostSpecies && p.x === b.x && p.y === b.y)).toBe(true);
+  }
+});
+
+// ── the pollination web data: single clouds carry their codex names ────────────
+// buildPollen is the shared data both the living web (C) and the ledger (G)
+// read. A bloom worked by exactly ONE cloud must wear that cloud's name (the
+// cross-reference between the diagram and the sky); a group row stays unnamed
+// but still carries the leading cloud's drawable insect genome.
+
+test("buildPollen names a single-cloud edge and leaves group rows unnamed — insect carried either way", () => {
+  const { flora, layer, species } = build();
+  const counts = (id: number): number => flora.speciesCounts.get(id) ?? 0;
+  const view = buildPollen(layer, species, counts);
+
+  expect(view.cloudsTotal).toBe(layer.swarms.length);
+  expect(view.links.length).toBeGreaterThan(0);
+  // the true grouping, recomputed independently of the builder
+  const bySpecies = new Map<number, typeof layer.swarms>();
+  for (const ent of layer.swarms) {
+    if (!ent.home || !layer.inspect(ent, species)) continue;
+    const list = bySpecies.get(ent.home.species) ?? [];
+    list.push(ent);
+    bySpecies.set(ent.home.species, list as typeof layer.swarms);
+  }
+  for (const link of view.links) {
+    const clouds = bySpecies.get(link.host.id)!;
+    expect(link.swarmCount).toBe(clouds.length);
+    if (clouds.length === 1) {
+      // one cloud, one codex name — the web says who works this bloom
+      expect(link.name).toBe(clouds[0].name);
+    } else {
+      expect(link.name).toBeNull();
+    }
+    // every edge can draw the very insect the sky flies: the leading cloud's genome
+    const rep = clouds.reduce((a, b) => (b.sw.population > a.sw.population ? b : a));
+    expect(link.insect.sensor).toBe(rep.sw.sensor);
+    expect(link.insect.behavior).toBe(rep.sw.behavior);
+    expect(link.hostCount).toBe(counts(link.host.id));
+  }
+  // matched edges lead, as the panel promises
+  const flags = view.links.map((l) => Number(l.matched));
+  expect([...flags].sort((a, b) => b - a)).toEqual(flags);
+});
+
+// ── the courted cloud: a planted bloom drawing a swarm, detected purely ────────
+
+test("courtingSwarm finds the first cloud working a bloom the player sowed — and only then", () => {
+  const { layer } = build();
+  const ent = layer.swarms.find((e) => e.home)!;
+  const key = sowKey(ent.home!.species, ent.home!.x, ent.home!.y);
+  // nothing planted → no courtship, however many clouds fly
+  expect(courtingSwarm(layer.swarms, new Set())).toBeNull();
+  // a planting elsewhere (no cloud homes on it) → still silent
+  expect(courtingSwarm(layer.swarms, new Set([sowKey(0, -999, -999)]))).toBeNull();
+  // the bloom a cloud already works is one the player sowed → that cloud is found
+  const suitor = courtingSwarm(layer.swarms, new Set([key]));
+  expect(suitor).not.toBeNull();
+  expect(sowKey(suitor!.home!.species, suitor!.home!.x, suitor!.home!.y)).toBe(key);
 });

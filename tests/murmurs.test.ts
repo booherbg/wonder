@@ -76,3 +76,15 @@ test("the guard shrugs off a missing or corrupt store", () => {
   markSwarmMet(7, kv); // a corrupt store is simply rewritten
   expect(swarmMetOn(7, kv)).toBe(true);
 });
+
+// a first meeting — once per island by construction — may speak through the
+// global cooldown instead of being silently swallowed by it; everything else
+// keeps the two-minute quiet, and the shown-set still holds even for firsts
+test("a first-meeting murmur speaks through the cooldown, but never repeats words", () => {
+  // inside the cooldown: an ordinary offer stays quiet, a first meeting speaks
+  expect(pickMurmur("swarm", new Set(), 0, COOLDOWN_MS - 1)).toBeNull();
+  expect(pickMurmur("swarm", new Set(), 0, COOLDOWN_MS - 1, true)).not.toBeNull();
+  // the bypass never resurrects words already heard
+  const heard = new Set(MURMURS.filter((m) => m.tag === "swarm").map((m) => m.text));
+  expect(pickMurmur("swarm", heard, 0, COOLDOWN_MS - 1, true)).toBeNull();
+});

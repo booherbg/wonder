@@ -17,7 +17,7 @@
 
 import { makeRng, Rng, hash2d } from "../core/rng";
 import { appearanceColors, resemblance, MAP_G, MAP_CELLS, IdMap } from "../life/idmap";
-import { Flower, Swarm, SWARM_CAP, makeFlower, makeSwarm, stepSwarm } from "../life/swarm";
+import { Flower, Swarm, SWARM_CAP, makeFlower, makeSwarm, regenNectar, stepSwarm } from "../life/swarm";
 import {
   CALM,
   FlightField,
@@ -58,6 +58,7 @@ interface FlowerEnt {
   fl: Flower;
   x: number; // tile coords
   y: number;
+  workedBy: number; // clouds that fed here last tick — display bookkeeping, no sim
 }
 
 /** The nearest flower to a point, as an index into `flowers` (−1 if none). Pure
@@ -153,7 +154,7 @@ export function startSimulator(): void {
   const swarms: SwarmEnt[] = [];
 
   function addFlower(x: number, y: number, size: number): void {
-    flowers.push({ fl: makeFlower(rng, size), x, y });
+    flowers.push({ fl: makeFlower(rng, size), x, y, workedBy: 0 });
   }
   let nextSwarmId = 0;
   function addSwarm(x: number, y: number): void {
@@ -234,9 +235,21 @@ export function startSimulator(): void {
    *  the Simulator only chooses the flower by proximity. */
   function tick(): void {
     const pressure = predatorsOn ? SIM_PREDATION : 0;
+    for (const f of flowers) f.workedBy = 0;
     for (const s of swarms) {
       const f = nearestFlowerFor(s);
-      if (f) stepSwarm(s.sw, f.fl, rng, pressure);
+      if (f) {
+        stepSwarm(s.sw, f.fl, rng, pressure);
+        f.workedBy++;
+      }
+    }
+    // an idle bloom brims back up: nectar regen rides stepSwarm for the flowers
+    // being fed, so an unworked flower used to freeze at whatever was left in it.
+    // Now the plate's NECTAR is a real readout — a worked bloom runs near empty
+    // (its clouds drink as fast as it brims), an idle one visibly refills.
+    // Deterministic: regenNectar draws nothing from the rng.
+    for (const f of flowers) {
+      if (f.workedBy === 0) regenNectar(f.fl);
     }
   }
 
@@ -283,7 +296,7 @@ export function startSimulator(): void {
       const f = nearestFlowerFor(s);
       ui.showSwarm(s.sw, f ? f.fl : null);
     } else {
-      ui.showFlower(selected.ref.fl);
+      ui.showFlower(selected.ref.fl, selected.ref.workedBy);
     }
   }
 
@@ -603,7 +616,7 @@ interface Chrome {
   onCap: (v: number) => void;
   setState: (s: { playing: boolean; speed: number; tool: ToolName; predatorsOn: boolean; cap: number }) => void;
   showSwarm: (sw: Swarm, flower: Flower | null) => void;
-  showFlower: (fl: Flower) => void;
+  showFlower: (fl: Flower, workedBy: number) => void;
   hideInspect: () => void;
 }
 
@@ -810,14 +823,21 @@ function buildChrome(): Chrome {
       `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">the insect is drawn from its map — body from the dominant colour, wing patches from real cells — so as the pool adapts you watch the bug become its flower.</div>`;
     plate.style.display = "block";
   };
-  chrome.showFlower = (fl) => {
+  chrome.showFlower = (fl, workedBy) => {
+    // the nectar meter tells its true state: a worked bloom runs near empty
+    // (its clouds drink as fast as it brims), an idle one refills tick by tick
+    const nectarWord =
+      workedBy > 0
+        ? "its clouds drink the nectar as fast as it brims — a worked bloom runs near empty."
+        : "no cloud works it now, so its nectar brims back up, tick by tick.";
     plate.innerHTML =
       head("a flower", "a fixed host map") +
       title("flower map · accent ringed") +
       portrait(genomeCanvas(fl.map, fl.accent)) +
       title("readout") +
       stat("nectar", pct(fl.nectar), "gold") +
-      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">the ringed cells are its flower accent — the jackpot a swarm earns most by matching.</div>`;
+      stat("worked by", workedBy === 0 ? "no clouds" : `${workedBy} cloud${workedBy === 1 ? "" : "s"}`, "mint") +
+      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); line-height: 1.5; margin-top: 12px;">the ringed cells are its flower accent — the jackpot a swarm earns most by matching. ${nectarWord}</div>`;
     plate.style.display = "block";
   };
 

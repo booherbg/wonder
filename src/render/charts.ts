@@ -26,7 +26,10 @@ export interface ChartsView {
   substrates: number;
   germinations: number;
   pollinators: { swarms: number; population: number; species: number }; // insect swarms working the blooms now
-  swarmCounts: number[]; // total swarm population over island-time (oldest → newest)
+  // each cloud's MATCH to its host flower over island-time (0..100, oldest →
+  // newest), one series per swarm in its own live genome colour — adaptation,
+  // the pollinators' real story (total population just sits at the cap)
+  swarmSeries: { name: string; color: string; matches: number[] }[];
 }
 
 // genome hue → a legible line colour (mid-light, saturated enough to read on the
@@ -153,12 +156,15 @@ function biomeBar(v: ChartsView): string {
 }
 
 // The pollinators aloft: a caption of the swarms working the blooms right now,
-// and — once there's enough history — a single gold line of total swarm
-// population over island-time, mirroring the census population chart's shape so
-// the reciprocal boom (a well-matched pair swelling) actually reads.
+// and — once there's enough history — each cloud's MATCH to its host flower
+// over island-time, one line per swarm in its own live genome colour. Total
+// population ramps once and then sits pinned at the cap (by design), so the
+// chart plots the real drama instead: resemblance drifting toward the flower.
+// The dashed 50% rule is the same threshold the living web calls "pollinating";
+// a line crossing it is a cloud starting to pay its bloom back.
 function swarmChart(v: ChartsView): string {
   const p = v.pollinators;
-  if (p.swarms === 0 && v.swarmCounts.length === 0)
+  if (p.swarms === 0 && v.swarmSeries.length === 0)
     return `<div class="ch-chain muted">no swarms aloft — this island's blooms still wait for pollinators</div>`;
   const caption =
     `<div class="ch-web-stats">` +
@@ -166,45 +172,75 @@ function swarmChart(v: ChartsView): string {
     `<span><b>${p.population.toLocaleString()}</b> insects</span>` +
     `<span>working <b>${p.species}</b> ${p.species === 1 ? "bloom" : "blooms"}</span>` +
     `</div>`;
-  const counts = v.swarmCounts;
-  if (counts.length < 2) return caption; // not enough history for a line yet
+  const drawn = v.swarmSeries.filter((s) => s.matches.length > 0);
+  const samples = Math.max(0, ...drawn.map((s) => s.matches.length));
+  if (samples < 2) return caption; // not enough history for the lines yet
 
   const W = 700;
-  const H = 150;
+  const H = 190;
   const padL = 46;
-  const padR = 20;
+  const padR = 132; // room for the dodged direct labels, as the census chart keeps
   const padT = 12;
-  const padB = 22;
+  const padB = 24;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-  const n = counts.length;
-  const maxY = Math.max(1, ...counts);
-  const x = (i: number) => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
-  const y = (c: number) => padT + plotH - Math.min(1, c / maxY) * plotH;
-  const GOLD = "#f4c979"; // the firefly gold — a pollinator's hue, set apart from the plant lines
+  const x = (i: number) => padL + (samples <= 1 ? 0 : (i / (samples - 1)) * plotW);
+  const y = (m: number) => padT + plotH - Math.min(1, m / 100) * plotH;
 
-  const gridVals = [0, Math.round(maxY / 2), maxY];
-  const grid = gridVals
+  const grid = [0, 50, 100]
     .map(
       (gv) =>
-        `<line x1="${padL}" y1="${y(gv)}" x2="${padL + plotW}" y2="${y(gv)}" class="ch-grid"/>` +
-        `<text x="${padL - 6}" y="${y(gv) + 3}" class="ch-axis" text-anchor="end">${gv.toLocaleString()}</text>`,
+        `<line x1="${padL}" y1="${y(gv)}" x2="${padL + plotW}" y2="${y(gv)}" class="ch-grid"${gv === 50 ? ' stroke-dasharray="4 4"' : ""}/>` +
+        `<text x="${padL - 6}" y="${y(gv) + 3}" class="ch-axis" text-anchor="end">${gv}%</text>`,
     )
     .join("");
-  const d = counts.map((c, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(c).toFixed(1)}`).join(" ");
-  const area = `${d} L${x(n - 1).toFixed(1)} ${y(0).toFixed(1)} L${x(0).toFixed(1)} ${y(0).toFixed(1)} Z`;
-  const lastX = x(n - 1);
-  const lastY = y(counts[n - 1]);
+  const rule = `<text x="${padL + 4}" y="${(y(50) - 4).toFixed(1)}" class="ch-axis" text-anchor="start">matched — pollinates above</text>`;
+
+  // right-aligned: a young cousin's short history starts where its life did
+  const path = (matches: number[]) => {
+    const off = samples - matches.length;
+    return matches
+      .map((m, i) => `${i === 0 ? "M" : "L"}${x(off + i).toFixed(1)} ${y(m).toFixed(1)}`)
+      .join(" ");
+  };
+
+  // dodge the end-labels apart, exactly as the census population chart does
+  const minGap = 15;
+  const items = drawn
+    .map((s) => {
+      const last = s.matches[s.matches.length - 1];
+      return { s, endX: x(samples - 1), endY: y(last), labelY: 0 };
+    })
+    .sort((a, b) => a.endY - b.endY);
+  let prev = padT - minGap;
+  for (const it of items) {
+    it.labelY = Math.max(it.endY, prev + minGap);
+    prev = it.labelY;
+  }
+  const overflow = prev - (padT + plotH);
+  if (overflow > 0) for (const it of items) it.labelY = Math.max(padT + 4, it.labelY - overflow);
+
+  const lines = items
+    .map((it) => {
+      const l = `<path d="${path(it.s.matches)}" class="ch-line" style="stroke:${it.s.color}" fill="none"/>`;
+      const dot = `<circle cx="${it.endX.toFixed(1)}" cy="${it.endY.toFixed(1)}" r="3" fill="${it.s.color}"/>`;
+      const conn =
+        Math.abs(it.labelY - it.endY) > 1.5
+          ? `<line x1="${(it.endX + 3).toFixed(1)}" y1="${it.endY.toFixed(1)}" x2="${(it.endX + 8).toFixed(1)}" y2="${it.labelY.toFixed(1)}" style="stroke:${it.s.color};stroke-width:1;opacity:0.45"/>`
+          : "";
+      const label = `<text x="${(it.endX + 10).toFixed(1)}" y="${(it.labelY + 3).toFixed(1)}" class="ch-lbl" style="fill:${it.s.color}">${escapeText(it.s.name)}</text>`;
+      return l + dot + conn + label;
+    })
+    .join("");
 
   return (
     caption +
-    `<svg class="ch-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="total swarm population over island-time">
+    `<svg class="ch-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="each swarm's match to its flower over island-time">
       ${grid}
-      <path d="${area}" fill="${GOLD}" opacity="0.1"/>
-      <path d="${d}" class="ch-line" style="stroke:${GOLD}" fill="none"/>
-      <circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="3" fill="${GOLD}"/>
+      ${rule}
       <text x="${padL}" y="${H - 6}" class="ch-axis" text-anchor="start">first log</text>
       <text x="${padL + plotW}" y="${H - 6}" class="ch-axis" text-anchor="end">now</text>
+      ${lines}
     </svg>`
   );
 }

@@ -478,13 +478,18 @@ export function markSwarmMet(seed: number, kv: KV | null = defaultKV()): void {
 }
 
 // Pure selection logic (unit-tested); the DOM display lives in show().
+// `firstMeeting` lets a genuinely once-in-a-long-while moment (the island's
+// single introduction to its insect clouds) speak through the global cooldown —
+// safe from spam because its callers fire at most once per island and the
+// shown-set/rehear window still hold; everything else keeps the two-minute quiet.
 export function pickMurmur(
   tag: MurmurTag,
   shown: ReadonlySet<string>,
   lastShownAt: number,
   now: number,
+  firstMeeting = false,
 ): Murmur | null {
-  if (now - lastShownAt < COOLDOWN_MS) return null;
+  if (!firstMeeting && now - lastShownAt < COOLDOWN_MS) return null;
   return MURMURS.find((m) => m.tag === tag && !shown.has(m.text)) ?? null;
 }
 
@@ -518,10 +523,11 @@ export class MurmurEngine {
     this.place = name;
   }
 
-  // Offer a moment; the engine decides whether a murmur surfaces.
-  offer(tag: MurmurTag, now = performance.now()): void {
+  // Offer a moment; the engine decides whether a murmur surfaces. A first
+  // meeting (once per island by construction) may speak through the cooldown.
+  offer(tag: MurmurTag, now = performance.now(), firstMeeting = false): void {
     if (aPanelIsOpen()) return; // never float a murmur over a panel being read
-    const m = pickMurmur(tag, this.shown, this.lastShownAt, now);
+    const m = pickMurmur(tag, this.shown, this.lastShownAt, now, firstMeeting);
     if (!m) return;
     this.shown.add(m.text);
     this.lastShownAt = now;

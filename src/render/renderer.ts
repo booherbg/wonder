@@ -991,9 +991,16 @@ export class Renderer {
     // the pollinators join the reading: each swarm a dashed ring (a cloud, not
     // a body) in its exposure colour — conspicuousness against the very flower
     // it works, the number predation actually reads — sized gently by how many
-    // fly. The dashed thread to the home bloom is the pollination bond.
+    // fly, and seated on a dark underlay so the dashes hold over pale sand as
+    // well as grass. The dashed thread to the home bloom appears ONLY when the
+    // cloud has genuinely drifted off it (re-homing, ranging to a far bloom):
+    // orbiting its own flower the thread was a few unreadable px tangled in the
+    // ring, but a far cloud's thread actually says "that one belongs to this bloom".
     if (scene.swarms) {
       const layer = scene.swarms;
+      // past the widest orbit a cloud ever keeps around its own bloom
+      const THREAD_MIN_PX = 3.6 * TILE_SIZE;
+      const UNDERLAY = "rgba(10, 14, 12, 0.75)"; // the dark seat under ring + thread
       for (const ent of layer.swarms) {
         const sx = Math.round(ent.x - camX);
         const sy = Math.round(ent.y - camY);
@@ -1005,26 +1012,32 @@ export class Renderer {
           SWARM_HIDDEN_RGB[1],
           SWARM_EXPOSED_RGB[1],
         )}, ${mix(SWARM_HIDDEN_RGB[2], SWARM_EXPOSED_RGB[2])}, 0.95)`;
-        if (ent.home) {
+        if (ent.home && Math.hypot(ent.x - ent.home.x, ent.y - ent.home.y) > THREAD_MIN_PX) {
           const hx = Math.round(ent.home.x - camX);
           const hy = Math.round(ent.home.y - 5 - camY); // the bloom's crown, as the perch line
-          ctx.strokeStyle = `rgba(${mix(SWARM_HIDDEN_RGB[0], SWARM_EXPOSED_RGB[0])}, ${mix(
-            SWARM_HIDDEN_RGB[1],
-            SWARM_EXPOSED_RGB[1],
-          )}, ${mix(SWARM_HIDDEN_RGB[2], SWARM_EXPOSED_RGB[2])}, ${(0.18 + 0.16 * pulse).toFixed(3)})`;
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 4]);
+          ctx.setLineDash([3, 4]);
           ctx.beginPath();
           ctx.moveTo(sx, sy);
           ctx.lineTo(hx, hy);
+          ctx.strokeStyle = UNDERLAY; // the dark seat first, so the dashes read on sand
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(${mix(SWARM_HIDDEN_RGB[0], SWARM_EXPOSED_RGB[0])}, ${mix(
+            SWARM_HIDDEN_RGB[1],
+            SWARM_EXPOSED_RGB[1],
+          )}, ${mix(SWARM_HIDDEN_RGB[2], SWARM_EXPOSED_RGB[2])}, ${(0.55 + 0.25 * pulse).toFixed(3)})`;
+          ctx.lineWidth = 1;
           ctx.stroke();
         }
         const frac = Math.max(0, Math.min(1, ent.sw.population / ent.sw.cap));
-        ctx.strokeStyle = ring;
-        ctx.lineWidth = 1.5;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
         ctx.arc(sx, sy, 8 + frac * 3, 0, Math.PI * 2);
+        ctx.strokeStyle = UNDERLAY; // dark outline under the colour — contrast on any ground
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+        ctx.strokeStyle = ring;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.setLineDash([]);
       }
@@ -1047,7 +1060,7 @@ export class Renderer {
     rows.innerHTML =
       `<div class="ovl-row"><i style="color:${warm};background:${warm}"></i>swarm, plain to see</div>` +
       `<div class="ovl-row"><i style="color:${cool};background:${cool}"></i>swarm, hidden in its bloom</div>` +
-      `<div class="ovl-row"><i style="color:${cool};background:linear-gradient(90deg,${cool},${warm})"></i>thread: the bloom it works</div>`;
+      `<div class="ovl-row"><i style="color:${cool};background:linear-gradient(90deg,${cool},${warm})"></i>thread: a far cloud, homing on its bloom</div>`;
     legend.appendChild(rows);
   }
 

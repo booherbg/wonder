@@ -94,6 +94,8 @@ export interface SwarmEvent {
   kind: "boom" | "cousin";
   name: string; // the swarm at the centre of it
   hostSpecies: number; // boom: the flowering kind that thickened · cousin: its new host
+  x: number; // world px — where the moment happened (the host bloom), so the
+  y: number; // game can ask "was there a witness?" before it speaks
 }
 export const BOOM_POLLINATIONS = 3; // spreads before a swarm's work reads as a visible boom
 const EVENT_QUEUE_CAP = 8; // undrained moments beyond this quietly age out
@@ -373,7 +375,7 @@ export class SwarmLayer {
               pollinations++;
               // enough spreads to read on the ground → one boom event, once per swarm
               if (++ent.pollinated === BOOM_POLLINATIONS) {
-                this.emit({ kind: "boom", name: ent.name, hostSpecies: host.species });
+                this.emit({ kind: "boom", name: ent.name, hostSpecies: host.species, x: host.x, y: host.y });
               }
             }
           }
@@ -432,7 +434,7 @@ export class SwarmLayer {
       pollinated: 0,
     };
     this.swarms.push(cousin);
-    this.emit({ kind: "cousin", name: cousin.name, hostSpecies: other.species });
+    this.emit({ kind: "cousin", name: cousin.name, hostSpecies: other.species, x: other.x, y: other.y });
     return cousin;
   }
 
@@ -508,6 +510,140 @@ export class SwarmLayer {
       accent: flower.accent,
     };
   }
+}
+
+// ── witnessing (pure; the game loop asks before it speaks) ────────────────────
+
+/** Whether a layer moment happened where the wanderer could actually SEE it —
+ *  the witness gate for boom/cousin surfacing. A HUD line about a bloom
+ *  thickening three bays away points at nothing; the game flashes only what is
+ *  on (or a breath beyond) the screen and leaves a lasting trace for the rest.
+ *  Pure camera math, so it is directly testable. */
+export function eventInView(
+  ev: { x: number; y: number },
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number,
+  marginPx: number = 2 * TILE_SIZE,
+): boolean {
+  return (
+    ev.x >= camX - marginPx &&
+    ev.x <= camX + viewW + marginPx &&
+    ev.y >= camY - marginPx &&
+    ev.y <= camY + viewH + marginPx
+  );
+}
+
+// ── the pollination web (the C panel's and G ledger's shared data) ────────────
+// The island's swarms grouped by the flowering kind they work. Pure over the
+// layer — no DOM, no draw — so both surfaces read the same truth. A bloom worked
+// by ONE cloud carries that cloud's codex NAME and its live genome (sensor +
+// behaviour, enough to draw the very insect the world flies); a bloom worked by
+// several stays a group row but still carries the most-populous cloud's insect.
+// This is the cross-reference a wanderer wants: the web names what the sky flies.
+
+export interface PollinationLink {
+  host: PlantSpecies; // the flowering plant the swarm works (drawn as its sprite)
+  hostName: string;
+  hostCount: number; // plants of this flowering kind on the island now
+  swarmCount: number; // clouds working this bloom
+  population: number; // insects across those clouds
+  colors: string[]; // the swarm's palette — its adaptation, rendered as colour
+  matched: boolean; // well-adapted (pollinates, hugs the bloom) vs still ranging (only feeds)
+  name: string | null; // the cloud's codex name — carried only when ONE cloud works this bloom
+  insect: { sensor: IdMap; behavior: BehaviorGenes }; // the leading cloud, drawable via getInsectSprites
+}
+
+export interface PollenView {
+  links: PollinationLink[];
+  cloudsTotal: number;
+  population: number;
+  species: number;
+}
+
+/** Group the layer's swarms by the flowering kind they work — matched-first,
+ *  then the biggest booms. `countOf` answers how many plants of a kind stand on
+ *  the island now (the game hands in flora.speciesCounts). */
+export function buildPollen(
+  layer: SwarmLayer,
+  species: readonly PlantSpecies[],
+  countOf: (speciesId: number) => number,
+): PollenView {
+  interface Group {
+    host: PlantSpecies;
+    population: number;
+    swarmCount: number;
+    resSum: number;
+    bestPop: number;
+    rep: WorldSwarm; // the most-populous cloud — it carries the row's name/insect/palette
+  }
+  const groups = new Map<number, Group>();
+  let population = 0;
+  for (const ent of layer.swarms) {
+    population += ent.sw.population;
+    // inspect gives us the resemblance + population + a live host in one call
+    const info = layer.inspect(ent, species);
+    if (!info || !ent.home) continue;
+    const sid = ent.home.species;
+    const host = species[sid];
+    if (!host) continue;
+    let g = groups.get(sid);
+    if (!g) {
+      g = { host, population: 0, swarmCount: 0, resSum: 0, bestPop: -1, rep: ent };
+      groups.set(sid, g);
+    }
+    g.population += info.population;
+    g.swarmCount++;
+    g.resSum += info.resemblance;
+    if (info.population > g.bestPop) {
+      g.bestPop = info.population;
+      g.rep = ent;
+    }
+  }
+  const links: PollinationLink[] = [...groups.values()].map((g) => ({
+    host: g.host,
+    hostName: g.host.name,
+    hostCount: countOf(g.host.id),
+    swarmCount: g.swarmCount,
+    population: Math.round(g.population),
+    colors: swarmPalette(g.rep.sw, 5),
+    matched: g.resSum / g.swarmCount >= 0.5, // visibly like the flower → pollinates
+    name: g.swarmCount === 1 ? g.rep.name : null, // one cloud, one name — a group stays a group
+    insect: { sensor: g.rep.sw.sensor, behavior: g.rep.sw.behavior },
+  }));
+  // matched-first, then the biggest booms — the living headline leads
+  links.sort((a, b) => Number(b.matched) - Number(a.matched) || b.population - a.population);
+  return {
+    links,
+    cloudsTotal: layer.swarms.length,
+    population: Math.round(population),
+    species: links.length,
+  };
+}
+
+// ── the courted cloud (a planted bloom drawing a swarm) ───────────────────────
+// The loop's one big player verb — sow a flower, and a cloud may take it for
+// home — used to close in silence. The game keeps the identity of every bloom
+// the wanderer's own hand set down; these two helpers let it notice, purely and
+// testably, the first cloud found working one of them.
+
+/** The identity of one planted bloom, as the swarm layer's `home` would name it. */
+export function sowKey(species: number, x: number, y: number): string {
+  return `${species}:${x}:${y}`;
+}
+
+/** The first cloud whose home bloom is one the player sowed — null when none
+ *  has come courting (or nothing has been planted). */
+export function courtingSwarm(
+  swarms: readonly WorldSwarm[],
+  sown: ReadonlySet<string>,
+): WorldSwarm | null {
+  if (sown.size === 0) return null;
+  for (const ent of swarms) {
+    if (ent.home && sown.has(sowKey(ent.home.species, ent.home.x, ent.home.y))) return ent;
+  }
+  return null;
 }
 
 // ── render helpers (pure; the camera transform lives in the Renderer) ─────────

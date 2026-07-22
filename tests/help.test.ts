@@ -97,3 +97,13 @@ test("the welcome points at the first verb and the way back to the card", () => 
   expect(HELP_WELCOME).toContain("?");
   expect(HELP_WELCOME).toContain("driftwood");
 });
+
+test("the guide teaches the swarm verbs: lean the view in (Z), and court a cloud with a sown flower", () => {
+  const web = helpSections().find((s) => s.title === "the living web")!.entries.map((e) => e.text).join(" ");
+  // the 17 insect forms only differentiate up close — the Z lean is where to look
+  expect(web).toContain("(Z)");
+  expect(web).toContain("insects themselves");
+  // and the one big player verb is finally written down: plant a flower, draw a cloud
+  expect(web).toContain("sow a flower");
+  expect(web).toContain("planted bloom");
+});

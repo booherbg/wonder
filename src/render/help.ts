@@ -97,7 +97,11 @@ export function helpSections(): HelpSection[] {
         },
         {
           text:
-            "clouds of insects work the blooms too — swarms, each slowly wearing the colour of the flower it feeds on. a cloud that has come to match its bloom pays it back: where it works, that kind thickens and spreads. lean close (E) or click a drifting cloud to meet it by name.",
+            "clouds of insects work the blooms too — swarms, each slowly wearing the colour of the flower it feeds on. a cloud that has come to match its bloom pays it back: where it works, that kind thickens and spreads. lean close (E) or click a drifting cloud to meet it by name — and lean the view in (Z) beside one: at a wanderer's distance a cloud is only motes, up close the insects themselves show.",
+        },
+        {
+          text:
+            "the courting can start with you: sow a flower where a cloud drifts near, and a swarm may take your planted bloom for its own — feeding there, coming to wear its colour, and spreading the very kind you set down.",
         },
         {
           text:

@@ -1,8 +1,11 @@
+import { tint } from "../game/swarms";
+import type { PollinationLink } from "../game/swarms";
 import { CritterSpecies } from "../life/fauna";
 import { Genome } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { Tile } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
+import { getInsectSprites } from "./insectSprites";
 import { BIOME_WORDS } from "./inspect";
 import { getPlantSprite, PLANT_SPRITE_H, PLANT_SPRITE_W } from "./plantSprites";
 
@@ -31,20 +34,10 @@ export interface WebLink {
 }
 
 // The PRIMARY relationship the web now leads with: a swarm of insects and the
-// flowering plant it works. One per host flowering SPECIES — the clouds working
-// the same bloom are gathered into one edge, grounded with live counts (the
-// insects aloft; the flowering kind's plants on the island now) and coloured by
-// the swarm's real adaptation, so it reads at a glance as "this cloud pollinates
-// this bloom."
-export interface PollinationLink {
-  host: PlantSpecies; // the flowering plant the swarm works (drawn as its sprite)
-  hostName: string;
-  hostCount: number; // plants of this flowering kind on the island now
-  swarmCount: number; // clouds working this bloom
-  population: number; // insects across those clouds
-  colors: string[]; // the swarm's palette — its adaptation, rendered as colour
-  matched: boolean; // well-adapted (pollinates, hugs the bloom) vs still ranging (only feeds)
-}
+// flowering plant it works — PollinationLink, built in game/swarms.ts (one edge
+// per host flowering species, the clouds working the same bloom gathered). A
+// single-cloud edge carries the cloud's codex NAME; every edge carries the
+// leading cloud's live genome, so the node draws the very insect the sky flies.
 
 export interface WebView {
   island: string;
@@ -125,9 +118,11 @@ function critterNode(sp: CritterSpecies): HTMLElement {
   return card;
 }
 
-// a swarm drawn as a node: a small cloud of its own genome colours (so a
-// well-adapted cloud shimmers in its flower's palette, a naive one in mint),
-// laid out in a deterministic phyllotaxis spray — never a grey particle fog.
+// a swarm drawn as a node: the ACTUAL generative insect the world flies (the
+// same sprite the sky, the codex card and the bench share), seated in a soft
+// wash and a few flecks of the cloud's own genome colours — many-ness kept,
+// anonymity gone. A single-cloud edge wears the cloud's codex name, so the web
+// and the world finally cross-reference: meet Thimo Duskwing here, find it there.
 function swarmNode(link: PollinationLink): HTMLElement {
   const card = document.createElement("div");
   card.className = "web-node";
@@ -135,33 +130,41 @@ function swarmNode(link: PollinationLink): HTMLElement {
   const S = 72;
   canvas.width = S;
   canvas.height = S;
-  // override the plant-canvas stretch rule with a square, self-standing cloud
+  // override the plant-canvas stretch rule with a square, self-standing node
   canvas.style.width = "62px";
   canvas.style.height = "62px";
   canvas.style.marginTop = "16px";
-  canvas.style.imageRendering = "auto";
   const ctx = canvas.getContext("2d")!;
   const cx = S / 2;
   const cy = S / 2;
   const cols = link.colors.length ? link.colors : ["rgb(127, 224, 196)"];
-  const N = 20;
-  const golden = Math.PI * (3 - Math.sqrt(5)); // deterministic, no rng
-  for (let i = 0; i < N; i++) {
-    const r = Math.sqrt((i + 0.5) / N) * (S * 0.42);
+  // the halo: the cloud's palette as a soft ground under the insect
+  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, S * 0.48);
+  halo.addColorStop(0, tint(cols[0], 0.26));
+  halo.addColorStop(1, tint(cols[0], 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, S, S);
+  // a ring of small flecks — the rest of the cloud, deterministic (no rng)
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < 8; i++) {
     const a = i * golden;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r * 0.9;
-    ctx.globalAlpha = 0.9 - (i / N) * 0.4;
+    const r = S * (0.34 + 0.1 * ((i * 5) % 3));
+    ctx.globalAlpha = 0.55 - i * 0.04;
     ctx.fillStyle = cols[i % cols.length];
     ctx.beginPath();
-    ctx.arc(x, y, Math.max(1.5, 3.4 - (i / N) * 1.4), 0, Math.PI * 2);
+    ctx.arc(cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.42, 1.6, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  // the insect itself, wings open — crisp pixel art, nearest-neighbour scaled
+  ctx.imageSmoothingEnabled = false;
+  const spr = getInsectSprites(link.insect).wingA;
+  const K = 56; // 7px sprite × 8
+  ctx.drawImage(spr, Math.round(cx - K / 2), Math.round(cy - K / 2), K, K);
   card.appendChild(canvas);
   const name = document.createElement("div");
   name.className = "web-name";
-  name.textContent = link.swarmCount > 1 ? `${link.swarmCount} swarms` : "a swarm";
+  name.textContent = link.name ?? `${link.swarmCount} swarms`;
   card.appendChild(name);
   const where = document.createElement("div");
   where.className = "web-where";

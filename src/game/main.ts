@@ -39,9 +39,9 @@ import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache } from "../render/critterSprites";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
-import { SwarmLayer, swarmPalette } from "./swarms";
+import { SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
-import { PollinationLink, WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
+import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
 import {
@@ -174,17 +174,21 @@ let devTileComp = ""; // biome census, recomputed only when the island changes
 let devTileSeed = NaN;
 // the living history: how many of each plant kind, sampled over island-time
 const census = new CensusLog();
-// and the pollinators' history: total swarm population over island-time, a light
-// rolling sampler on its OWN advancing clock (swarms tick during ?warm and play,
-// never while you're away), mirroring the census cadence so the two charts read
-// on the same footing. Reset with the island; sampled beside each swarm heartbeat.
+// and the pollinators' history: a light rolling sampler on its OWN advancing
+// clock (swarms tick during ?warm and play, never while you're away), mirroring
+// the census cadence so the two charts read on the same footing. What it keeps
+// is each cloud's MATCH to its host flower (resemblance, 0..100) — total
+// population ramps once and then sits pinned at the cap forever (by design),
+// but resemblance is the real drama: the ledger plots adaptation happening.
+// Reset with the island; sampled beside each swarm heartbeat. Bounded: at most
+// SWARM_COUNT_CAP clouds, each with a capped history.
 const SWARM_SAMPLE_INTERVAL = 40; // ticks between samples, matching CensusLog's default
-const SWARM_HISTORY_CAP = 100; // samples kept — a bounded history like the census
-const swarmHistory: number[] = [];
+const SWARM_HISTORY_CAP = 100; // samples kept per cloud — a bounded history like the census
+const swarmMatchHistory = new Map<number, number[]>(); // swarm id → match % over island-time
 let swarmSampleTick = 0;
 let lastSwarmSample = -Infinity;
 function resetSwarmHistory(): void {
-  swarmHistory.length = 0;
+  swarmMatchHistory.clear();
   swarmSampleTick = 0;
   lastSwarmSample = -Infinity;
 }
@@ -192,10 +196,17 @@ function sampleSwarms(): void {
   swarmSampleTick++;
   if (swarmSampleTick - lastSwarmSample < SWARM_SAMPLE_INTERVAL) return;
   lastSwarmSample = swarmSampleTick;
-  let pop = 0;
-  for (const e of swarmLayer.swarms) pop += e.sw.population;
-  swarmHistory.push(Math.round(pop));
-  if (swarmHistory.length > SWARM_HISTORY_CAP) swarmHistory.shift();
+  for (const e of swarmLayer.swarms) {
+    const info = swarmLayer.inspect(e, species);
+    if (!info) continue;
+    let h = swarmMatchHistory.get(e.id);
+    if (!h) {
+      h = [];
+      swarmMatchHistory.set(e.id, h);
+    }
+    h.push(Math.round(info.resemblance * 100));
+    if (h.length > SWARM_HISTORY_CAP) h.shift();
+  }
 }
 // this world's identity: a name you gave it, and the real time you've spent here
 let worldName: string | null = null;
@@ -305,11 +316,18 @@ function interact(): void {
     const res = plantLoaded(bar);
     if (!res) return;
     const [nextBar, seed] = res;
-    if (!flora.sowByPlayer(seed.species, seed.genome, px, py, flora.tick)) {
+    const rooted = flora.sowByPlayer(seed.species, seed.genome, px, py, flora.tick);
+    if (!rooted) {
       flashHud("no room here for it to root");
       return;
     }
     bar = nextBar;
+    // remember this planting by identity, so the game can notice the first
+    // cloud that comes to work a bloom set down by the wanderer's own hand
+    sownBlooms.add(sowKey(rooted.species, rooted.x, rooted.y));
+    if (sownBlooms.size > SOWN_BLOOMS_CAP) {
+      sownBlooms.delete(sownBlooms.values().next().value!);
+    }
     flashHud(
       onSoil ? `${species[seed.species].name} takes to the tilled soil` : `${species[seed.species].name} takes root`,
     );
@@ -508,7 +526,18 @@ function buildChartsView(): ChartsView {
       text: `${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}`,
       closes: l.closes,
     }));
-  const pol = buildPollen();
+  const pol = buildPollen(swarmLayer, species, (id) => flora.speciesCounts.get(id) ?? 0);
+  // each cloud's adaptation curve, in its own live genome colour — the ledger's
+  // pollinator story. The fullest clouds lead; the tail stays in the caption.
+  const swarmSeries = swarmLayer.swarms
+    .filter((e) => (swarmMatchHistory.get(e.id)?.length ?? 0) > 0)
+    .sort((a, b) => b.sw.population - a.sw.population)
+    .slice(0, 8)
+    .map((e) => ({
+      name: e.name,
+      color: swarmPalette(e.sw, 1)[0],
+      matches: [...swarmMatchHistory.get(e.id)!],
+    }));
   return {
     name: worldName ?? "this island",
     timeLabel: `${fmtDur(worldPlayMs)} here`,
@@ -522,7 +551,7 @@ function buildChartsView(): ChartsView {
     substrates: flora.substrates.length,
     germinations: flora.germinations,
     pollinators: { swarms: pol.cloudsTotal, population: pol.population, species: pol.species },
-    swarmCounts: [...swarmHistory],
+    swarmSeries,
   };
 }
 
@@ -614,6 +643,12 @@ let critters!: Critter[];
 let critterRng!: Rng;
 let swarmLayer!: SwarmLayer; // insect swarms homing on the island's blooms — regenerated from seed each load
 let swarmMetHere = false; // the once-per-island cloud cue: already spoken on this island?
+// the blooms the wanderer's own hand set down this sitting, and whether a cloud
+// has come to one yet — the courted-cloud moment speaks once per island, then
+// rests. Bounded; not persisted (a reload starts the watch afresh, never re-fires).
+const SOWN_BLOOMS_CAP = 256;
+let sownBlooms = new Set<string>();
+let courtshipSpoken = false;
 let lastCamX = 0; // the frame's camera, stashed so a canvas click can hit-test the world
 let lastCamY = 0;
 let trust: Map<number, number> = new Map(); // per-kind bond, this island; wander.trust
@@ -827,6 +862,8 @@ function loadWorld(seed: number): void {
   swarmLayer.takeEvents(); // moments from before the wanderer arrived went unwitnessed
   // has this island already pointed at its clouds? remembered across sittings
   swarmMetHere = swarmMetOn(seed);
+  sownBlooms = new Set();
+  courtshipSpoken = false;
   clearCritterSpriteCache();
   simAcc = 0;
   saveAcc = 0;
@@ -1508,69 +1545,8 @@ function openMenuNow(): void {
   openMenu(buildMenuModel(), menuHandlers);
 }
 
-// The pollination web: the island's insect swarms grouped by the flowering kind
-// they work, each edge grounded with live counts (insects aloft; the flowering
-// kind's plants now) and coloured by the swarm's real adaptation. This is the
-// PRIMARY relationship both the living web (C) and the ledger (G) now lead with.
-// Grouped by host species so the clouds working one bloom read as a single edge.
-function buildPollen(): {
-  links: PollinationLink[];
-  cloudsTotal: number;
-  population: number;
-  species: number;
-} {
-  interface Group {
-    host: PlantSpecies;
-    population: number;
-    swarmCount: number;
-    resSum: number;
-    bestPop: number;
-    colors: string[];
-  }
-  const groups = new Map<number, Group>();
-  let population = 0;
-  for (const ent of swarmLayer.swarms) {
-    population += ent.sw.population;
-    // inspect gives us the resemblance + population + a live host in one call
-    const info = swarmLayer.inspect(ent, species);
-    if (!info || !ent.home) continue;
-    const sid = ent.home.species;
-    const host = species[sid];
-    if (!host) continue;
-    let g = groups.get(sid);
-    if (!g) {
-      g = { host, population: 0, swarmCount: 0, resSum: 0, bestPop: -1, colors: [] };
-      groups.set(sid, g);
-    }
-    g.population += info.population;
-    g.swarmCount++;
-    g.resSum += info.resemblance;
-    // the most-populous cloud carries the group's palette — its adaptation, shown
-    if (info.population > g.bestPop) {
-      g.bestPop = info.population;
-      g.colors = swarmPalette(ent.sw, 5);
-    }
-  }
-  const links: PollinationLink[] = [...groups.values()].map((g) => ({
-    host: g.host,
-    hostName: g.host.name,
-    hostCount: flora.speciesCounts.get(g.host.id) ?? 0,
-    swarmCount: g.swarmCount,
-    population: Math.round(g.population),
-    colors: g.colors,
-    matched: g.resSum / g.swarmCount >= 0.5, // visibly like the flower → pollinates
-  }));
-  // matched-first, then the biggest booms — the living headline leads
-  links.sort((a, b) => Number(b.matched) - Number(a.matched) || b.population - a.population);
-  return {
-    links,
-    cloudsTotal: swarmLayer.swarms.length,
-    population: Math.round(population),
-    species: links.length,
-  };
-}
-
-// The player's web view: the pollinators leading, then the byproduct chains as
+// The player's web view: the pollinators leading (buildPollen, shared with the
+// ledger — built in game/swarms.ts so its shape is unit-testable), then the byproduct chains as
 // drawable links — the species themselves, grounded with how many live on the
 // island now and whether a byproduct of the source is on the ground this moment
 // (so you can go watch the loop close). Ordered live-first, then loops, then the
@@ -1600,7 +1576,7 @@ function buildWebView(): WebView {
   const CAP = 8;
   const POLLEN_CAP = 6;
   const score = Math.round(chainScoreNow());
-  const pol = buildPollen();
+  const pol = buildPollen(swarmLayer, species, (id) => flora.speciesCounts.get(id) ?? 0);
   return {
     island: worldName ?? islandName(currentSeed),
     score,
@@ -2124,7 +2100,9 @@ function offerMurmurMoments(dt: number): void {
       flashHud("a cloud of colour works the blooms nearby — lean close (E) or click it", 5200);
       swarmMetHere = true; // marked only now the cue is truly on screen
       markSwarmMet(currentSeed);
-      murmurs.offer("swarm");
+      // a first meeting, once per island ever — it may speak through the
+      // global murmur cooldown rather than be silently swallowed by it
+      murmurs.offer("swarm", performance.now(), true);
     }
     // standing truly still, watching: learn who eats what — if that plant
     // already has a page in the journal
@@ -2248,6 +2226,7 @@ function frame(now: number): void {
   const auroraTonight = FORCE_AURORA || isAuroraNight(sky, currentSeed);
   rainMurmurArmed = rainNow > 0.5;
   simAcc += dt * 1000;
+  let heartbeat = false; // did the island's sim advance this frame?
   while (simAcc >= SIM_MS) {
     flora.simTick({
       rain: rainNow > 0.2,
@@ -2258,27 +2237,51 @@ function frame(now: number): void {
     sampleSwarms(); // and the pollinators' history keeps pace with the census
     census.sample(flora.tick, flora.speciesCounts);
     simAcc -= SIM_MS;
+    heartbeat = true;
   }
   for (const ev of flora.takeEvents()) {
     flashHud(`${ev.name} — a new kind, arisen from ${ev.parentName}`);
     murmurs.offer("speciation");
     remember(`${ev.name} arose here`);
   }
-  // the swarm layer's best moments, given a witness: a bloom visibly thickening
-  // under a well-matched cloud, a cousin budding off toward a second flower.
-  // Rare by construction (once per swarm; divergence on a slow cadence), so
-  // each earns one quiet line — and a boom writes the host plant's page the
-  // way a watched disperser does ("spread by …"), if that kind has a page.
+  // the swarm layer's best moments, spoken only to a real witness: a bloom
+  // visibly thickening under a well-matched cloud, a cousin budding off toward
+  // a second flower. A HUD flash about a swarm three bays away points at
+  // nothing — so the flash (and its murmur) fires only when the moment is on
+  // or near the screen; an unseen moment leaves a lasting trace instead (the
+  // island's memory; a boom writes the host plant's page either way, the way a
+  // watched disperser does — "spread by …", if that kind has a page), so it
+  // stays discoverable later. Rare by construction (once per swarm; divergence
+  // on a slow cadence).
   for (const ev of swarmLayer.takeEvents()) {
     const host = species[ev.hostSpecies]?.name ?? "its flower";
+    const witnessed = eventInView(ev, lastCamX, lastCamY, renderer.viewWidth, renderer.viewHeight);
     if (ev.kind === "boom") {
-      flashHud(`${host} thickens where ${ev.name} works`);
       recordSpread(currentSeed, ev.hostSpecies, ev.name);
-      murmurs.offer("swarm");
+      if (witnessed) {
+        flashHud(`${host} thickens where ${ev.name} works`);
+        murmurs.offer("swarm");
+      } else {
+        remember(`${host} thickened where ${ev.name} worked`);
+      }
     } else {
-      flashHud(`a cousin — ${ev.name} drifts off toward ${host}`);
       remember(`${ev.name} budded off toward ${host}`);
-      murmurs.offer("speciation");
+      if (witnessed) {
+        flashHud(`a cousin — ${ev.name} drifts off toward ${host}`);
+        murmurs.offer("speciation");
+      }
+    }
+  }
+  // the courted cloud: the first time a swarm is found working a bloom the
+  // wanderer's own hand set down, the loop's one big player verb is named —
+  // once per island, checked only on a heartbeat (homes move only then)
+  if (heartbeat && !courtshipSpoken && sownBlooms.size > 0) {
+    const suitor = courtingSwarm(swarmLayer.swarms, sownBlooms);
+    if (suitor) {
+      courtshipSpoken = true;
+      const bloom = species[suitor.home!.species]?.name ?? "the flower";
+      flashHud(`${suitor.name} has come to the ${bloom} you planted — a sown flower can court a cloud`, 5200);
+      murmurs.offer("swarm");
     }
   }
   saveAcc += dt;
