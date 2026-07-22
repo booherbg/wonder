@@ -18,7 +18,7 @@ export interface HelpSection {
 // the reading behind the game — a living index, opened in a new tab
 export const REFERENCES_URL = "https://claude.ai/code/artifact/d256bcb4-2a5f-4f5f-90bc-997c348f68be";
 
-// one extra line, spoken only on a wanderer's very first arrival
+// the welcome line — folded into the guide itself, said every time it opens
 export const HELP_WELCOME =
   "welcome. look around — E leans close, space acts (an empty hand gathers), and the beach keeps driftwood for a fire. press ? any time to find this card again.";
 
@@ -151,9 +151,8 @@ export function closeHelp(): void {
   panel().style.display = "none";
 }
 
-// The guide, opened: three small chapters and a hint home. On the very
-// first arrival it carries one extra line of welcome.
-export function openHelp(firstVisit = false): void {
+// The guide, opened: a welcome line, three small chapters, and a hint home.
+export function openHelp(): void {
   const el = panel();
   el.innerHTML = "";
   const title = document.createElement("div");
@@ -164,12 +163,10 @@ export function openHelp(firstVisit = false): void {
   epigraph.className = "anth-epigraph";
   epigraph.textContent = "nothing here is required — all of it can be found by wandering.";
   el.appendChild(epigraph);
-  if (firstVisit) {
-    const welcome = document.createElement("div");
-    welcome.className = "help-welcome";
-    welcome.textContent = HELP_WELCOME;
-    el.appendChild(welcome);
-  }
+  const welcome = document.createElement("div");
+  welcome.className = "help-welcome";
+  welcome.textContent = HELP_WELCOME;
+  el.appendChild(welcome);
   for (const section of helpSections()) {
     const header = document.createElement("div");
     header.className = "anth-title";
