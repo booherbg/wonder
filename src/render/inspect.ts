@@ -470,6 +470,16 @@ export function openInspect(
   }
   // standing at your hearth, the camp speaks first — before the wild does
   if (camp) noteSection(el, "your camp", campLines(camp));
+  // swarms drifting within reach — the colourful clouds working the blooms.
+  // Spoken high on the card, before the plant grid, so the genome + host +
+  // population + resemblance + behaviour readout is visible on a normal
+  // window instead of clipping away below the fold: a cloud close enough to
+  // examine is the rarer meeting, and its appearance is the tell.
+  if (swarms.length > 0) {
+    sectionTitle(el, swarms.length > 1 ? "swarms adrift here" : "a swarm adrift here");
+    const g = grid(el);
+    for (const view of swarms) g.appendChild(swarmCard(view));
+  }
   sectionTitle(el, groups.length > 0 ? "growing here" : "nothing grows within reach");
   if (groups.length > 0) {
     const g = grid(el);
@@ -610,13 +620,6 @@ export function openInspect(
       card.appendChild(traits);
       g.appendChild(card);
     }
-  }
-
-  // swarms drifting within reach — the colourful clouds working the blooms
-  if (swarms.length > 0) {
-    sectionTitle(el, swarms.length > 1 ? "swarms adrift here" : "a swarm adrift here");
-    const g = grid(el);
-    for (const view of swarms) g.appendChild(swarmCard(view));
   }
 
   if (pouch.length > 0) {

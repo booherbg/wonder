@@ -7,7 +7,8 @@ import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
-import { MOTES_MAX, SwarmLayer, swarmPalette, tint } from "../game/swarms";
+import { resemblance } from "../life/idmap";
+import { MOTES_MAX, SwarmLayer, dominantColor, swarmPalette, tint } from "../game/swarms";
 import { Dragonflies, FishSchool, FrogPatch, drawClouds, drawForegroundMotes } from "./ambient";
 import { drawBeast } from "./beastSprite";
 import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from "./depth";
@@ -55,6 +56,25 @@ export interface Scene {
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
+
+// The swarm harmonizer. Genome swatches arrive at bench saturation
+// (hsl(H, 62%, 58%)) — right for the Simulator's dark field, garish over the
+// island's lit, muted terrain. Ease each swatch toward the naturalist codex: a
+// touch less saturation and a hair more light (more into the dark, so a night
+// cloud reads as embers). Hue is untouched — the appearance stays the tell.
+function harmonizeSwatch(color: string, darkness: number): string {
+  const m = color.match(/^hsl\((\d+(?:\.\d+)?),\s*(\d+(?:\.\d+)?)%,\s*(\d+(?:\.\d+)?)%\)$/);
+  if (!m) return color;
+  const s = Math.round(Number(m[2]) * 0.78);
+  const l = Math.min(80, Math.round(Number(m[3]) + 5 + darkness * 10));
+  return `hsl(${m[1]}, ${s}%, ${l}%)`;
+}
+
+// When the player asks for reduced motion, the swarms' shimmer and the
+// home-ring's breath hold steady (the clouds still drift — that motion is the
+// sim's own, and predates this pass).
+const CALM =
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 // Taller plants lean a pixel in a slow breeze, each on its own phase.
 function swayOffset(timeMs: number, x: number, y: number): number {
@@ -838,18 +858,24 @@ export class Renderer {
     if (scene.overlay) this.drawEcologyOverlay(scene, camX, camY, timeMs);
   }
 
-  // The insect swarms, drawn in world space (the same camera transform the scene
-  // uses): a soft colour halo pulled from the swarm's dominant genome, then the
-  // individuals — each mote coloured from a pool variant, so the cloud reads as
-  // many related insects and its palette shifts live as the pool adapts toward
-  // its flower. Density rides the population; cohesion tightens or loosens the
-  // cloud. Peaceful, cosmetic-feeling, never a grey dust fog.
+  // The insect swarms, drawn in world space (the same camera transform the
+  // scene uses) and after the night pass, so a cloud keeps its own light. The
+  // Simulator bench set the bar and the world now matches it:
+  //   • a faint thread ties each cloud to the bloom it works, brightening as
+  //     its genome comes to resemble that flower — adaptation made visible —
+  //     with a soft ring on the bloom itself in the cloud's colour,
+  //   • the cloud's read-at-a-glance colour is its SENSOR map's dominant — the
+  //     very map the inspect card paints — so what you see is the genome you
+  //     read, harmonized toward the codex so it sits in the scene,
+  //   • each insect gets an additive bloom under an ink rim under a crisp
+  //     body: luminous over dark forest, still legible over pale sand, and
+  //     glowing like embers after dark.
+  // Density rides the population; cohesion tightens or loosens the cloud.
   private drawSwarms(scene: Scene, camX: number, camY: number, darkness: number, timeMs: number): void {
     const layer = scene.swarms;
     if (!layer) return;
     const ctx = this.ctx;
     const t = timeMs / 1000;
-    const lit = 1 - 0.4 * darkness; // insects dim a little into the dark
     for (const ent of layer.swarms) {
       const cx = ent.x - camX;
       const cy = ent.y - camY;
@@ -857,38 +883,96 @@ export class Renderer {
       const cohesion = sw.behavior.cohesion;
       const baseR = (1.5 - cohesion * 0.6) * TILE_SIZE * 0.8; // world-px cloud radius
       const halo = baseR * 2.1;
-      if (cx < -halo || cx > this.viewWidth + halo || cy < -halo || cy > this.viewHeight + halo) continue;
-      const pal = swarmPalette(sw);
+      const margin = halo + TILE_SIZE * 2; // roomy, so the home thread reaches in from just offscreen
+      if (cx < -margin || cx > this.viewWidth + margin || cy < -margin || cy > this.viewHeight + margin)
+        continue;
+      const dom = harmonizeSwatch(dominantColor(sw.sensor), darkness);
+      const pal = swarmPalette(sw).map((c) => harmonizeSwatch(c, darkness));
+      // ── the bond, made visible: a thread from the cloud to its home bloom ──
+      if (ent.home) {
+        const hx = ent.home.x - camX;
+        const hy = ent.home.y - camY;
+        const flower = layer.flowerFor(ent.home.species);
+        const res = flower ? resemblance(sw.sensor, flower.map) : 0;
+        ctx.strokeStyle = `rgba(127, 224, 196, ${(0.08 + res * 0.38).toFixed(3)})`;
+        ctx.lineWidth = 0.5 + res * 1.0;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+        // the worked bloom wears a soft ring in the cloud's colour, breathing
+        // gently (holding still under prefers-reduced-motion)
+        const breath = CALM ? 0 : Math.sin(t * 1.6 + ent.orbit) * 0.9;
+        ctx.strokeStyle = tint(dom, 0.16 + res * 0.3);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(hx, hy, TILE_SIZE * 0.62 + breath, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       const frac = Math.max(0, Math.min(1, sw.population / sw.cap));
-      const shown = Math.round(6 + frac * (MOTES_MAX - 6));
-      // the aggregate glow: the cloud's colour, read at a glance
+      const shown = Math.min(ent.motes.length, Math.round(6 + frac * (MOTES_MAX - 6)));
+      // the aggregate halo: the cloud's colour read at a glance. Normal
+      // compositing on purpose — over bright sand it TINTS the ground toward
+      // the cloud's hue (additive light would wash out), over dark forest it
+      // lifts; either way the cloud has a body. Night feeds it, ember-like.
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, halo);
-      glow.addColorStop(0, tint(pal[0], 0.34 * lit));
-      glow.addColorStop(0.5, tint(pal[0], 0.14 * lit));
-      glow.addColorStop(1, tint(pal[0], 0));
+      glow.addColorStop(0, tint(dom, 0.3 + 0.16 * darkness));
+      glow.addColorStop(0.55, tint(dom, 0.12 + 0.08 * darkness));
+      glow.addColorStop(1, tint(dom, 0));
       ctx.fillStyle = glow;
       ctx.fillRect(cx - halo, cy - halo, halo * 2, halo * 2);
-      // the individuals — a soft outer wing plus a crisp bright core, so each
-      // insect reads as a little coloured mote, not a flat dot
-      ctx.globalAlpha = lit;
+      // the individuals — positions computed once, then three passes so the
+      // cloud reads as a shimmer of insects, not a smudge. Even motes wear the
+      // sensor's dominant (the cloud's consensus, the card's colour); odd ones
+      // sprinkle pool variants, the visible spread of kin within the cloud.
+      const px: number[] = [];
+      const py: number[] = [];
+      const prad: number[] = [];
+      const pcol: string[] = [];
+      const ptw: number[] = [];
       for (let i = 0; i < shown; i++) {
         const m = ent.motes[i];
         const a = m.a + t * m.spd * (1 + (i % 3) * 0.15);
         const rr = baseR * (0.3 + m.r * (1 + (1 - cohesion) * 0.8));
-        const mx = cx + Math.cos(a) * rr;
-        const my = cy + Math.sin(a) * rr * 0.82;
-        const rad = 0.9 + m.z * 1.4;
-        const col = pal[i % pal.length];
-        ctx.fillStyle = tint(col, 0.16 * lit);
+        px.push(cx + Math.cos(a) * rr);
+        py.push(cy + Math.sin(a) * rr * 0.82);
+        prad.push(0.65 + m.z * 0.85); // insect-small: a pinprick body the bloom pass haloes
+        pcol.push(i % 2 === 0 ? dom : pal[i % pal.length]);
+        // each insect twinkles on its own beat (steady when motion is reduced)
+        ptw.push(CALM ? 1 : 0.7 + 0.3 * Math.sin(t * (2.2 + m.spd * 2.5) + i * 1.9));
+      }
+      // pass 1 — the luminous under-glow: low-alpha additive bloom beneath
+      // every body, so the cloud carries light the way the bench does
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < shown; i++) {
+        ctx.fillStyle = tint(pcol[i], (0.09 + 0.11 * darkness) * ptw[i]);
         ctx.beginPath();
-        ctx.arc(mx, my, rad * 1.3, 0, Math.PI * 2); // the soft wing-blur
-        ctx.fill();
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.arc(mx, my, rad, 0, Math.PI * 2); // the crisp body
+        ctx.arc(px[i], py[i], prad[i] * 3, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.globalAlpha = 1;
+      ctx.restore();
+      // pass 2 — the ink rim: a whisper of dark under each body, the
+      // naturalist's outline that keeps a pale-mint cloud legible over pale
+      // sand and hard noon light (fading at night, when the glow does the work)
+      const rimA = 0.42 * (1 - darkness * 0.6);
+      if (rimA > 0.05) {
+        ctx.fillStyle = `rgba(26, 24, 18, ${rimA.toFixed(3)})`;
+        ctx.beginPath();
+        for (let i = 0; i < shown; i++) {
+          ctx.moveTo(px[i] + prad[i] + 0.5, py[i]);
+          ctx.arc(px[i], py[i], prad[i] + 0.5, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+      // pass 3 — the crisp bodies: near-solid always (the twinkle lives in the
+      // bloom pass, so a body never fades to a smudge), a touch brighter dark
+      for (let i = 0; i < shown; i++) {
+        ctx.fillStyle = tint(pcol[i], Math.min(1, 0.94 + 0.06 * darkness));
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], prad[i], 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
