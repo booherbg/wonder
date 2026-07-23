@@ -118,3 +118,53 @@ test("the garden bed is a 3x3 around home and boosts survival semantics", () => 
   flora.setHome(null);
   expect(flora.inGarden(50 * 16 + 8, 60 * 16 + 8)).toBe(false);
 });
+
+test("GUARD: an old-format save (legacy [species,x,y,energy] rows, no crittersV2, no rng) restores to today's exact defaults", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+
+  // a hand-built legacy SavedWorld: ONLY the 4-element critter rows, nothing new
+  const legacy = {
+    v: 1 as const,
+    seed: SEED,
+    tick: 0,
+    savedAt: 1000,
+    player: [1, 1] as [number, number],
+    home: null,
+    inv: [],
+    plants: [],
+    critters: [
+      [0, 100, 200, 0.5],
+      [1, 300, 400, 0.9],
+      [0, 500, 600, 0.1],
+    ] as number[][],
+  };
+
+  const out = restoreCritters(legacy as unknown as import("../src/game/save").SavedWorld, critterSpecies);
+  expect(out).toHaveLength(3);
+  // the per-index desync trick + fresh-state defaults, byte-for-byte (save.ts:166-175)
+  out.forEach((c, i) => {
+    const row = legacy.critters[i];
+    expect(c.species).toBe(row[0]);
+    expect(c.x).toBe(row[1]);
+    expect(c.y).toBe(row[2]);
+    expect(c.energy).toBe(row[3]);
+    expect(c.state).toBe("idle");
+    expect(c.targetX).toBe(row[1]); // target collapses to current position
+    expect(c.targetY).toBe(row[2]);
+    expect(c.stateTime).toBe((i % 5) * 0.4);
+    expect(c.hopPhase).toBe((i * 1.7) % 6.28);
+    expect(c.facing).toBe(i % 2 === 0 ? 1 : -1);
+    expect(c.curiosity).toBe(0);
+    expect(c.mood).toBe("content");
+    expect(c.meal).toBeUndefined(); // no meal/treat/stuck/path on a legacy restore
+    expect(c.treat).toBeUndefined();
+    expect(c.stuck).toBeUndefined();
+    expect(c.path).toBeUndefined();
+  });
+  // an out-of-range species id is dropped, not restored (save.ts:157)
+  const withBad = { ...legacy, critters: [[999, 1, 2, 0.5]] as number[][] };
+  expect(restoreCritters(withBad as unknown as import("../src/game/save").SavedWorld, critterSpecies)).toHaveLength(0);
+});
