@@ -68,6 +68,7 @@ import {
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import { PRESSURES, Pressure, PressureId, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
+import { AMBIENT_ROLES, roleBadge } from "./simAmbient";
 import {
   RestoredSim,
   SavedSimControl,
@@ -233,7 +234,14 @@ function critterInspectView(c: Critter, sp: CritterSpecies, plantSpecies: PlantS
   return {
     name: sp.name,
     role: sp.role,
-    roleLine: roleLine(sp.role),
+    // the ambient bench's own copy wins over the shared roleLine: real play's
+    // roleLine only tells "grazer" from everything else and reads any bench
+    // role as a generic "spreader" (render/inspect.ts:309-313) — wrong for a
+    // fish, which never spreads a seed. AMBIENT_ROLES (Task 4) carries
+    // evocative, role-correct help text for every bench role; fall back to
+    // roleLine only for "grazer", the one real-play role it doesn't list.
+    // Simulator-only: the shared roleLine() real play calls stays untouched.
+    roleLine: AMBIENT_ROLES.find((r) => r.id === sp.role)?.help ?? roleLine(sp.role),
     size: sp.size,
     palate: sp.palate,
     state: c.state,
@@ -669,6 +677,8 @@ export function startWorldLab(): void {
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
+      // keep the ambient tray in lockstep with the roster + each kind's live role
+      ui.setAmbient(critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })));
     }
   }
 
@@ -1527,10 +1537,27 @@ export function startWorldLab(): void {
   ui.onUnpinEntry = (key) => unpinDrawerEntry(key);
   ui.onReseedPinned = () => reseedPinned();
   ui.onPressure = (id, value) => setPressure(id, value);
+  ui.onAmbientRole = (id, role) => {
+    const was = kernel.critterSpecies[id].role;
+    kernel.setCritterRole(id, role); // the same live role-flip grazerShare uses
+    refreshPalette(); // repaints the chip badge AND the tray (refreshPalette feeds setAmbient)
+    refreshDrawer();
+    ui?.flashNote(was === role ? `${role} — unchanged` : `role → ${role}`);
+  };
+  // a dev-aid so the tray can be screenshot open without a mouse click
+  if (new URLSearchParams(location.search).has("ambient")) {
+    refreshPalette(); // ensure setAmbient has the current roster
+    ui.openAmbient(true);
+  }
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
   ui.setBrushSize(brushSize);
   ui.setRollKind(rollKind);
+  // the boot-time twin of refreshPalette's own ui.setAmbient call (Step 5):
+  // build() (just above) ran refreshPalette() before `ui` existed, so that
+  // first call's if (ui) {...} guard never fired for setAmbient either.
+  // Without this, the ambient tray opens BLANK on an ordinary first use.
+  ui.setAmbient(critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })));
   // re-light the tray's sliders to whatever pressureValues actually holds —
   // buildChrome() itself only knows DEFAULT_TUNING (it has no access to this
   // closure's state), so if ?pressures=wild already cranked pressureValues
@@ -1912,6 +1939,13 @@ interface Chrome {
   onPressure: (id: PressureId, value: number) => void;
   setPressure: (id: PressureId, value: number) => void;
   openPressures: (open?: boolean) => void;
+  // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
+  // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
+  // child-of-`stack` tray shape as the pressures tray above — NOT a
+  // position:fixed overlay. Bench-only; nothing graduates to real worlds.
+  onAmbientRole: (id: number, role: CritterRole) => void;
+  setAmbient: (kinds: { id: number; name: string; role: CritterRole }[]) => void;
+  openAmbient: (open?: boolean) => void;
   // save/load a construct to a named slot (Task 9): a save-prompt button + a
   // load picker whose rows startWorldLab fills in from readSimIndex — Chrome
   // only draws what it's given and dispatches picks/forgets, the SAME split
@@ -2121,6 +2155,17 @@ function buildChrome(initial: StarterKind): Chrome {
   pressuresBtn.onclick = () => chrome.openPressures();
   bar.appendChild(pressuresBtn);
 
+  // ── the ambient bench toggle: an "ambient ✿" button beside pressures, same
+  // btn() chrome as every other bar control. Flips the ambient tray (built near
+  // the end of this function) open/closed — the Simulator's opt-in ambient roles,
+  // one click away (slice 5b). ─────────────────────────────────────────────────
+  const ambientBtn = document.createElement("button");
+  ambientBtn.id = "ambient-btn";
+  ambientBtn.textContent = "ambient ✿";
+  ambientBtn.style.cssText = btn(false);
+  ambientBtn.onclick = () => chrome.openAmbient();
+  bar.appendChild(ambientBtn);
+
   // ── save/load a construct to a named slot (Task 9): a "save · load"
   // cluster beside pressures, same btn()/group() chrome as every other bar
   // control. Save prompts for a name (mirrors nameWorld's window.prompt,
@@ -2238,7 +2283,8 @@ function buildChrome(initial: StarterKind): Chrome {
     });
     critterBtns = critters.map((c) => {
       const b = document.createElement("button");
-      b.textContent = c.name.toLowerCase();
+      const badge = roleBadge(c.role); // "" for a plain disperser; a glyph for a bench role
+      b.textContent = badge ? `${c.name.toLowerCase()} ${badge}` : c.name.toLowerCase();
       b.style.cssText = btn(false);
       b.onclick = () => chrome.onSelect({ kind: "critter", id: c.id });
       critterRow.appendChild(b);
@@ -3020,6 +3066,65 @@ function buildChrome(initial: StarterKind): Chrome {
     slotPanel.style.display = slotPanelOpen ? "block" : "none";
     loadSlotBtn.style.cssText = btn(slotPanelOpen);
   };
+
+  // ── the ambient bench: opt-in experimental roles for placed critter KINDS
+  // (pollinator / shuttle / … ), OFF by default. Same in-flow-child-of-`stack`
+  // pattern as the pressures tray above (NOT a position:fixed overlay — see that
+  // tray's own hard-won comment trail), same btn()/group()/label() chrome. Each
+  // row is one critter kind + a button per role; clicking flips that kind live
+  // through kernel.setCritterRole (the exact path grazerShare already uses).
+  // Bench-only: nothing graduates to real worlds in v1. ────────────────────────
+  const ambientTray = document.createElement("div");
+  ambientTray.id = "lab-ambient-tray";
+  ambientTray.style.cssText =
+    "display: none; max-width: 340px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
+    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
+    " font-family: var(--serif); user-select: none;";
+  stack.appendChild(ambientTray); // appended after evoTray — column-reverse stacks it above the bar
+
+  const ambientHead = document.createElement("div");
+  ambientHead.style.cssText = "text-align: center;";
+  ambientHead.innerHTML =
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the ambient bench</div>` +
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">give a placed kind an experimental role — bench only, nothing graduates</div>`;
+  ambientTray.appendChild(ambientHead);
+
+  const ambientRows = document.createElement("div");
+  ambientRows.style.cssText = "display: flex; flex-direction: column; gap: 8px; margin-top: 10px;";
+  ambientTray.appendChild(ambientRows);
+
+  chrome.setAmbient = (kinds) => {
+    ambientRows.replaceChildren();
+    if (kinds.length === 0) {
+      ambientRows.appendChild(label("place a critter first"));
+      return;
+    }
+    for (const k of kinds) {
+      const rowEl = document.createElement("div");
+      rowEl.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+      const nameEl = document.createElement("span");
+      nameEl.textContent = k.name.toLowerCase();
+      nameEl.style.cssText = "font-variant: small-caps; color: var(--ink-bright); min-width: 96px;";
+      rowEl.appendChild(nameEl);
+      for (const role of AMBIENT_ROLES) {
+        const b = document.createElement("button");
+        b.textContent = role.label;
+        b.title = role.help;
+        b.style.cssText = btn(k.role === role.id); // the active role reads lit
+        b.onclick = () => chrome.onAmbientRole(k.id, role.id);
+        rowEl.appendChild(b);
+      }
+      ambientRows.appendChild(rowEl);
+    }
+  };
+
+  let ambientOpen = false;
+  chrome.openAmbient = (open) => {
+    ambientOpen = open ?? !ambientOpen;
+    ambientTray.style.display = ambientOpen ? "block" : "none";
+    ambientBtn.style.cssText = btn(ambientOpen);
+  };
+  chrome.onAmbientRole = () => {}; // real handler wired by startWorldLab's body
 
   return chrome;
 }
