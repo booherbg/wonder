@@ -1554,7 +1554,12 @@ export function startWorldLab(): void {
     kernel.setCritterRole(id, role); // the same live role-flip grazerShare uses
     refreshPalette(); // repaints the chip badge AND the tray (refreshPalette feeds setAmbient)
     refreshDrawer();
-    ui?.flashNote(was === role ? `${role} — unchanged` : `role → ${role}`);
+    // speak the tray's own vocabulary ("fish", "shuttle"), not the raw kebab-case
+    // CritterRole id ("aquatic-grazer", "nutrient-shuttle") the button never showed
+    // (qa consistency #3 / coherence Important #2). Raw id only for a role the tray
+    // doesn't list.
+    const roleName = AMBIENT_ROLES.find((r) => r.id === role)?.label ?? role;
+    ui?.flashNote(was === role ? `${roleName} — unchanged` : `role → ${roleName}`);
   };
   // a dev-aid so the tray can be screenshot open without a mouse click
   if (new URLSearchParams(location.search).has("ambient")) {
@@ -2167,13 +2172,15 @@ function buildChrome(initial: StarterKind): Chrome {
   pressuresBtn.onclick = () => chrome.openPressures();
   bar.appendChild(pressuresBtn);
 
-  // ── the ambient bench toggle: an "ambient ✿" button beside pressures, same
+  // ── the ambient bench toggle: an "ambient" button beside pressures, same
   // btn() chrome as every other bar control. Flips the ambient tray (built near
   // the end of this function) open/closed — the Simulator's opt-in ambient roles,
-  // one click away (slice 5b). ─────────────────────────────────────────────────
+  // one click away (slice 5b). No glyph: the old "ambient ✿" reused ✿, which is
+  // ALSO the pollinator role's own badge, so one mark meant both "open this panel"
+  // and "this kind pollinates" (qa consistency #1). ────────────────────────────
   const ambientBtn = document.createElement("button");
   ambientBtn.id = "ambient-btn";
-  ambientBtn.textContent = "ambient ✿";
+  ambientBtn.textContent = "ambient";
   ambientBtn.style.cssText = btn(false);
   ambientBtn.onclick = () => chrome.openAmbient();
   bar.appendChild(ambientBtn);
@@ -2784,8 +2791,12 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   chrome.showCritterInspect = (v) => {
+    // the subtitle speaks the tray's short label ("fish"), never the raw kebab-case
+    // role id ("aquatic-grazer") — the same vocabulary the button and badge use (qa
+    // consistency #3). Falls back to the raw id for an unlisted role (reads fine).
+    const roleName = AMBIENT_ROLES.find((r) => r.id === v.role)?.label ?? v.role;
     readout.innerHTML =
-      head(v.name.toLowerCase(), `${v.role} · size ${v.size.toFixed(2)}`) +
+      head(v.name.toLowerCase(), `${roleName} · size ${v.size.toFixed(2)}`) +
       title("palate") +
       stat("form", PlantForm[v.palate.form].toLowerCase()) +
       stat("hue center", pct(v.palate.hueCenter)) +
