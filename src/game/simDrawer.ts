@@ -40,6 +40,21 @@ export function cloneDef<T>(def: T): T {
 }
 
 let keySeq = 0;
+
+// exported so the sim slot can mint fresh, collision-free keys after a resume
+export function nextDrawerKey(): string {
+  return `e${keySeq++}`; // the file's existing format — an "e" prefix, no dash
+}
+
+// after restoring a saved roster, advance the shared counter past every restored
+// key's numeric suffix, so new entries never collide with resumed ones (facts §4)
+export function syncKeySeq(entries: DrawerEntry[]): void {
+  for (const e of entries) {
+    const suffix = Number(e.key.slice(1)); // strip the "e" prefix — real keys are "e0"/"e42", never dashed
+    if (Number.isFinite(suffix) && suffix >= keySeq) keySeq = suffix + 1;
+  }
+}
+
 export function makeEntry(args: {
   kind: EntryKind;
   speciesId: number;
@@ -48,7 +63,7 @@ export function makeEntry(args: {
   parentId?: number;
 }): DrawerEntry {
   return {
-    key: `e${keySeq++}`,
+    key: nextDrawerKey(),
     kind: args.kind,
     speciesId: args.speciesId,
     name: args.def.name,
