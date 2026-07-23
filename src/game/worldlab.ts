@@ -415,6 +415,13 @@ export function startWorldLab(): void {
     // placed) — the kernel gets its own real Flora; placement is this task's job.
     const scratch = new Flora(map, species, seed, {}, { tick: 0, plants: [] });
     const critterSpecies: CritterSpecies[] = generateCritterSpecies(seed, map, scratch, species);
+    // Every unplaced species dens at the scratch Flora's fallback (map.spawn,
+    // since no plants are placed yet) — park them off-map so a fresh bench
+    // doesn't stack ~17 den mounds on the spawn tile. placeCritter (kernel.ts)
+    // overwrites the real den to the drop tile on placement, so a PLACED
+    // critter still dens where you dropped it. chainStats/chainLinks (foodweb.ts)
+    // never read species.den — only role/palate/archetype — so this is safe.
+    for (const sp of critterSpecies) sp.den = { x: -1, y: -1 };
     kernel = new SimKernel({ map, plantSpecies: species, critterSpecies, seed });
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);

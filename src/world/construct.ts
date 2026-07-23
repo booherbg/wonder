@@ -85,5 +85,10 @@ export function buildConstruct(kind: StarterKind, seed: number): WorldMap {
       return biomeSampler(seed);
     case "single-biome":
       return singleBiome(seed);
+    default:
+      // A malformed ?starter (or any future StarterKind this switch hasn't
+      // caught up with) falls back to the sampler rather than returning
+      // undefined and crashing new Flora(undefined, …) downstream.
+      return biomeSampler(seed);
   }
 }
