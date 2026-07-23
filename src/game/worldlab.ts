@@ -85,9 +85,9 @@ const BIOME_TILES: { tile: Tile; name: string }[] = [
 ];
 
 const STARTERS: { kind: StarterKind; name: string }[] = [
-  { kind: "playable-island", name: "Playable Island" },
-  { kind: "biome-sampler", name: "Biome Sampler" },
-  { kind: "single-biome", name: "Single Biome" },
+  { kind: "playable-island", name: "playable island" },
+  { kind: "biome-sampler", name: "biome sampler" },
+  { kind: "single-biome", name: "single biome" },
 ];
 
 // The palette's current pick: a plant or critter kind by id, a real Tile for
@@ -991,18 +991,22 @@ export function startWorldLab(): void {
   // Curate — pin/unpin: a pure flag toggle on the drawer entry (pinEntry/
   // unpinEntry, immutable like delete/revive), swapped into `drawer` and
   // re-rendered. Never touches the kernel or the stored def — pinning only
-  // marks a phenotype as the one re-seed should draw from.
+  // marks a phenotype as the one `place pinned` should draw from. A pin used
+  // to point nowhere (no feedback, no hint where "place pinned" even lives) —
+  // both toggles now flash a note.
   function pinDrawerEntry(key: string): void {
     const i = drawer.findIndex((e) => e.key === key);
     if (i < 0) return;
     drawer[i] = pinEntry(drawer[i]);
     refreshDrawer();
+    if (ui) ui.flashNote("pinned ★ — place pinned kinds from the roll pane, top-left");
   }
   function unpinDrawerEntry(key: string): void {
     const i = drawer.findIndex((e) => e.key === key);
     if (i < 0) return;
     drawer[i] = unpinEntry(drawer[i]);
     refreshDrawer();
+    if (ui) ui.flashNote("unpinned");
   }
 
   // Curate — reseed: for every pinned, non-deleted kind, re-place a few fresh
@@ -1035,7 +1039,13 @@ export function startWorldLab(): void {
     refreshPalette();
     refreshDrawer();
     refreshCensusStrip();
-    if (ui) ui.flashNote(pinned.length > 0 ? `re-seeded ${pinned.length} pinned kind(s) from their stored definitions` : "no pinned kinds to re-seed");
+    if (ui) {
+      ui.flashNote(
+        pinned.length === 0
+          ? "nothing pinned to place"
+          : `placed ${pinned.length} pinned ${pinned.length === 1 ? "kind" : "kinds"} from their stored definitions`,
+      );
+    }
   }
 
   // ?drawerdemo=1: rolls+picks one plant kind and one critter kind (the SAME
@@ -1758,10 +1768,11 @@ interface Chrome {
   onPinEntry: (key: string) => void;
   onUnpinEntry: (key: string) => void;
   onReseedPinned: () => void;
-  // the evolution tray (Task 5, slice 4): five LIVE pressure sliders in a
-  // toggled `position: fixed` overlay — not a leftStack/rightStack child, so
-  // it can't push either bounded column into the overlap those stacks exist
-  // to avoid.
+  // the evolution tray (Task 5, slice 4): five LIVE pressure sliders, toggled
+  // open/closed. An in-flow child of the bottom-center `stack` (appended
+  // last, so it grows the stack upward without disturbing the bar/palette
+  // below it) — not an independent `position: fixed` overlay, and not a
+  // leftStack/rightStack child either.
   onPressure: (id: PressureId, value: number) => void;
   setPressure: (id: PressureId, value: number) => void;
   openPressures: (open?: boolean) => void;
@@ -1950,11 +1961,11 @@ function buildChrome(initial: StarterKind): Chrome {
   });
   bar.appendChild(group(label("brush"), ...brushBtns.map((s) => s.b)));
 
-  // ── the evolution tray's toggle: a "pressures ⚘" button beside brush,
-  // same btn() chrome as every other bar control. Flips a `position: fixed`
-  // overlay tray (built near the end of this function, once stat() exists)
-  // open/closed — the marquee of the evolutionary layer, one click away
-  // (Task 5, slice 4). ───────────────────────────────────────────────────
+  // ── the pressures tray's toggle: a "pressures ⚘" button beside brush,
+  // same btn() chrome as every other bar control. Flips the pressures tray
+  // (an in-flow child of the bottom-center `stack`, built near the end of
+  // this function, once stat() exists) open/closed — the marquee of the
+  // evolutionary layer, one click away (Task 5, slice 4). ─────────────────
   bar.appendChild(sep());
   const pressuresBtn = document.createElement("button");
   pressuresBtn.id = "pressures-btn";
@@ -2154,7 +2165,7 @@ function buildChrome(initial: StarterKind): Chrome {
       row.style.cssText = "padding: 7px 0; border-bottom: 1px solid rgba(127,224,196,0.14);";
       row.innerHTML =
         `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">` +
-        `<span style="font-variant: small-caps; letter-spacing: 0.02em; font-size: 13px; color: var(--ink-bright);` +
+        `<span title="${esc(r.name)}" style="font-variant: small-caps; letter-spacing: 0.02em; font-size: 13px; color: var(--ink-bright);` +
         ` overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 158px;">${esc(r.name)}</span>` +
         `<span style="font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: ${stateColor};">${state}</span></div>` +
         `<div style="font: 10px var(--mono); color: rgba(228,236,242,0.45); margin-top: -1px;">${esc(r.sub)}</div>` +
@@ -2170,7 +2181,7 @@ function buildChrome(initial: StarterKind): Chrome {
         actionBtn.onclick = () => chrome.onDeleteEntry(r.key);
       }
       row.appendChild(actionBtn);
-      // curate: pin this phenotype so `reseed pinned` re-places fresh
+      // curate: pin this phenotype so `place pinned` re-places fresh
       // instances from its stored def — the active (lumen-filled) face of
       // btn() IS the pinned ⭑ state, no separate badge needed.
       const pinBtn = document.createElement("button");
@@ -2249,7 +2260,7 @@ function buildChrome(initial: StarterKind): Chrome {
     `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.6); line-height: 1.5; margin: 6px 0 2px;">${esc(t)}</div>`;
   const speciesRow = (name: string, spark: string, count: number): string =>
     `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 2px 0; font: 11px var(--mono);">` +
-    `<span style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
+    `<span title="${esc(name.toLowerCase())}" style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
     `<span style="color: rgb(var(--lumen)); letter-spacing: 0.03em;">${spark}</span>` +
     `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${count}</span></div>`;
 
@@ -2257,9 +2268,10 @@ function buildChrome(initial: StarterKind): Chrome {
   // roll/re-roll pair, and a grid of live thumbnails whose cells ARE the pick
   // buttons. Docked top-left, under the eyebrow, ABOVE the census in
   // `leftStack` (was independently fixed, vertically overlapping the
-  // census — see leftStack's own comment above). The pane itself no longer
-  // caps/scrolls as a whole — only the grid does, below — so the header and
-  // roll/re-roll controls stay put and never scroll out of reach. This
+  // census — see leftStack's own comment above). The pane itself caps its
+  // OWN height and scrolls as a whole (the vh-cap block just below) — not
+  // just the grid's own inner scroll — so growth here can never shove the
+  // census down into the collision leftStack was built to avoid. This
   // chrome never rolls or renders a sprite itself — worldlab.ts hands it
   // finished canvases via setBatch; a click only ever reports its index
   // outward. ─────────────────────────────────────────────────────────────
@@ -2334,10 +2346,12 @@ function buildChrome(initial: StarterKind): Chrome {
   seedRicherBtn.onclick = () => chrome.onSeedRicher();
   // curate: re-seed every pinned drawer kind from its stored def (Task 6) —
   // lives beside roll-a-web's own control row since both are "add instances
-  // to the construct" actions, not roll-batch actions.
+  // to the construct" actions, not roll-batch actions. Labelled "place
+  // pinned" (not "reseed") — "reseed" is the pressures tray's own word for
+  // FloraTuning.reproChance; three mechanics sharing one word was the bug.
   const reseedPinnedBtn = document.createElement("button");
   reseedPinnedBtn.id = "reseed-pinned-btn";
-  reseedPinnedBtn.textContent = "reseed pinned";
+  reseedPinnedBtn.textContent = "place pinned";
   reseedPinnedBtn.style.cssText = btn(false);
   reseedPinnedBtn.onclick = () => chrome.onReseedPinned();
   webControls.appendChild(group(rollWebBtn, seedRicherBtn, reseedPinnedBtn));
@@ -2384,6 +2398,7 @@ function buildChrome(initial: StarterKind): Chrome {
       cellBtn.appendChild(cell.thumb);
       const nameEl = document.createElement("span");
       nameEl.textContent = cell.name;
+      nameEl.title = cell.name; // hovering shows the full name — critical for a dozen ✧ daughters
       nameEl.style.cssText =
         "font-size: 9px; text-align: center; line-height: 1.15; max-width: 54px; overflow: hidden;" +
         " text-overflow: ellipsis; white-space: nowrap;";
@@ -2525,12 +2540,15 @@ function buildChrome(initial: StarterKind): Chrome {
         return b;
       });
       habitatRow.append(label("habitat"), ...habitatBtns);
+      // labelled "substrate feeder" (not "reseed") — "reseed" is the
+      // pressures tray's own word for FloraTuning.reproChance; this toggle is
+      // the substrateFeeder flag, a different mechanic entirely.
       const reseedBtn = document.createElement("button");
       reseedBtn.id = "iterate-reseed-btn";
-      reseedBtn.textContent = view.substrateFeeder ? "reseed: on" : "reseed: off";
+      reseedBtn.textContent = view.substrateFeeder ? "substrate feeder: on" : "substrate feeder: off";
       reseedBtn.style.cssText = btn(!!view.substrateFeeder);
       reseedBtn.onclick = () => chrome.onSetTrait({ substrateFeeder: !view.substrateFeeder });
-      traitsControls.append(habitatRow, group(label("reseed"), reseedBtn));
+      traitsControls.append(habitatRow, group(label("substrate feeder"), reseedBtn));
       // one combined readout line — the genome's form/hue aren't shown by
       // any button (habitat/reseed are); habitat itself is skipped here,
       // already legible off the habitat picker's own active tile.
@@ -2616,7 +2634,7 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("live", String(v.summary.live), "mint") +
       stat("arose", String(v.summary.arose)) +
       stat("lost", String(v.summary.lost)) +
-      title("by species") +
+      title("by species (plants)") +
       rows +
       title("food web") +
       stat("chains", String(v.chains.chains)) +
@@ -2645,7 +2663,7 @@ function buildChrome(initial: StarterKind): Chrome {
   // only centers each child WITHIN that box, not within the narrower gap
   // between leftStack's right edge (~386px: 18px + the roll pane's own
   // 336px content + its 32px of padding) and rightStack's left edge
-  // (~328px in from the right: 18px + the drawer's 296px content + its
+  // (~346px in from the right: 18px + the drawer's 296px content + its
   // 32px of padding) — a gap that narrows on a smaller window. So the tray
   // caps its OWN max-width well under that gap (independent of whatever the
   // palette does) and lays its five sliders in a compact, narrow-columned
@@ -2666,13 +2684,13 @@ function buildChrome(initial: StarterKind): Chrome {
   const evoHead = document.createElement("div");
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
-    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the evolution tray</div>` +
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">crank a pressure — evolution changes live, nothing resets</div>`;
   evoTray.appendChild(evoHead);
 
   // The five sliders sit in a ROW (not a stacked column) — a compact strip
   // above the bottom bar rather than a tall panel. Each group is narrow
-  // enough (with the tray's own 340px cap above) that either three fit per
+  // enough (with the tray's own 260px cap above) that either two fit per
   // row at that cap, or all five fit in one row on a wide enough window
   // (flex-wrap handles both), the same convention the bottom bar's own
   // clusters already use.

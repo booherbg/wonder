@@ -90,7 +90,6 @@ export function statusOf(entry: DrawerEntry, count: number, entries: readonly Dr
 export function captureDaughters(
   plantSpecies: readonly PlantSpecies[],
   entries: readonly DrawerEntry[],
-  _nextKey?: number,
 ): DrawerEntry[] {
   const known = new Set(entries.filter((e) => e.kind === "plant").map((e) => e.speciesId));
   const fresh: DrawerEntry[] = [];

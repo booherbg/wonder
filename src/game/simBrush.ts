@@ -38,9 +38,11 @@ export function stampCells(tx: number, ty: number, size: BrushSize, map: WorldMa
 // Repaint the ground under `cells` to `tile`, in place — the biome brush. The
 // SAME map.tiles array Flora and the Renderer already hold, so the mutation is
 // seen live by both with no rebuild. Keeps the WorldMap valid: `tile` is always
-// a real enum value (the caller only ever passes a Tile), and the spawn cell is
-// never made non-walkable (a flood of DeepWater/Snow/Cliff spares spawn), so
-// the construct is never stranded. Returns how many cells actually changed.
+// a real enum value (the caller only ever passes a Tile), and the spawn TILE
+// itself is never painted non-walkable (a flood of DeepWater/Snow/Cliff spares
+// just that one cell) — the literal guarantee stops there: nothing here checks
+// that a walkable PATH from spawn to the rest of the construct still exists
+// after the paint. Returns how many cells actually changed.
 export function paintBiome(map: WorldMap, cells: { x: number; y: number }[], tile: Tile): number {
   const spawnKey = map.spawn.y * map.width + map.spawn.x;
   const tileWalkable = WALKABLE.has(tile);

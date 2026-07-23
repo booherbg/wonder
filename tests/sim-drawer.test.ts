@@ -52,13 +52,13 @@ test("captureDaughters adds first-class entries for parent-bearing records not y
     plantDef(0),
     plantDef(1, { name: "Ova Bloom ✧", parent: 0, bornTick: 42 }),
   ];
-  const fresh = captureDaughters(speciesList, [picked], 100);
+  const fresh = captureDaughters(speciesList, [picked]);
   expect(fresh.length).toBe(1);
   expect(fresh[0].origin).toBe("daughter");
   expect(fresh[0].parentId).toBe(0);
   expect(fresh[0].speciesId).toBe(1);
   // idempotent: once captured, it isn't captured again
-  expect(captureDaughters(speciesList, [picked, ...fresh], 200).length).toBe(0);
+  expect(captureDaughters(speciesList, [picked, ...fresh]).length).toBe(0);
 });
 
 test("variations = iterated looks + captured daughters of this kind", () => {
