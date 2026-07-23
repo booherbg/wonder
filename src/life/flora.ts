@@ -179,7 +179,10 @@ export class Flora {
     if (restored) {
       this.tick = restored.tick;
       for (const k of restored.soil ?? []) this.soilTiles.add(k);
-      for (const p of restored.plants) this.addPlant(p.species, p.genome, p.x, p.y, p.born);
+      // skipCap=true: REPRODUCE the saved set, don't re-adjudicate it through
+      // the density caps under (possibly since-lowered) live tuning — see
+      // addPlant's skipCap doc. Every saved plant was legal when it rooted.
+      for (const p of restored.plants) this.addPlant(p.species, p.genome, p.x, p.y, p.born, true);
       if (restored.substrates) this.substrates = restored.substrates.map((s) => ({ ...s }));
       if (restored.suppressed) for (const id of restored.suppressed) this.suppressedSpecies.add(id);
       if (restored.lastSplitTick !== undefined) this.lastSplitTick = restored.lastSplitTick;
@@ -302,17 +305,27 @@ export class Flora {
     return !bucket || bucket.length < this.tuning.maxPerTile;
   }
 
+  // The half of the gate that's about PLACE, not room: in bounds and on this
+  // species' own habitat tile. Split out of rootableAt so a density-cap
+  // bypass (addPlant's `skipCap`, for restore) can still keep this half.
+  private inHabitat(species: number, x: number, y: number): boolean {
+    const tx = Math.floor(x / TILE_SIZE);
+    const ty = Math.floor(y / TILE_SIZE);
+    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
+    const key = ty * this.map.width + tx;
+    return this.map.tiles[key] === this.speciesList[species].habitat;
+  }
+
   // The gate every seed the SIM sows must pass to take root: in bounds, on its
   // own habitat, the tile not yet full, the island not yet full. Public so a
   // courier (the beast) can find open, correct-habitat ground before it
   // bothers to drift a seed onto it. This never consults the soil tiles, so
   // drift, propagate, reseeding and scatter can never jump off-habitat.
   rootableAt(species: number, x: number, y: number): boolean {
+    if (!this.inHabitat(species, x, y)) return false;
     const tx = Math.floor(x / TILE_SIZE);
     const ty = Math.floor(y / TILE_SIZE);
-    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height) return false;
     const key = ty * this.map.width + tx;
-    if (this.map.tiles[key] !== this.speciesList[species].habitat) return false;
     return this.hasRoom(key);
   }
 
@@ -346,8 +359,32 @@ export class Flora {
     return plant;
   }
 
-  addPlant(species: number, genome: Genome, x: number, y: number, born: number): Plant | null {
-    if (!this.rootableAt(species, x, y)) return null;
+  // `skipCap` (restore-only): bypass the density caps — per-tile AND the
+  // global maxPlants — while still requiring the habitat gate. Exists so
+  // Flora's restore loop can REPRODUCE a saved plant set rather than
+  // re-adjudicate it through whatever cap is live NOW. The pressures panel's
+  // setTuning can lower maxPerTile/maxPlants live without pruning existing
+  // plants, so a saved construct can legally hold MORE on a tile than the
+  // current cap allows; every saved plant was legal when it rooted, so
+  // restore must not silently drop the excess. For any under-cap plant set
+  // (true of every real-play save — worldgen always respects the cap, and
+  // real play has no live tuning control) skipCap changes nothing: hasRoom
+  // would have accepted the plant anyway, so the outcome is identical either
+  // way. Ordinary sim/player placement never sets this — only Flora's own
+  // restore loop does.
+  addPlant(
+    species: number,
+    genome: Genome,
+    x: number,
+    y: number,
+    born: number,
+    skipCap = false,
+  ): Plant | null {
+    if (skipCap) {
+      if (!this.inHabitat(species, x, y)) return null;
+    } else if (!this.rootableAt(species, x, y)) {
+      return null;
+    }
     return this.insert(species, genome, x, y, born);
   }
 

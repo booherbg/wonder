@@ -16,12 +16,13 @@ import { worldKey, WORLD_INDEX_KEY } from "../src/game/save";
 import { nextDrawerKey, syncKeySeq } from "../src/game/simDrawer";
 import { SimKernel } from "../src/life/kernel";
 import { Flora } from "../src/life/flora";
-import { generatePlantSpecies } from "../src/life/species";
+import { generatePlantSpecies, speciateFrom } from "../src/life/species";
 import { generateCritterSpecies } from "../src/life/fauna";
 import { buildConstruct } from "../src/world/construct";
 import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
 import { paintBiome } from "../src/game/simBrush";
+import { makeRng } from "../src/core/rng";
 
 // an in-memory Storage so the localStorage round-trip is testable in node
 function memStore(): Storage {
@@ -166,4 +167,107 @@ test("syncKeySeq advances the drawer minter past restored keys (no collision aft
   syncKeySeq(restored);
   const next = nextDrawerKey(); // must be past 7
   expect(Number(next.slice(1))).toBeGreaterThan(7);
+});
+
+// PROBE3 — the confirmed bug: restore must REPRODUCE saved plants, not
+// re-adjudicate them through the density cap. The pressures panel's setTuning
+// can lower maxPerTile/maxPlants live WITHOUT pruning existing plants, so a
+// tile can legally hold more than the CURRENT cap. Before the fix, Flora's
+// restore loop re-rooted every saved plant through addPlant's live hasRoom
+// gate and silently dropped the excess (packSim captured 4, restoreSim gave
+// back 2). Flora.addPlant now takes a restore-only skipCap that bypasses the
+// density caps (never the habitat gate) so the saved set survives whole.
+test("PROBE3: restore reproduces an over-cap tile rather than re-adjudicating it under a lowered live cap", () => {
+  const map = buildConstruct("single-biome", SEED);
+  const plants = generatePlantSpecies(SEED);
+  const scratch = new Flora(map, plants, SEED, {}, { tick: 0, plants: [] });
+  const critters = generateCritterSpecies(SEED, map, scratch, plants);
+  const kernel = new SimKernel({ map, plantSpecies: plants, critterSpecies: critters, seed: SEED });
+  const grassPlant = plants.findIndex((p) => p.habitat === Tile.Grass);
+  const tx = 6, ty = 6;
+
+  // 4 plants on ONE tile — exactly DEFAULT_TUNING.maxPerTile, so all 4 legally root
+  for (const dx of [2, 5, 8, 11]) {
+    expect(kernel.placePlant(grassPlant, tx * TILE_SIZE + dx, ty * TILE_SIZE + 8)).not.toBeNull();
+  }
+  expect(kernel.flora.plantsInTile(tx, ty).length).toBe(4);
+
+  kernel.setTuning({ maxPerTile: 2 }); // lowered live AFTER the plants rooted; nothing is pruned
+  expect(kernel.flora.plantsInTile(tx, ty).length).toBe(4); // still 4 — setTuning never prunes
+
+  const blob = packSim({ kernel, drawer: [], starter: "single-biome", seed: SEED, name: "probe3", savedAt: 1 });
+  expect(blob.flora.plants.length).toBe(kernel.flora.count); // packSim captures every live plant, cap or no cap
+  const json = JSON.parse(JSON.stringify(blob)) as typeof blob;
+
+  const r = restoreSim(json);
+  expect(r.kernel.flora.count).toBe(4); // THE FIX: all 4 survive, not just the first 2
+  expect(r.kernel.flora.plantsInTile(tx, ty).length).toBe(4);
+
+  // continuation stays deterministic: both share maxPerTile=2 with this tile
+  // already over-cap, so neither can add MORE to it going forward, and both
+  // walk the identical rng streams from here
+  kernel.step(60, "full");
+  r.kernel.step(60, "full");
+  expect(snap(r.kernel)).toEqual(snap(kernel));
+});
+
+// carry-forward #1: a runtime-introduced (speciated) daughter plant kind —
+// added via kernel.introducePlantSpecies, the exact shape maybeSpeciate
+// produces — must survive packSim/restoreSim. A fresh generatePlantSpecies(seed)
+// call would never reproduce this id, so if restoreSim ever regressed to
+// rebuilding species from a fresh generate rather than carrying the saved
+// array wholesale, Flora.addPlant would throw indexing speciesList[daughterId].
+test("carry-forward #1: a speciated daughter plant species + its live plants survive packSim/restoreSim", () => {
+  const { kernel, grassPlant } = liveBench();
+  const parent = kernel.plantSpecies[grassPlant];
+  const rng = makeRng(999); // authoring a species record for the test, not the kernel's own stream
+  const daughterArchetype = { ...parent.archetype, hue: (parent.archetype.hue + 0.3) % 1 };
+  const daughter = speciateFrom(parent, kernel.plantSpecies.length, daughterArchetype, rng, kernel.tick);
+  const daughterId = kernel.introducePlantSpecies(daughter); // beyond the fresh-seed roster
+  expect(daughterId).toBe(kernel.plantSpecies.length - 1);
+
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  const placedA = kernel.placePlant(daughterId, at(20), at(20));
+  const placedB = kernel.placePlant(daughterId, at(21), at(20));
+  expect(placedA).not.toBeNull();
+  expect(placedB).not.toBeNull();
+
+  const blob = JSON.parse(
+    JSON.stringify(packSim({ kernel, drawer: [], starter: "single-biome", seed: SEED, name: "daughter", savedAt: 1 })),
+  ) as SavedSim;
+  expect(blob.plantSpecies.length).toBe(kernel.plantSpecies.length); // the daughter rode along
+
+  const r = restoreSim(blob);
+  expect(r.kernel.plantSpecies.length).toBe(kernel.plantSpecies.length);
+  expect(r.kernel.plantSpecies[daughterId].parent).toBe(parent.id); // the daughter record itself, not a stand-in
+  const survivors = r.kernel.flora.all.filter((p) => p.species === daughterId);
+  expect(survivors.length).toBe(2); // both daughter-species plants survived
+
+  // the exact failure this carry-forward warns about: addPlant indexing
+  // speciesList[daughterId] must not throw (it would, if daughterId were
+  // out of bounds because restoreSim rebuilt species fresh instead of from the save)
+  expect(() => r.kernel.flora.addPlant(daughterId, daughter.archetype, at(22), at(20), r.kernel.tick)).not.toThrow();
+});
+
+// carry-forward #2: the LIVE (possibly pressures-panel-mutated) tuning must
+// come back on restore, not silently snap to DEFAULT_TUNING. Both packSim's
+// capture and restoreSim's application are asserted, and a shared-seed
+// continuation proves it's actually IN EFFECT, not just present on the blob.
+test("carry-forward #2: non-default tuning round-trips and its effect on the continuation matches", () => {
+  const { kernel } = liveBench();
+  kernel.setTuning({ reproChance: 0.9, matureAge: 3 }); // far from DEFAULT_TUNING (0.06 / 20)
+  kernel.step(20, "full"); // let the tuning actually shape some ticks before the save
+
+  const blob = packSim({ kernel, drawer: [], starter: "single-biome", seed: SEED, name: "tuned", savedAt: 1 });
+  expect(blob.flora.tuning?.reproChance).toBe(0.9); // captured, not defaulted
+  expect(blob.flora.tuning?.matureAge).toBe(3);
+  const json = JSON.parse(JSON.stringify(blob)) as typeof blob;
+
+  const r = restoreSim(json);
+  expect(r.kernel.flora.tuning.reproChance).toBe(0.9); // restored — this FAILS if restoreSim drops tuning
+  expect(r.kernel.flora.tuning.matureAge).toBe(3);
+
+  kernel.step(40, "full");
+  r.kernel.step(40, "full");
+  expect(snap(r.kernel)).toEqual(snap(kernel)); // would diverge fast if restore silently reset to DEFAULT_TUNING
 });

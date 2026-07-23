@@ -156,7 +156,7 @@ export function packSim(input: PackSimInput): SavedSim {
     tiles: tilesIfPainted(kernel.map.tiles, starter, seed),
     flora: {
       tick: kernel.flora.tick,
-      plants: kernel.flora.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
+      plants: kernel.flora.all.map((p) => ({ species: p.species, genome: cloneDef(p.genome), x: p.x, y: p.y, born: p.born })),
       soil: kernel.flora.soilTileKeys(),
       rngState: kernel.flora.rngState(),
       substrates: kernel.flora.substratesSnapshot(),
@@ -170,6 +170,8 @@ export function packSim(input: PackSimInput): SavedSim {
     plantSpecies: cloneDef(kernel.plantSpecies), // wholesale, incl. runtime introduces (carry-forward #1)
     critterSpecies: cloneDef(kernel.critterSpecies), // wholesale, incl. den/role mutations (carry-forward #1)
     drawer: cloneDef(drawer),
+    // captured for a future chart-continuity nicety only — restoreSim has no path
+    // to rebuild it yet (deferred; not determinism-critical, feeds no rng).
     census: kernel.census.list(),
     control,
   };
