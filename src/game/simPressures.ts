@@ -92,16 +92,31 @@ export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuni
   }
 }
 
+// The bench-only ambient roles a player sets by hand in the ambient tray.
+// grazerShare must NOT stomp these: dragging the slider would otherwise silently
+// revert a fish/pollinator/shuttle back to a plain grazer/disperser (and a fish
+// reverted mid-water inherits the land walk rule). See grazerAssignment (qa
+// consistency #4). Kept in sync with AMBIENT_ROLES' bench entries.
+const BENCH_ROLES: ReadonlySet<CritterRole> = new Set(["pollinator", "nutrient-shuttle", "aquatic-grazer"]);
+
 // The grazer-share paint: given the critter kinds' ids and a target share 0..1,
 // which become grazers. Deterministic (sort by id; the first ⌊share·N⌋ graze,
 // the rest disperse) — no rng, so the same share always paints the same roster.
 // updateCritter reads sp.role live, so writing these back lands on the next step.
-export function grazerAssignment(ids: readonly number[], share: number): Map<number, CritterRole> {
-  const sorted = [...ids].sort((a, b) => a - b);
+// A kind currently wearing a bench role (looked up through the optional roleOf) is
+// SKIPPED entirely — left off the returned map so the caller never touches it —
+// preserving a hand-set fish/pollinator/shuttle (qa consistency #4). Without
+// roleOf every kind is eligible, so existing callers/tests are unchanged.
+export function grazerAssignment(
+  ids: readonly number[],
+  share: number,
+  roleOf?: (id: number) => CritterRole,
+): Map<number, CritterRole> {
+  const eligible = (roleOf ? ids.filter((id) => !BENCH_ROLES.has(roleOf(id))) : [...ids]).sort((a, b) => a - b);
   const clamped = Math.max(0, Math.min(1, share));
-  const nGraze = Math.round(clamped * sorted.length);
+  const nGraze = Math.round(clamped * eligible.length);
   const out = new Map<number, CritterRole>();
-  sorted.forEach((id, i) => out.set(id, i < nGraze ? "grazer" : "disperser"));
+  eligible.forEach((id, i) => out.set(id, i < nGraze ? "grazer" : "disperser"));
   return out;
 }
 

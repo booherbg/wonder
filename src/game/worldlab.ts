@@ -237,10 +237,10 @@ function critterInspectView(c: Critter, sp: CritterSpecies, plantSpecies: PlantS
     // the ambient bench's own copy wins over the shared roleLine: real play's
     // roleLine only tells "grazer" from everything else and reads any bench
     // role as a generic "spreader" (render/inspect.ts:309-313) — wrong for a
-    // fish, which never spreads a seed. AMBIENT_ROLES (Task 4) carries
-    // evocative, role-correct help text for every bench role; fall back to
-    // roleLine only for "grazer", the one real-play role it doesn't list.
-    // Simulator-only: the shared roleLine() real play calls stays untouched.
+    // fish, which never spreads a seed. AMBIENT_ROLES carries evocative,
+    // role-correct help for every role it lists (now including "grazer", whose
+    // help matches roleLine's own words); the `?? roleLine` fall-back covers any
+    // future/unlisted role. Simulator-only: the shared roleLine() stays untouched.
     roleLine: AMBIENT_ROLES.find((r) => r.id === sp.role)?.help ?? roleLine(sp.role),
     size: sp.size,
     palate: sp.palate,
@@ -1227,7 +1227,10 @@ export function startWorldLab(): void {
       kernel.setTuning(tuningPatchFor(id, fieldValueFor(id, value)));
     } else if (id === "grazerShare") {
       const ids = critterKinds.map((c) => c.id);
-      const roles = grazerAssignment(ids, value);
+      // skip kinds wearing a bench role (fish/pollinator/shuttle set in the
+      // ambient tray): grazer-share leaves those untouched rather than silently
+      // reverting them (qa consistency #4).
+      const roles = grazerAssignment(ids, value, (id) => kernel.critterSpecies[id].role);
       let changed = 0;
       for (const [cid, role] of roles) {
         if (kernel.critterSpecies[cid].role !== role) changed++;

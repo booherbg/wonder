@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   PRESSURES, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor,
 } from "../src/game/simPressures";
+import type { CritterRole } from "../src/life/fauna";
 import { chainStats, richnessWord } from "../src/life/foodweb";
 import { rollWeb } from "../src/life/rollweb";
 import { singleBiome } from "../src/world/construct";
@@ -59,6 +60,23 @@ test("grazerAssignment flips a deterministic share of kinds to grazer", () => {
   expect([...a.entries()].sort()).toEqual([...grazerAssignment(ids, 0.5).entries()].sort()); // deterministic
   expect([...a.values()].filter((r) => r === "grazer").length).toBe(2); // round(0.5*4)
   expect([...grazerAssignment(ids, 0).values()].every((r) => r === "disperser")).toBe(true);
+  expect([...grazerAssignment(ids, 1).values()].every((r) => r === "grazer")).toBe(true);
+});
+
+test("grazerAssignment leaves bench-role kinds untouched (F8)", () => {
+  const ids = [0, 1, 2, 3];
+  const roleOf = (id: number): CritterRole =>
+    id === 1 ? "nutrient-shuttle" : id === 3 ? "aquatic-grazer" : "disperser";
+  const a = grazerAssignment(ids, 1, roleOf); // share 1 → every ELIGIBLE kind grazes
+  expect(a.has(1)).toBe(false); // the shuttle a player set in the ambient tray is preserved
+  expect(a.has(3)).toBe(false); // the fish is preserved
+  expect(a.get(0)).toBe("grazer"); // the two plain kinds still repaint
+  expect(a.get(2)).toBe("grazer");
+  // a pollinator is a bench role too, and share 0 still skips it (never repainted to disperser)
+  const withPollinator = grazerAssignment([7, 8], 0, (id) => (id === 7 ? "pollinator" : "disperser"));
+  expect(withPollinator.has(7)).toBe(false);
+  expect(withPollinator.get(8)).toBe("disperser");
+  // WITHOUT roleOf, behavior is unchanged — every kind eligible (back-compat)
   expect([...grazerAssignment(ids, 1).values()].every((r) => r === "grazer")).toBe(true);
 });
 
