@@ -235,7 +235,7 @@ From the UX audit; can ship in the same epic or a sibling plan:
 |---|---|
 | **6a — Roster & tools** | Clean slate, Archive, tool radio, Erase |
 | **6b — Spread levers** | Radii + pollinator reach/density; document self-seed=0 scenario |
-| **6c — Insect bench** | SwarmLayer; place generic + invite snap; Details; retarget; erase clouds; pollination log |
+| **6c — Insect bench** | SwarmLayer; place + invite; Details; pin/free-roam; **per-plant nectar**; **truthful visit animation**; erase clouds; pollination log |
 | **6d — Camera** | Pan/zoom (optional sibling) |
 | **6e — Watch & tweak** | Lab ledger charts; swarm histories; clone-with-mutation flower; lifespan lever if not in 6b |
 
