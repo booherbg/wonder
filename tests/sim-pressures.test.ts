@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import {
-  PRESSURES, grazerAssignment, richnessMeter, tuningPatchFor,
+  PRESSURES, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor,
 } from "../src/game/simPressures";
 import { chainStats, richnessWord } from "../src/life/foodweb";
 import { rollWeb } from "../src/life/rollweb";
@@ -42,6 +42,15 @@ test("tuningPatchFor clamps a wild value to the pressure's own range, so a wild 
 
   const split = PRESSURES.find((p) => p.id === "splitDistance")!;
   expect(tuningPatchFor("splitDistance", 5).splitDistance).toBeLessThanOrEqual(split.max);
+});
+
+test("fieldValueFor mirrors ONLY the reversed pressure (speciation), so right-slider = wilder for all five", () => {
+  // splitDistance is reversed: a HIGH slider value (right end) must map to
+  // the LOW real field (wild speciation) and vice versa.
+  expect(fieldValueFor("splitDistance", 0.6)).toBeCloseTo(0.08);
+  expect(fieldValueFor("splitDistance", 0.08)).toBeCloseTo(0.6);
+  // a non-reversed pressure is untouched — identity beyond the usual clamp.
+  expect(fieldValueFor("mutationAmount", 0.2)).toBe(0.2);
 });
 
 test("grazerAssignment flips a deterministic share of kinds to grazer", () => {

@@ -134,7 +134,19 @@ export class SimKernel {
   clearPlantInstances(id: number): number {
     const doomed = this.flora.all.filter((p) => p.species === id);
     for (const p of doomed) this.flora.removePlant(p);
+    // "cleared" must mean it: a substrate-feeder id, once cleared, is
+    // suppressed from stepSubstrates' own germination roll (flora.ts) —
+    // otherwise a live disperser's byproduct germinates it right back while
+    // the drawer still shows the tombstone. See unsuppressPlantSpecies below.
+    this.flora.suppressedSpecies.add(id);
     return doomed.length;
+  }
+
+  // The other half of clearPlantInstances' suppression: bringing a kind back
+  // (the drawer's revive, or a curate re-seed) lifts the germination ban so
+  // it can grow again through every route, not just a direct place.
+  unsuppressPlantSpecies(id: number): void {
+    this.flora.suppressedSpecies.delete(id);
   }
 
   clearCritterInstances(id: number): number {

@@ -25,13 +25,20 @@ export interface Pressure {
   max: number;
   step: number;
   tuningKey?: keyof FloraTuning; // present for the four FloraTuning-backed pressures
+  // true when a HIGHER raw field value is the TAMER end — splitDistance is the
+  // one pressure where the sim's own field runs backwards vs. the other four
+  // (lower splitDistance = wilder speciation). Every OTHER pressure has
+  // right-slider = wilder for free; this flag routes splitDistance's raw
+  // field through fieldValueFor (below) so its slider agrees with its
+  // siblings without the field's own real meaning changing at all.
+  reversed?: boolean;
 }
 
 // The five pressures, in panel order. Ranges bracket DEFAULT_TUNING so the
 // default sits mid-slider and cranking a knob is a visible change.
 export const PRESSURES: Pressure[] = [
   { id: "mutationAmount", label: "drift", min: 0, max: 0.3, step: 0.01, tuningKey: "mutationAmount" },
-  { id: "splitDistance", label: "speciation", min: 0.08, max: 0.6, step: 0.01, tuningKey: "splitDistance" },
+  { id: "splitDistance", label: "speciation", min: 0.08, max: 0.6, step: 0.01, tuningKey: "splitDistance", reversed: true },
   { id: "grazerShare", label: "grazer share", min: 0, max: 1, step: 0.05 },
   { id: "reproChance", label: "reseed rate", min: 0, max: 0.4, step: 0.01, tuningKey: "reproChance" },
   { id: "maxPerTile", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
@@ -45,6 +52,19 @@ export const PRESSURES: Pressure[] = [
 function clampToRange(id: PressureId, value: number): number {
   const p = PRESSURES.find((pr) => pr.id === id);
   return p ? Math.max(p.min, Math.min(p.max, value)) : value;
+}
+
+// The slider-position → real-field translation: for every pressure but
+// splitDistance this is plain clamping (identity beyond the range guard).
+// splitDistance is `reversed`, so its slider position gets mirrored across
+// [min, max] here — the ONE place that reversal lives — so the slider itself
+// can read "right = wilder" like its four siblings while the field
+// tuningPatchFor writes (and its own tests) stay exactly the real
+// splitDistance→gates mapping, untouched.
+export function fieldValueFor(id: PressureId, sliderValue: number): number {
+  const p = PRESSURES.find((pr) => pr.id === id);
+  const clamped = clampToRange(id, sliderValue);
+  return p?.reversed ? p.min + p.max - clamped : clamped;
 }
 
 // A FloraTuning patch for a tuning-backed pressure. Speciation is special: a

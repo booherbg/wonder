@@ -67,7 +67,7 @@ import {
 } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
-import { PRESSURES, Pressure, PressureId, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
+import { PRESSURES, Pressure, PressureId, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -285,7 +285,13 @@ interface DrawerRow {
 // itself is now the shared richnessMeter (simPressures.ts) — the SAME score
 // arithmetic diversityScore uses, over the construct's own live roster
 // (never a rebuilt-from-seed world), so this recomputes fresh every refresh.
-function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterSpecies: CritterSpecies[]): CensusWebView {
+function censusWebView(
+  census: CensusLog,
+  plantSpecies: PlantSpecies[],
+  critterSpecies: CritterSpecies[],
+  speciesCounts: ReadonlyMap<number, number>,
+  critterCountOf: (id: number) => number,
+): CensusWebView {
   const species = census
     .list()
     .slice()
@@ -295,7 +301,12 @@ function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterS
       spark: sparkline(tr.counts),
       count: tr.counts[tr.counts.length - 1] ?? 0,
     }));
-  const r = richnessMeter(plantSpecies, critterSpecies);
+  // FIX 4: score only species with a LIVE population — richness is "how wild
+  // is what you've actually MADE", not every introduced definition (incl.
+  // unplaced starters, which used to score an empty construct as "living").
+  const livePlants = plantSpecies.filter((sp) => (speciesCounts.get(sp.id) ?? 0) > 0);
+  const liveCritters = critterSpecies.filter((sp) => critterCountOf(sp.id) > 0);
+  const r = richnessMeter(livePlants, liveCritters);
   return {
     summary: census.summary(),
     species,
@@ -955,6 +966,11 @@ export function startWorldLab(): void {
     const cx = Math.floor(map.width / 2);
     const cy = Math.floor(map.height / 2);
     if (e.kind === "plant") {
+      // lift clearPlantInstances' own germination ban (FIX 3) BEFORE
+      // re-placing, so a brought-back substrate feeder can grow through
+      // every route again — the fresh instances placed just below, AND any
+      // future byproduct germination — not just this one direct re-place.
+      kernel.unsuppressPlantSpecies(e.speciesId);
       const sp = kernel.plantSpecies[e.speciesId];
       const tile = nearestTileOf(map, sp.habitat, cx, cy) ?? { x: cx, y: cy };
       for (let n = 0; n < 3; n++) {
@@ -1102,7 +1118,11 @@ export function startWorldLab(): void {
   // census from zero once the source→disperser→feeder loop first resolves.
   function refreshCensusStrip(): void {
     if (!ui) return;
-    ui.setCensusWeb(censusWebView(kernel.census, kernel.plantSpecies, kernel.critterSpecies));
+    ui.setCensusWeb(
+      censusWebView(kernel.census, kernel.plantSpecies, kernel.critterSpecies, kernel.speciesCounts(), (id) =>
+        kernel.critterCountOf(id),
+      ),
+    );
     refreshDrawer();
   }
 
@@ -1126,13 +1146,34 @@ export function startWorldLab(): void {
     pressureValues[id] = value;
     const pressure = PRESSURES.find((p) => p.id === id);
     if (pressure?.tuningKey) {
-      kernel.setTuning(tuningPatchFor(id, value));
+      // fieldValueFor un-reverses speciation's slider position before it
+      // reaches tuningPatchFor — the ONE place the reversal lives (identity
+      // for the other three tuning-backed pressures); pressureValues[id]
+      // itself keeps the raw slider position, so the readout still counts up
+      // left→right the same as every sibling.
+      kernel.setTuning(tuningPatchFor(id, fieldValueFor(id, value)));
     } else if (id === "grazerShare") {
       const ids = critterKinds.map((c) => c.id);
       const roles = grazerAssignment(ids, value);
-      for (const [cid, role] of roles) kernel.setCritterRole(cid, role);
+      let changed = 0;
+      for (const [cid, role] of roles) {
+        if (kernel.critterSpecies[cid].role !== role) changed++;
+        kernel.setCritterRole(cid, role);
+      }
       refreshPalette();
       refreshDrawer();
+      // FIX 5: grazer share used to silently repaint every kind's role with
+      // no feedback — a hand-set role (from the iterate strip, or a rolled
+      // web's disperser) could vanish without a trace. Now every touch
+      // names exactly what changed.
+      const sharePct = Math.round(value * 100);
+      if (ui) {
+        ui.flashNote(
+          changed === 0
+            ? `grazer share ${sharePct}% — roster unchanged`
+            : `grazer share ${sharePct}% — repainted ${changed} ${changed === 1 ? "kind" : "kinds"}`,
+        );
+      }
     }
     refreshCensusStrip();
     if (ui) ui.setPressure(id, value);
@@ -1234,6 +1275,18 @@ export function startWorldLab(): void {
     // already-closing web, not an unstepped one.
     if (webAid) seedWeb(WEB_SIZE);
     if (richAid) seedWeb(WEB_SIZE_RICH);
+    // FIX 5: seed grazerShare from the roster's ACTUAL current grazer mix,
+    // not the placeholder 0 pressureValues was constructed with — this is
+    // the first point critterKinds reflects the FULLY assembled roster
+    // (starters plus whatever ?demo/?drawerdemo/?web/?rich just introduced),
+    // so the pressures tray's slider starts truthful instead of silently
+    // claiming "no grazers" on a roster that already has some.
+    // ?pressures=wild, just below, still cranks this to 0.5 afterward — it
+    // runs later and setPressure always overwrites pressureValues outright.
+    {
+      const liveGrazers = critterKinds.filter((sp) => sp.role === "grazer").length;
+      pressureValues.grazerShare = critterKinds.length > 0 ? liveGrazers / critterKinds.length : 0;
+    }
     // ?pressures=wild: crank every pressure to its wild end BEFORE the
     // ?run=N pre-step just below, so a pre-stepped shot actually RUNS wild
     // rather than just showing wild-looking knobs over a defaults-evolved
@@ -1245,7 +1298,11 @@ export function startWorldLab(): void {
     // to match once `ui` does.
     if (pressuresAid === "wild") {
       setPressure("mutationAmount", 0.28);
-      setPressure("splitDistance", 0.1);
+      // speciation's slider is now right=wilder like its four siblings (FIX
+      // 2) — 0.6 is its slider MAX, which fieldValueFor mirrors down to the
+      // wild real splitDistance (0.08), the same wild field value this dev
+      // aid always cranked to.
+      setPressure("splitDistance", 0.6);
       setPressure("grazerShare", 0.5);
       setPressure("reproChance", 0.35);
       setPressure("maxPerTile", 10);
@@ -1443,8 +1500,13 @@ export function startWorldLab(): void {
   let playing = false;
   let fidelity: Fidelity = "full";
   let stepN = 20;
+  // FIX 6: the spec names pause/play/SPEED — play used to pace off a single
+  // fixed TICK_MS. speedMul only ever changes how many kernel.step() calls
+  // the wall clock pumps per frame (the frame loop below divides TICK_MS by
+  // it) — never a sim input, so it stays exactly as deterministic as before.
+  let speedMul = 1;
   function refreshTimeState(): void {
-    ui!.setTimeState({ playing, fidelity, stepN });
+    ui!.setTimeState({ playing, fidelity, stepN, speedMul });
   }
   ui.onPlay = () => {
     playing = !playing;
@@ -1469,6 +1531,10 @@ export function startWorldLab(): void {
   };
   ui.onFidelity = (f) => {
     fidelity = f;
+    refreshTimeState();
+  };
+  ui.onSpeed = () => {
+    speedMul = speedMul >= 4 ? 1 : speedMul * 2;
     refreshTimeState();
   };
   refreshTimeState();
@@ -1615,8 +1681,9 @@ export function startWorldLab(): void {
     if (playing) {
       acc += dt;
       let ticks = 0;
-      while (acc >= TICK_MS && ticks < 8) {
-        acc -= TICK_MS;
+      const stepMs = TICK_MS / speedMul; // speed only re-paces the ACCUMULATOR — never a sim input
+      while (acc >= stepMs && ticks < 8) {
+        acc -= stepMs;
         ticks++;
       }
       if (ticks > 0) {
@@ -1672,7 +1739,11 @@ interface Chrome {
   onStepN: () => void;
   onStepNChange: (n: number) => void;
   onFidelity: (f: Fidelity) => void;
-  setTimeState: (s: { playing: boolean; fidelity: Fidelity; stepN: number }) => void;
+  // speed (Task 6/QA FIX 6 — the spec names pause/play/speed; play used to
+  // pace off a single fixed TICK_MS): cycles ×1→×2→×4, read out on the SAME
+  // button whose label reflects the current multiplier.
+  onSpeed: () => void;
+  setTimeState: (s: { playing: boolean; fidelity: Fidelity; stepN: number; speedMul: number }) => void;
   setTick: (tick: number) => void;
   // the readout plate + living-web strip (Task 7)
   showCritterInspect: (v: CritterInspectView) => void;
@@ -1841,6 +1912,16 @@ function buildChrome(initial: StarterKind): Chrome {
   stepNInput.oninput = () => chrome.onStepNChange(Number(stepNInput.value));
   bar.appendChild(group(stepNBtn, stepNInput));
 
+  // speed (Task 6/QA FIX 6 — the spec names pause/play/speed): one button,
+  // its own label the readout, cycling ×1→×2→×4→×1. Still inside the "time"
+  // cluster, before the next sep() breaks into fidelity.
+  const speedBtn = document.createElement("button");
+  speedBtn.id = "speed-btn";
+  speedBtn.textContent = "×1";
+  speedBtn.style.cssText = btn(false);
+  speedBtn.onclick = () => chrome.onSpeed();
+  bar.appendChild(speedBtn);
+
   bar.appendChild(sep());
   const fidelityDefs: { f: Fidelity; name: string }[] = [
     { f: "plants", name: "plants" },
@@ -1894,10 +1975,12 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onStepN = () => {};
   chrome.onStepNChange = () => {};
   chrome.onFidelity = () => {};
-  chrome.setTimeState = ({ playing, fidelity, stepN }) => {
+  chrome.onSpeed = () => {};
+  chrome.setTimeState = ({ playing, fidelity, stepN, speedMul }) => {
     playBtn.textContent = playing ? "pause" : "play";
     for (const { f, b } of fidelityBtns) b.style.cssText = btn(f === fidelity);
     if (Number(stepNInput.value) !== stepN) stepNInput.value = String(stepN);
+    speedBtn.textContent = `×${speedMul}`;
   };
   chrome.setTick = (tick) => {
     tickValue.textContent = String(tick);
@@ -1913,9 +1996,16 @@ function buildChrome(initial: StarterKind): Chrome {
   // the "won't root here" note. ────────────────────────────────────────────
   const palette = document.createElement("div");
   palette.id = "lab-palette"; // a stable hook, same convention as #lab-readout/#lab-census
+  // Capped + scrolling, mirroring every OTHER panel's own vh-relative cap
+  // (rollPane 48vh, drawerPanel/readout 42vh, evoTray 46vh) — without one, a
+  // wrapped plant/critter row on a narrow window grows the palette, which
+  // grows `stack` (its bottom-anchored, column-reverse parent), which shoves
+  // the whole stack — the palette AND the pressures tray appended above it —
+  // up over the header/side panels rather than staying put and scrolling.
   palette.style.cssText =
-    "max-width: 88vw; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px;" +
-    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); user-select: none;";
+    "max-width: 88vw; max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" +
+    " padding: 9px 12px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
+    " user-select: none;";
   stack.appendChild(palette);
 
   const plantRow = document.createElement("div");

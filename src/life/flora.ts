@@ -138,6 +138,15 @@ export class Flora {
   all: Plant[] = [];
   byTile = new Map<number, Plant[]>();
   speciesCounts = new Map<number, number>();
+  // Species ids stepSubstrates must never re-germinate — Simulator-only, and
+  // additive: real play never populates this (nothing writes to it outside
+  // the SimKernel's own clearPlantInstances/unsuppressPlantSpecies), so an
+  // empty set here means every ordinary Flora is byte-identical to before
+  // this field existed. Exists so the World-Lab's "clear a kind" can mean it
+  // (see SimKernel.clearPlantInstances): without it, a cleared substrate
+  // feeder quietly germinates back from a live disperser's byproduct while
+  // the drawer still reads "cleared".
+  readonly suppressedSpecies = new Set<number>();
   // Tiles the wanderer has amended with a clod of dug soil — tilled ground the
   // player may sow ANY seed on, its natural habitat set aside. Keyed row-major
   // (ty*width+tx), the same key byTile uses. The wild sim never consults this;
@@ -533,7 +542,7 @@ export class Flora {
   // Trait-windowed, never a named species: any feeder in the hue window on the
   // right habitat can fill the role, so a chain routes around a lost one.
   private stepSubstrates(): void {
-    const feeders = this.speciesList.filter((s) => s.substrateFeeder);
+    const feeders = this.speciesList.filter((s) => s.substrateFeeder && !this.suppressedSpecies.has(s.id));
     const survivors: Substrate[] = [];
     for (const sub of this.substrates) {
       if (this.tick - sub.born >= SUBSTRATE_LIFETIME) continue; // decayed, unfed
