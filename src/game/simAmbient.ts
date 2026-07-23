@@ -24,7 +24,7 @@ export const AMBIENT_ROLES: AmbientRole[] = [
   { id: "grazer", label: "grazer", glyph: "", help: "a grazer — it crops what it favors as it feeds" },
   { id: "pollinator", label: "pollinator", glyph: "✿", help: "active cross — carries a bloom's genes wider and looser than drift" },
   { id: "nutrient-shuttle", label: "shuttle", glyph: "❖", help: "ferries a loose substrate from where it fed to where it lands next" },
-  { id: "aquatic-grazer", label: "fish", glyph: "≈", help: "aquatic grazer — swims the shallows and crops water plants a land critter can't reach" },
+  { id: "aquatic-grazer", label: "fish", glyph: "≈", help: "fish — swims the shallows and crops water plants a land critter can't reach" },
 ];
 
 // The badge glyph for a role — "" for the plain default — so a flipped kind reads
@@ -32,4 +32,19 @@ export const AMBIENT_ROLES: AmbientRole[] = [
 // no ambient badge.
 export function roleBadge(role: CritterRole): string {
   return AMBIENT_ROLES.find((r) => r.id === role)?.glyph ?? "";
+}
+
+// Whether an ambient role button should be OFFERED for a kind on a given
+// construct. Only "aquatic-grazer" (fish) is conditional: a fish needs shallow
+// water to feed and move — on a waterless construct (no Tile.ShallowWater) a
+// flip would freeze the critter forever, so the tray gates that one button off.
+// The exception: a kind ALREADY a fish stays togglable, so a construct that lost
+// its water can still hand the role back. All other roles are always available.
+export function ambientRoleEnabled(
+  roleId: CritterRole,
+  hasShallow: boolean,
+  currentRole: CritterRole,
+): boolean {
+  if (roleId !== "aquatic-grazer") return true;
+  return hasShallow || currentRole === "aquatic-grazer";
 }

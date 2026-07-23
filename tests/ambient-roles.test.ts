@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { ambientRoleEnabled } from "../src/game/simAmbient";
 import { generateCritterSpecies } from "../src/life/fauna";
 import type { CritterSpecies } from "../src/life/fauna";
 import { Flora } from "../src/life/flora";
@@ -61,4 +62,21 @@ test("foodweb ignores the new roles: flipping a disperser to pollinator drops it
   const pollinator = { ...disperser, role: "pollinator" } as CritterSpecies;
   const withPollinator = chainStats(plants, [pollinator]);
   expect(withPollinator.chains).toBe(0); // the new role is NOT a disperser — no foodweb change needed
+});
+
+// P2: flipping a kind to fish on a construct with no shallow water strands it
+// forever (fauna's aquatic-grazer never leaves ShallowWater). The tray gates the
+// fish button off there — but never for the OTHER roles, and never for a kind
+// already a fish (so a dried-up construct can still hand the role back).
+test("ambientRoleEnabled gates fish only when the construct has no shallow water", () => {
+  // fish: blocked without water, offered with water
+  expect(ambientRoleEnabled("aquatic-grazer", false, "disperser")).toBe(false);
+  expect(ambientRoleEnabled("aquatic-grazer", true, "disperser")).toBe(true);
+  // a kind already a fish stays togglable even on a waterless construct (reset path)
+  expect(ambientRoleEnabled("aquatic-grazer", false, "aquatic-grazer")).toBe(true);
+  // every other role is always available, water or not
+  for (const role of ["disperser", "grazer", "pollinator", "nutrient-shuttle"] as const) {
+    expect(ambientRoleEnabled(role, false, "disperser")).toBe(true);
+    expect(ambientRoleEnabled(role, true, "disperser")).toBe(true);
+  }
 });
