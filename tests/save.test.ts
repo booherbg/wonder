@@ -182,6 +182,7 @@ test("crittersV2 losslessly round-trips every behavioral field, and re-resolves 
 
   // give one critter a rich, non-default behavioral state + a live meal
   const c = critters[0];
+  c.x = 123.456; c.y = 78.9; // fractional — would be corrupted by any rounding
   c.state = "seek";
   c.targetX = 111.25; c.targetY = 222.5;
   c.stateTime = 1.234567; c.hopPhase = 4.2; c.facing = -1;
@@ -190,7 +191,7 @@ test("crittersV2 losslessly round-trips every behavioral field, and re-resolves 
   const mealIdx = 12;
   c.meal = flora.all[mealIdx];
 
-  const rows = packCrittersV2(critters);
+  const rows = packCrittersV2(critters, flora);
   const json = JSON.parse(JSON.stringify(rows)); // prove JSON-safe
   expect(json[0].meal).toBe(mealIdx); // meal serialized as a flora.all index
 
@@ -201,6 +202,8 @@ test("crittersV2 losslessly round-trips every behavioral field, and re-resolves 
   });
   const back = restoreCritterRows(json, critterSpecies, restoredFlora);
   const b = back[0];
+  expect(b.x).toBe(123.456); // LOSSLESS — exact, not just close
+  expect(b.y).toBe(78.9);
   expect(b.state).toBe("seek");
   expect(b.targetX).toBe(111.25);
   expect(b.targetY).toBe(222.5);
@@ -225,7 +228,7 @@ test("crittersV2 preserves null vs. undefined meal, and drops out-of-range speci
   const critters = spawnCritters(critterSpecies, map, SEED).slice(0, 3);
   critters[0].meal = null; // explicitly no meal
   // critters[1].meal stays undefined (no meal field at all)
-  const rows = packCrittersV2(critters);
+  const rows = packCrittersV2(critters, flora);
   expect(rows[0].meal).toBeNull();
   expect(rows[1].meal).toBeUndefined();
   const back = restoreCritterRows(rows, critterSpecies, flora);
@@ -234,6 +237,12 @@ test("crittersV2 preserves null vs. undefined meal, and drops out-of-range speci
   // an out-of-range species id is dropped
   const bad = [{ ...rows[0], species: 999 }];
   expect(restoreCritterRows(bad, critterSpecies, flora)).toHaveLength(0);
+  // a stale/out-of-range meal idx (beyond flora.all.length, e.g. from a save
+  // taken against a since-shrunk flora) resolves to no meal — never crashes
+  const oobRow = [{ ...rows[1], meal: flora.all.length + 5 }];
+  const oobBack = restoreCritterRows(oobRow, critterSpecies, flora);
+  expect(oobBack).toHaveLength(1);
+  expect(oobBack[0].meal).toBeUndefined();
 });
 
 test("restoreCrittersV2 falls back to the LEGACY defaults when crittersV2 is absent (guard stays green through the dispatcher)", () => {

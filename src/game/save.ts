@@ -217,7 +217,7 @@ export interface SavedCritterV2 {
   pathGoal?: number;
 }
 
-export function packCrittersV2(critters: Critter[]): SavedCritterV2[] {
+export function packCrittersV2(critters: Critter[], flora: Flora): SavedCritterV2[] {
   return critters.map((c) => {
     const row: SavedCritterV2 = {
       species: c.species,
@@ -234,7 +234,11 @@ export function packCrittersV2(critters: Critter[]): SavedCritterV2[] {
       mood: c.mood,
     };
     if (c.meal === null) row.meal = null;
-    else if (c.meal) row.meal = c.meal.idx;
+    // re-validate identity before capturing the index — removePlant's swap-pop
+    // can move a DIFFERENT plant into c.meal.idx's slot; the same guard fauna.ts
+    // uses at nibble-completion (flora.all[c.meal.idx] === c.meal) keeps a stale
+    // slot from being packed as if it still pointed at the eaten plant.
+    else if (c.meal) row.meal = flora.all[c.meal.idx] === c.meal ? c.meal.idx : null;
     if (c.treat !== undefined) row.treat = c.treat;
     // companion intentionally NOT serialized — re-derived on load, see SavedCritterV2's note
     if (c.stuck !== undefined) row.stuck = c.stuck;
