@@ -47,3 +47,28 @@ test("hash2d differs across coordinates and seeds", () => {
   expect(hash2d(1, 2, 3)).not.toBe(hash2d(2, 1, 3));
   expect(hash2d(1, 2, 3)).not.toBe(hash2d(1, 2, 4));
 });
+
+test("a captured .state() resumes the exact same stream (continues, not restarts)", () => {
+  const a = makeRng(12345);
+  for (let i = 0; i < 37; i++) a(); // advance the stream to an arbitrary point
+  const saved = a.state!(); // capture mid-stream — a single uint32
+  const b = makeRng(saved); // resume from the captured state
+  for (let i = 0; i < 50; i++) expect(b()).toBe(a()); // b reproduces a's continuation exactly
+});
+
+test(".state() is JSON-safe and advances as the stream is drawn", () => {
+  const r = makeRng(999);
+  const s0 = r.state!();
+  expect(Number.isInteger(s0)).toBe(true);
+  expect(s0).toBeGreaterThanOrEqual(0);
+  expect(s0).toBeLessThanOrEqual(0xffffffff);
+  expect(JSON.parse(JSON.stringify(s0))).toBe(s0);
+  r();
+  expect(r.state!()).not.toBe(s0); // drawing moved the state
+});
+
+test("makeRng(seed) with a fresh seed still matches makeRng(seed) — no behavior change for existing callers", () => {
+  const a = makeRng(42);
+  const b = makeRng(42);
+  for (let i = 0; i < 100; i++) expect(a()).toBe(b()); // the pre-existing invariant still holds
+});
