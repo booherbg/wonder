@@ -1,5 +1,5 @@
-import { Critter, CritterSpecies } from "../life/fauna";
-import { Plant } from "../life/flora";
+import { Critter, CritterMood, CritterSpecies, CritterState } from "../life/fauna";
+import { Flora, Plant } from "../life/flora";
 import { Genome, NUMERIC_TRAITS, PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { Inventory } from "./inventory";
@@ -21,6 +21,8 @@ export interface SavedWorld {
   inv: number[][]; // [species, ...traits]
   plants: number[][]; // [species, x, y, born, ...traits]
   critters?: number[][]; // [species, x, y, energy] — the animals, where you left them
+  crittersV2?: SavedCritterV2[]; // full behavioral state + rng-resumable meal; absent in saves from before slice 5a
+  critterRngState?: number; // the sim critter rng stream position, so animals resume mid-thought; absent in saves from before slice 5a
   daughters?: SavedDaughter[]; // species that arose here after worldgen
   memories?: string[]; // weather memory: rare events this island has witnessed
   camp?: SavedCamp; // the wanderer's camp: materials carried, nodes taken, fire built
@@ -84,7 +86,13 @@ export function packWorld(
   memories: readonly string[] = [],
   camp?: SavedCamp,
   critters: readonly Critter[] = [],
-  extra: { name?: string; playMs?: number; soil?: number[] } = {},
+  extra: {
+    name?: string;
+    playMs?: number;
+    soil?: number[];
+    crittersV2?: SavedCritterV2[];
+    critterRngState?: number;
+  } = {},
 ): SavedWorld {
   return {
     v: 1,
@@ -94,6 +102,8 @@ export function packWorld(
     name: extra.name,
     playMs: extra.playMs,
     soil: extra.soil && extra.soil.length > 0 ? [...extra.soil] : undefined,
+    crittersV2: extra.crittersV2,
+    critterRngState: extra.critterRngState,
     player: [r1(player.x), r1(player.y)],
     home: home ? [home.x, home.y] : null,
     inv: inventory.seeds.map((s) => [s.species, ...packGenome(s.genome)]),
@@ -175,6 +185,114 @@ export function restoreCritters(saved: SavedWorld, speciesList: CritterSpecies[]
     });
   });
   return out;
+}
+
+// The full Critter state, losslessly — every field of the Critter interface
+// (fauna.ts). Additive to the legacy 4-element `critters` rows; consulted only
+// when present, so old saves are byte-for-byte unaffected. `meal` (a live Plant
+// reference) is stored as its flora.all index and re-resolved after restore.
+export interface SavedCritterV2 {
+  species: number;
+  x: number;
+  y: number;
+  state: CritterState;
+  targetX: number;
+  targetY: number;
+  stateTime: number;
+  hopPhase: number;
+  facing: 1 | -1;
+  energy: number;
+  meal?: number | null; // absent = no meal field; null = explicitly none; number = index into flora.all at save
+  treat?: boolean;
+  // NOTE: no `companion` field, deliberately. The friend at your heel is
+  // re-derived on load from SavedCamp.companion + takeCompanion (a per-KIND
+  // designation, not a per-critter one), and the sim slot has no companion
+  // concept at all. Persisting a per-critter companion:true here would risk
+  // desyncing from SavedCamp.companion's re-derivation — omit it, preserving
+  // today's re-derive-only behavior.
+  curiosity: number;
+  mood: CritterMood;
+  stuck?: number;
+  path?: number[];
+  pathGoal?: number;
+}
+
+export function packCrittersV2(critters: Critter[]): SavedCritterV2[] {
+  return critters.map((c) => {
+    const row: SavedCritterV2 = {
+      species: c.species,
+      x: c.x, // LOSSLESS — no r1/r3; bit-identical replay depends on it
+      y: c.y,
+      state: c.state,
+      targetX: c.targetX,
+      targetY: c.targetY,
+      stateTime: c.stateTime,
+      hopPhase: c.hopPhase,
+      facing: c.facing,
+      energy: c.energy,
+      curiosity: c.curiosity,
+      mood: c.mood,
+    };
+    if (c.meal === null) row.meal = null;
+    else if (c.meal) row.meal = c.meal.idx;
+    if (c.treat !== undefined) row.treat = c.treat;
+    // companion intentionally NOT serialized — re-derived on load, see SavedCritterV2's note
+    if (c.stuck !== undefined) row.stuck = c.stuck;
+    if (c.path !== undefined) row.path = c.path.slice();
+    if (c.pathGoal !== undefined) row.pathGoal = c.pathGoal;
+    return row;
+  });
+}
+
+export function restoreCritterRows(
+  rows: SavedCritterV2[],
+  speciesList: CritterSpecies[],
+  flora: Flora,
+): Critter[] {
+  const out: Critter[] = [];
+  for (const row of rows) {
+    const sp = row.species;
+    if (sp < 0 || sp >= speciesList.length) continue; // drop out-of-range kinds (matches restoreCritters)
+    const c: Critter = {
+      species: sp,
+      x: row.x,
+      y: row.y,
+      state: row.state,
+      targetX: row.targetX,
+      targetY: row.targetY,
+      stateTime: row.stateTime,
+      hopPhase: row.hopPhase,
+      facing: row.facing,
+      energy: row.energy,
+      curiosity: row.curiosity,
+      mood: row.mood,
+    };
+    if (row.meal === null) c.meal = null;
+    else if (typeof row.meal === "number") {
+      const p = flora.all[row.meal];
+      if (p) c.meal = p; // re-resolve to the live plant; the tick guard re-validates anyway
+    }
+    if (row.treat !== undefined) c.treat = row.treat;
+    // companion intentionally NOT restored from the row — re-derived by the
+    // caller (takeCompanion against SavedCamp.companion), see SavedCritterV2's note
+    if (row.stuck !== undefined) c.stuck = row.stuck;
+    if (row.path !== undefined) c.path = row.path.slice();
+    if (row.pathGoal !== undefined) c.pathGoal = row.pathGoal;
+    out.push(c);
+  }
+  return out;
+}
+
+// The restore dispatcher: full state when a crittersV2 block is present,
+// else today's exact restoreCritters defaults (the guard-tested legacy path).
+export function restoreCrittersV2(
+  saved: SavedWorld,
+  speciesList: CritterSpecies[],
+  flora: Flora,
+): Critter[] {
+  return saved.crittersV2
+    ? restoreCritterRows(saved.crittersV2, speciesList, flora)
+    : restoreCritters(saved, speciesList);
 }
 
 export function restoreInventory(saved: SavedWorld, species: PlantSpecies[]): Inventory {

@@ -3,9 +3,12 @@ import { generateCritterSpecies, spawnCritters } from "../src/life/fauna";
 import { Flora } from "../src/life/flora";
 import { generatePlantSpecies } from "../src/life/species";
 import {
+  packCrittersV2,
   packGenome,
   packWorld,
+  restoreCritterRows,
   restoreCritters,
+  restoreCrittersV2,
   restoreInventory,
   restorePlants,
   unpackGenome,
@@ -167,4 +170,82 @@ test("GUARD: an old-format save (legacy [species,x,y,energy] rows, no crittersV2
   // an out-of-range species id is dropped, not restored (save.ts:157)
   const withBad = { ...legacy, critters: [[999, 1, 2, 0.5]] as number[][] };
   expect(restoreCritters(withBad as unknown as import("../src/game/save").SavedWorld, critterSpecies)).toHaveLength(0);
+});
+
+test("crittersV2 losslessly round-trips every behavioral field, and re-resolves meal to the live plant", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  for (let i = 0; i < 10; i++) flora.simTick();
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+  const critters = spawnCritters(critterSpecies, map, SEED);
+
+  // give one critter a rich, non-default behavioral state + a live meal
+  const c = critters[0];
+  c.state = "seek";
+  c.targetX = 111.25; c.targetY = 222.5;
+  c.stateTime = 1.234567; c.hopPhase = 4.2; c.facing = -1;
+  c.energy = 0.135791; c.curiosity = 0.42; c.mood = "hungry";
+  c.stuck = 0.7; c.path = [3, 4, 5]; c.pathGoal = 9; c.treat = true;
+  const mealIdx = 12;
+  c.meal = flora.all[mealIdx];
+
+  const rows = packCrittersV2(critters);
+  const json = JSON.parse(JSON.stringify(rows)); // prove JSON-safe
+  expect(json[0].meal).toBe(mealIdx); // meal serialized as a flora.all index
+
+  // restore against a flora rebuilt in the SAME plant order (indices realign)
+  const restoredFlora = new Flora(map, species, SEED, {}, {
+    tick: flora.tick,
+    plants: flora.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
+  });
+  const back = restoreCritterRows(json, critterSpecies, restoredFlora);
+  const b = back[0];
+  expect(b.state).toBe("seek");
+  expect(b.targetX).toBe(111.25);
+  expect(b.targetY).toBe(222.5);
+  expect(b.stateTime).toBe(1.234567); // LOSSLESS — no rounding
+  expect(b.hopPhase).toBe(4.2);
+  expect(b.facing).toBe(-1);
+  expect(b.energy).toBe(0.135791);
+  expect(b.curiosity).toBe(0.42);
+  expect(b.mood).toBe("hungry");
+  expect(b.stuck).toBe(0.7);
+  expect(b.path).toEqual([3, 4, 5]);
+  expect(b.pathGoal).toBe(9);
+  expect(b.treat).toBe(true);
+  expect(b.meal).toBe(restoredFlora.all[mealIdx]); // re-resolved to the live object, same identity
+});
+
+test("crittersV2 preserves null vs. undefined meal, and drops out-of-range species", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+  const critters = spawnCritters(critterSpecies, map, SEED).slice(0, 3);
+  critters[0].meal = null; // explicitly no meal
+  // critters[1].meal stays undefined (no meal field at all)
+  const rows = packCrittersV2(critters);
+  expect(rows[0].meal).toBeNull();
+  expect(rows[1].meal).toBeUndefined();
+  const back = restoreCritterRows(rows, critterSpecies, flora);
+  expect(back[0].meal).toBeNull();
+  expect(back[1].meal).toBeUndefined();
+  // an out-of-range species id is dropped
+  const bad = [{ ...rows[0], species: 999 }];
+  expect(restoreCritterRows(bad, critterSpecies, flora)).toHaveLength(0);
+});
+
+test("restoreCrittersV2 falls back to the LEGACY defaults when crittersV2 is absent (guard stays green through the dispatcher)", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED);
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+  const legacy = packWorld(SEED, 0, { x: 1, y: 1 }, null, { seeds: [] }, [], 1000, [], [], undefined, spawnCritters(critterSpecies, map, SEED));
+  expect(legacy.crittersV2).toBeUndefined(); // packWorld with no crittersV2 extra writes none
+  const viaDispatcher = restoreCrittersV2(legacy, critterSpecies, flora);
+  const viaLegacy = restoreCritters(legacy, critterSpecies);
+  // identical defaults — the dispatcher's absent-branch IS the legacy path
+  expect(viaDispatcher.map((c) => [c.species, c.state, c.stateTime, c.facing, c.mood]))
+    .toEqual(viaLegacy.map((c) => [c.species, c.state, c.stateTime, c.facing, c.mood]));
 });
