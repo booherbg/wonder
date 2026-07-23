@@ -68,6 +68,17 @@ import {
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import { PRESSURES, Pressure, PressureId, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
+import {
+  RestoredSim,
+  SavedSimControl,
+  forgetSimSlot,
+  loadSimSlot,
+  packSim,
+  readSimIndex,
+  restoreSim,
+  saveSimSlot,
+} from "./simSave";
+import { agoPhrase } from "../render/picker";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -278,6 +289,16 @@ interface DrawerRow {
   pinned: boolean; // curate: this phenotype is the one to re-seed from
 }
 
+// The slot panel's per-row view (Task 9): a finished row, pre-phrased —
+// startWorldLab formats the "last saved" text (agoPhrase, the isle picker's
+// own relative-time helper, picker.ts) so Chrome stays a dumb view, same
+// split as DrawerRow above.
+interface SlotRowView {
+  id: string;
+  name: string;
+  when: string; // "last saved 3 hours ago" (or similar), pre-phrased
+}
+
 // The living-web strip's data: the census exactly as CensusLog keeps it
 // (summary/list/sparkline never re-derived) paired with the food web's
 // static chain-potential — population is the live proof a chain closed; the
@@ -451,7 +472,10 @@ function seedDemoScenario(map: WorldMap, kernel: SimKernel, placeable: PlantSpec
 
 export function startWorldLab(): void {
   const canvas = document.getElementById("game") as HTMLCanvasElement;
-  const seed = seedFromUrl();
+  // reassignable: a loaded sim slot carries its own seed (rebuildFromSim,
+  // Task 9), which must overwrite this construct's so a later re-save
+  // re-derives the SAME buildConstruct baseline the slot was loaded from.
+  let seed = seedFromUrl();
   const demoRequested = new URL(location.href).searchParams.has("demo");
   // The ?inspect=critter|plant dev aid: auto-selects the first placed
   // critter/plant so a screenshot can show the readout plate without a real
@@ -523,6 +547,10 @@ export function startWorldLab(): void {
   // Both display-only, rng-free — setPressure adds no rng draws.
   const evoAid = new URL(location.href).searchParams.has("evo");
   const pressuresAid = new URL(location.href).searchParams.get("pressures");
+  // The slot panel's own dev aid (Task 9): ?slots=1 opens the save/load
+  // picker on load, so a shot can show it with no manual click. Display-
+  // only — readSimIndex/agoPhrase draw no rng.
+  const slotsAid = new URL(location.href).searchParams.has("slots");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -535,6 +563,11 @@ export function startWorldLab(): void {
   let brushSize: BrushSize = 1;
   let inspected: Inspected = null;
   let ui: Chrome | undefined;
+  // the slot this construct was loaded from (or last saved to), if any — a
+  // re-save on the SAME construct overwrites its own slot rather than
+  // minting a fresh one every time (Task 9).
+  let currentSlotId: string | null = null;
+  let currentSlotName: string | null = null;
   // the roll pane's own state: which kind the toggle shows, the seeded
   // stream's cursor (re-roll advances it), the current batch of candidates
   // (PROVISIONAL_ID until picked), and the drawer roster — every introduced
@@ -1561,6 +1594,98 @@ export function startWorldLab(): void {
   refreshTimeState();
   ui.setTick(kernel.tick);
 
+  // ── save/load a construct to a named slot (Task 9): packSim/restoreSim +
+  // the slot storage (simSave.ts, Tasks 7–8) wired into the bench itself. A
+  // sim slot names itself (mirrors nameWorld's window.prompt, main.ts) —
+  // currentSlotId/currentSlotName remember which slot (if any) this
+  // construct came from or was last saved to, so a re-save on the SAME
+  // construct overwrites its own slot rather than minting a fresh one every
+  // time. ───────────────────────────────────────────────────────────────────
+  ui.onSaveSlot = () => {
+    const name = window.prompt("name this construct", currentSlotName ?? "construct")?.trim();
+    if (!name) return; // empty/cancel → no save (mirrors nameWorld's null/empty guard)
+    const savedAt = Date.now(); // UI metadata only — never a sim input
+    const id = currentSlotId ?? `${savedAt.toString(36)}-${Math.floor(savedAt % 1000)}`;
+    const control: SavedSimControl = { playing, fidelity, speedMul, stepN };
+    const blob = packSim({ kernel, drawer, starter, seed, name, savedAt, control });
+    saveSimSlot(localStorage, { id, name, savedAt }, blob);
+    currentSlotId = id;
+    currentSlotName = name;
+    ui!.flashNote(`saved · ${name}`);
+  };
+  ui.onLoadSlot = () => openSlotPicker();
+  ui.onPickSlot = (id) => {
+    const blob = loadSimSlot(localStorage, id);
+    if (!blob) return;
+    rebuildFromSim(restoreSim(blob), blob.seed, id, blob.name);
+    ui!.openSlotPanel(false);
+  };
+  ui.onForgetSlot = (id) => {
+    forgetSimSlot(localStorage, id);
+    openSlotPicker(); // re-open with the entry gone (mirrors the isle picker's forget → re-open)
+  };
+
+  // Fills the slot panel from readSimIndex, most-recent-first, each row's
+  // "last saved" phrase off agoPhrase (picker.ts) — the SAME relative-time
+  // voice the isle picker already uses, so a sim slot and a real world read
+  // alike.
+  function openSlotPicker(): void {
+    const rows: SlotRowView[] = readSimIndex(localStorage).map((m) => ({
+      id: m.id,
+      name: m.name,
+      when: `last saved ${agoPhrase(Date.now() - m.savedAt)}`,
+    }));
+    ui!.setSlotRows(rows);
+    ui!.openSlotPanel(true);
+  }
+
+  // Swaps the bench over to a restored construct: a NEW kernel + drawer
+  // (never the one just left running), the construct's own starter/seed kept
+  // in sync (so a later re-save re-derives the SAME buildConstruct baseline
+  // this slot was loaded from), and every panel refreshed from the restored
+  // state — palette, drawer, census + richness (one call — censusWebView's
+  // own richnessMeter), the renderer's map, and the camera re-fit (a
+  // restored construct may be a different size than the one just left).
+  // Whatever the OLD kernel had picked/inspected/rolled cannot survive a
+  // kernel swap (its refs point into a now-discarded object graph), so those
+  // reset exactly as a fresh build() would.
+  function rebuildFromSim(r: RestoredSim, restoredSeed: number, id: string, name: string): void {
+    kernel = r.kernel;
+    map = kernel.map;
+    drawer = r.drawer;
+    starter = r.starter;
+    seed = restoredSeed;
+    if (r.control) {
+      playing = r.control.playing;
+      fidelity = r.control.fidelity;
+      speedMul = r.control.speedMul;
+      stepN = r.control.stepN;
+    }
+    currentSlotId = id;
+    currentSlotName = name;
+    selected = null;
+    inspected = null;
+    batch = [];
+    focus = null;
+    rollCursor = 0;
+    webCursor = 0;
+    renderer.setMap(map);
+    fitCameraToConstruct();
+    ui!.setStarter(starter);
+    refreshPalette();
+    refreshTimeState();
+    refreshCensusStrip(); // drawer + census + richness — one call
+    refreshInspect(); // inspected is now null → the readout plate hides
+    renderGrid();
+    renderFocus();
+    ui!.flashNote(`loaded · ${name}`);
+  }
+
+  // The slot panel's own dev aid (Task 9, mirrors ?evo=1 above): opens the
+  // picker on load, so a shot can show it with no manual click. Display-
+  // only — readSimIndex/agoPhrase draw no rng.
+  if (slotsAid) openSlotPicker();
+
   // ── pan input: arrow keys nudge the camera (clamped); Esc leaves ────────
   const PAN_STEP = TILE_SIZE * 2;
   window.addEventListener("keydown", (e) => {
@@ -1787,6 +1912,17 @@ interface Chrome {
   onPressure: (id: PressureId, value: number) => void;
   setPressure: (id: PressureId, value: number) => void;
   openPressures: (open?: boolean) => void;
+  // save/load a construct to a named slot (Task 9): a save-prompt button + a
+  // load picker whose rows startWorldLab fills in from readSimIndex — Chrome
+  // only draws what it's given and dispatches picks/forgets, the SAME split
+  // the drawer's own onDeleteEntry/onReviveEntry already keep (storage
+  // knowledge stays in startWorldLab; Chrome stays a dumb view).
+  onSaveSlot: () => void;
+  onLoadSlot: () => void;
+  setSlotRows: (rows: SlotRowView[]) => void;
+  onPickSlot: (id: string) => void;
+  onForgetSlot: (id: string) => void;
+  openSlotPanel: (open?: boolean) => void;
 }
 
 function buildChrome(initial: StarterKind): Chrome {
@@ -1984,6 +2120,28 @@ function buildChrome(initial: StarterKind): Chrome {
   pressuresBtn.style.cssText = btn(false);
   pressuresBtn.onclick = () => chrome.openPressures();
   bar.appendChild(pressuresBtn);
+
+  // ── save/load a construct to a named slot (Task 9): a "save · load"
+  // cluster beside pressures, same btn()/group() chrome as every other bar
+  // control. Save prompts for a name (mirrors nameWorld's window.prompt,
+  // main.ts); load opens the slot panel below (mirrors the isle picker's
+  // own toggle-able modal, picker.ts). loadSlotBtn's active face tracks the
+  // panel's open state, the same convention pressuresBtn already uses. ────
+  bar.appendChild(sep());
+  const saveSlotBtn = document.createElement("button");
+  saveSlotBtn.id = "save-slot-btn";
+  saveSlotBtn.textContent = "save";
+  saveSlotBtn.style.cssText = btn(false);
+  saveSlotBtn.onclick = () => chrome.onSaveSlot();
+  const loadSlotBtn = document.createElement("button");
+  loadSlotBtn.id = "load-slot-btn";
+  loadSlotBtn.textContent = "load";
+  loadSlotBtn.style.cssText = btn(false);
+  loadSlotBtn.onclick = () => chrome.onLoadSlot();
+  bar.appendChild(group(label("slot"), saveSlotBtn, loadSlotBtn));
+
+  chrome.onSaveSlot = () => {};
+  chrome.onLoadSlot = () => {};
 
   bar.appendChild(sep());
   const tickValue = document.createElement("span");
@@ -2763,6 +2921,104 @@ function buildChrome(initial: StarterKind): Chrome {
     pressuresOpen = open ?? !pressuresOpen;
     evoTray.style.display = pressuresOpen ? "block" : "none";
     pressuresBtn.style.cssText = btn(pressuresOpen);
+  };
+
+  // ── the slot panel (Task 9): a centered modal, the same footprint
+  // convention as the real-world #picker (index.html) — position: fixed,
+  // translate(-50%, -50%), var(--panel)/var(--frame)/var(--radius) — but
+  // built fresh here, never the real #picker element: a sim slot's own
+  // namespace stays as separate from a real world's picker as simSave.ts's
+  // wander.sims key is from wander.world.<seed> (facts §6). Its z-index sits
+  // above the whole bench chrome (5/6 elsewhere), so it's the one thing on
+  // top while it's open — the bar/palette/drawer stay put underneath. ─────
+  const slotPanel = document.createElement("div");
+  slotPanel.id = "lab-slot-panel";
+  slotPanel.style.cssText =
+    "display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 20;" +
+    " width: min(420px, 88vw); max-height: 68vh; overflow-y: auto; padding: 18px 22px; background: var(--panel);" +
+    " box-shadow: var(--frame); border-radius: var(--radius); color: var(--ink); font-family: var(--serif);" +
+    " user-select: none;";
+  document.body.appendChild(slotPanel);
+
+  const slotTitle = document.createElement("div");
+  slotTitle.style.cssText =
+    "font-variant: small-caps; letter-spacing: 0.08em; font-size: 19px; color: var(--ink-bright);";
+  slotTitle.textContent = "the constructs you've kept";
+  slotPanel.appendChild(slotTitle);
+
+  const slotEpigraph = document.createElement("div");
+  slotEpigraph.style.cssText =
+    "font: italic 12px var(--serif); opacity: 0.5; margin: 4px 0 12px; padding-bottom: 10px;" +
+    " border-bottom: 1px solid rgba(var(--lumen), 0.14);";
+  slotEpigraph.textContent = "every bench you've saved, kept whole — click one to take up right where you left it.";
+  slotPanel.appendChild(slotEpigraph);
+
+  const slotRowsEl = document.createElement("div");
+  slotPanel.appendChild(slotRowsEl);
+
+  const slotEmptyMsg =
+    `<div style="font: italic 13px var(--serif); color: rgba(228,236,242,0.6); margin-top: 6px;">` +
+    `nothing kept yet — "save" beside load tucks this construct away for later.</div>`;
+
+  const slotHint = document.createElement("div");
+  slotHint.style.cssText = `${MONO} color: rgba(228,236,242,0.4); margin-top: 12px; text-align: center;`;
+  slotHint.textContent = "click a construct to load it";
+  slotPanel.appendChild(slotHint);
+
+  const slotCloseBtn = document.createElement("button");
+  slotCloseBtn.textContent = "close";
+  slotCloseBtn.style.cssText = btn(false) + " display: block; margin: 10px auto 0;";
+  slotCloseBtn.onclick = () => chrome.openSlotPanel(false);
+  slotPanel.appendChild(slotCloseBtn);
+
+  chrome.onPickSlot = () => {};
+  chrome.onForgetSlot = () => {};
+  chrome.setSlotRows = (rows) => {
+    if (rows.length === 0) {
+      slotRowsEl.innerHTML = slotEmptyMsg;
+      return;
+    }
+    slotRowsEl.innerHTML = "";
+    for (const row of rows) {
+      const r = document.createElement("div");
+      r.style.cssText = "position: relative; padding: 7px 10px; margin: 2px -10px; border-radius: 6px; cursor: pointer;";
+      const name = document.createElement("div");
+      name.style.cssText = "font: 13px var(--mono); color: var(--ink-bright);";
+      name.textContent = row.name;
+      const when = document.createElement("div");
+      when.style.cssText = "font: italic 12px var(--serif); opacity: 0.55; margin-top: 1px;";
+      when.textContent = row.when;
+      const forget = document.createElement("button");
+      forget.textContent = "forget";
+      forget.title = "delete this saved construct";
+      forget.style.cssText =
+        "position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0;" +
+        " transition: opacity 0.15s; font: 10px var(--mono); color: rgba(var(--rose), 0.85); cursor: pointer;" +
+        " background: rgba(255,255,255,0.06); border: 1px solid rgba(var(--rose), 0.35); border-radius: 4px;" +
+        " padding: 2px 8px;";
+      r.onmouseenter = () => {
+        r.style.background = "rgba(var(--lumen), 0.06)";
+        forget.style.opacity = "1";
+      };
+      r.onmouseleave = () => {
+        r.style.background = "transparent";
+        forget.style.opacity = "0";
+      };
+      forget.onclick = (ev) => {
+        ev.stopPropagation();
+        chrome.onForgetSlot(row.id);
+      };
+      r.onclick = () => chrome.onPickSlot(row.id);
+      r.append(name, when, forget);
+      slotRowsEl.appendChild(r);
+    }
+  };
+
+  let slotPanelOpen = false;
+  chrome.openSlotPanel = (open) => {
+    slotPanelOpen = open ?? !slotPanelOpen;
+    slotPanel.style.display = slotPanelOpen ? "block" : "none";
+    loadSlotBtn.style.cssText = btn(slotPanelOpen);
   };
 
   return chrome;
