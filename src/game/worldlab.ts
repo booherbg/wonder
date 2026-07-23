@@ -68,7 +68,7 @@ import {
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import { PRESSURES, Pressure, PressureId, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
-import { AMBIENT_ROLES, roleBadge } from "./simAmbient";
+import { AMBIENT_ROLES, ambientRoleEnabled, roleBadge } from "./simAmbient";
 import {
   RestoredSim,
   SavedSimControl,
@@ -87,7 +87,7 @@ import { agoPhrase } from "../render/picker";
 // trivially extended with any other Tile.
 const BIOME_TILES: { tile: Tile; name: string }[] = [
   { tile: Tile.DeepWater, name: "deep water" },
-  { tile: Tile.ShallowWater, name: "water" },
+  { tile: Tile.ShallowWater, name: "shallow water" },
   { tile: Tile.Sand, name: "sand" },
   { tile: Tile.Grass, name: "grass" },
   { tile: Tile.Forest, name: "forest" },
@@ -687,7 +687,10 @@ export function startWorldLab(): void {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
       // keep the ambient tray in lockstep with the roster + each kind's live role
-      ui.setAmbient(critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })));
+      ui.setAmbient(
+        critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })),
+        habitatsOf(map).has(Tile.ShallowWater),
+      );
     }
   }
 
@@ -1062,7 +1065,7 @@ export function startWorldLab(): void {
     if (i < 0) return;
     drawer[i] = pinEntry(drawer[i]);
     refreshDrawer();
-    if (ui) ui.flashNote("pinned ★ — place pinned kinds from the roll pane, top-left");
+    if (ui) ui.flashNote("pinned ⭑ — place pinned kinds from the roll pane, top-left");
   }
   function unpinDrawerEntry(key: string): void {
     const i = drawer.findIndex((e) => e.key === key);
@@ -1574,7 +1577,10 @@ export function startWorldLab(): void {
   // build() (just above) ran refreshPalette() before `ui` existed, so that
   // first call's if (ui) {...} guard never fired for setAmbient either.
   // Without this, the ambient tray opens BLANK on an ordinary first use.
-  ui.setAmbient(critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })));
+  ui.setAmbient(
+    critterKinds.map((c) => ({ id: c.id, name: c.name, role: c.role })),
+    habitatsOf(map).has(Tile.ShallowWater),
+  );
   // re-light the tray's sliders to whatever pressureValues actually holds —
   // buildChrome() itself only knows DEFAULT_TUNING (it has no access to this
   // closure's state), so if ?pressures=wild already cranked pressureValues
@@ -1961,7 +1967,10 @@ interface Chrome {
   // child-of-`stack` tray shape as the pressures tray above — NOT a
   // position:fixed overlay. Bench-only; nothing graduates to real worlds.
   onAmbientRole: (id: number, role: CritterRole) => void;
-  setAmbient: (kinds: { id: number; name: string; role: CritterRole }[]) => void;
+  // hasShallow gates the fish (aquatic-grazer) button: on a waterless construct
+  // (no Tile.ShallowWater) a flipped fish would freeze forever, so the tray
+  // disables that one button with an explaining title (P2).
+  setAmbient: (kinds: { id: number; name: string; role: CritterRole }[], hasShallow: boolean) => void;
   openAmbient: (open?: boolean) => void;
   // save/load a construct to a named slot (Task 9): a save-prompt button + a
   // load picker whose rows startWorldLab fills in from readSimIndex — Chrome
@@ -2313,6 +2322,8 @@ function buildChrome(initial: StarterKind): Chrome {
       const b = document.createElement("button");
       const badge = roleBadge(c.role); // "" for a plain disperser; a glyph for a bench role
       b.textContent = badge ? `${c.name.toLowerCase()} ${badge}` : c.name.toLowerCase();
+      const roleHelp = AMBIENT_ROLES.find((r) => r.id === c.role)?.help; // P7: the chip explains its role
+      if (roleHelp) b.title = roleHelp;
       b.style.cssText = btn(false);
       b.onclick = () => chrome.onSelect({ kind: "critter", id: c.id });
       critterRow.appendChild(b);
@@ -2867,7 +2878,13 @@ function buildChrome(initial: StarterKind): Chrome {
     ` text-transform: uppercase; color: rgba(228,236,242,0.55);">` +
     `<span>chains <b style="color: var(--ink-bright);">${v.chains.chains}</b></span>` +
     `<span>closable <b style="color: ${v.chains.closable > 0 ? "rgb(var(--lumen))" : "var(--ink-bright)"};">${v.chains.closable}</b></span>` +
-    `</div></div>`;
+    `</div>` +
+    // P5: the meter only counts dispersers (chainStats' equality filter) — a
+    // note so an ambient pollinator/shuttle flip that leaves the number still
+    // reads as expected, not as a broken meter.
+    `<div style="margin-top: 6px; font: italic 10.5px var(--serif); color: rgba(228,236,242,0.45);">` +
+    `counts dispersers — ambient roles don't move this number</div>` +
+    `</div>`;
 
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
@@ -3028,7 +3045,7 @@ function buildChrome(initial: StarterKind): Chrome {
   slotEpigraph.style.cssText =
     "font: italic 12px var(--serif); opacity: 0.5; margin: 4px 0 12px; padding-bottom: 10px;" +
     " border-bottom: 1px solid rgba(var(--lumen), 0.14);";
-  slotEpigraph.textContent = "every bench you've saved, kept whole — click one to take up right where you left it.";
+  slotEpigraph.textContent = "every construct you've saved, kept whole — click one to take up right where you left it.";
   slotPanel.appendChild(slotEpigraph);
 
   const slotRowsEl = document.createElement("div");
@@ -3109,7 +3126,9 @@ function buildChrome(initial: StarterKind): Chrome {
   const ambientTray = document.createElement("div");
   ambientTray.id = "lab-ambient-tray";
   ambientTray.style.cssText =
-    "display: none; max-width: 340px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
+    // 260px matches evoTray — proven clearance from leftStack's right edge, so
+    // kind names never clip behind the roll pane at ~1100px (P1).
+    "display: none; max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
     " font-family: var(--serif); user-select: none;";
   stack.appendChild(ambientTray); // appended after evoTray — column-reverse stacks it above the bar
@@ -3125,10 +3144,13 @@ function buildChrome(initial: StarterKind): Chrome {
   ambientRows.style.cssText = "display: flex; flex-direction: column; gap: 8px; margin-top: 10px;";
   ambientTray.appendChild(ambientRows);
 
-  chrome.setAmbient = (kinds) => {
+  chrome.setAmbient = (kinds, hasShallow) => {
     ambientRows.replaceChildren();
     if (kinds.length === 0) {
-      ambientRows.appendChild(label("place a critter first"));
+      const empty = document.createElement("div");
+      empty.style.cssText = "font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;";
+      empty.textContent = "nothing to give a role yet — place a critter first";
+      ambientRows.appendChild(empty);
       return;
     }
     for (const k of kinds) {
@@ -3141,9 +3163,19 @@ function buildChrome(initial: StarterKind): Chrome {
       for (const role of AMBIENT_ROLES) {
         const b = document.createElement("button");
         b.textContent = role.label;
-        b.title = role.help;
+        // P2: a fish freezes forever on a construct with no shallow water — gate
+        // the button (unless the kind is already a fish) rather than let a flip
+        // strand the critter. See ambientRoleEnabled for the rule.
+        const gated = !ambientRoleEnabled(role.id, hasShallow, k.role);
+        b.title = gated ? "needs shallow water on this construct" : role.help;
         b.style.cssText = btn(k.role === role.id); // the active role reads lit
-        b.onclick = () => chrome.onAmbientRole(k.id, role.id);
+        if (gated) {
+          b.disabled = true;
+          b.style.opacity = "0.4";
+          b.style.cursor = "not-allowed";
+        } else {
+          b.onclick = () => chrome.onAmbientRole(k.id, role.id);
+        }
         rowEl.appendChild(b);
       }
       ambientRows.appendChild(rowEl);
