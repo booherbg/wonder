@@ -66,6 +66,15 @@ import {
   statusOf,
   unpinEntry,
 } from "./simDrawer";
+import {
+  clampCameraAxis,
+  fitZoomFor,
+  nextZoomMul,
+  wheelCameraMode,
+  wheelPanDelta,
+  wheelZoomFactor,
+  FIT_MARGIN,
+} from "./simCamera";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import { PRESSURES, Pressure, PressureId, DEFAULT_PRESSURE_POLLINATOR_DENSITY, DEFAULT_PRESSURE_POLLINATOR_REACH, fieldValueFor, grazerAssignment, pollinateAssistFor, richnessMeter, tuningPatchFor } from "./simPressures";
@@ -1443,18 +1452,8 @@ export function startWorldLab(): void {
     if (ui) ui.setPressure(id, value);
   }
 
-  // Clamp a camera axis to the construct's bounds — UNLESS the fit zoom has
-  // left this axis of the construct smaller than the view (a non-square
-  // construct in a non-square window: one axis binds the fit, the other has
-  // slack). Then there's nowhere useful to pan — hold the negative, centred
-  // offset instead of flooring to 0, or the construct would hug one edge
-  // rather than sit centred with even letterboxing on both sides.
-  const clampAxis = (pos: number, worldSize: number, viewSize: number): number => {
-    const maxOffset = worldSize - viewSize;
-    return maxOffset <= 0 ? maxOffset / 2 : Math.max(0, Math.min(pos, maxOffset));
-  };
-  const clampX = (x: number): number => clampAxis(x, map.width * TILE_SIZE, renderer.viewWidth);
-  const clampY = (y: number): number => clampAxis(y, map.height * TILE_SIZE, renderer.viewHeight);
+  const clampX = (x: number): number => clampCameraAxis(x, map.width * TILE_SIZE, renderer.viewWidth);
+  const clampY = (y: number): number => clampCameraAxis(y, map.height * TILE_SIZE, renderer.viewHeight);
   function centreCamera(): void {
     camX = clampX((map.width * TILE_SIZE - renderer.viewWidth) / 2);
     camY = clampY((map.height * TILE_SIZE - renderer.viewHeight) / 2);
@@ -1472,12 +1471,12 @@ export function startWorldLab(): void {
   // math never has to know SCALE or TILE_SIZE's relationship directly.
   // `fitZoom` is the baseline; `zoomMul` is the user's wheel nudge on top
   // (1 = fitted; scroll in/out from there without losing the fit math).
-  const FIT_MARGIN = 0.92; // a little breathing room around the construct's edges
   let fitZoom = 1;
   let zoomMul = 1;
   function applyCameraZoom(): void {
     renderer.setZoom(Math.max(0.05, fitZoom * zoomMul));
     clampCamera();
+    ui?.setZoomPct(Math.round(zoomMul * 100));
   }
   function fitCameraToConstruct(): void {
     renderer.setZoom(1);
@@ -1485,10 +1484,14 @@ export function startWorldLab(): void {
     const baseH = renderer.viewHeight;
     const worldW = map.width * TILE_SIZE;
     const worldH = map.height * TILE_SIZE;
-    fitZoom = Math.min(2, (baseW * FIT_MARGIN) / worldW, (baseH * FIT_MARGIN) / worldH);
+    fitZoom = fitZoomFor(worldW, worldH, baseW, baseH, FIT_MARGIN);
     zoomMul = 1;
     applyCameraZoom();
     centreCamera();
+  }
+  function nudgeZoom(direction: "in" | "out"): void {
+    zoomMul = nextZoomMul(zoomMul, direction);
+    applyCameraZoom();
   }
 
   // (Re)builds the construct + kernel from the current starter/seed. Reused
@@ -1786,6 +1789,10 @@ export function startWorldLab(): void {
     refreshInspect();
   };
   ui.onPressure = (id, value) => setPressure(id, value);
+  ui.onZoomIn = () => nudgeZoom("in");
+  ui.onZoomOut = () => nudgeZoom("out");
+  ui.onZoomFit = () => fitCameraToConstruct();
+  ui.setZoomPct(Math.round(zoomMul * 100));
   ui.onAmbientRole = (id, role) => {
     const was = kernel.critterSpecies[id].role;
     kernel.setCritterRole(id, role); // the same live role-flip grazerShare uses
@@ -1976,14 +1983,41 @@ export function startWorldLab(): void {
 
   // ── pan input: arrow keys nudge the camera (clamped); Esc leaves ────────
   const PAN_STEP = TILE_SIZE * 2;
+  let spaceDown = false;
+  let didSpacePan = false;
+  let cameraPanning = false;
+  let panLastX = 0;
+  let panLastY = 0;
+
+  function moveCameraPan(clientX: number, clientY: number): void {
+    const rect = canvas.getBoundingClientRect();
+    const dx = (clientX - panLastX) * (renderer.viewWidth / rect.width);
+    const dy = (clientY - panLastY) * (renderer.viewHeight / rect.height);
+    panLastX = clientX;
+    panLastY = clientY;
+    camX = clampX(camX - dx);
+    camY = clampY(camY - dy);
+  }
+
   window.addEventListener("keydown", (e) => {
     // the Step N number input handles its own arrow/typing keys (native
     // increment/decrement) — don't let the global bindings below steal them
     if (e.target instanceof HTMLElement && e.target.tagName === "INPUT") return;
     if (e.key === " ") {
       e.preventDefault();
-      playing = !playing;
-      refreshTimeState();
+      if (!spaceDown) {
+        spaceDown = true;
+        didSpacePan = false;
+      }
+    } else if (e.key === "=" || e.key === "+") {
+      nudgeZoom("in");
+      e.preventDefault();
+    } else if (e.key === "-") {
+      nudgeZoom("out");
+      e.preventDefault();
+    } else if (e.key === "0") {
+      fitCameraToConstruct();
+      e.preventDefault();
     } else if (e.key === "ArrowRight" && e.shiftKey) {
       // shift+→ steps N — → alone is claimed by stepping (below), so this
       // bench's camera pans on ←/↑/↓ only; the fit-to-window camera already
@@ -2022,20 +2056,46 @@ export function startWorldLab(): void {
       }
     }
   });
+  window.addEventListener("keyup", (e) => {
+    if (e.key !== " ") return;
+    if (e.target instanceof HTMLElement && e.target.tagName === "INPUT") return;
+    e.preventDefault();
+    spaceDown = false;
+    if (!didSpacePan) {
+      playing = !playing;
+      refreshTimeState();
+    }
+    if (cameraPanning) {
+      cameraPanning = false;
+    }
+  });
   window.addEventListener("resize", () => {
     renderer.resize();
     fitCameraToConstruct();
   });
 
-  // Wheel zooms in/out around the fitted baseline. preventDefault so the page
-  // doesn't scroll under the canvas while the user is leaning into the construct.
+  // Wheel pans by default; ⌃/⌘+wheel or pinch zooms with a soft step.
+  // preventDefault so the page doesn't scroll under the canvas.
   canvas.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
-      const factor = e.deltaY > 0 ? 0.9 : 1.11;
-      zoomMul = Math.min(4, Math.max(0.4, zoomMul * factor));
-      applyCameraZoom();
+      const rect = canvas.getBoundingClientRect();
+      if (wheelCameraMode(e) === "zoom") {
+        zoomMul = nextZoomMul(zoomMul, wheelZoomFactor(e.deltaY) >= 1 ? "in" : "out");
+        applyCameraZoom();
+        return;
+      }
+      const { dx, dy } = wheelPanDelta(
+        e.deltaX,
+        e.deltaY,
+        renderer.viewWidth,
+        renderer.viewHeight,
+        rect.width,
+        rect.height,
+      );
+      camX = clampX(camX + dx);
+      camY = clampY(camY + dy);
     },
     { passive: false },
   );
@@ -2083,6 +2143,15 @@ export function startWorldLab(): void {
   }
 
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 1 || spaceDown) {
+      e.preventDefault();
+      cameraPanning = true;
+      panLastX = e.clientX;
+      panLastY = e.clientY;
+      if (spaceDown) didSpacePan = true;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const hit = pointerTile(e);
     if (!hit) return;
     const { tx, ty, wx, wy } = hit;
@@ -2146,6 +2215,10 @@ export function startWorldLab(): void {
     }
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (cameraPanning) {
+      moveCameraPan(e.clientX, e.clientY);
+      return;
+    }
     if (!painting && !placing) return;
     const hit = pointerTile(e);
     if (!hit) return;
@@ -2173,9 +2246,23 @@ export function startWorldLab(): void {
       stampKindAt(tx, ty, { quiet: true });
     }
   });
-  canvas.addEventListener("pointerup", endStroke);
-  canvas.addEventListener("pointerleave", endStroke);
-  canvas.addEventListener("pointercancel", endStroke);
+  function endPointer(e: PointerEvent): void {
+    if (cameraPanning) {
+      cameraPanning = false;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    }
+    endStroke();
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointerleave", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("contextmenu", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
 
   // ── the loop: while playing, pace kernel.step() calls off the wall clock
   // (an accumulator, guard-capped as simulator.ts's own tick() loop is, so a
@@ -2308,6 +2395,11 @@ interface Chrome {
   onPickSlot: (id: string) => void;
   onForgetSlot: (id: string) => void;
   openSlotPanel: (open?: boolean) => void;
+  // camera zoom HUD (iteration 6d)
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onZoomFit: () => void;
+  setZoomPct: (pct: number) => void;
 }
 
 function buildChrome(initial: StarterKind): Chrome {
@@ -2352,7 +2444,7 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
     `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
-    `select · place · paint · erase · cloud · brush 1–4 · wheel zooms · ←↑↓ pan · roll / web / drawer · space plays · Esc home` +
+    `select · place · paint · erase · cloud · brush 1–4 · wheel pans · ⌃/⌘+wheel zooms · −/+ / 0 fit · space+drag pan · ←↑↓ nudge · roll / web / drawer · space play · Esc home` +
     `<div style="margin-top: 3px; font: 10px var(--mono); letter-spacing: 0.04em; color: rgba(228,236,242,0.42);">` +
     `spread paths: natural reseed · critter pollinator (ambient) · insect cloud</div>` +
     `</div>`;
@@ -2366,6 +2458,27 @@ function buildChrome(initial: StarterKind): Chrome {
   back.style.cssText = btn(false) + " position: fixed; right: 18px; top: 18px; z-index: 6;";
   back.onclick = leaveBench;
   document.body.appendChild(back);
+
+  const zoomHud = document.createElement("div");
+  zoomHud.style.cssText =
+    "position: fixed; right: 18px; top: 58px; z-index: 6; display: flex; align-items: center; gap: 4px; user-select: none;";
+  const zoomOutBtn = document.createElement("button");
+  zoomOutBtn.textContent = "−";
+  zoomOutBtn.title = "zoom out (−)";
+  zoomOutBtn.style.cssText = btn(false) + " min-width: 28px; padding-inline: 8px;";
+  const zoomPctEl = document.createElement("span");
+  zoomPctEl.textContent = "100%";
+  zoomPctEl.style.cssText = `${MONO} min-width: 44px; text-align: center; color: rgba(228,236,242,0.72);`;
+  const zoomInBtn = document.createElement("button");
+  zoomInBtn.textContent = "+";
+  zoomInBtn.title = "zoom in (+)";
+  zoomInBtn.style.cssText = btn(false) + " min-width: 28px; padding-inline: 8px;";
+  const zoomFitBtn = document.createElement("button");
+  zoomFitBtn.textContent = "fit";
+  zoomFitBtn.title = "fit construct (0)";
+  zoomFitBtn.style.cssText = btn(false);
+  zoomHud.append(zoomOutBtn, zoomPctEl, zoomInBtn, zoomFitBtn);
+  document.body.appendChild(zoomHud);
 
   // The bottom stack: the starter/time bar and the palette panel both live
   // here now, as plain flow children laid out bottom-up (column-reverse) —
@@ -2417,6 +2530,15 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   const chrome = {} as Chrome;
+  zoomOutBtn.onclick = () => chrome.onZoomOut();
+  zoomInBtn.onclick = () => chrome.onZoomIn();
+  zoomFitBtn.onclick = () => chrome.onZoomFit();
+  chrome.setZoomPct = (pct) => {
+    zoomPctEl.textContent = `${pct}%`;
+  };
+  chrome.onZoomIn = () => {};
+  chrome.onZoomOut = () => {};
+  chrome.onZoomFit = () => {};
   const starterBtns = STARTERS.map(({ kind, name }) => {
     const b = document.createElement("button");
     b.textContent = name;
