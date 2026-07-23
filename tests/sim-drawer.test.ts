@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
-  bumpPeak, captureDaughters, cloneDef, deleteEntry, makeEntry, reviveEntry, statusOf,
+  bumpPeak, captureDaughters, cloneDef, deleteEntry, makeEntry, pinEntry, pinnedEntries, reviveEntry, statusOf,
+  unpinEntry,
 } from "../src/game/simDrawer";
 import { rollPlantBatch } from "../src/life/roll";
 import { PlantSpecies } from "../src/life/species";
@@ -67,4 +68,21 @@ test("variations = iterated looks + captured daughters of this kind", () => {
   const entries = [parent, daughter];
   expect(statusOf(parent, 3, entries).variations).toBe(3); // 2 looks + 1 daughter
   expect(statusOf(daughter, 1, entries).variations).toBe(0);
+});
+
+test("pin/unpin toggles the flag and preserves the stored def", () => {
+  const def = plantDef(3, { substrateFeeder: true });
+  const e = makeEntry({ kind: "plant", speciesId: 3, def, origin: "rolled" });
+  expect(e.pinned).toBe(false); // fresh entries are unpinned
+  const pinned = pinEntry(e);
+  expect(pinned.pinned).toBe(true);
+  expect(pinned.def).toEqual(def); // curation never disturbs the definition
+  expect(unpinEntry(pinned).pinned).toBe(false);
+});
+
+test("pinnedEntries returns non-deleted pinned kinds only", () => {
+  const a = pinEntry(makeEntry({ kind: "plant", speciesId: 0, def: plantDef(0), origin: "rolled" }));
+  const b = makeEntry({ kind: "plant", speciesId: 1, def: plantDef(1), origin: "rolled" });
+  const c = deleteEntry(pinEntry(makeEntry({ kind: "plant", speciesId: 2, def: plantDef(2), origin: "rolled" })));
+  expect(pinnedEntries([a, b, c]).map((e) => e.speciesId)).toEqual([0]); // b unpinned, c deleted
 });

@@ -59,8 +59,11 @@ import {
   captureDaughters,
   deleteEntry,
   makeEntry,
+  pinEntry,
+  pinnedEntries,
   reviveEntry,
   statusOf,
+  unpinEntry,
 } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
@@ -272,6 +275,7 @@ interface DrawerRow {
   variations: number;
   extinct: boolean;
   deleted: boolean;
+  pinned: boolean; // curate: this phenotype is the one to re-seed from
 }
 
 // The living-web strip's data: the census exactly as CensusLog keeps it
@@ -482,6 +486,15 @@ export function startWorldLab(): void {
   const drawerDemoAid = new URL(location.href).searchParams.has("drawerdemo");
   const splitAid = new URL(location.href).searchParams.has("split");
   const drawerDelAid = new URL(location.href).searchParams.get("drawerdel");
+  // Curate's own dev aids (Task 6): ?pin=<index-or-key> pins that drawer
+  // entry deterministically (the SAME pinDrawerEntry a click on the drawer's
+  // own pin button runs), so a shot can show the pinned ⭑ state without a
+  // manual click; ?reseed=1 calls reseedPinned() once on load, so a shot can
+  // show the re-seeded fresh instances too. Combine with ?drawerdemo=1 so
+  // there's a real kind at index 0 to pin. Display-only, rng-free beyond the
+  // seeded placement reseedPinned already draws from.
+  const pinAid = new URL(location.href).searchParams.get("pin");
+  const reseedAid = new URL(location.href).searchParams.has("reseed");
   // Slice-4's roll-a-web dev aids: ?web=1 rolls+introduces+auto-places one
   // matched web (source/feeder/disperser), the SAME seedWeb a "roll a web"
   // click runs; ?rich=1 runs the denser "seed it richer" batch instead. Both
@@ -905,6 +918,7 @@ export function startWorldLab(): void {
         variations: status.variations,
         extinct: status.extinct,
         deleted: e.deleted,
+        pinned: e.pinned,
       };
     });
     ui.setDrawer(rows);
@@ -956,6 +970,56 @@ export function startWorldLab(): void {
     refreshPalette();
     refreshDrawer();
     if (ui) ui.flashNote(`brought back ${e.name.toLowerCase()}`);
+  }
+
+  // Curate — pin/unpin: a pure flag toggle on the drawer entry (pinEntry/
+  // unpinEntry, immutable like delete/revive), swapped into `drawer` and
+  // re-rendered. Never touches the kernel or the stored def — pinning only
+  // marks a phenotype as the one re-seed should draw from.
+  function pinDrawerEntry(key: string): void {
+    const i = drawer.findIndex((e) => e.key === key);
+    if (i < 0) return;
+    drawer[i] = pinEntry(drawer[i]);
+    refreshDrawer();
+  }
+  function unpinDrawerEntry(key: string): void {
+    const i = drawer.findIndex((e) => e.key === key);
+    if (i < 0) return;
+    drawer[i] = unpinEntry(drawer[i]);
+    refreshDrawer();
+  }
+
+  // Curate — reseed: for every pinned, non-deleted kind, re-place a few fresh
+  // instances from its STORED def near the construct's centre — the SAME
+  // nearestTileOf + worldPxCenter placement loop reviveDrawerEntry uses,
+  // through the ordinary placePlant/placeCritter path (the species record
+  // still sits at its id, so placing just works; the drawer's deep-cloned
+  // def is the conceptual source of truth). Placement draws only from the
+  // kernel's own seeded placeRng, off the step stream — deterministic. Only
+  // ever ADDS instances; nothing pinned or otherwise is cleared.
+  function reseedPinned(): void {
+    const cx = Math.floor(map.width / 2);
+    const cy = Math.floor(map.height / 2);
+    const pinned = pinnedEntries(drawer);
+    for (const e of pinned) {
+      if (e.kind === "plant") {
+        const sp = kernel.plantSpecies[e.speciesId];
+        const tile = nearestTileOf(map, sp.habitat, cx, cy) ?? { x: cx, y: cy };
+        for (let n = 0; n < 3; n++) {
+          const { x, y } = worldPxCenter(Math.min(map.width - 1, tile.x + n), tile.y);
+          kernel.placePlant(e.speciesId, x, y);
+        }
+      } else {
+        for (let n = 0; n < 2; n++) {
+          const { x, y } = worldPxCenter(Math.min(map.width - 1, cx + n), cy);
+          kernel.placeCritter(e.speciesId, x, y);
+        }
+      }
+    }
+    refreshPalette();
+    refreshDrawer();
+    refreshCensusStrip();
+    if (ui) ui.flashNote(pinned.length > 0 ? `re-seeded ${pinned.length} pinned kind(s) from their stored definitions` : "no pinned kinds to re-seed");
   }
 
   // ?drawerdemo=1: rolls+picks one plant kind and one critter kind (the SAME
@@ -1281,6 +1345,17 @@ export function startWorldLab(): void {
           : drawer.find((e) => e.key === drawerDelAid);
       if (target) deleteDrawerEntry(target.key);
     }
+    // ?pin=<index-or-key>: pins that drawer entry deterministically (the SAME
+    // pinDrawerEntry a click on the drawer's own pin button runs); ?reseed=1
+    // then calls reseedPinned() once, so a shot can show the pinned kind
+    // re-placed from its stored def.
+    if (pinAid !== null) {
+      const idx = Number(pinAid);
+      const target =
+        Number.isInteger(idx) && idx >= 0 && idx < drawer.length ? drawer[idx] : drawer.find((e) => e.key === pinAid);
+      if (target) pinDrawerEntry(target.key);
+    }
+    if (reseedAid) reseedPinned();
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -1337,6 +1412,9 @@ export function startWorldLab(): void {
   ui.onPickFocused = () => pickFocused();
   ui.onDeleteEntry = (key) => deleteDrawerEntry(key);
   ui.onReviveEntry = (key) => reviveDrawerEntry(key);
+  ui.onPinEntry = (key) => pinDrawerEntry(key);
+  ui.onUnpinEntry = (key) => unpinDrawerEntry(key);
+  ui.onReseedPinned = () => reseedPinned();
   ui.onPressure = (id, value) => setPressure(id, value);
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
@@ -1605,6 +1683,10 @@ interface Chrome {
   setDrawer: (rows: DrawerRow[]) => void;
   onDeleteEntry: (key: string) => void;
   onReviveEntry: (key: string) => void;
+  // curate: pin a phenotype to re-seed from it (Task 6)
+  onPinEntry: (key: string) => void;
+  onUnpinEntry: (key: string) => void;
+  onReseedPinned: () => void;
   // the evolution tray (Task 5, slice 4): five LIVE pressure sliders in a
   // toggled `position: fixed` overlay — not a leftStack/rightStack child, so
   // it can't push either bounded column into the overlap those stacks exist
@@ -1959,6 +2041,8 @@ function buildChrome(initial: StarterKind): Chrome {
 
   chrome.onDeleteEntry = () => {};
   chrome.onReviveEntry = () => {};
+  chrome.onPinEntry = () => {};
+  chrome.onUnpinEntry = () => {};
   // Renders the roster from scratch every call — the drawer is never large
   // enough (a handful of starters + whatever's been rolled/captured) for a
   // full-innerHTML rebuild to be worth avoiding, and it keeps each row's
@@ -1996,6 +2080,14 @@ function buildChrome(initial: StarterKind): Chrome {
         actionBtn.onclick = () => chrome.onDeleteEntry(r.key);
       }
       row.appendChild(actionBtn);
+      // curate: pin this phenotype so `reseed pinned` re-places fresh
+      // instances from its stored def — the active (lumen-filled) face of
+      // btn() IS the pinned ⭑ state, no separate badge needed.
+      const pinBtn = document.createElement("button");
+      pinBtn.style.cssText = btn(r.pinned) + " margin-top: 4px; margin-left: 6px; padding: 3px 9px; font-size: 9px;";
+      pinBtn.textContent = r.pinned ? "⭑ pinned" : "pin ⭑";
+      pinBtn.onclick = () => (r.pinned ? chrome.onUnpinEntry(r.key) : chrome.onPinEntry(r.key));
+      row.appendChild(pinBtn);
       drawerList.appendChild(row);
     }
   };
@@ -2150,7 +2242,15 @@ function buildChrome(initial: StarterKind): Chrome {
   seedRicherBtn.textContent = "seed it richer";
   seedRicherBtn.style.cssText = btn(false);
   seedRicherBtn.onclick = () => chrome.onSeedRicher();
-  webControls.appendChild(group(rollWebBtn, seedRicherBtn));
+  // curate: re-seed every pinned drawer kind from its stored def (Task 6) —
+  // lives beside roll-a-web's own control row since both are "add instances
+  // to the construct" actions, not roll-batch actions.
+  const reseedPinnedBtn = document.createElement("button");
+  reseedPinnedBtn.id = "reseed-pinned-btn";
+  reseedPinnedBtn.textContent = "reseed pinned";
+  reseedPinnedBtn.style.cssText = btn(false);
+  reseedPinnedBtn.onclick = () => chrome.onReseedPinned();
+  webControls.appendChild(group(rollWebBtn, seedRicherBtn, reseedPinnedBtn));
 
   // bounded so a bigger-than-usual batch scrolls WITHIN the grid instead of
   // growing the pane past this point and reopening the census collision —
@@ -2172,6 +2272,7 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onPickBatch = () => {};
   chrome.onRollWeb = () => {};
   chrome.onSeedRicher = () => {};
+  chrome.onReseedPinned = () => {};
   chrome.onFocusBatch = () => {};
   chrome.onNudgeLooks = () => {};
   chrome.onRerollLooks = () => {};

@@ -22,6 +22,7 @@ export interface DrawerEntry {
   looksIterations: number; // iterate-looks applied to this kind (a variation count)
   peak: number; // highest population seen — so "extinct" means lived-then-lost
   deleted: boolean; // a delete tombstone; the def is preserved
+  pinned: boolean; // curate: this phenotype is the one to re-seed from
 }
 
 export interface EntryStatus {
@@ -57,6 +58,7 @@ export function makeEntry(args: {
     looksIterations: 0,
     peak: 0,
     deleted: false,
+    pinned: false,
   };
 }
 
@@ -108,4 +110,19 @@ export function deleteEntry(entry: DrawerEntry): DrawerEntry {
 }
 export function reviveEntry(entry: DrawerEntry): DrawerEntry {
   return { ...entry, deleted: false };
+}
+
+// Curate: pin a phenotype to RE-SEED from it (the wild output becomes new
+// input, spec §"The evolutionary layer"). A pin is a flag on the drawer entry;
+// the bench re-places from the entry's STORED def through the seeded kernel.
+// Immutable-style, like delete/revive, so callers swap the entry in their list.
+export function pinEntry(entry: DrawerEntry): DrawerEntry {
+  return { ...entry, pinned: true };
+}
+export function unpinEntry(entry: DrawerEntry): DrawerEntry {
+  return { ...entry, pinned: false };
+}
+// The kinds curation should re-seed from: pinned, not cleared.
+export function pinnedEntries(entries: readonly DrawerEntry[]): DrawerEntry[] {
+  return entries.filter((e) => e.pinned && !e.deleted);
 }
