@@ -51,7 +51,7 @@ import { Renderer, Scene } from "../render/renderer";
 import { OVERVIEW_COLORS } from "../render/palette";
 import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
-import { Tile, WorldMap } from "../world/types";
+import { Tile, WorldMap, tileAt } from "../world/types";
 import {
   DrawerEntry,
   EntryKind,
@@ -631,10 +631,19 @@ export function startWorldLab(): void {
         const p = kernel.placePlant(selected.id, px, py);
         if (p === null && x === tx && y === ty) centreRefused = true;
       } else {
+        // a fish (aquatic-grazer) only takes to ShallowWater — the critter mirror
+        // of placePlant's habitat gate (§4/§5). Every other critter places on any
+        // cell, exactly as before.
+        if (kernel.critterSpecies[selected.id].role === "aquatic-grazer" && tileAt(map, x, y) !== Tile.ShallowWater) {
+          if (x === tx && y === ty) centreRefused = true;
+          continue;
+        }
         kernel.placeCritter(selected.id, px, py);
       }
     }
-    if (centreRefused && ui) ui.flashNote("won't root here — wrong habitat");
+    if (centreRefused && ui) {
+      ui.flashNote(selected.kind === "critter" ? "a fish needs shallow water" : "won't root here — wrong habitat");
+    }
     refreshCensusStrip(); // a fresh block can add latent chain links
   }
 

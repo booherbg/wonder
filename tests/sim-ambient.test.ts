@@ -20,3 +20,8 @@ test("roleBadge marks the opt-in roles and leaves the default plain", () => {
   expect(roleBadge("pollinator")).toBe("✿");
   expect(roleBadge("nutrient-shuttle")).toBe("❖");
 });
+
+test("the ambient menu includes the fish aquatic-grazer role with a badge", () => {
+  expect(AMBIENT_ROLES.map((r) => r.id)).toContain("aquatic-grazer");
+  expect(roleBadge("aquatic-grazer")).toBe("≈");
+});

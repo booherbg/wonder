@@ -20,6 +20,7 @@ export const AMBIENT_ROLES: AmbientRole[] = [
   { id: "disperser", label: "disperser", glyph: "", help: "the ordinary role — scatters a drifted seed where it feeds" },
   { id: "pollinator", label: "pollinator", glyph: "✿", help: "active cross — carries a bloom's genes wider and looser than drift" },
   { id: "nutrient-shuttle", label: "shuttle", glyph: "❖", help: "ferries a loose substrate from where it fed to where it lands next" },
+  { id: "aquatic-grazer", label: "fish", glyph: "≈", help: "aquatic grazer — swims the shallows and crops water plants a land critter can't reach" },
 ];
 
 // The badge glyph for a role — "" for the plain default — so a flipped kind reads
