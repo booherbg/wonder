@@ -423,7 +423,53 @@ above; a biome brush would repaint their tiles in a later slice.
 controls, and the readout, all DOM/render-layer code that reuses the kernel
 and construct rather than re-deriving anything.
 
-Deferred to later slices (not lost, just not slice 1): the biome brush +
-stamp brush, the roll pane + drawer, the evolutionary layer (pressures panel,
-roll-a-web, richness meter), save/resume to a slot with full critter state +
-RNG persistence, and an ambient/title-screen bench.
+Deferred to later slices (not lost, just not slice 1 — the biome + stamp
+brush shipped in slice 2, §14 below): the roll pane + drawer, the
+evolutionary layer (pressures panel, roll-a-web, richness meter),
+save/resume to a slot with full critter state + RNG persistence, and an
+ambient/title-screen bench.
+
+## 14. The shaping tools (Simulator slice 2)
+
+The World-Lab now carries two hand tools alongside slice 1's place-one: the
+**stamp brush** — a shared 1×/2×/3× size picker; one click lays an N×N block
+of the selected plant or critter kind (odd sizes centre on the clicked tile;
+the even 2×2 has no exact centre, so it anchors the block at the clicked
+tile's top-left) — and the **biome brush** — pick a real `Tile` from an
+eight-swatch row (every plant habitat, plus open water), then click or drag
+to repaint that many tiles under the brush. A paint mutates `map.tiles` in
+place — the same `Uint8Array` the game's `Renderer` and `Flora` already
+hold — so the repaint shows up on the very next frame with no `setMap` call
+and no atlas rebuild; the plant palette re-filters through
+`placeablePlants`/`habitatsOf` on stroke end (pointerup, not per painted
+cell, to avoid thrashing a full-tiles scan mid-drag), so painting a new
+habitat in unlocks its plants live. Painting a habitat *away* just stops
+offering it — it does not retro-kill anything already rooted there, since
+`Flora` only gates habitat at `addPlant` time, never continuously.
+`paintBiome` also refuses to make the spawn cell non-walkable, so a
+construct can never be stranded even under a full flood.
+
+Both tools are rng-free by construction — `grep -nE "Math\.random|Date\.now|new Date" src/game/simBrush.ts`
+finds nothing — and structurally peaceful: a stamp only ever calls
+`placePlant`/`placeCritter`, a paint only ever writes `tiles`; neither one
+removes anything, so slice 1's `critterCount()` never-decreases invariant
+over `step()` holds untouched. The pure maths (`stampOffsets`/`stampCells`/
+`paintBiome`) lives in `src/game/simBrush.ts`, covered by
+`tests/sim-brush.test.ts`; the DOM wiring — the size picker, the tile swatch
+row, the drag-to-paint path, the post-stroke palette refresh — lives in
+`src/game/worldlab.ts`, reusing the same click→world mapping,
+`placeablePlants`/`habitatsOf`, and kernel placement calls slice 1 already
+built. No shared file changed, so ordinary play and the `?sim=swarm` bench
+are untouched by any of this — the router (`parseSimMode` in
+`src/game/flags.ts`) still sends the three modes down entirely separate
+paths, and its existing test still guards it.
+
+Tuning surface: `BIOME_TILES` in `simBrush.ts` is the eight swatches on
+offer (a one-line addition to include `Scree`/`Snow`/`Cliff`, omitted as
+rarely a plant habitat); the 2×2 stamp's top-left anchor is a one-line flip
+in `stampOffsets` if a different feel is wanted.
+
+Deferred to later slices, unchanged: the roll pane + drawer (slice 3), the
+evolutionary layer — pressures panel, roll-a-web, richness meter (slice 4),
+save/resume to a slot with full critter state + RNG persistence (slice 5),
+and an ambient/title-screen bench.
