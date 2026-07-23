@@ -13,12 +13,24 @@
 // Chrome mirrors simulator.ts's codex voice and token usage, kept minimal:
 // an eyebrow, a way back, a starter selector, and now the palette itself.
 
-import { CritterSpecies, appetite, generateCritterSpecies } from "../life/fauna";
-import { Flora } from "../life/flora";
-import { chainLinks } from "../life/foodweb";
-import { hsl } from "../life/genome";
+import { CensusLog, sparkline } from "../life/census";
+import {
+  Critter,
+  CritterSpecies,
+  DriveName,
+  Drives,
+  Palate,
+  appetite,
+  critterDrives,
+  dominantDrive,
+  generateCritterSpecies,
+} from "../life/fauna";
+import { Flora, Plant, nearestPlant } from "../life/flora";
+import { chainLinks, chainStats, richnessWord } from "../life/foodweb";
+import { Genome, PlantForm, hsl } from "../life/genome";
 import { Fidelity, SimKernel } from "../life/kernel";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
+import { BIOME_WORDS, moodLine, roleLine } from "../render/inspect";
 import { Renderer, Scene } from "../render/renderer";
 import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
@@ -32,9 +44,36 @@ const STARTERS: { kind: StarterKind; name: string }[] = [
 ];
 
 // The palette's current pick: a plant or critter kind by id, or null for the
-// select tool (the default) — Task 7 wires a null-selection click into an
-// inspect readout; this task only wires the placing half.
+// select tool (the default) — a null-selection click inspects whatever
+// stands nearest it instead of placing anything (see `Inspected` below).
 type Selected = { kind: "plant" | "critter"; id: number } | null;
+
+// The select tool's own pick: the critter or plant currently read out on the
+// codex plate, or null when nothing's chosen. A direct object reference, not
+// an id — this bench never removes a critter, and while a plant CAN be
+// removed by the sim (age, crowding, a grazer's bite), a stale reference
+// after that is harmless for a raw-internals plate: its fields simply stop
+// changing, a fair "gone quiet" reading, not a bug to guard against.
+type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | null;
+
+const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
+
+// The select tool's critter half of the hit-test: nearest critter within
+// reach, else null. No fauna.ts helper does this (flora.ts's own
+// `nearestPlant`, reused below, is the plant half) — a small, local, pure
+// spatial search, not a reimplementation of anything the readout itself owns.
+function pickCritterNear(critters: readonly Critter[], wx: number, wy: number, radiusPx: number): Critter | null {
+  let best: Critter | null = null;
+  let bestD = radiusPx * radiusPx;
+  for (const c of critters) {
+    const d = (c.x - wx) ** 2 + (c.y - wy) ** 2;
+    if (d <= bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
 
 // The way back: drop ?sim and the island resumes — it was saved on the way
 // in, and its seed rides the URL, so the bench is never a one-way door.
@@ -63,6 +102,99 @@ function sceneFor(kernel: SimKernel): Scene {
     critterSpecies: kernel.critterSpecies,
     darkness: 0,
   };
+}
+
+// ── the readout's view-builders — pure, so the plate's numbers are exactly
+// what the kernel holds, nothing re-derived or guessed. Reuses
+// critterDrives/dominantDrive (the drives themselves, never re-computed
+// here) and inspect.ts's moodLine/roleLine/BIOME_WORDS (the very words the
+// player-facing card speaks), but skips inspect.ts's word-ified plant
+// description (FORM_WORDS/featureWord, both private to that file anyway) —
+// this plate wants the RAW genome, not a reading of it. ─────────────────────
+
+interface CritterInspectView {
+  name: string;
+  role: string;
+  roleLine: string;
+  size: number;
+  palate: Palate;
+  state: string;
+  mood: string;
+  moodLine: string;
+  energy: number;
+  curiosity: number;
+  targetX: number;
+  targetY: number;
+  mealName: string; // its species name, or "—"
+  drives: Drives;
+  dominant: DriveName | null;
+}
+
+function critterInspectView(c: Critter, sp: CritterSpecies, plantSpecies: PlantSpecies[]): CritterInspectView {
+  const drives = critterDrives(c);
+  const favSp = plantSpecies[sp.favoriteSpecies];
+  return {
+    name: sp.name,
+    role: sp.role,
+    roleLine: roleLine(sp.role),
+    size: sp.size,
+    palate: sp.palate,
+    state: c.state,
+    mood: c.mood,
+    moodLine: moodLine(c.mood, favSp.name),
+    energy: c.energy,
+    curiosity: c.curiosity,
+    targetX: c.targetX,
+    targetY: c.targetY,
+    mealName: c.meal ? plantSpecies[c.meal.species].name : "—",
+    drives,
+    dominant: dominantDrive(drives),
+  };
+}
+
+interface PlantInspectView {
+  name: string;
+  habitat: string;
+  substrateFeeder: boolean;
+  genome: Genome;
+  age: number; // kernel ticks since it took root
+}
+
+function plantInspectView(p: Plant, sp: PlantSpecies, tick: number): PlantInspectView {
+  return {
+    name: sp.name,
+    habitat: BIOME_WORDS[sp.habitat] ?? "the island",
+    substrateFeeder: !!sp.substrateFeeder,
+    genome: p.genome,
+    age: tick - p.born,
+  };
+}
+
+interface CensusWebView {
+  summary: { live: number; arose: number; lost: number };
+  species: { name: string; spark: string; count: number }[];
+  chains: { chains: number; closable: number; redundancy: number };
+  richness: string;
+}
+
+// The living-web strip's data: the census exactly as CensusLog keeps it
+// (summary/list/sparkline never re-derived) paired with the food web's
+// static chain-potential (chainStats/richnessWord, the same score
+// arithmetic diversityScore uses) — population is the live proof a chain
+// closed; the chain count is the standing potential for one to.
+function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterSpecies: CritterSpecies[]): CensusWebView {
+  const species = census
+    .list()
+    .slice()
+    .sort((a, b) => b.peak - a.peak)
+    .map((tr) => ({
+      name: plantSpecies[tr.id]?.name ?? `species #${tr.id}`,
+      spark: sparkline(tr.counts),
+      count: tr.counts[tr.counts.length - 1] ?? 0,
+    }));
+  const chains = chainStats(plantSpecies, critterSpecies);
+  const richness = richnessWord(chains.chains + 2 * (chains.redundancy - 1));
+  return { summary: census.summary(), species, chains, richness };
 }
 
 // World px at the centre of a tile — every placement (click or demo) snaps to
@@ -165,6 +297,10 @@ export function startWorldLab(): void {
   const canvas = document.getElementById("game") as HTMLCanvasElement;
   const seed = seedFromUrl();
   const demoRequested = new URL(location.href).searchParams.has("demo");
+  // The ?inspect=critter|plant dev aid: auto-selects the first placed
+  // critter/plant so a screenshot can show the readout plate without a real
+  // click — same spirit as ?demo/?run, display-only, no rng anywhere near it.
+  const inspectAid = new URL(location.href).searchParams.get("inspect");
   // The ?run=N dev aid: pre-steps the kernel N ticks on load (full fidelity),
   // so a screenshot lands on an already-evolved bench instead of a freshly
   // placed one. Bounded so a stray huge N can't hang the tab. Wall-clock never
@@ -185,7 +321,38 @@ export function startWorldLab(): void {
   let plantKinds: PlantSpecies[] = [];
   let critterKinds: CritterSpecies[] = [];
   let selected: Selected = null;
+  let inspected: Inspected = null;
   let ui: Chrome | undefined;
+
+  // Re-renders the readout plate from the current `inspected` pick — called
+  // after every kernel.step() batch (play, step, step-n) and after a fresh
+  // pick, so the numbers are always the kernel's actual current state, never
+  // a stale snapshot. A harmless no-op before `ui` exists (build()'s first
+  // call, ahead of buildChrome()).
+  function refreshInspect(): void {
+    if (!ui) return;
+    if (!inspected) {
+      ui.hideInspect();
+      return;
+    }
+    if (inspected.kind === "critter") {
+      ui.showCritterInspect(
+        critterInspectView(inspected.ref, kernel.critterSpecies[inspected.ref.species], kernel.plantSpecies),
+      );
+    } else {
+      ui.showPlantInspect(plantInspectView(inspected.ref, kernel.plantSpecies[inspected.ref.species], kernel.tick));
+    }
+  }
+
+  // Re-renders the always-on census + living-web strip. Called after every
+  // kernel.step() batch AND after a placement (a fresh kind can add a latent
+  // chain link even before anything's stepped). This is where a chain is
+  // actually WATCHED closing: a feeder species' row climbs out of the census
+  // from zero once the source→disperser→feeder loop first resolves.
+  function refreshCensusStrip(): void {
+    if (!ui) return;
+    ui.setCensusWeb(censusWebView(kernel.census, kernel.plantSpecies, kernel.critterSpecies));
+  }
 
   // Clamp a camera axis to the construct's bounds — UNLESS the fit zoom has
   // left this axis of the construct smaller than the view (a non-square
@@ -248,10 +415,18 @@ export function startWorldLab(): void {
     selected = null;
     if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
     if (runTicks > 0) kernel.step(runTicks, "full");
+    inspected =
+      inspectAid === "critter" && kernel.critters.length > 0
+        ? { kind: "critter", ref: kernel.critters[0] }
+        : inspectAid === "plant" && kernel.flora.all.length > 0
+          ? { kind: "plant", ref: kernel.flora.all[0] }
+          : null;
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
     }
+    refreshInspect();
+    refreshCensusStrip();
   }
   build();
 
@@ -268,6 +443,9 @@ export function startWorldLab(): void {
   };
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
+  // the first real render: build()'s own call above ran before `ui` existed
+  refreshInspect();
+  refreshCensusStrip();
 
   // ── time controls: pause/play/step-1/step-N + fidelity ──────────────────
   // `playing` paces the frame loop's calls into kernel.step(); pausing simply
@@ -290,11 +468,15 @@ export function startWorldLab(): void {
     playing = false;
     kernel.step(1, fidelity);
     refreshTimeState();
+    refreshCensusStrip();
+    refreshInspect();
   };
   ui.onStepN = () => {
     playing = false;
     kernel.step(stepN, fidelity);
     refreshTimeState();
+    refreshCensusStrip();
+    refreshInspect();
   };
   ui.onStepNChange = (n) => {
     stepN = Math.max(1, Math.min(5000, Math.floor(n) || 1));
@@ -325,11 +507,15 @@ export function startWorldLab(): void {
       playing = false;
       kernel.step(stepN, fidelity);
       refreshTimeState();
+      refreshCensusStrip();
+      refreshInspect();
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       playing = false;
       kernel.step(1, fidelity);
       refreshTimeState();
+      refreshCensusStrip();
+      refreshInspect();
     } else if (e.key === "ArrowLeft") {
       camX = clampX(camX - PAN_STEP);
       e.preventDefault();
@@ -340,7 +526,14 @@ export function startWorldLab(): void {
       camY = clampY(camY + PAN_STEP);
       e.preventDefault();
     } else if (e.key === "Escape") {
-      leaveBench();
+      // Esc closes the current thing: a readout first (simulator.ts's own
+      // rule); with nothing inspected, the bench itself — back to the island
+      if (inspected) {
+        inspected = null;
+        refreshInspect();
+      } else {
+        leaveBench();
+      }
     }
   });
   window.addEventListener("resize", () => {
@@ -348,12 +541,14 @@ export function startWorldLab(): void {
     fitCameraToConstruct();
   });
 
-  // ── click-to-place: screen px → world px through the camera, minding both
-  // the fit-to-window zoom AND the centred offset (the same lens the render
-  // loop reads), then tile-snapped so a plant lands square on the tile you
-  // clicked rather than some sub-tile jitter position. The select tool
-  // (selected === null, the default) doesn't place anything here — Task 7
-  // wires its click into the inspect readout.
+  // ── click-to-place / click-to-inspect: screen px → world px through the
+  // SAME camera math either way (the fit-to-window zoom AND the centred
+  // offset — the lens the render loop reads), then tile-snapped for
+  // placement so a plant lands square on the tile you clicked rather than
+  // some sub-tile jitter position. With the select tool active (selected
+  // === null), the raw (untile-snapped) world point instead hit-tests the
+  // kernel's placed critters, then plants, within PICK_RADIUS_PX — a click
+  // near nothing quietly clears the readout rather than leaving a stale one.
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     const wx = camX + (e.offsetX / rect.width) * renderer.viewWidth;
@@ -361,7 +556,13 @@ export function startWorldLab(): void {
     const tx = Math.floor(wx / TILE_SIZE);
     const ty = Math.floor(wy / TILE_SIZE);
     if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return; // off the construct — nothing to click
-    if (!selected) return; // the select tool: Task 7's job, not this one
+    if (!selected) {
+      const c = pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
+      const p = c ? null : nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
+      inspected = c ? { kind: "critter", ref: c } : p ? { kind: "plant", ref: p } : null;
+      refreshInspect();
+      return;
+    }
     const { x: px, y: py } = worldPxCenter(tx, ty);
     if (selected.kind === "plant") {
       const p = kernel.placePlant(selected.id, px, py);
@@ -369,6 +570,7 @@ export function startWorldLab(): void {
     } else {
       kernel.placeCritter(selected.id, px, py);
     }
+    refreshCensusStrip(); // a fresh placement can add a latent chain link
   });
 
   // ── the loop: while playing, pace kernel.step() calls off the wall clock
@@ -390,7 +592,11 @@ export function startWorldLab(): void {
         acc -= TICK_MS;
         ticks++;
       }
-      if (ticks > 0) kernel.step(ticks, fidelity);
+      if (ticks > 0) {
+        kernel.step(ticks, fidelity);
+        refreshCensusStrip();
+        refreshInspect();
+      }
     }
     renderer.draw(camX, camY, sceneFor(kernel), now);
     ui!.setTick(kernel.tick);
@@ -418,6 +624,11 @@ interface Chrome {
   onFidelity: (f: Fidelity) => void;
   setTimeState: (s: { playing: boolean; fidelity: Fidelity; stepN: number }) => void;
   setTick: (tick: number) => void;
+  // the readout plate + living-web strip (Task 7)
+  showCritterInspect: (v: CritterInspectView) => void;
+  showPlantInspect: (v: PlantInspectView) => void;
+  hideInspect: () => void;
+  setCensusWeb: (v: CensusWebView) => void;
 }
 
 function buildChrome(initial: StarterKind): Chrome {
@@ -648,6 +859,126 @@ function buildChrome(initial: StarterKind): Chrome {
     }, 1600);
   };
   chrome.onSelect = () => {};
+
+  // ── the readout plate: a bench-owned codex plate for the select tool's
+  // pick — raw internals, not the player-facing openInspect card. Right
+  // side, vertically centred, opposite the living-web strip. ─────────────
+  const readout = document.createElement("div");
+  readout.id = "lab-readout";
+  readout.style.cssText =
+    "position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 6; display: none;" +
+    " width: 264px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
+  document.body.appendChild(readout);
+
+  // ── the living-web strip: always on, opposite the readout — the census
+  // (population, the live proof) beside the food web's static
+  // chain-potential, so watching a chain close is just watching a feeder's
+  // row climb out of zero. ─────────────────────────────────────────────────
+  const web = document.createElement("div");
+  web.id = "lab-census";
+  web.style.cssText =
+    "position: fixed; left: 18px; top: 50%; transform: translateY(-50%); z-index: 6;" +
+    " width: 240px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
+  document.body.appendChild(web);
+
+  // shared plate-string helpers, mirroring simulator.ts's own title/head/
+  // stat token usage so the two benches' plates read as one family
+  const pct = (v: number): string => Math.round(v * 100) + "%";
+  const esc = (s: string): string => s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
+  const title = (t: string): string =>
+    `<div style="font: 10px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: rgb(var(--lumen)); opacity: 0.75; margin: 14px 0 6px;">${t}</div>`;
+  const head = (name: string, sub: string): string =>
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 18px; color: var(--ink-bright);">${esc(name)}</div>` +
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">${esc(sub)}</div>`;
+  const stat = (k: string, v: string, cls: "ink" | "mint" | "gold" = "ink"): string => {
+    const col = cls === "mint" ? "rgb(var(--lumen))" : cls === "gold" ? "rgb(var(--firefly))" : "var(--ink-bright)";
+    return (
+      `<div style="display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; gap: 10px;">` +
+      `<span style="font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(228,236,242,0.5);">${esc(k)}</span>` +
+      `<span style="font: 13px var(--mono); color: ${col}; text-align: right;">${esc(v)}</span></div>`
+    );
+  };
+  // a drive row: the dominant one wears the firefly gold — the "legible why"
+  const drive = (k: string, v: number, isDominant: boolean): string =>
+    `<div style="display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0;">` +
+    `<span style="font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: ${isDominant ? "rgb(var(--firefly))" : "rgba(228,236,242,0.5)"};">${k}${isDominant ? " · dominant" : ""}</span>` +
+    `<span style="font: 13px var(--mono); color: ${isDominant ? "rgb(var(--firefly))" : "var(--ink-bright)"};">${pct(v)}</span></div>`;
+  const italic = (t: string): string =>
+    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.6); line-height: 1.5; margin: 6px 0 2px;">${esc(t)}</div>`;
+  const speciesRow = (name: string, spark: string, count: number): string =>
+    `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 2px 0; font: 11px var(--mono);">` +
+    `<span style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
+    `<span style="color: rgb(var(--lumen)); letter-spacing: 0.03em;">${spark}</span>` +
+    `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${count}</span></div>`;
+
+  chrome.showCritterInspect = (v) => {
+    readout.innerHTML =
+      head(v.name.toLowerCase(), `${v.role} · size ${v.size.toFixed(2)}`) +
+      title("palate") +
+      stat("form", PlantForm[v.palate.form].toLowerCase()) +
+      stat("hue center", pct(v.palate.hueCenter)) +
+      stat("hue width", pct(v.palate.hueWidth)) +
+      stat("glow taste", v.palate.glowTaste.toFixed(2)) +
+      title("live state") +
+      stat("state", v.state) +
+      stat("mood", v.mood, "mint") +
+      stat("energy", pct(v.energy), "mint") +
+      stat("curiosity", v.curiosity.toFixed(2)) +
+      stat("target", `${Math.round(v.targetX)}, ${Math.round(v.targetY)}`) +
+      stat("meal", v.mealName) +
+      italic(`${v.moodLine} · ${v.roleLine}`) +
+      title("drives · the legible why") +
+      drive("hunger", v.drives.hunger, v.dominant === "hunger") +
+      drive("comfort", v.drives.comfort, v.dominant === "comfort") +
+      drive("curiosity", v.drives.curiosity, v.dominant === "curiosity");
+    readout.style.display = "block";
+  };
+  chrome.showPlantInspect = (v) => {
+    readout.innerHTML =
+      head(
+        v.name.toLowerCase(),
+        `${v.habitat} · ${v.substrateFeeder ? "a substrate feeder" : "not a substrate feeder"}`,
+      ) +
+      title("genome") +
+      stat("form", PlantForm[v.genome.form].toLowerCase()) +
+      stat("hue", pct(v.genome.hue)) +
+      stat("hue2", pct(v.genome.hue2)) +
+      stat("sat", pct(v.genome.sat)) +
+      stat("height", pct(v.genome.height)) +
+      stat("spread", pct(v.genome.spread)) +
+      stat("petals", String(Math.round(v.genome.petals))) +
+      stat("leaves", String(Math.round(v.genome.leaves))) +
+      stat("lean", v.genome.lean.toFixed(2)) +
+      stat("glow", pct(v.genome.glow), v.genome.glow > 0.8 ? "gold" : "ink") +
+      title("readout") +
+      stat("age", `${v.age} ticks`, "mint");
+    readout.style.display = "block";
+  };
+  chrome.hideInspect = () => {
+    readout.style.display = "none";
+  };
+
+  chrome.setCensusWeb = (v) => {
+    const rows = v.species.length
+      ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
+      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">nothing counted yet — place a kind, or step time</div>`;
+    web.innerHTML =
+      `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
+      `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census · food web — live as you step</div>` +
+      title("census") +
+      stat("live", String(v.summary.live), "mint") +
+      stat("arose", String(v.summary.arose)) +
+      stat("lost", String(v.summary.lost)) +
+      title("by species") +
+      rows +
+      title("food web") +
+      stat("chains", String(v.chains.chains)) +
+      stat("closable", String(v.chains.closable), v.chains.closable > 0 ? "mint" : "ink") +
+      stat("redundancy", v.chains.redundancy.toFixed(1) + "×") +
+      stat("richness", v.richness, "gold");
+  };
 
   return chrome;
 }
