@@ -2037,9 +2037,18 @@ function buildChrome(initial: StarterKind): Chrome {
   // then let the two panels collide). The flexbox does the stacking math
   // instead, so either panel can grow without colliding with the other.
   const stack = document.createElement("div");
+  // Capped to the viewport with its OWN scroll. Each child self-caps (palette
+  // 40vh, evoTray/ambientTray 46vh), but nothing bounded the stack's TOTAL
+  // height — bar + palette + a third open tray could exceed 100vh, and since the
+  // stack is bottom-anchored + column-reverse with no cap, the overflow went off
+  // the TOP of the viewport, unreachable by mouse or scroll (the ambient tray's
+  // heading + first kind row vanished at laptop heights — qa coherence Blocking /
+  // ux #1). A max-height + overflow-y here keeps the bottom anchor and the
+  // reverse stacking, but now the top overflow SCROLLS into reach instead.
   stack.style.cssText =
     "position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;" +
-    " display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; max-width: 92vw;";
+    " display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; max-width: 92vw;" +
+    " max-height: calc(100vh - 36px); overflow-y: auto;";
   document.body.appendChild(stack);
 
   const bar = document.createElement("div");
