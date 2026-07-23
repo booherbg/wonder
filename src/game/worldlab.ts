@@ -1524,7 +1524,8 @@ export function startWorldLab(): void {
     rollCursor = 0;
     webCursor = 0;
     batch = [];
-    if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
+    // ?demo places instances only — Live drawer stays empty (clean slate).
+    if (demoRequested) seedDemoScenario(map, kernel, placeablePlants(kernel.plantSpecies, habitatsOf(map)));
     if (drawerDemoAid) seedDrawerDemo();
     // ?web=/?rich=: seeded ahead of the ?run=N pre-step below (same tier as
     // ?demo/?drawerdemo just above), so &run=N composes to show an

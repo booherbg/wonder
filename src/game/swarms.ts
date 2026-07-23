@@ -408,12 +408,15 @@ export class SwarmLayer {
     }
   }
 
-  // Pick the bloom this swarm feeds this heartbeat — pin holds the plant;
-  // free-roam skips spent blooms and prefers fuller nectar nearby.
+  // Pick the bloom this swarm feeds this heartbeat — pin holds the plant
+  // (even when nectar is spent); free-roam skips spent blooms and prefers
+  // fuller nectar nearby.
   private chooseFeedPlant(ent: WorldSwarm, flora: Flora): Plant | null {
-    if (ent.pinned && ent.visitPlantIdx !== null) {
+    if (ent.pinned) {
+      if (ent.visitPlantIdx === null) return null;
       const pinned = flora.all[ent.visitPlantIdx];
       if (pinned && isBloom(pinned) && this.flowerFor(pinned.species) !== null) return pinned;
+      return null;
     }
     const hx = ent.home?.x ?? ent.x;
     const hy = ent.home?.y ?? ent.y;
@@ -435,7 +438,7 @@ export class SwarmLayer {
     for (const p of flora.plantsNear(hx, hy, HOME_SCAN_PX)) {
       if (!isBloom(p) || this.flowerFor(p.species) === null) continue;
       const nectar = this.nectarOf(p);
-      if (!ent.pinned && nectar < this.emptyThreshold) continue;
+      if (nectar < this.emptyThreshold) continue;
       const dist = Math.sqrt((p.x - hx) ** 2 + (p.y - hy) ** 2);
       const score = nectar - (dist / HOME_SCAN_PX) * 0.25;
       if (score > bestScore) {

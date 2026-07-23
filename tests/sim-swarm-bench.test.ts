@@ -86,7 +86,7 @@ test("SwarmLayer.tick uses pollinateAssist from bench config", () => {
 test("pin holds feed target while free-roam skips spent blooms", () => {
   const { kernel, layer, flowerSp } = bench(13);
   const spent = placeBloom(kernel, flowerSp.id, 2, 2);
-  placeBloom(kernel, flowerSp.id, 8, 2);
+  const fuller = placeBloom(kernel, flowerSp.id, 8, 2);
   const cloud = layer.inviteCloud(kernel.flora, spent)!;
   layer.setPinned(cloud, false);
   for (let t = 0; t < 50; t++) layer.tick(kernel.flora);
@@ -98,4 +98,15 @@ test("pin holds feed target while free-roam skips spent blooms", () => {
   layer.setPinned(pinned, true);
   for (let t = 0; t < 10; t++) layer.tick(kernel.flora);
   expect(pinned.visitPlantIdx).toBe(spent.idx);
+  expect(pinned.visitPlantIdx).not.toBe(fuller.idx);
+});
+
+test("pinned cloud does not wander when a fuller bloom is nearby", () => {
+  const { kernel, layer, flowerSp } = bench(15);
+  const pinnedBloom = placeBloom(kernel, flowerSp.id, 2, 2);
+  placeBloom(kernel, flowerSp.id, 8, 2);
+  const cloud = layer.inviteCloud(kernel.flora, pinnedBloom)!;
+  expect(cloud.pinned).toBe(true);
+  for (let t = 0; t < 80; t++) layer.tick(kernel.flora);
+  expect(cloud.visitPlantIdx).toBe(pinnedBloom.idx);
 });
