@@ -419,6 +419,31 @@ export class Flora {
     this.substrates.push({ x, y, hue: sig.hue, glow: sig.glow, form: sig.form, born: this.tick });
   }
 
+  // The nutrient shuttle's pickup (Simulator ambient bench): find the nearest
+  // live substrate within `radius` px of (x, y), REMOVE it from the pool, and
+  // hand it back — or null if none is in reach. Deterministic (nearest by
+  // squared distance; the first in the array wins a tie — no rng). Removing here
+  // and re-adding through addSubstrate at the drop keeps the substrate COUNT
+  // conserved: a shuttle relocates, it never creates or destroys (the peaceful
+  // pillar). substrates is empty unless chains are on (only SimKernel forces
+  // it), so this is inert off the bench.
+  takeSubstrateNear(x: number, y: number, radius: number): Substrate | null {
+    const r2 = radius * radius;
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.substrates.length; i++) {
+      const s = this.substrates[i];
+      const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+      if (d <= r2 && d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    if (best < 0) return null;
+    const [taken] = this.substrates.splice(best, 1);
+    return taken;
+  }
+
   // A real bite. A young plant is eaten whole; a mature one is set back to
   // sprout and must regrow before it can reseed again — grazing suppresses
   // a patch before it erases it, and a rested patch comes back. Tended

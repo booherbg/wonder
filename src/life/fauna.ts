@@ -331,6 +331,7 @@ export interface Critter {
   stuck?: number; // seconds of no headway toward a target — trips the unstick
   path?: number[]; // a queued detour (tile indices) around an obstacle, first step first
   pathGoal?: number; // the goal tile that detour was routed to; dropped if the goal moves
+  carriedSubstrate?: { hue: number; glow: number; form: PlantForm }; // Simulator "nutrient-shuttle" role ONLY: a lifted substrate in transit. Absent in real play (that role is bench-only), so ordinary critters are byte-identical.
 }
 
 export const CRITTER_SPEED = 40; // px/s — unhurried
@@ -790,6 +791,11 @@ function routeToward(c: Critter, map: WorldMap): boolean {
 const POLLINATOR_RADIUS = 6; // tiles — > reseedRadius (3): the "wider" of wider/looser
 const POLLINATOR_MAX_SAME = 2; // per-cloud density cap, below the per-tile cap: the "looser"
 
+// The nutrient shuttle's pickup reach — how near a loose substrate must be for a
+// ferrying critter to lift it on a feeding visit. A tile or two, in world px
+// (substrates carry world-px coords, matching plantsNear's px radii). No rng.
+const SHUTTLE_PICKUP_RADIUS = 2 * TILE_SIZE;
+
 export function updateCritter(
   c: Critter,
   dt: number,
@@ -834,6 +840,19 @@ export function updateCritter(
           // routes through addPlant, so every cap/habitat gate still holds.
           // Bench-only; real play never assigns "pollinator".
           flora.pollinateSpread(c.meal, POLLINATOR_RADIUS, POLLINATOR_MAX_SAME);
+        } else if (sp.role === "nutrient-shuttle") {
+          // ferry a loose substrate from where it fed to where it lands next:
+          // carrying → set it down here; empty-handed → lift the nearest one.
+          // No rng (nearest-by-distance), and the count is conserved across
+          // lift+drop — the peaceful pillar. Bench-only; real play never assigns
+          // this role, so the carriedSubstrate field stays absent in ordinary play.
+          if (c.carriedSubstrate) {
+            flora.addSubstrate(c.x, c.y, c.carriedSubstrate);
+            c.carriedSubstrate = undefined;
+          } else {
+            const lifted = flora.takeSubstrateNear(c.x, c.y, SHUTTLE_PICKUP_RADIUS);
+            if (lifted) c.carriedSubstrate = { hue: lifted.hue, glow: lifted.glow, form: lifted.form };
+          }
         } else {
           flora.propagate(c.meal);
           // a disperser leaves a byproduct where it fed, tagged with the eaten
