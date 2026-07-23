@@ -1277,17 +1277,34 @@ function buildChrome(initial: StarterKind): Chrome {
     " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
   document.body.appendChild(readout);
 
-  // ── the living-web strip: always on, opposite the readout — the census
-  // (population, the live proof) beside the food web's static
+  // ── the left column: the roll pane and the living-web census used to be
+  // two independently `position: fixed` panels sharing the left:18px column
+  // — the roll pane pinned under the eyebrow, the census vertically
+  // centred. Once the roll grid filled out (its normal 2-row state), the
+  // roll pane's height reached down into the census's vertically-centred
+  // box, and painted over its title (it's appended to body later, so it
+  // wins the paint order). `leftStack` fixes that structurally, the same
+  // way the bottom starter/time `stack` above avoids ITS own panel
+  // collision: a single fixed anchor, plain flow children laid top-down, so
+  // the census's top edge is always "roll pane's bottom + gap" — never a
+  // guess that can land inside the roll pane's box. ───────────────────────
+  const leftStack = document.createElement("div");
+  leftStack.id = "lab-left-stack";
+  leftStack.style.cssText =
+    "position: fixed; left: 18px; top: 104px; z-index: 6; display: flex; flex-direction: column;" +
+    " align-items: flex-start; gap: 10px;";
+  document.body.appendChild(leftStack);
+
+  // the census (population, the live proof) beside the food web's static
   // chain-potential, so watching a chain close is just watching a feeder's
-  // row climb out of zero. ─────────────────────────────────────────────────
+  // row climb out of zero. Docked below the roll pane in `leftStack` now
+  // (was vertically centred, independently fixed — see above).
   const web = document.createElement("div");
   web.id = "lab-census";
   web.style.cssText =
-    "position: fixed; left: 18px; top: 50%; transform: translateY(-50%); z-index: 6;" +
-    " width: 240px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
+    "width: 240px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
     " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
-  document.body.appendChild(web);
+  leftStack.appendChild(web);
 
   // shared plate-string helpers, mirroring simulator.ts's own title/head/
   // stat token usage so the two benches' plates read as one family
@@ -1321,17 +1338,20 @@ function buildChrome(initial: StarterKind): Chrome {
 
   // ── the roll pane: the species lab's dice made visible — a kind toggle, a
   // roll/re-roll pair, and a grid of live thumbnails whose cells ARE the pick
-  // buttons. Docked top-left, under the eyebrow, opposite nothing (the web
-  // strip sits vertically centred, so there's no collision). This chrome
-  // never rolls or renders a sprite itself — worldlab.ts hands it finished
-  // canvases via setBatch; a click only ever reports its index outward. ────
+  // buttons. Docked top-left, under the eyebrow, ABOVE the census in
+  // `leftStack` (was independently fixed, vertically overlapping the
+  // census — see leftStack's own comment above). The pane itself no longer
+  // caps/scrolls as a whole — only the grid does, below — so the header and
+  // roll/re-roll controls stay put and never scroll out of reach. This
+  // chrome never rolls or renders a sprite itself — worldlab.ts hands it
+  // finished canvases via setBatch; a click only ever reports its index
+  // outward. ─────────────────────────────────────────────────────────────
   const rollPane = document.createElement("div");
   rollPane.id = "lab-roll";
   rollPane.style.cssText =
-    "position: fixed; left: 18px; top: 104px; z-index: 6; width: 336px; max-height: 62vh;" +
-    " overflow-y: auto; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
-    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none;";
-  document.body.appendChild(rollPane);
+    "width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;";
+  leftStack.insertBefore(rollPane, web); // above the census — leftStack's first child
 
   const rollHead = document.createElement("div");
   rollHead.innerHTML =
@@ -1369,8 +1389,13 @@ function buildChrome(initial: StarterKind): Chrome {
   reRollBtn.onclick = () => chrome.onReRoll();
   rollControls.appendChild(group(rollBtn, reRollBtn));
 
+  // bounded so a bigger-than-usual batch scrolls WITHIN the grid instead of
+  // growing the pane past this point and reopening the census collision —
+  // ~220px comfortably holds the normal 2-row/10-thumbnail batch with room
+  // to spare, and scrolls if that ever grows.
   const rollGrid = document.createElement("div");
-  rollGrid.style.cssText = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;";
+  rollGrid.style.cssText =
+    "display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 220px; overflow-y: auto;";
   rollPane.appendChild(rollGrid);
 
   const rollEmpty = document.createElement("div");
