@@ -70,6 +70,10 @@ import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import { PRESSURES, Pressure, PressureId, DEFAULT_PRESSURE_POLLINATOR_DENSITY, DEFAULT_PRESSURE_POLLINATOR_REACH, fieldValueFor, grazerAssignment, pollinateAssistFor, richnessMeter, tuningPatchFor } from "./simPressures";
 import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
+import { SwarmLayer, WorldSwarm, canFlower } from "./swarms";
+import { appearanceColors, MAP_G } from "../life/idmap";
+import { isBloom } from "../render/ambient";
+import { behaviourLine } from "../render/inspect";
 import { AMBIENT_ROLES, ambientRoleEnabled, roleBadge } from "./simAmbient";
 import {
   RestoredSim,
@@ -106,7 +110,7 @@ const STARTERS: { kind: StarterKind; name: string }[] = [
 
 // The palette's current pick: a plant or critter kind by id, a real Tile for
 // the biome brush, or null when Select/Erase is active.
-type Selected = { kind: "plant" | "critter"; id: number } | { kind: "tile"; tile: Tile } | null;
+type Selected = { kind: "plant" | "critter"; id: number } | { kind: "tile"; tile: Tile } | { kind: "cloud" } | null;
 
 // Tool radio (iteration 6a): what the pointer does. Catalog chips only matter
 // for place/paint; select + erase ignore the catalog.
@@ -118,7 +122,7 @@ type LabTool = "select" | "place" | "paint" | "erase";
 // removed by the sim (age, crowding, a grazer's bite), a stale reference
 // after that is harmless for a raw-internals plate: its fields simply stop
 // changing, a fair "gone quiet" reading, not a bug to guard against.
-type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | null;
+type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | { kind: "swarm"; ref: WorldSwarm } | null;
 
 const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
 
@@ -195,7 +199,7 @@ function seedFromUrl(): number {
 // Renderer wants — the same shape main.ts assembles for renderer.draw, minus
 // everything that belongs to a played island (no player, no home, no beast,
 // no weather). darkness stays 0: the bench is a workbench, always lit.
-function sceneFor(kernel: SimKernel): Scene {
+function sceneFor(kernel: SimKernel, swarms: SwarmLayer): Scene {
   return {
     player: null,
     flora: kernel.flora,
@@ -203,6 +207,7 @@ function sceneFor(kernel: SimKernel): Scene {
     critters: kernel.critters,
     critterSpecies: kernel.critterSpecies,
     darkness: 0,
+    swarms,
   };
 }
 
@@ -276,6 +281,73 @@ function plantInspectView(p: Plant, sp: PlantSpecies, tick: number): PlantInspec
     substrateFeeder: !!sp.substrateFeeder,
     genome: p.genome,
     age: tick - p.born,
+  };
+}
+
+interface SwarmInspectView {
+  name: string;
+  hostName: string;
+  population: number;
+  energy: number;
+  cap: number;
+  resemblance: number;
+  matchEfficiency: number;
+  nectar: number;
+  pinned: boolean;
+  behaviorLine: string;
+  sensorPatch: string;
+  flowerPatch: string;
+  pollinationLog: { name: string; count: number; lastTick: number; patch: string }[];
+}
+
+function mapPatchDataUrl(map: Uint8Array, accent?: Uint8Array, ring?: Set<number>): string {
+  const cell = 12;
+  const c = document.createElement("canvas");
+  c.width = MAP_G * cell;
+  c.height = MAP_G * cell;
+  const g = c.getContext("2d")!;
+  const cols = appearanceColors(map);
+  for (let y = 0; y < MAP_G; y++) {
+    for (let x = 0; x < MAP_G; x++) {
+      const i = y * MAP_G + x;
+      g.fillStyle = cols[i];
+      g.fillRect(x * cell, y * cell, cell - 1, cell - 1);
+      if (ring?.has(i)) {
+        g.strokeStyle = "rgba(244, 201, 121, 0.95)";
+        g.lineWidth = 2;
+        g.strokeRect(x * cell + 1, y * cell + 1, cell - 3, cell - 3);
+      }
+    }
+  }
+  return c.toDataURL();
+}
+
+function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpecies[]): SwarmInspectView | null {
+  const info = layer.inspect(ent, species);
+  if (!info) return null;
+  const ring = new Set<number>();
+  for (let i = 0; i < info.sensor.length; i++) {
+    if (info.accent[i] && info.sensor[i] === info.flowerMap[i]) ring.add(i);
+  }
+  return {
+    name: info.name,
+    hostName: info.hostName,
+    population: info.population,
+    energy: info.energy,
+    cap: info.cap,
+    resemblance: info.resemblance,
+    matchEfficiency: info.matchEfficiency,
+    nectar: info.nectar,
+    pinned: info.pinned,
+    behaviorLine: behaviourLine(info.behavior),
+    sensorPatch: mapPatchDataUrl(info.sensor, info.accent, ring),
+    flowerPatch: mapPatchDataUrl(info.flowerMap, info.accent),
+    pollinationLog: info.pollinationLog.map((row) => ({
+      name: row.speciesName,
+      count: row.count,
+      lastTick: row.lastTick,
+      patch: mapPatchDataUrl(row.flowerMap, row.accent),
+    })),
   };
 }
 
@@ -567,6 +639,7 @@ export function startWorldLab(): void {
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
   let map!: WorldMap, kernel!: SimKernel, renderer!: Renderer;
+  let swarmLayer!: SwarmLayer;
   let camX = 0,
     camY = 0;
   let plantKinds: PlantSpecies[] = [];
@@ -626,7 +699,11 @@ export function startWorldLab(): void {
   let pollinateAssist: PollinateAssist = { ...DEFAULT_POLLINATE_ASSIST };
   const benchCritterCtx = (): CritterContext => ({ pollinateAssist });
   function stepKernel(nTicks: number, fid: Fidelity = "full"): void {
-    kernel.step(nTicks, fid, benchCritterCtx());
+    for (let i = 0; i < nTicks; i++) {
+      kernel.step(1, fid, benchCritterCtx());
+      swarmLayer.pollinateAssist = pollinateAssist;
+      swarmLayer.tick(kernel.flora);
+    }
   }
 
   // A biome brush label for flash copy — the same words the palette swatches use
@@ -653,16 +730,18 @@ export function startWorldLab(): void {
     return `tile full (${cap} plants) — they can overlap, but each tile only holds so many`;
   }
 
-  // Erase life under the brush (plants + critters). Does not archive kinds.
-  function eraseAt(tx: number, ty: number): { plants: number; critters: number } {
+  // Erase life under the brush (plants + critters + insect clouds).
+  function eraseAt(tx: number, ty: number): { plants: number; critters: number; clouds: number } {
     let plants = 0;
     let critters = 0;
+    let clouds = 0;
     for (const { x, y } of stampCells(tx, ty, brushSize, map)) {
       const r = kernel.eraseAtTile(x, y);
       plants += r.plants;
       critters += r.critters;
+      clouds += swarmLayer.removeCloudsInTiles([{ x, y }]);
     }
-    return { plants, critters };
+    return { plants, critters, clouds };
   }
 
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
@@ -674,7 +753,7 @@ export function startWorldLab(): void {
   // Returns whether the centre cell accepted a plant/critter (drag-place uses
   // this to avoid spamming the same refusal flash every move).
   function stampKindAt(tx: number, ty: number, opts?: { quiet?: boolean }): boolean {
-    if (!selected || selected.kind === "tile") return false;
+    if (!selected || selected.kind === "tile" || selected.kind === "cloud") return false;
     const cells = stampCells(tx, ty, brushSize, map);
     let centreOk = false;
     let centreRefused = false;
@@ -1240,6 +1319,9 @@ export function startWorldLab(): void {
     if (inspected?.kind === "plant" && kernel.flora.all[inspected.ref.idx] !== inspected.ref) {
       inspected = null;
     }
+    if (inspected?.kind === "swarm" && !swarmLayer.swarms.includes(inspected.ref)) {
+      inspected = null;
+    }
     if (!inspected) {
       ui.hideInspect();
       return;
@@ -1248,8 +1330,14 @@ export function startWorldLab(): void {
       ui.showCritterInspect(
         critterInspectView(inspected.ref, kernel.critterSpecies[inspected.ref.species], kernel.plantSpecies),
       );
+    } else if (inspected.kind === "plant") {
+      const sp = kernel.plantSpecies[inspected.ref.species];
+      const canInvite = isBloom(inspected.ref) && canFlower(sp.archetype.form);
+      ui.showPlantInspect(plantInspectView(inspected.ref, sp, kernel.tick), canInvite);
     } else {
-      ui.showPlantInspect(plantInspectView(inspected.ref, kernel.plantSpecies[inspected.ref.species], kernel.tick));
+      const view = swarmInspectView(swarmLayer, inspected.ref, kernel.plantSpecies);
+      if (view) ui.showSwarmInspect(view, inspected.ref);
+      else ui.hideInspect();
     }
   }
 
@@ -1326,6 +1414,7 @@ export function startWorldLab(): void {
         id === "pollinatorReach" ? value : pressureValues.pollinatorReach,
         id === "pollinatorDensity" ? value : pressureValues.pollinatorDensity,
       );
+      swarmLayer.pollinateAssist = pollinateAssist;
     }
     refreshCensusStrip();
     if (ui) ui.setPressure(id, value);
@@ -1414,6 +1503,14 @@ export function startWorldLab(): void {
         ? { tuning: { splitDistance: 0.12, splitClusterMin: 2, splitCooldownTicks: 0, splitKinDistance: 0.4 } }
         : {}),
     });
+    const centre = constructCentre(map);
+    const focusPx = worldPxCenter(centre.cx, centre.cy);
+    swarmLayer = new SwarmLayer(seed, kernel.plantSpecies, kernel.flora, focusPx, {
+      perPlantNectar: true,
+      autoSpawn: false,
+      predation: 0,
+    });
+    swarmLayer.pollinateAssist = pollinateAssist;
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);
     fitCameraToConstruct();
@@ -1654,6 +1751,23 @@ export function startWorldLab(): void {
   ui.onPinEntry = (key) => pinDrawerEntry(key);
   ui.onUnpinEntry = (key) => unpinDrawerEntry(key);
   ui.onReseedPinned = () => reseedPinned();
+  ui.onInviteCloud = () => {
+    if (inspected?.kind !== "plant") return;
+    const plant = inspected.ref;
+    const hostName = kernel.plantSpecies[plant.species].name.toLowerCase();
+    const ent = swarmLayer.inviteCloud(kernel.flora, plant);
+    if (ent) {
+      inspected = { kind: "swarm", ref: ent };
+      if (ui) ui.flashNote(`invited ${ent.name.toLowerCase()} onto ${hostName}`);
+      refreshInspect();
+    } else if (ui) ui.flashNote("needs a flowering plant in bloom");
+  };
+  ui.onToggleSwarmPin = () => {
+    if (inspected?.kind !== "swarm") return;
+    swarmLayer.setPinned(inspected.ref, !inspected.ref.pinned);
+    if (ui) ui.flashNote(inspected.ref.pinned ? "pinned to host" : "free-roam — follows fuller blooms");
+    refreshInspect();
+  };
   ui.onPressure = (id, value) => setPressure(id, value);
   ui.onAmbientRole = (id, role) => {
     const was = kernel.critterSpecies[id].role;
@@ -1954,9 +2068,18 @@ export function startWorldLab(): void {
     if (!hit) return;
     const { tx, ty, wx, wy } = hit;
     if (tool === "select" || !selected) {
-      const c = pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
-      const p = c ? null : nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
-      inspected = c ? { kind: "critter", ref: c } : p ? { kind: "plant", ref: p } : null;
+      const p = nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
+      if (inspected?.kind === "swarm" && p && isBloom(p) && canFlower(kernel.plantSpecies[p.species].archetype.form)) {
+        if (swarmLayer.retarget(inspected.ref, p)) {
+          if (ui) ui.flashNote(`retargeted ${inspected.ref.name.toLowerCase()} → ${kernel.plantSpecies[p.species].name.toLowerCase()}`);
+          refreshInspect();
+          return;
+        }
+      }
+      const sw = swarmLayer.pick(wx, wy, PICK_RADIUS_PX);
+      const c = sw ? null : pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
+      const plantPick = c || sw ? null : p;
+      inspected = sw ? { kind: "swarm", ref: sw } : c ? { kind: "critter", ref: c } : plantPick ? { kind: "plant", ref: plantPick } : null;
       refreshInspect();
       return;
     }
@@ -1964,12 +2087,13 @@ export function startWorldLab(): void {
       placing = true; // reuse stroke tracking for drag-erase
       lastStrokeKey = ty * map.width + tx;
       const r = eraseAt(tx, ty);
-      if (r.plants || r.critters) {
+      if (r.plants || r.critters || r.clouds) {
         refreshCensusStrip();
         refreshInspect();
         const bits = [
           r.plants ? `${r.plants} plant${r.plants === 1 ? "" : "s"}` : "",
           r.critters ? `${r.critters} critter${r.critters === 1 ? "" : "s"}` : "",
+          r.clouds ? `${r.clouds} cloud${r.clouds === 1 ? "" : "s"}` : "",
         ].filter(Boolean);
         if (ui) ui.flashNote(`erased ${bits.join(" · ")}`);
       }
@@ -1979,6 +2103,14 @@ export function startWorldLab(): void {
       painting = true;
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
       lastStrokeKey = ty * map.width + tx;
+      return;
+    }
+    if (tool === "place" && selected?.kind === "cloud") {
+      placing = true;
+      lastStrokeKey = ty * map.width + tx;
+      const { x: px, y: py } = worldPxCenter(tx, ty);
+      swarmLayer.placeCloud(kernel.flora, px, py);
+      if (ui) ui.flashNote("placed an insect cloud — it will home on the nearest bloom");
       return;
     }
     if (tool === "place" && selected.kind !== "tile") {
@@ -2002,6 +2134,11 @@ export function startWorldLab(): void {
     }
     if (painting && selected?.kind === "tile") {
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
+      return;
+    }
+    if (placing && selected?.kind === "cloud") {
+      const { x: px, y: py } = worldPxCenter(tx, ty);
+      swarmLayer.placeCloud(kernel.flora, px, py);
       return;
     }
     if (placing && selected && selected.kind !== "tile") {
@@ -2040,7 +2177,8 @@ export function startWorldLab(): void {
         refreshInspect();
       }
     }
-    renderer.draw(camX, camY, sceneFor(kernel), now);
+    swarmLayer.animate(dt / 1000);
+    renderer.draw(camX, camY, sceneFor(kernel, swarmLayer), now);
     ui!.setTick(kernel.tick);
     requestAnimationFrame(frame);
   }
@@ -2097,7 +2235,10 @@ interface Chrome {
   setTick: (tick: number) => void;
   // the readout plate + living-web strip (Task 7)
   showCritterInspect: (v: CritterInspectView) => void;
-  showPlantInspect: (v: PlantInspectView) => void;
+  showPlantInspect: (v: PlantInspectView, canInvite?: boolean) => void;
+  showSwarmInspect: (v: SwarmInspectView, ent: WorldSwarm) => void;
+  onInviteCloud: () => void;
+  onToggleSwarmPin: () => void;
   hideInspect: () => void;
   setCensusWeb: (v: CensusWebView) => void;
   // the drawer (species roster): live status + delete/bring-back (Task 6)
@@ -2185,7 +2326,9 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
     `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
-    `select · place · paint · erase · brush 1–4 · wheel zooms · ←↑↓ pan · roll / web / drawer · space plays · Esc home` +
+    `select · place · paint · erase · cloud · brush 1–4 · wheel zooms · ←↑↓ pan · roll / web / drawer · space plays · Esc home` +
+    `<div style="margin-top: 3px; font: 10px var(--mono); letter-spacing: 0.04em; color: rgba(228,236,242,0.42);">` +
+    `spread paths: natural reseed · critter pollinator (ambient) · insect cloud</div>` +
     `</div>`;
   eyebrow.style.cssText = "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);
@@ -2469,7 +2612,7 @@ function buildChrome(initial: StarterKind): Chrome {
     { id: "select", name: "select", title: "click to read a genome up close" },
     { id: "place", name: "place", title: "stamp the selected plant or critter" },
     { id: "paint", name: "paint", title: "paint biomes with the brush" },
-    { id: "erase", name: "erase", title: "clear plants and critters under the brush" },
+    { id: "erase", name: "erase", title: "clear plants, critters, and insect clouds under the brush" },
   ];
   const toolBtns = TOOLS.map(({ id, name, title }) => {
     const b = document.createElement("button");
@@ -2480,6 +2623,12 @@ function buildChrome(initial: StarterKind): Chrome {
     return { id, b };
   });
   toolRow.append(label("tool"), ...toolBtns.map((t) => t.b));
+  const cloudBtn = document.createElement("button");
+  cloudBtn.textContent = "cloud";
+  cloudBtn.title = "place a naïve insect cloud — it homes on the nearest bloom";
+  cloudBtn.style.cssText = btn(false);
+  cloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
+  toolRow.appendChild(cloudBtn);
   plantRow.appendChild(label("plant"));
   critterRow.appendChild(label("critter"));
   biomeRow.appendChild(label("biome"));
@@ -2541,6 +2690,7 @@ function buildChrome(initial: StarterKind): Chrome {
     for (const { tile, b, color } of tileBtns) {
       b.style.cssText = tileBtn(sel !== null && sel.kind === "tile" && sel.tile === tile, color);
     }
+    cloudBtn.style.cssText = btn(sel !== null && sel.kind === "cloud");
   };
   chrome.flashNote = (msg) => {
     hint.textContent = msg;
@@ -3069,7 +3219,7 @@ function buildChrome(initial: StarterKind): Chrome {
       drive("curiosity", v.drives.curiosity, v.dominant === "curiosity");
     readout.style.display = "block";
   };
-  chrome.showPlantInspect = (v) => {
+  chrome.showPlantInspect = (v, canInvite = false) => {
     readout.innerHTML =
       head(
         v.name.toLowerCase(),
@@ -3088,8 +3238,62 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("glow", pct(v.genome.glow), v.genome.glow > 0.8 ? "gold" : "ink") +
       title("readout") +
       stat("age", `${v.age} ticks`, "mint");
+    if (canInvite) {
+      const row = document.createElement("div");
+      row.style.cssText = "margin-top: 10px;";
+      const inviteBtn = document.createElement("button");
+      inviteBtn.textContent = "invite a cloud";
+      inviteBtn.title = "snap an insect cloud onto this bloom";
+      inviteBtn.style.cssText = btn(false);
+      inviteBtn.onclick = () => chrome.onInviteCloud();
+      row.appendChild(inviteBtn);
+      readout.appendChild(row);
+    }
     readout.style.display = "block";
   };
+  chrome.showSwarmInspect = (v, ent) => {
+    const logRows = v.pollinationLog.length
+      ? v.pollinationLog
+          .map(
+            (row) =>
+              `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">` +
+              `<img src="${row.patch}" style="width:28px;height:28px;image-rendering:pixelated;border-radius:2px;" alt="">` +
+              `<span>${esc(row.name.toLowerCase())} · ${row.count} spread${row.count === 1 ? "" : "s"} · tick ${row.lastTick}</span></div>`,
+          )
+          .join("")
+      : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no assisted spreads yet</div>`;
+    readout.innerHTML =
+      head(v.name.toLowerCase(), `insect cloud · works ${esc(v.hostName.toLowerCase())}`) +
+      title("vitals") +
+      stat("population", `${Math.round(v.population)} / ${Math.round(v.cap)}`, "mint") +
+      stat("energy", pct(v.energy), "mint") +
+      stat("match", pct(v.matchEfficiency), "mint") +
+      stat("resemblance", pct(v.resemblance)) +
+      stat("host nectar", pct(v.nectar), v.nectar < 0.2 ? "ink" : "mint") +
+      stat("mode", v.pinned ? "pinned to host" : "free-roam") +
+      title("maps") +
+      `<div style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;">` +
+      `<div style="text-align:center;"><img src="${v.sensorPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">insect</div></div>` +
+      `<div style="text-align:center;"><img src="${v.flowerPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">flower</div></div></div>` +
+      `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.5); margin-bottom: 6px;">${esc(v.behaviorLine)}</div>` +
+      title("pollination log") +
+      logRows;
+    const controls = document.createElement("div");
+    controls.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;";
+    const pinBtn = document.createElement("button");
+    pinBtn.textContent = ent.pinned ? "free-roam" : "pin to host";
+    pinBtn.style.cssText = btn(ent.pinned);
+    pinBtn.onclick = () => chrome.onToggleSwarmPin();
+    controls.appendChild(pinBtn);
+    const hint = document.createElement("div");
+    hint.style.cssText = "font: 10px var(--mono); color: rgba(228,236,242,0.45); flex: 1 1 100%;";
+    hint.textContent = "select a bloom while this cloud is open to retarget";
+    controls.append(hint);
+    readout.appendChild(controls);
+    readout.style.display = "block";
+  };
+  chrome.onInviteCloud = () => {};
+  chrome.onToggleSwarmPin = () => {};
   chrome.hideInspect = () => {
     readout.style.display = "none";
   };
@@ -3182,7 +3386,7 @@ function buildChrome(initial: StarterKind): Chrome {
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed rate 0 = insects-only</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed 0 = insects-only · natural · critter pollinator · insect cloud</div>`;
   evoTray.appendChild(evoHead);
 
   // The five sliders sit in a ROW (not a stacked column) — a compact strip
