@@ -51,7 +51,16 @@ import { OVERVIEW_COLORS } from "../render/palette";
 import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
-import { DrawerEntry, makeEntry } from "./simDrawer";
+import {
+  DrawerEntry,
+  EntryKind,
+  bumpPeak,
+  captureDaughters,
+  deleteEntry,
+  makeEntry,
+  reviveEntry,
+  statusOf,
+} from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 
@@ -243,6 +252,19 @@ interface CensusWebView {
   richness: string;
 }
 
+// The drawer's per-entry view: a finished row, live off statusOf/bumpPeak —
+// `extinct`/`deleted` are the model's own three-way state (deleted → cleared;
+// extinct → lived, now gone; else alive), Chrome only ever picks the label.
+interface DrawerRow {
+  key: string;
+  name: string;
+  sub: string;
+  count: number;
+  variations: number;
+  extinct: boolean;
+  deleted: boolean;
+}
+
 // The living-web strip's data: the census exactly as CensusLog keeps it
 // (summary/list/sparkline never re-derived) paired with the food web's
 // static chain-potential (chainStats/richnessWord, the same score
@@ -425,6 +447,18 @@ export function startWorldLab(): void {
   // "looks" — the same "unrecognized value falls back to the common case"
   // convention ?roll already uses. Display-only, off iterateRng.
   const iterateAid = new URL(location.href).searchParams.get("iterate");
+  // Task 6's dev aids: ?drawerdemo=1 rolls+picks a plant and a critter kind
+  // (the SAME roll→pick path a click takes) and stamps a small patch of each
+  // near the construct's centre, so the drawer shows real, non-zero "in
+  // play" counts without a manual click; ?split=1 constructs the kernel with
+  // permissive speciation tuning, so ?drawerdemo=1's dense same-kind stamp
+  // plus a long &run= has a real shot at surfacing a captured ✧ daughter;
+  // ?drawerdel=<index-or-key> deletes that drawer entry deterministically,
+  // so a shot can show the cleared badge + bring-back button. All
+  // display-only / rng-free beyond the ordinary seeded paths they reuse.
+  const drawerDemoAid = new URL(location.href).searchParams.has("drawerdemo");
+  const splitAid = new URL(location.href).searchParams.has("split");
+  const drawerDelAid = new URL(location.href).searchParams.get("drawerdel");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -439,8 +473,9 @@ export function startWorldLab(): void {
   let ui: Chrome | undefined;
   // the roll pane's own state: which kind the toggle shows, the seeded
   // stream's cursor (re-roll advances it), the current batch of candidates
-  // (PROVISIONAL_ID until picked), and the drawer roster (Task 6 renders it —
-  // this task only keeps it seeded/growing so the roster is never empty).
+  // (PROVISIONAL_ID until picked), and the drawer roster — every introduced
+  // kind (starter/rolled/captured daughter), the palette's own single
+  // source of truth (see refreshPalette below).
   let rollKind: RollKind = "critter";
   let rollCursor = 0;
   let batch: (PlantSpecies | CritterSpecies)[] = [];
@@ -484,20 +519,44 @@ export function startWorldLab(): void {
     return paintBiome(map, stampCells(tx, ty, brushSize, map), selected.tile) > 0;
   }
 
-  // After a paint stroke, re-filter the plant palette: a newly-painted habitat
-  // unlocks its plants; a painted-away one drops them. Uses the exact slice-1
-  // gating. If the selected plant kind is no longer placeable (its habitat was
-  // erased), fall back to the select tool so no stale id survives.
-  function repaintRefresh(): void {
-    plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
+  // The drawer's own non-deleted entries of one kind — the palette's raw
+  // material (see refreshPalette, just below).
+  function drawerLive(kind: EntryKind): DrawerEntry[] {
+    return drawer.filter((e) => e.kind === kind && !e.deleted);
+  }
+
+  // The palette's SINGLE source of truth (Task 6): plantKinds/critterKinds
+  // are the drawer's own non-deleted entries (plants further intersected with
+  // placeablePlants' habitat gate, the exact slice-1 filter — a newly-painted
+  // habitat unlocks its plants, a painted-away one drops them, same as
+  // before). So a deleted kind leaves the palette and a revived one returns,
+  // with no separate bookkeeping to keep in sync. Called after every paint
+  // stroke, pick, delete, and revive. If the current selection's kind just
+  // left the palette (painted away, or deleted), fall back to the select
+  // tool so no stale id survives.
+  function refreshPalette(): void {
+    const livePlantIds = new Set(drawerLive("plant").map((e) => e.speciesId));
+    plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map)).filter((sp) => livePlantIds.has(sp.id));
+    const liveCritterIds = new Set(drawerLive("critter").map((e) => e.speciesId));
+    critterKinds = kernel.critterSpecies.filter((sp) => liveCritterIds.has(sp.id));
     if (selected?.kind === "plant") {
       const id = selected.id; // hoisted out of the closure below: TS can't narrow a captured `let`
       if (!plantKinds.some((s) => s.id === id)) selected = null;
+    } else if (selected?.kind === "critter") {
+      const id = selected.id;
+      if (!critterKinds.some((s) => s.id === id)) selected = null;
     }
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
     }
+  }
+
+  // After a paint stroke, re-filter the plant palette: a newly-painted
+  // habitat unlocks its plants; a painted-away one drops them — handled by
+  // refreshPalette's own habitat gate above.
+  function repaintRefresh(): void {
+    refreshPalette();
   }
 
   // ── the roll pane: seeded batch → live thumbnails → pick onto the palette
@@ -555,13 +614,14 @@ export function startWorldLab(): void {
   }
 
   // Pick: introduces the batch member at `index` into the kernel FOR REAL
-  // (kernel.introduce*Species assigns the real id === array index), re-filters
-  // the palette so the new kind is immediately placeable, and records a
-  // "rolled" drawer entry. The freshly-picked kind becomes the selection, so
+  // (kernel.introduce*Species assigns the real id === array index) and
+  // records a "rolled" drawer entry — refreshPalette then re-sources the
+  // palette off the drawer's own non-deleted entries, so the new kind is
+  // immediately placeable. The freshly-picked kind becomes the selection, so
   // the very next click on the construct places it. Kernel-side effects run
-  // regardless of `ui` (so ?rollpick can fire from build()'s first call,
-  // ahead of buildChrome()); the UI refresh is guarded and re-synced by the
-  // main flow once `ui` exists.
+  // regardless of `ui` (so ?rollpick/?drawerdemo can fire from build()'s
+  // first call, ahead of buildChrome()); the UI refresh is guarded and
+  // re-synced by the main flow once `ui` exists.
   function pickBatch(index: number): void {
     const member = batch[index];
     if (!member) return;
@@ -569,20 +629,18 @@ export function startWorldLab(): void {
     if (rollKind === "plant") {
       const sp = member as PlantSpecies;
       id = kernel.introducePlantSpecies({ ...sp, id: PROVISIONAL_ID });
-      plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
       drawer.push(makeEntry({ kind: "plant", speciesId: id, def: kernel.plantSpecies[id], origin: "rolled" }));
       selected = { kind: "plant", id };
     } else {
       const sp = member as CritterSpecies;
       id = kernel.introduceCritterSpecies({ ...sp });
-      critterKinds = kernel.critterSpecies;
       drawer.push(makeEntry({ kind: "critter", speciesId: id, def: kernel.critterSpecies[id], origin: "rolled" }));
       selected = { kind: "critter", id };
     }
+    refreshPalette(); // the drawer just grew — plant/critterKinds re-source from it
+    refreshDrawer();
     focus = null; // the pick is made; the iterate strip's job here is done
     if (ui) {
-      ui.setPalette(plantKinds, critterKinds);
-      ui.setSelected(selected);
       ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
       ui.setFocus(null);
     }
@@ -680,6 +738,135 @@ export function startWorldLab(): void {
     pickBatch(focus);
   }
 
+  // ── the drawer (species roster): live status, daughter ✧ auto-capture,
+  // delete/bring-back. Task 6. ─────────────────────────────────────────────
+
+  // Refreshes the drawer roster: auto-captures any emergent daughters
+  // (flora's own ✧ speciation — a plant record appended with `parent` set,
+  // scanned off kernel.plantSpecies, idempotent per simDrawer's own note),
+  // paired with flora's OWN witnessed speciation events for a human-legible
+  // flash (the scan gives the id the drawer needs; the event gives the name
+  // worth saying out loud). Then bumps each entry's peak against its live
+  // count and renders the finished rows. A harmless no-op before `ui` exists
+  // (build()'s first call, ahead of buildChrome()) — called from
+  // refreshCensusStrip (so it fires everywhere that already does: after
+  // every kernel.step() batch and every placement) and directly after
+  // pick/delete/revive.
+  function refreshDrawer(): void {
+    if (!ui) return;
+    const events = kernel.flora.takeEvents();
+    const fresh = captureDaughters(kernel.plantSpecies, drawer);
+    if (fresh.length) drawer.push(...fresh);
+    for (const ev of events) ui.flashNote(`✧ a daughter arose: ${ev.name.toLowerCase()}`);
+    const rows = drawer.map((e) => {
+      const count =
+        e.kind === "plant" ? kernel.speciesCounts().get(e.speciesId) ?? 0 : kernel.critterCountOf(e.speciesId);
+      bumpPeak(e, count);
+      const status = statusOf(e, count, drawer);
+      const parent =
+        e.parentId !== undefined ? drawer.find((p) => p.kind === "plant" && p.speciesId === e.parentId) : undefined;
+      return {
+        key: e.key,
+        name: e.name.toLowerCase(),
+        sub: e.origin === "daughter" ? `daughter of ${(parent?.name ?? "an unknown kind").toLowerCase()}` : `${e.origin} ${e.kind}`,
+        count: status.count,
+        variations: status.variations,
+        extinct: status.extinct,
+        deleted: e.deleted,
+      };
+    });
+    ui.setDrawer(rows);
+  }
+
+  // Delete: the kernel's own peaceful tombstone clear (population → 0, the
+  // species RECORD kept at its id — never a splice, so ids never move), then
+  // the drawer's own tombstone swap, and a palette + drawer refresh (drops it
+  // from the palette).
+  function deleteDrawerEntry(key: string): void {
+    const i = drawer.findIndex((e) => e.key === key);
+    if (i < 0) return;
+    const e = drawer[i];
+    if (e.kind === "plant") kernel.clearPlantInstances(e.speciesId);
+    else kernel.clearCritterInstances(e.speciesId);
+    drawer[i] = deleteEntry(e);
+    refreshPalette();
+    refreshDrawer();
+    if (ui) ui.flashNote(`cleared ${e.name.toLowerCase()} — its definition is kept; bring it back any time`);
+  }
+
+  // Bring back: the drawer's own tombstone swap, then a few fresh instances
+  // re-spawned near the construct's centre through the ordinary placePlant/
+  // placeCritter path — delete only ever cleared LIVE instances, the species
+  // record never moved, so placing at the same id just works (the drawer's
+  // stored def is the conceptual source of truth; the kernel's own record at
+  // that id is, byte for byte, still it) — and a palette + drawer refresh
+  // (re-adds it).
+  function reviveDrawerEntry(key: string): void {
+    const i = drawer.findIndex((e) => e.key === key);
+    if (i < 0) return;
+    const e = drawer[i];
+    drawer[i] = reviveEntry(e);
+    const cx = Math.floor(map.width / 2);
+    const cy = Math.floor(map.height / 2);
+    if (e.kind === "plant") {
+      const sp = kernel.plantSpecies[e.speciesId];
+      const tile = nearestTileOf(map, sp.habitat, cx, cy) ?? { x: cx, y: cy };
+      for (let n = 0; n < 3; n++) {
+        const { x, y } = worldPxCenter(Math.min(map.width - 1, tile.x + n), tile.y);
+        kernel.placePlant(e.speciesId, x, y);
+      }
+    } else {
+      for (let n = 0; n < 2; n++) {
+        const { x, y } = worldPxCenter(Math.min(map.width - 1, cx + n), cy);
+        kernel.placeCritter(e.speciesId, x, y);
+      }
+    }
+    refreshPalette();
+    refreshDrawer();
+    if (ui) ui.flashNote(`brought back ${e.name.toLowerCase()}`);
+  }
+
+  // ?drawerdemo=1: rolls+picks one plant kind and one critter kind (the SAME
+  // roll→pick path a click takes) and stamps a small patch of each near the
+  // construct's centre via stampKindAt (also the same path a click takes),
+  // so the drawer shows real, non-zero "in play" counts without a manual
+  // click. The plant patch is a dense same-kind 3×3 (stampCells' own block —
+  // ?split=1's own "dense same-kind stamp"). Best-effort, same spirit as
+  // ?demo: a seed that rolls nothing placeable simply leaves the drawer
+  // showing the starter kinds alone. Leaves the roll pane / brush / selection
+  // back at their neutral defaults when done.
+  function seedDrawerDemo(): void {
+    const cx = Math.floor(map.width / 2);
+    const cy = Math.floor(map.height / 2);
+    rollKind = "plant";
+    rollCursor = 0;
+    rollBatch();
+    if (batch.length > 0) {
+      pickBatch(0);
+      if (selected?.kind === "plant") {
+        brushSize = 3;
+        const sp = kernel.plantSpecies[selected.id];
+        const tile = nearestTileOf(map, sp.habitat, cx, cy) ?? { x: cx, y: cy };
+        stampKindAt(tile.x, tile.y);
+      }
+    }
+    rollKind = "critter";
+    rollCursor = 1; // a different slice of the seeded stream than the plant draw above
+    rollBatch();
+    if (batch.length > 0) {
+      pickBatch(0);
+      if (selected?.kind === "critter") {
+        brushSize = 2;
+        stampKindAt(Math.min(map.width - 1, cx + 5), Math.min(map.height - 1, cy + 5));
+      }
+    }
+    rollKind = "critter"; // the app's own default toggle state
+    rollCursor = 0;
+    batch = [];
+    brushSize = 1;
+    selected = null;
+  }
+
   // Re-renders the readout plate from the current `inspected` pick — called
   // after every kernel.step() batch (play, step, step-n) and after a fresh
   // pick, so the numbers are always the kernel's actual current state, never
@@ -710,14 +897,17 @@ export function startWorldLab(): void {
     }
   }
 
-  // Re-renders the always-on census + living-web strip. Called after every
-  // kernel.step() batch AND after a placement (a fresh kind can add a latent
-  // chain link even before anything's stepped). This is where a chain is
-  // actually WATCHED closing: a feeder species' row climbs out of the census
-  // from zero once the source→disperser→feeder loop first resolves.
+  // Re-renders the always-on census + living-web strip, AND the drawer
+  // (Task 6 — the same call sites that already keep the census live are
+  // exactly the ones the drawer's "in play" counts need too). Called after
+  // every kernel.step() batch AND after a placement (a fresh kind can add a
+  // latent chain link even before anything's stepped). This is where a chain
+  // is actually WATCHED closing: a feeder species' row climbs out of the
+  // census from zero once the source→disperser→feeder loop first resolves.
   function refreshCensusStrip(): void {
     if (!ui) return;
     ui.setCensusWeb(censusWebView(kernel.census, kernel.plantSpecies, kernel.critterSpecies));
+    refreshDrawer();
   }
 
   // Clamp a camera axis to the construct's bounds — UNLESS the fit zoom has
@@ -778,16 +968,26 @@ export function startWorldLab(): void {
     // critter still dens where you dropped it. chainStats/chainLinks (foodweb.ts)
     // never read species.den — only role/palate/archetype — so this is safe.
     for (const sp of critterSpecies) sp.den = { x: -1, y: -1 };
-    kernel = new SimKernel({ map, plantSpecies: species, critterSpecies, seed });
+    kernel = new SimKernel({
+      map,
+      plantSpecies: species,
+      critterSpecies,
+      seed,
+      // ?split=1: permissive speciation tuning, so a dense same-kind stamp
+      // (?drawerdemo=1's own 3×3 plant patch) plus a long &run= has a real
+      // shot at founding a daughter within a screenshot-sized run.
+      ...(splitAid
+        ? { tuning: { splitDistance: 0.12, splitClusterMin: 2, splitCooldownTicks: 0, splitKinDistance: 0.4 } }
+        : {}),
+    });
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);
     fitCameraToConstruct();
 
-    plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
-    critterKinds = kernel.critterSpecies;
     selected = null;
     // the drawer's roster resets with the construct — seeded with every
-    // starter kind (origin "starter") so the roll pane's roster is never
+    // starter kind (origin "starter") so the roster (and, from here on, the
+    // palette itself — refreshPalette sources it FROM the drawer) is never
     // empty, even before a single kind is rolled.
     drawer = [
       ...kernel.plantSpecies.map((sp) => makeEntry({ kind: "plant", speciesId: sp.id, def: sp, origin: "starter" })),
@@ -795,9 +995,11 @@ export function startWorldLab(): void {
         makeEntry({ kind: "critter", speciesId: sp.id, def: sp, origin: "starter" }),
       ),
     ];
+    refreshPalette(); // plantKinds/critterKinds now sourced from the drawer's non-deleted entries
     rollCursor = 0;
     batch = [];
     if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
+    if (drawerDemoAid) seedDrawerDemo();
     if (runTicks > 0) kernel.step(runTicks, "full");
     if (brushDemo === "stamp") {
       // a 3×3 of the first placeable plant kind near the construct's centre,
@@ -881,6 +1083,18 @@ export function startWorldLab(): void {
         nudgeFocused();
       }
     }
+    // ?drawerdel=<index-or-key>: deletes that drawer entry deterministically
+    // (the SAME deleteDrawerEntry a click on the drawer's own delete button
+    // runs), so a shot can show the cleared badge + bring-back button, and
+    // that kind gone from the palette.
+    if (drawerDelAid !== null) {
+      const idx = Number(drawerDelAid);
+      const target =
+        Number.isInteger(idx) && idx >= 0 && idx < drawer.length
+          ? drawer[idx]
+          : drawer.find((e) => e.key === drawerDelAid);
+      if (target) deleteDrawerEntry(target.key);
+    }
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -933,6 +1147,8 @@ export function startWorldLab(): void {
   ui.onRerollLooks = () => nudgeFocused(REROLL_LOOKS_AMOUNT[rollKind]);
   ui.onSetTrait = (patch) => setFocusedTrait(patch);
   ui.onPickFocused = () => pickFocused();
+  ui.onDeleteEntry = (key) => deleteDrawerEntry(key);
+  ui.onReviveEntry = (key) => reviveDrawerEntry(key);
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
   ui.setBrushSize(brushSize);
@@ -1184,6 +1400,10 @@ interface Chrome {
   showPlantInspect: (v: PlantInspectView) => void;
   hideInspect: () => void;
   setCensusWeb: (v: CensusWebView) => void;
+  // the drawer (species roster): live status + delete/bring-back (Task 6)
+  setDrawer: (rows: DrawerRow[]) => void;
+  onDeleteEntry: (key: string) => void;
+  onReviveEntry: (key: string) => void;
 }
 
 function buildChrome(initial: StarterKind): Chrome {
@@ -1474,16 +1694,102 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.onSelect = () => {};
 
+  // ── the right column: the drawer (species roster, Task 6) and the select
+  // tool's readout plate. The readout used to independently `position:
+  // fixed` at right:18px, vertically centred — the drawer has nowhere
+  // principled to go alongside it without risking the SAME collision
+  // leftStack already fixed on the left column (a panel whose height can
+  // reach into its neighbour's box). `rightStack` mirrors that fix: one
+  // fixed anchor, plain flow children stacked top-down, so the readout's top
+  // edge is always "the drawer's bottom + gap" — never a guess that can
+  // overlap it, regardless of which panel is showing or how tall either
+  // grows. Capped so, even both fully expanded, the column never reaches
+  // the bottom starter/time/palette stack. ────────────────────────────────
+  const rightStack = document.createElement("div");
+  rightStack.id = "lab-right-stack";
+  rightStack.style.cssText =
+    "position: fixed; right: 18px; top: 104px; z-index: 6; display: flex; flex-direction: column;" +
+    " align-items: flex-end; gap: 10px; max-height: calc(100vh - 122px);";
+  document.body.appendChild(rightStack);
+
+  // the drawer: every introduced kind (starter/rolled/captured daughter),
+  // live status — in play / variations / a three-way alive-extinct-cleared
+  // badge — and a delete/bring-back button. Docked above the readout.
+  const drawerPanel = document.createElement("div");
+  drawerPanel.id = "lab-drawer";
+  drawerPanel.style.cssText =
+    "width: 296px; max-height: 42vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
+    " user-select: none; flex: 0 0 auto;";
+  rightStack.appendChild(drawerPanel);
+
+  const drawerHead = document.createElement("div");
+  drawerHead.innerHTML =
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the drawer</div>` +
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">every kind introduced here — live status, delete, bring back</div>`;
+  drawerPanel.appendChild(drawerHead);
+
+  const drawerEmptyMsg =
+    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">nothing in the drawer yet</div>`;
+  const drawerList = document.createElement("div");
+  drawerList.style.cssText = "margin-top: 8px;";
+  drawerList.innerHTML = drawerEmptyMsg;
+  drawerPanel.appendChild(drawerList);
+
+  chrome.onDeleteEntry = () => {};
+  chrome.onReviveEntry = () => {};
+  // Renders the roster from scratch every call — the drawer is never large
+  // enough (a handful of starters + whatever's been rolled/captured) for a
+  // full-innerHTML rebuild to be worth avoiding, and it keeps each row's
+  // delete/bring-back button trivially wired to the CURRENT key, no stale
+  // closures to worry about. Three-way state (deleted → cleared; extinct →
+  // lived, now gone; else alive) is exactly the model's own reading of
+  // `extinct`/`deleted` — this is the only place that turns it into a label.
+  chrome.setDrawer = (rows) => {
+    if (rows.length === 0) {
+      drawerList.innerHTML = drawerEmptyMsg;
+      return;
+    }
+    drawerList.innerHTML = "";
+    for (const r of rows) {
+      const state = r.deleted ? "cleared" : r.extinct ? "extinct" : "alive";
+      const stateColor =
+        state === "alive" ? "rgb(var(--lumen))" : state === "extinct" ? "rgb(var(--rose))" : "rgba(228,236,242,0.45)";
+      const row = document.createElement("div");
+      row.style.cssText = "padding: 7px 0; border-bottom: 1px solid rgba(127,224,196,0.14);";
+      row.innerHTML =
+        `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">` +
+        `<span style="font-variant: small-caps; letter-spacing: 0.02em; font-size: 13px; color: var(--ink-bright);` +
+        ` overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 158px;">${esc(r.name)}</span>` +
+        `<span style="font: 9.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: ${stateColor};">${state}</span></div>` +
+        `<div style="font: 10px var(--mono); color: rgba(228,236,242,0.45); margin-top: -1px;">${esc(r.sub)}</div>` +
+        stat("in play", String(r.count), "mint") +
+        stat("variations", String(r.variations));
+      const actionBtn = document.createElement("button");
+      actionBtn.style.cssText = btn(false) + " margin-top: 4px; padding: 3px 9px; font-size: 9px;";
+      if (r.deleted) {
+        actionBtn.textContent = "bring back";
+        actionBtn.onclick = () => chrome.onReviveEntry(r.key);
+      } else {
+        actionBtn.textContent = "delete";
+        actionBtn.onclick = () => chrome.onDeleteEntry(r.key);
+      }
+      row.appendChild(actionBtn);
+      drawerList.appendChild(row);
+    }
+  };
+
   // ── the readout plate: a bench-owned codex plate for the select tool's
-  // pick — raw internals, not the player-facing openInspect card. Right
-  // side, vertically centred, opposite the living-web strip. ─────────────
+  // pick — raw internals, not the player-facing openInspect card. Docked
+  // below the drawer in `rightStack` now (was independently fixed, vertically
+  // centred — see rightStack's own comment above). ─────────────────────────
   const readout = document.createElement("div");
   readout.id = "lab-readout";
   readout.style.cssText =
-    "position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 6; display: none;" +
-    " width: 264px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
-    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
-  document.body.appendChild(readout);
+    "display: none; width: 264px; max-height: 42vh; overflow-y: auto; padding: 16px 18px;" +
+    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
+    " font-family: var(--serif); flex: 0 0 auto;";
+  rightStack.appendChild(readout);
 
   // ── the left column: the roll pane and the living-web census used to be
   // two independently `position: fixed` panels sharing the left:18px column
