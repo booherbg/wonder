@@ -123,6 +123,7 @@ test("packSim/restoreSim carries swarms and match history when provided", () => 
     layer.tick(kernel.flora);
   }
   const matchHistory: Record<string, number[]> = { "0": [12, 24, 36] };
+  const energyHistory: Record<string, number[]> = { "0": [55, 62, 58] };
   const blob = JSON.parse(
     JSON.stringify(
       packSim({
@@ -134,15 +135,18 @@ test("packSim/restoreSim carries swarms and match history when provided", () => 
         savedAt: 1,
         swarms: layer.snapshot(),
         swarmMatchHistory: matchHistory,
+        swarmEnergyHistory: energyHistory,
       }),
     ),
   );
   expect(blob.swarms?.swarms).toHaveLength(1);
   expect(blob.swarmMatchHistory).toEqual(matchHistory);
+  expect(blob.swarmEnergyHistory).toEqual(energyHistory);
 
   const r = restoreSim(blob);
   expect(r.swarms?.swarms).toHaveLength(1);
   expect(r.swarmMatchHistory).toEqual(matchHistory);
+  expect(r.swarmEnergyHistory).toEqual(energyHistory);
   expect(r.census).toBeDefined();
 });
 
@@ -164,6 +168,7 @@ test("packSim/restoreSim omits swarms for legacy blobs and continues determinist
   const r = restoreSim(blob);
   expect(r.swarms).toBeUndefined();
   expect(r.swarmMatchHistory).toBeUndefined();
+  expect(r.swarmEnergyHistory).toBeUndefined();
 
   kernel.step(30, "full");
   r.kernel.step(30, "full");

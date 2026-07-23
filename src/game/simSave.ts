@@ -80,6 +80,7 @@ export interface SavedSim {
   control?: SavedSimControl; // optional — UI pacing continuity
   swarms?: SavedSwarmLayer; // optional — World-Lab insect clouds (bench-only)
   swarmMatchHistory?: Record<string, number[]>; // swarm id → match % samples (chart continuity)
+  swarmEnergyHistory?: Record<string, number[]>; // swarm id → energy % samples (chart continuity)
 }
 
 export function readSimIndex(store: Storage): SimSlotMeta[] {
@@ -138,6 +139,7 @@ export interface PackSimInput {
   pollinateAssist?: PollinateAssist;
   swarms?: SavedSwarmLayer;
   swarmMatchHistory?: Record<string, number[]>;
+  swarmEnergyHistory?: Record<string, number[]>;
 }
 
 // The tile grid ONLY when it has been hand-painted away from the pure
@@ -151,7 +153,19 @@ function tilesIfPainted(tiles: Uint8Array, starter: StarterKind, seed: number): 
 }
 
 export function packSim(input: PackSimInput): SavedSim {
-  const { kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist, swarms, swarmMatchHistory } = input;
+  const {
+    kernel,
+    drawer,
+    starter,
+    seed,
+    name,
+    savedAt,
+    control,
+    pollinateAssist,
+    swarms,
+    swarmMatchHistory,
+    swarmEnergyHistory,
+  } = input;
   const lastSplit = kernel.flora.lastSplitTickValue();
   return {
     v: 1,
@@ -183,6 +197,7 @@ export function packSim(input: PackSimInput): SavedSim {
     control,
     swarms: swarms ? cloneDef(swarms) : undefined,
     swarmMatchHistory: swarmMatchHistory ? cloneDef(swarmMatchHistory) : undefined,
+    swarmEnergyHistory: swarmEnergyHistory ? cloneDef(swarmEnergyHistory) : undefined,
   };
 }
 
@@ -195,6 +210,7 @@ export interface RestoredSim {
   census?: SpeciesTrace[];
   swarms?: SavedSwarmLayer;
   swarmMatchHistory?: Record<string, number[]>;
+  swarmEnergyHistory?: Record<string, number[]>;
 }
 
 export function restoreSim(saved: SavedSim): RestoredSim {
@@ -241,5 +257,6 @@ export function restoreSim(saved: SavedSim): RestoredSim {
     census: saved.census ? cloneDef(saved.census) : undefined,
     swarms: saved.swarms ? cloneDef(saved.swarms) : undefined,
     swarmMatchHistory: saved.swarmMatchHistory ? cloneDef(saved.swarmMatchHistory) : undefined,
+    swarmEnergyHistory: saved.swarmEnergyHistory ? cloneDef(saved.swarmEnergyHistory) : undefined,
   };
 }

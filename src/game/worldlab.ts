@@ -386,7 +386,7 @@ function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpec
 interface CensusWebView {
   summary: { live: number; arose: number; lost: number };
   species: { name: string; spark: string; count: number }[];
-  swarms: { name: string; spark: string; match: number }[];
+  swarms: { name: string; matchSpark: string; match: number; energySpark: string; energy: number }[];
   chains: { chains: number; closable: number; redundancy: number };
   richness: string; // richnessWord(score) — flat/sparse/living/rich/lush/legendary
   richnessScore: number; // the same numeric score the word names
@@ -429,7 +429,7 @@ function censusWebView(
   critterSpecies: CritterSpecies[],
   speciesCounts: ReadonlyMap<number, number>,
   critterCountOf: (id: number) => number,
-  swarmSeries: { name: string; spark: string; match: number }[],
+  swarmSeries: { name: string; matchSpark: string; match: number; energySpark: string; energy: number }[],
 ): CensusWebView {
   const species = census
     .list()
@@ -743,6 +743,7 @@ export function startWorldLab(): void {
   const SWARM_SAMPLE_INTERVAL = 40;
   const SWARM_HISTORY_CAP = 100;
   const swarmMatchHistory = new Map<number, number[]>();
+  const swarmEnergyHistory = new Map<number, number[]>();
   let lastSwarmSample = -Infinity;
 
   function applyNectarBenchTuning(layer: SwarmLayer = swarmLayer): void {
@@ -762,25 +763,45 @@ export function startWorldLab(): void {
     for (const ent of swarmLayer.swarms) {
       const info = swarmLayer.inspect(ent, kernel.plantSpecies);
       if (!info) continue;
-      let h = swarmMatchHistory.get(ent.id);
-      if (!h) {
-        h = [];
-        swarmMatchHistory.set(ent.id, h);
+      let matchH = swarmMatchHistory.get(ent.id);
+      if (!matchH) {
+        matchH = [];
+        swarmMatchHistory.set(ent.id, matchH);
       }
-      h.push(Math.round(info.matchEfficiency * 100));
-      if (h.length > SWARM_HISTORY_CAP) h.shift();
+      matchH.push(Math.round(info.matchEfficiency * 100));
+      if (matchH.length > SWARM_HISTORY_CAP) matchH.shift();
+
+      let energyH = swarmEnergyHistory.get(ent.id);
+      if (!energyH) {
+        energyH = [];
+        swarmEnergyHistory.set(ent.id, energyH);
+      }
+      energyH.push(Math.round(info.energy * 100));
+      if (energyH.length > SWARM_HISTORY_CAP) energyH.shift();
     }
   }
 
-  function swarmSeriesView(): { name: string; spark: string; match: number }[] {
+  function swarmSeriesView(): {
+    name: string;
+    matchSpark: string;
+    match: number;
+    energySpark: string;
+    energy: number;
+  }[] {
     return swarmLayer.swarms
-      .filter((e) => (swarmMatchHistory.get(e.id)?.length ?? 0) > 0)
+      .filter(
+        (e) =>
+          (swarmMatchHistory.get(e.id)?.length ?? 0) > 0 || (swarmEnergyHistory.get(e.id)?.length ?? 0) > 0,
+      )
       .map((e) => {
-        const hist = swarmMatchHistory.get(e.id)!;
+        const matchHist = swarmMatchHistory.get(e.id) ?? [];
+        const energyHist = swarmEnergyHistory.get(e.id) ?? [];
         return {
           name: e.name,
-          spark: sparkline(hist),
-          match: hist[hist.length - 1] ?? 0,
+          matchSpark: sparkline(matchHist.length ? matchHist : [0]),
+          match: matchHist[matchHist.length - 1] ?? 0,
+          energySpark: sparkline(energyHist.length ? energyHist : [0]),
+          energy: energyHist[energyHist.length - 1] ?? 0,
         };
       });
   }
@@ -2061,11 +2082,31 @@ export function startWorldLab(): void {
     return out;
   }
 
+  function packSwarmEnergyHistory(): Record<string, number[]> {
+    const out: Record<string, number[]> = {};
+    for (const [id, hist] of swarmEnergyHistory) out[String(id)] = [...hist];
+    return out;
+  }
+
   function restoreSwarmMatchHistory(saved: Record<string, number[]> | undefined): void {
     swarmMatchHistory.clear();
-    lastSwarmSample = -Infinity;
     if (!saved) return;
     for (const [id, hist] of Object.entries(saved)) swarmMatchHistory.set(Number(id), [...hist]);
+  }
+
+  function restoreSwarmEnergyHistory(saved: Record<string, number[]> | undefined): void {
+    swarmEnergyHistory.clear();
+    if (!saved) return;
+    for (const [id, hist] of Object.entries(saved)) swarmEnergyHistory.set(Number(id), [...hist]);
+  }
+
+  function restoreSwarmHistories(
+    matchSaved: Record<string, number[]> | undefined,
+    energySaved: Record<string, number[]> | undefined,
+  ): void {
+    lastSwarmSample = -Infinity;
+    restoreSwarmMatchHistory(matchSaved);
+    restoreSwarmEnergyHistory(energySaved);
   }
 
   ui.onSaveSlot = () => {
@@ -2085,6 +2126,7 @@ export function startWorldLab(): void {
       pollinateAssist,
       swarms: swarmLayer.snapshot(),
       swarmMatchHistory: packSwarmMatchHistory(),
+      swarmEnergyHistory: packSwarmEnergyHistory(),
     });
     saveSimSlot(localStorage, { id, name, savedAt }, blob);
     currentSlotId = id;
@@ -2137,9 +2179,9 @@ export function startWorldLab(): void {
     swarmLayer = benchSwarmLayer(map, kernel, seed);
     if (r.swarms) {
       swarmLayer.restore(r.swarms);
-      restoreSwarmMatchHistory(r.swarmMatchHistory);
+      restoreSwarmHistories(r.swarmMatchHistory, r.swarmEnergyHistory);
     } else {
-      restoreSwarmMatchHistory(undefined);
+      restoreSwarmHistories(undefined, undefined);
     }
     if (r.control) {
       playing = r.control.playing;
@@ -3250,6 +3292,23 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span title="${esc(name.toLowerCase())}" style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
     `<span style="color: rgb(var(--lumen)); letter-spacing: 0.03em;">${spark}</span>` +
     `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${count}</span></div>`;
+  const swarmRow = (
+    name: string,
+    matchSpark: string,
+    match: number,
+    energySpark: string,
+    energy: number,
+  ): string =>
+    `<div style="padding: 3px 0; font: 11px var(--mono);">` +
+    `<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">` +
+    `<span title="${esc(name.toLowerCase())}" style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
+    `<span style="font: 9px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(228,236,242,0.45);">match</span>` +
+    `<span style="color: rgb(var(--lumen)); letter-spacing: 0.03em;">${matchSpark}</span>` +
+    `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${match}</span></div>` +
+    `<div style="display: flex; justify-content: flex-end; align-items: baseline; gap: 8px; margin-top: 1px;">` +
+    `<span style="font: 9px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(228,236,242,0.45);">energy</span>` +
+    `<span style="color: rgb(var(--firefly)); letter-spacing: 0.03em;">${energySpark}</span>` +
+    `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${energy}</span></div></div>`;
 
   // ── the roll pane: the species lab's dice made visible — a kind toggle, a
   // roll/re-roll pair, and a grid of live thumbnails whose cells ARE the pick
@@ -3730,7 +3789,9 @@ function buildChrome(initial: StarterKind): Chrome {
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
       : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">nothing counted yet — place a kind, or step time</div>`;
     const swarmRows = v.swarms.length
-      ? v.swarms.map((s) => speciesRow(s.name, s.spark, s.match)).join("")
+      ? v.swarms
+          .map((s) => swarmRow(s.name, s.matchSpark, s.match, s.energySpark, s.energy))
+          .join("")
       : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet — invite a swarm and step</div>`;
     web.innerHTML =
       `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
@@ -3742,7 +3803,7 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("lost", String(v.summary.lost)) +
       title("by species (plants)") +
       rows +
-      title("swarm match %") +
+      title("swarm clouds") +
       swarmRows +
       title("food web") +
       stat("chains", String(v.chains.chains)) +
