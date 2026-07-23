@@ -132,6 +132,10 @@ export interface RestoredFlora {
   tick: number;
   plants: { species: number; genome: Genome; x: number; y: number; born: number }[];
   soil?: number[]; // tile keys the wanderer amended with soil (row-major, per map width)
+  rngState?: number; // resume the flora rng stream exactly (slice 5a); absent = fresh makeRng(seed ^ 0xf10a)
+  substrates?: Substrate[]; // in-flight byproduct-chain markers; absent = none
+  suppressed?: number[]; // suppressedSpecies ids to re-apply; absent = none
+  lastSplitTick?: number; // speciation cooldown gate; absent = -Infinity (never split yet)
 }
 
 export class Flora {
@@ -171,11 +175,14 @@ export class Flora {
     restored?: RestoredFlora,
   ) {
     this.tuning = { ...DEFAULT_TUNING, ...tuning };
-    this.rng = makeRng(seed ^ 0xf10a);
+    this.rng = makeRng(restored?.rngState ?? (seed ^ 0xf10a));
     if (restored) {
       this.tick = restored.tick;
       for (const k of restored.soil ?? []) this.soilTiles.add(k);
       for (const p of restored.plants) this.addPlant(p.species, p.genome, p.x, p.y, p.born);
+      if (restored.substrates) this.substrates = restored.substrates.map((s) => ({ ...s }));
+      if (restored.suppressed) for (const id of restored.suppressed) this.suppressedSpecies.add(id);
+      if (restored.lastSplitTick !== undefined) this.lastSplitTick = restored.lastSplitTick;
     } else {
       this.scatter(seed);
     }
@@ -217,6 +224,24 @@ export class Flora {
     const out = this.germEvents;
     this.germEvents = [];
     return out;
+  }
+
+  // The rng stream's current position — captured so a save can resume this
+  // exact stream rather than re-seeding it (slice 5a). makeRng always attaches
+  // .state, so the assertion is safe.
+  rngState(): number {
+    return this.rng.state!();
+  }
+
+  // A copy of the live substrate markers — for the save to snapshot.
+  substratesSnapshot(): Substrate[] {
+    return this.substrates.map((s) => ({ ...s }));
+  }
+
+  // The speciation-cooldown gate, for the save to snapshot. May be -Infinity
+  // when no split has happened yet (not JSON-safe; the caller must guard).
+  lastSplitTickValue(): number {
+    return this.lastSplitTick;
   }
 
   plantsInTile(tx: number, ty: number): readonly Plant[] {

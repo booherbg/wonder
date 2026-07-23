@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { makeRng } from "../src/core/rng";
 import { TILE_SIZE } from "../src/world/config";
 import { generate } from "../src/world/generate";
 import { Tile, WorldMap } from "../src/world/types";
@@ -190,4 +191,70 @@ test("nearestPlant picks the truly nearest, not tile-scan order", () => {
   expect(found[0]).toBe(far); // scan order really would hand you the far one
   expect(nearestPlant(found, x, y)).toBe(near);
   expect(nearestPlant([], x, y)).toBeNull();
+});
+
+test("a Flora resumes bit-identically from a full restore blob (rng + substrates + lastSplitTick)", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+
+  // (a) a straight run: scatter, step to N, snapshot, keep stepping to N+M
+  const a = new Flora(map, species, SEED);
+  const N = 60, M = 60;
+  for (let i = 0; i < N; i++) a.simTick();
+  const blob = {
+    tick: a.tick,
+    plants: a.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
+    soil: a.soilTileKeys(),
+    rngState: a.rngState(),
+    substrates: a.substratesSnapshot(),
+    suppressed: [...a.suppressedSpecies],
+    lastSplitTick: Number.isFinite(a.lastSplitTickValue()) ? a.lastSplitTickValue() : undefined,
+  };
+  for (let i = 0; i < M; i++) a.simTick();
+
+  // (b) a resumed run from the N-snapshot, then M more
+  const b = new Flora(map, species, SEED, {}, blob);
+  expect(b.tick).toBe(N); // resumed at the snapshot tick
+  expect(b.rngState()).toBe(blob.rngState); // the stream position was injected, not re-seeded
+  for (let i = 0; i < M; i++) b.simTick();
+
+  // identical continuation
+  const snap = (f: Flora) => ({
+    tick: f.tick,
+    count: f.count,
+    plants: f.all.map((p) => [p.species, Math.round(p.x * 1e3), Math.round(p.y * 1e3), Math.round(p.genome.hue * 1e6)]),
+    rng: f.rngState(),
+  });
+  expect(snap(b)).toEqual(snap(a));
+});
+
+test("a restore block lacking the new resume fields behaves exactly as before (real-play inertness)", () => {
+  // (a) real play's own construction: no restore block at all
+  const a = islandFlora();
+  // (b) the pre-slice-5a-style restore path used by roll.ts/worldlab.ts/kernel.ts:
+  // {tick, plants} only — no rngState/substrates/suppressed/lastSplitTick
+  const b = new Flora(generate(SEED), generatePlantSpecies(SEED), SEED, {}, {
+    tick: 0,
+    plants: [],
+  });
+  // scatter() ran for `a` (no restored block); `b`'s restore has zero plants
+  // and skips scatter — so b starts empty, and its rng starts fresh at the
+  // same seed `a`'s did, exactly as today.
+  expect(b.tick).toBe(0);
+  expect(b.count).toBe(0);
+  expect(b.rngState()).toBe(makeRng(SEED ^ 0xf10a).state!());
+  expect(b.lastSplitTickValue()).toBe(-Infinity);
+  expect(b.substratesSnapshot()).toEqual([]);
+  expect([...b.suppressedSpecies]).toEqual([]);
+
+  // and a's own scatter-seeded rng position is unaffected by any of this —
+  // stepping both the same number of ticks from their own starts still
+  // agrees seed-for-seed with a fresh, restore-free Flora (today's behavior)
+  const c = islandFlora();
+  for (let i = 0; i < 30; i++) {
+    a.simTick();
+    c.simTick();
+  }
+  expect(a.count).toBe(c.count);
+  expect(JSON.stringify(a.all)).toBe(JSON.stringify(c.all));
 });
