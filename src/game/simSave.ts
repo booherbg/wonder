@@ -12,6 +12,7 @@ import { packCrittersV2, restoreCritterRows, type SavedCritterV2 } from "./save"
 import type { DrawerEntry } from "./simDrawer";
 import { cloneDef, syncKeySeq } from "./simDrawer";
 import type { SpeciesTrace } from "../life/census";
+import type { PollinateAssist } from "../life/pollinateAssist";
 import { SimKernel } from "../life/kernel";
 
 export const SIM_INDEX_KEY = "wander.sims"; // parallel to WORLD_INDEX_KEY = "wander.worlds"
@@ -74,6 +75,7 @@ export interface SavedSim {
   critterSpecies: CritterSpecies[]; // wholesale, INCLUDING runtime den/role mutations (facts §4)
   drawer: DrawerEntry[]; // the roster/palette roster, plain data
   census?: SpeciesTrace[]; // optional — chart continuity only, feeds no rng
+  pollinateAssist?: PollinateAssist; // shared ambient + swarm reach/density (not FloraTuning)
   control?: SavedSimControl; // optional — UI pacing continuity
 }
 
@@ -130,6 +132,7 @@ export interface PackSimInput {
   name: string;
   savedAt: number;
   control?: SavedSimControl;
+  pollinateAssist?: PollinateAssist;
 }
 
 // The tile grid ONLY when it has been hand-painted away from the pure
@@ -143,7 +146,7 @@ function tilesIfPainted(tiles: Uint8Array, starter: StarterKind, seed: number): 
 }
 
 export function packSim(input: PackSimInput): SavedSim {
-  const { kernel, drawer, starter, seed, name, savedAt, control } = input;
+  const { kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist } = input;
   const lastSplit = kernel.flora.lastSplitTickValue();
   return {
     v: 1,
@@ -173,6 +176,7 @@ export function packSim(input: PackSimInput): SavedSim {
     // captured for a future chart-continuity nicety only — restoreSim has no path
     // to rebuild it yet (deferred; not determinism-critical, feeds no rng).
     census: kernel.census.list(),
+    pollinateAssist: pollinateAssist ? cloneDef(pollinateAssist) : undefined,
     control,
   };
 }
@@ -182,6 +186,7 @@ export interface RestoredSim {
   drawer: DrawerEntry[];
   starter: StarterKind;
   control?: SavedSimControl;
+  pollinateAssist?: PollinateAssist;
 }
 
 export function restoreSim(saved: SavedSim): RestoredSim {
@@ -216,5 +221,11 @@ export function restoreSim(saved: SavedSim): RestoredSim {
   kernel.critters = restoreCritterRows(saved.critters, critterSpecies, kernel.flora);
   const drawer = cloneDef(saved.drawer);
   syncKeySeq(drawer); // new entries won't collide with resumed keys
-  return { kernel, drawer, starter: saved.starter, control: saved.control };
+  return {
+    kernel,
+    drawer,
+    starter: saved.starter,
+    control: saved.control,
+    pollinateAssist: saved.pollinateAssist ? cloneDef(saved.pollinateAssist) : undefined,
+  };
 }

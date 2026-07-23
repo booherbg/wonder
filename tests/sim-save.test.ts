@@ -271,3 +271,24 @@ test("carry-forward #2: non-default tuning round-trips and its effect on the con
   r.kernel.step(40, "full");
   expect(snap(r.kernel)).toEqual(snap(kernel)); // would diverge fast if restore silently reset to DEFAULT_TUNING
 });
+
+test("pollinateAssist reach/density round-trips on packSim/restoreSim", () => {
+  const { kernel } = liveBench();
+  const assist = { radius: 3, maxSame: 4 };
+  const blob = JSON.parse(
+    JSON.stringify(
+      packSim({
+        kernel,
+        drawer: [],
+        starter: "single-biome",
+        seed: SEED,
+        name: "assist",
+        savedAt: 1,
+        pollinateAssist: assist,
+      }),
+    ),
+  ) as SavedSim;
+  expect(blob.pollinateAssist).toEqual(assist);
+  const r = restoreSim(blob);
+  expect(r.pollinateAssist).toEqual(assist);
+});

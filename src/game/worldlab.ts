@@ -698,6 +698,30 @@ export function startWorldLab(): void {
   };
   let pollinateAssist: PollinateAssist = { ...DEFAULT_POLLINATE_ASSIST };
   const benchCritterCtx = (): CritterContext => ({ pollinateAssist });
+  function benchSwarmLayer(forMap: WorldMap, forKernel: SimKernel, forSeed: number): SwarmLayer {
+    const centre = constructCentre(forMap);
+    const focusPx = worldPxCenter(centre.cx, centre.cy);
+    const layer = new SwarmLayer(forSeed, forKernel.plantSpecies, forKernel.flora, focusPx, {
+      perPlantNectar: true,
+      autoSpawn: false,
+      predation: 0,
+    });
+    layer.pollinateAssist = pollinateAssist;
+    return layer;
+  }
+
+  function syncPollinateAssistFromBlob(assist: PollinateAssist | undefined): void {
+    if (!assist) return;
+    pollinateAssist = { ...assist };
+    pressureValues.pollinatorReach = assist.radius;
+    pressureValues.pollinatorDensity = assist.maxSame;
+    if (swarmLayer) swarmLayer.pollinateAssist = pollinateAssist;
+    if (ui) {
+      ui.setPressure("pollinatorReach", assist.radius);
+      ui.setPressure("pollinatorDensity", assist.maxSame);
+    }
+  }
+
   function stepKernel(nTicks: number, fid: Fidelity = "full"): void {
     for (let i = 0; i < nTicks; i++) {
       kernel.step(1, fid, benchCritterCtx());
@@ -1503,14 +1527,7 @@ export function startWorldLab(): void {
         ? { tuning: { splitDistance: 0.12, splitClusterMin: 2, splitCooldownTicks: 0, splitKinDistance: 0.4 } }
         : {}),
     });
-    const centre = constructCentre(map);
-    const focusPx = worldPxCenter(centre.cx, centre.cy);
-    swarmLayer = new SwarmLayer(seed, kernel.plantSpecies, kernel.flora, focusPx, {
-      perPlantNectar: true,
-      autoSpawn: false,
-      predation: 0,
-    });
-    swarmLayer.pollinateAssist = pollinateAssist;
+    swarmLayer = benchSwarmLayer(map, kernel, seed);
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);
     fitCameraToConstruct();
@@ -1877,7 +1894,7 @@ export function startWorldLab(): void {
     const savedAt = Date.now(); // UI metadata only — never a sim input
     const id = currentSlotId ?? `${savedAt.toString(36)}-${Math.floor(savedAt % 1000)}`;
     const control: SavedSimControl = { playing, fidelity, speedMul, stepN };
-    const blob = packSim({ kernel, drawer, starter, seed, name, savedAt, control });
+    const blob = packSim({ kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist });
     saveSimSlot(localStorage, { id, name, savedAt }, blob);
     currentSlotId = id;
     currentSlotName = name;
@@ -1925,6 +1942,8 @@ export function startWorldLab(): void {
     drawer = r.drawer;
     starter = r.starter;
     seed = restoredSeed;
+    syncPollinateAssistFromBlob(r.pollinateAssist);
+    swarmLayer = benchSwarmLayer(map, kernel, seed);
     if (r.control) {
       playing = r.control.playing;
       fidelity = r.control.fidelity;
@@ -2111,7 +2130,14 @@ export function startWorldLab(): void {
       lastStrokeKey = ty * map.width + tx;
       const { x: px, y: py } = worldPxCenter(tx, ty);
       swarmLayer.placeCloud(kernel.flora, px, py);
-      if (ui) ui.flashNote("placed an insect cloud — it will home on the nearest bloom");
+      if (ui) {
+        const placed = swarmLayer.swarms[swarmLayer.swarms.length - 1];
+        ui.flashNote(
+          placed?.home
+            ? "placed an insect cloud — it will home on the nearest bloom"
+            : "placed an insect cloud — no blooms nearby yet",
+        );
+      }
       return;
     }
     if (tool === "place" && selected.kind !== "tile") {

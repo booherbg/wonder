@@ -8,6 +8,7 @@ import { generatePlantSpecies } from "../src/life/species";
 import { singleBiome } from "../src/world/construct";
 import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
+import { PlantForm } from "../src/life/genome";
 
 function bench(seed: number) {
   const map = singleBiome(seed, Tile.Grass, 16);
@@ -109,4 +110,42 @@ test("pinned cloud does not wander when a fuller bloom is nearby", () => {
   expect(cloud.pinned).toBe(true);
   for (let t = 0; t < 80; t++) layer.tick(kernel.flora);
   expect(cloud.visitPlantIdx).toBe(pinnedBloom.idx);
+});
+
+test("inviteCloud rejects a plant that is not in bloom", () => {
+  const { kernel, layer, flowerSp } = bench(17);
+  const wx = 5 * TILE_SIZE + TILE_SIZE / 2;
+  const wy = 5 * TILE_SIZE + TILE_SIZE / 2;
+  const p = kernel.placePlant(flowerSp.id, wx, wy)!;
+  p.genome.form = PlantForm.Tree;
+  expect(layer.inviteCloud(kernel.flora, p)).toBeNull();
+});
+
+test("placeCloud with no blooms still adds a cloud but homes on nothing yet", () => {
+  const { kernel, layer } = bench(19);
+  expect(kernel.flora.all).toHaveLength(0);
+  layer.placeCloud(kernel.flora, 4 * TILE_SIZE, 4 * TILE_SIZE);
+  expect(layer.swarms).toHaveLength(1);
+  expect(layer.swarms[0].home).toBeNull();
+});
+
+test("pinned cloud stops feeding after its host plant is erased, not a swapped idx", () => {
+  const { kernel, layer, flowerSp } = bench(21);
+  const host = placeBloom(kernel, flowerSp.id, 4, 4);
+  const bystander = placeBloom(kernel, flowerSp.id, 8, 4);
+  const cloud = layer.inviteCloud(kernel.flora, host)!;
+  const hostNectarBefore = layer.nectarOf(host);
+  kernel.eraseAtTile(4, 4);
+  for (let t = 0; t < 20; t++) layer.tick(kernel.flora);
+  expect(layer.nectarOf(bystander)).toBe(hostNectarBefore);
+  expect(cloud.visitPlantIdx).not.toBe(bystander.idx);
+});
+
+test("removeCloudsInTiles clears a pinned cloud when its host tile is erased", () => {
+  const { kernel, layer, flowerSp } = bench(23);
+  const host = placeBloom(kernel, flowerSp.id, 3, 3);
+  layer.inviteCloud(kernel.flora, host);
+  expect(layer.swarms).toHaveLength(1);
+  expect(layer.removeCloudsInTiles([{ x: 3, y: 3 }])).toBe(1);
+  expect(layer.swarms).toHaveLength(0);
 });

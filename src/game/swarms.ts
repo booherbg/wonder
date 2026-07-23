@@ -408,15 +408,33 @@ export class SwarmLayer {
     }
   }
 
+  // visitPlantIdx goes stale when flora compacts indices on removePlant — resolve
+  // the pinned host by its saved home coordinates instead.
+  private plantAtHome(ent: WorldSwarm, flora: Flora): Plant | null {
+    if (!ent.home) return null;
+    const { x: hx, y: hy, species } = ent.home;
+    for (const p of flora.plantsNear(hx, hy, TILE_SIZE * 0.75)) {
+      if (
+        p.species === species &&
+        Math.abs(p.x - hx) < 1 &&
+        Math.abs(p.y - hy) < 1 &&
+        isBloom(p) &&
+        this.flowerFor(p.species) !== null
+      ) {
+        return p;
+      }
+    }
+    return null;
+  }
+
   // Pick the bloom this swarm feeds this heartbeat — pin holds the plant
   // (even when nectar is spent); free-roam skips spent blooms and prefers
   // fuller nectar nearby.
   private chooseFeedPlant(ent: WorldSwarm, flora: Flora): Plant | null {
     if (ent.pinned) {
-      if (ent.visitPlantIdx === null) return null;
-      const pinned = flora.all[ent.visitPlantIdx];
-      if (pinned && isBloom(pinned) && this.flowerFor(pinned.species) !== null) return pinned;
-      return null;
+      const pinned = this.plantAtHome(ent, flora);
+      ent.visitPlantIdx = pinned?.idx ?? null;
+      return pinned;
     }
     const hx = ent.home?.x ?? ent.x;
     const hy = ent.home?.y ?? ent.y;
@@ -536,15 +554,11 @@ export class SwarmLayer {
   tick(flora: Flora): void {
     let pollinations = 0; // island-wide events this heartbeat, held under the cap
     for (const ent of this.swarms) {
-      const host = this.chooseFeedPlant(ent, flora);
-      if (host) {
-        ent.home = { x: host.x, y: host.y, species: host.species };
-        ent.visitPlantIdx = host.idx;
-      }
-      if (!ent.home || ent.visitPlantIdx === null) continue;
-      const feedHost = flora.all[ent.visitPlantIdx];
-      if (!feedHost || !isBloom(feedHost)) continue;
-      const flower = this.flowerFor(ent.home.species);
+      const feedHost = this.chooseFeedPlant(ent, flora);
+      if (!feedHost) continue;
+      ent.home = { x: feedHost.x, y: feedHost.y, species: feedHost.species };
+      ent.visitPlantIdx = feedHost.idx;
+      const flower = this.flowerFor(feedHost.species);
       if (!flower) continue;
       this.stepEntOnHost(ent, feedHost, flower);
       if (pollinations < MAX_POLLINATIONS_PER_TICK) {
