@@ -36,3 +36,15 @@ test("out-of-range knobs and warmth are clamped, never passed raw", () => {
   expect(gen.config.width).toBeGreaterThanOrEqual(64);
   expect(gen.config.seaLevel).toBeLessThanOrEqual(1);
 });
+
+test("fractional integer knobs are rounded, never passed raw", () => {
+  const s = defaultForgeState(1);
+  s.cfg = { elevationOctaves: 3.7, riverCount: 5.4, riverMaxSteps: 1234.9 };
+  const { gen } = forgeArgs(s);
+  expect(gen.config.elevationOctaves).toBe(4);
+  expect(Number.isInteger(gen.config.elevationOctaves)).toBe(true);
+  expect(gen.config.riverCount).toBe(5);
+  expect(Number.isInteger(gen.config.riverCount)).toBe(true);
+  expect(gen.config.riverMaxSteps).toBe(1235);
+  expect(Number.isInteger(gen.config.riverMaxSteps)).toBe(true);
+});

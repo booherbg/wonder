@@ -5,7 +5,7 @@
 // input writes back into that copy, never the caller's object, so nothing
 // here can leak a half-edited state back out except through the handlers.
 
-import { ForgeState, FORGE_BOUNDS } from "./forgeArgs";
+import { ForgeState, FORGE_BOUNDS, RANDOMIZE_RANGES, INTEGER_FIELDS } from "./forgeArgs";
 import { IslandRelief, IslandShape, RELIEF_PHRASE, RELIEFS, SHAPE_PHRASE, SHAPES } from "../world/generate";
 import { DEFAULT_CONFIG, WorldConfig } from "../world/config";
 
@@ -15,17 +15,10 @@ export interface ForgeHandlers {
   rerollSeed: () => number;
 }
 
-// integer WorldConfig/ForgeState fields — these get step="1"; every other
-// numeric field is either a [0,1] level/probability (fine step) or a scale
-// (step of 1, but fractional values are still legal — just not spun to by
-// the native stepper).
-const INTEGER_FIELDS = new Set<string>([
-  "width", "height",
-  "elevationOctaves", "moistureOctaves",
-  "riverCount", "riverMaxSteps", "fallMaxCount", "fallMinSpacing",
-  "minWalkableRegion", "maxGenerationAttempts",
-]);
-
+// INTEGER_FIELDS (imported from forgeArgs.ts, shared with forgeArgs()'s
+// rounding) get step="1" here; every other numeric field is either a [0,1]
+// level/probability (fine step) or a scale (step of 1, but fractional
+// values are still legal — just not spun to by the native stepper).
 function stepFor(field: string, bounds: readonly [number, number]): string {
   if (INTEGER_FIELDS.has(field)) return "1";
   if (bounds[1] - bounds[0] <= 1.0001) return "0.005"; // a [0,1] level/probability
@@ -350,11 +343,11 @@ function render(): void {
     for (const [field, bounds] of Object.entries(FORGE_BOUNDS)) {
       if (field === "warm") continue; // handled below — it's ForgeState.warm, not a cfg field
       if (RANDOMIZE_SKIP.has(field)) continue; // left unset ⇒ forgeArgs() uses the viable DEFAULT_CONFIG value
-      const v = randomInRange(field, bounds);
+      const v = randomInRange(field, RANDOMIZE_RANGES[field] ?? bounds);
       if (field === "width" || field === "height") (state as any)[field] = v;
       else (state.cfg as any)[field] = v;
     }
-    state.warm = randomInRange("warm", FORGE_BOUNDS.warm);
+    state.warm = randomInRange("warm", RANDOMIZE_RANGES.warm ?? FORGE_BOUNDS.warm);
     render(); // knobs moved out from under the panel — rebuild it in place
   });
   actions.appendChild(randomizeAll);

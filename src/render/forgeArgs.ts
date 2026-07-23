@@ -50,14 +50,47 @@ export const FORGE_BOUNDS: Record<string, [number, number]> = {
   maxGenerationAttempts: [1, 24],
 };
 
+// Randomize-all's OWN (narrower) sub-ranges for the aesthetic fields it
+// rolls — kept separate from FORGE_BOUNDS so the fine-grain fold's manual
+// sliders still expose the full range, while a random roll stays viable.
+// Measured with a throwaway script (~300 rolls through the same randomize
+// logic, straight into generate()): full FORGE_BOUNDS rolled ~83% viable
+// islands (generate()'s internal retries absorb some bad luck, but not
+// all). The two culprits, both isolated with a grid probe:
+//   - forestMoisture near 0 turns essentially all land to Forest, leaving no
+//     Grass tile for findSpawn to plant a spawn on (generate.ts:980) — dies
+//     below ~0.15, reliable above ~0.2.
+//   - falloffSharpness near 0 flattens the radial falloff to ~1 everywhere
+//     (d^sharpness → 1), collapsing the island to almost no land at all —
+//     only failed at the values that round to exactly 0 (< 0.5).
+// Narrowing just those two brought a 300-sample run to ~99.7% viable while
+// every other field still rolls across its full FORGE_BOUNDS span. Any field
+// not listed here falls back to FORGE_BOUNDS in forgeArgs' randomize loop.
+export const RANDOMIZE_RANGES: Partial<Record<string, [number, number]>> = {
+  forestMoisture: [0.22, 0.85],
+  falloffSharpness: [1, 12],
+};
+
+// Integer WorldConfig/ForgeState fields — generate() indexes arrays and runs
+// loops with these, so a fractional value (a stray ".7" from a hand-typed
+// fine-grain input, or a rounding slip upstream) must never reach it.
+// Shared with forge.ts, which also uses this set to decide a field's <input
+// step="1"> in the UI.
+export const INTEGER_FIELDS = new Set<string>([
+  "width", "height",
+  "elevationOctaves", "moistureOctaves",
+  "riverCount", "riverMaxSteps", "fallMaxCount", "fallMinSpacing",
+  "minWalkableRegion", "maxGenerationAttempts",
+]);
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
 function clampBound(field: string, v: number): number {
   const bounds = FORGE_BOUNDS[field];
-  if (bounds) return clamp(v, bounds[0], bounds[1]);
-  return v;
+  const clamped = bounds ? clamp(v, bounds[0], bounds[1]) : v;
+  return INTEGER_FIELDS.has(field) ? Math.round(clamped) : clamped;
 }
 
 export function defaultForgeState(seed: number): ForgeState {
