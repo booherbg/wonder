@@ -28,8 +28,14 @@ export function resolveChains(param: string | null, stored: string | null): bool
 // Written by main.ts on world entry (never for the title backdrop); read here.
 export const LAST_SEED_KEY = "wander.lastSeed";
 
+// Only a plain non-negative decimal integer string is a seed — no exponent
+// notation ("1e2"), no hex ("0x2A"), no surrounding whitespace (" 42 "), no
+// "-0"; Number() alone accepts all of those, which JSON.stringify(seed)
+// never wrote, so anything else is corrupt/foreign storage, not a seed.
+const CANONICAL_INT = /^\d+$/;
+
 export function parseLastSeed(stored: string | null): number | null {
-  if (stored === null || stored === "") return null;
+  if (stored === null || !CANONICAL_INT.test(stored)) return null;
   const n = Number(stored);
-  return Number.isInteger(n) && n >= 0 ? n : null;
+  return n >= 0 ? n : null;
 }

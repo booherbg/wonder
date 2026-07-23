@@ -33,3 +33,12 @@ test("parseLastSeed rejects absent / non-integer / negative values", () => {
   expect(parseLastSeed("3.5")).toBeNull();
   expect(parseLastSeed("-1")).toBeNull();
 });
+
+test("parseLastSeed rejects non-canonical integer strings Number() would silently accept", () => {
+  expect(parseLastSeed("1e2")).toBeNull(); // exponent notation
+  expect(parseLastSeed("0x2A")).toBeNull(); // hex
+  expect(parseLastSeed(" 42 ")).toBeNull(); // surrounding whitespace
+  expect(parseLastSeed("-0")).toBeNull(); // signed zero
+  expect(parseLastSeed("42")).toBe(42); // still works
+  expect(parseLastSeed("0")).toBe(0); // still works
+});
