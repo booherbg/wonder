@@ -8,7 +8,7 @@ import { makeRng, Rng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { WorldMap } from "../world/types";
 import { CensusLog } from "./census";
-import { Critter, CritterSpecies, updateCritter } from "./fauna";
+import { Critter, CritterRole, CritterSpecies, updateCritter } from "./fauna";
 import { Flora, FloraTuning, Plant } from "./flora";
 import { mutate } from "./genome";
 import { PlantSpecies } from "./species";
@@ -147,6 +147,27 @@ export class SimKernel {
     let n = 0;
     for (const c of this.critters) if (c.species === id) n++;
     return n;
+  }
+
+  // Live-adjust the running Flora's tuning IN PLACE — the pressures panel's one
+  // lever (the evolutionary layer, slice 4). Flora reads this.tuning fresh every
+  // simTick/maybeSpeciate/propagate/hasRoom/stepSubstrates (verified in flora.ts —
+  // NO field is captured at construction), so a patch takes effect on the very
+  // NEXT step() with NO rebuild and NO loss of the current plant/critter/tick
+  // state. A deterministic parameter change: it adds no rng draws, so the same
+  // seed + placements + tuning schedule + step count ⇒ an identical run. The
+  // `readonly tuning` field forbids reassignment; its number fields are mutable,
+  // so Object.assign is the in-place write. Additive + Simulator-only.
+  setTuning(patch: Partial<FloraTuning>): void {
+    Object.assign(this.flora.tuning, patch);
+  }
+
+  // Selection strength's other half: set a critter KIND's role live (a grazer
+  // bites / a disperser scatters). updateCritter reads sp.role fresh, so a flip
+  // lands on the next step. A roster op, never a violent kill — the peaceful
+  // pillar holds (a grazer nibbles; nothing dies).
+  setCritterRole(id: number, role: CritterRole): void {
+    this.critterSpecies[id].role = role;
   }
 
   // Run time. "plants" scrubs flora + census only (fast); "full" also steps

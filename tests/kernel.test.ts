@@ -134,3 +134,42 @@ test("clearPlantInstances / clearCritterInstances zero a kind but keep its recor
   expect(kernel.plantSpecies.length).toBe(plantRecords); // record kept — ids stay stable
   expect(kernel.critterSpecies.length).toBe(critterRecords);
 });
+
+test("setTuning takes effect LIVE on the next step — no rebuild, state preserved", () => {
+  const { kernel, grassPlant } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  for (let i = 0; i < 8; i++) kernel.placePlant(grassPlant, at(4 + i), at(4 + (i % 3)));
+  kernel.setTuning({ reproChance: 0 }); // no reseed at all
+  kernel.step(60, "plants");
+  const held = kernel.flora.count; // barely grew (only aging/thinning)
+  // crank reseed + ceiling on the SAME running kernel — no new construct
+  kernel.setTuning({ reproChance: 0.4, maxPerTile: 12 });
+  kernel.step(60, "plants");
+  expect(kernel.flora.count).toBeGreaterThan(held); // the live change drove growth
+  expect(kernel.tick).toBe(120); // never rebuilt — the tick kept climbing, state preserved
+});
+
+test("a setTuning schedule is deterministic (same schedule ⇒ identical run)", () => {
+  const a = bench();
+  const b = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  for (const s of [a, b]) {
+    for (let i = 0; i < 6; i++) s.kernel.placePlant(s.grassPlant, at(4 + i), at(5));
+    s.kernel.step(30, "plants");
+    s.kernel.setTuning({ mutationAmount: 0.25, reproChance: 0.3 });
+    s.kernel.step(30, "plants");
+  }
+  expect(snap(a.kernel)).toEqual(snap(b.kernel));
+});
+
+test("setCritterRole flips a kind's role live; step still never births/removes a critter (peaceful)", () => {
+  const { kernel, grassPlant, critter } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  for (let i = 0; i < 6; i++) kernel.placePlant(grassPlant, at(4 + i), at(4));
+  kernel.placeCritter(critter, at(7), at(6));
+  kernel.setCritterRole(critter, "grazer");
+  expect(kernel.critterSpecies[critter].role).toBe("grazer");
+  const before = kernel.critterCount();
+  kernel.step(120, "full"); // a grazer thins plants — but never dies, nor multiplies
+  expect(kernel.critterCount()).toBe(before);
+});
