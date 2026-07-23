@@ -8,6 +8,7 @@ import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
 import { rollPlantBatch, rollCritterBatch } from "../src/life/roll";
 import { packCrittersV2, restoreCritterRows } from "../src/game/save";
+import { PlantForm } from "../src/life/genome";
 
 const SEED = 4242;
 
@@ -181,6 +182,34 @@ test("setCritterRole flips a kind's role live; step still never births/removes a
   const before = kernel.critterCount();
   kernel.step(120, "full"); // a grazer thins plants — but never dies, nor multiplies
   expect(kernel.critterCount()).toBe(before);
+});
+
+test("leaving the shuttle role mid-carry drops the ferried substrate — count conserved (F3)", () => {
+  const { kernel, critter } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  const c = kernel.placeCritter(critter, at(7), at(6));
+  kernel.setCritterRole(critter, "nutrient-shuttle");
+  // a live carry: it lifted a substrate off the (empty) pool — the load now lives
+  // ONLY on the critter (pool empty), exactly as updateCritter's shuttle arm leaves it.
+  c.carriedSubstrate = { hue: 0.4, glow: 0.5, form: PlantForm.Flower };
+  expect(kernel.flora.substrates.length).toBe(0);
+
+  kernel.setCritterRole(critter, "disperser"); // flip AWAY from shuttle mid-carry
+  expect(c.carriedSubstrate).toBeUndefined(); // no longer orphaned on the critter
+  expect(kernel.flora.substrates.length).toBe(1); // set down at its feet — count conserved
+  expect(kernel.flora.substrates[0].hue).toBe(0.4);
+  expect(kernel.flora.substrates[0].x).toBe(c.x); // dropped where it stood
+});
+
+test("flipping shuttle → shuttle (a no-op re-set) keeps the carry — only leaving the role drops (F3)", () => {
+  const { kernel, critter } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  const c = kernel.placeCritter(critter, at(7), at(6));
+  kernel.setCritterRole(critter, "nutrient-shuttle");
+  c.carriedSubstrate = { hue: 0.4, glow: 0.5, form: PlantForm.Flower };
+  kernel.setCritterRole(critter, "nutrient-shuttle"); // same role — nothing left
+  expect(c.carriedSubstrate).toEqual({ hue: 0.4, glow: 0.5, form: PlantForm.Flower });
+  expect(kernel.flora.substrates.length).toBe(0);
 });
 
 test("a kernel resumes bit-identically from a full snapshot — flora + critters + all rng streams", () => {

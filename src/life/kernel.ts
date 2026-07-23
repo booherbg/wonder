@@ -193,6 +193,20 @@ export class SimKernel {
   // lands on the next step. A roster op, never a violent kill — the peaceful
   // pillar holds (a grazer nibbles; nothing dies).
   setCritterRole(id: number, role: CritterRole): void {
+    const prev = this.critterSpecies[id].role;
+    // Leaving the nutrient-shuttle role mid-carry would ORPHAN the ferried load:
+    // the drop only ever runs in the shuttle's own nibble arm (fauna.ts), which
+    // never fires again once the role changes. So set any live carry down where
+    // the critter stands — count conserved, the peaceful pillar (qa functionality
+    // I2). addSubstrate self-gates on the chains flag (a no-op off the bench).
+    if (prev === "nutrient-shuttle" && role !== "nutrient-shuttle") {
+      for (const c of this.critters) {
+        if (c.species === id && c.carriedSubstrate) {
+          this.flora.addSubstrate(c.x, c.y, c.carriedSubstrate);
+          c.carriedSubstrate = undefined;
+        }
+      }
+    }
     this.critterSpecies[id].role = role;
   }
 

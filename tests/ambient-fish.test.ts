@@ -3,7 +3,7 @@ import { critterWalkable, fishWalkable, updateCritter } from "../src/life/fauna"
 import type { Critter, CritterSpecies } from "../src/life/fauna";
 import { Flora } from "../src/life/flora";
 import { generatePlantSpecies } from "../src/life/species";
-import { biomeSampler } from "../src/world/construct";
+import { biomeSampler, singleBiome } from "../src/world/construct";
 import { Tile, WorldMap, tileAt } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
 import { makeRng } from "../src/core/rng";
@@ -76,6 +76,34 @@ test("a fish crosses open-sea shallows toward a target; a land critter cannot (d
   }
   expect(fishMaxX).toBe(4); // swam the shallows to the far tile, stopped at the deep edge
   expect(landMaxX).toBeLessThan(2); // never left the shore tile into open water — land movement unchanged
+});
+
+// The natural bench workflow is place-a-land-critter → flip it to "fish". A fish
+// stranded on dry land must NOT roam it freely: stepToward's escape hatch (meant
+// to free a critter that somehow reached a bad tile) used raw isWalkable, which
+// let a land-stranded fish walk across ANY land. For a fish the escape must stay
+// in the water — so on an all-grass construct a "fish" simply can't advance (qa I1).
+test("a fish flipped onto dry land does not wander it — the escape hatch stays in water (F4)", () => {
+  const m = singleBiome(1, Tile.Grass, 40); // all grass, no shallow water anywhere
+  const plants = generatePlantSpecies(1);
+  const flora = new Flora(m, plants, 1, { chains: true });
+  const startTile = 5;
+  const sp = [{
+    id: 0, role: "aquatic-grazer", den: { x: startTile, y: 5 },
+    palate: { form: 0, hueCenter: 0.5, hueWidth: 0.2, glowTaste: 0 },
+  }] as unknown as CritterSpecies[];
+  const c = {
+    species: 0, x: (startTile + 0.5) * TILE_SIZE, y: (5 + 0.5) * TILE_SIZE,
+    state: "seek", targetX: (startTile + 20) * TILE_SIZE, targetY: (5 + 0.5) * TILE_SIZE,
+    stateTime: 1000, hopPhase: 0, facing: 1, energy: 0.9, curiosity: 0, mood: "hungry",
+  } as unknown as Critter;
+  const rng = makeRng(1);
+  let maxX = startTile;
+  for (let i = 0; i < 120; i++) {
+    updateCritter(c, 0.5, m, flora, sp, null, rng, {});
+    maxX = Math.max(maxX, Math.floor(c.x / TILE_SIZE));
+  }
+  expect(maxX).toBe(startTile); // never advanced a single dry tile — no free land roam
 });
 
 test("a fish grazes a water-habitat plant it swims to", () => {

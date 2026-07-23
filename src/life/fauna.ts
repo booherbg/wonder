@@ -702,11 +702,16 @@ function stepToward(
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
   // step where this critter's own rule allows; only when already stuck on a bad
-  // tile (an off-limits tile it somehow reached) may it step onto any walkable
-  // tile to escape. The escape hatch stays isWalkable (byte-identical for land).
+  // tile (an off-limits tile it somehow reached) may it step onto an escape tile.
+  // The land escape stays isWalkable (byte-identical for land — the default
+  // predicate). A fish (fishWalkable injected) must escape only TOWARD water, not
+  // onto any dry land — otherwise a kind flipped to "fish" on grass would roam
+  // the land freely (qa functionality I1). So the escape predicate mirrors the
+  // critter's own rule: land escapes onto land, a fish escapes into the shallows.
+  const escape: WalkPredicate = walkable === critterWalkable ? isWalkable : walkable;
   const onBad = !walkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE));
   const canStep = (tx: number, ty: number): boolean =>
-    walkable(map, tx, ty) || (onBad && isWalkable(map, tx, ty));
+    walkable(map, tx, ty) || (onBad && escape(map, tx, ty));
   if (canStep(Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
   if (canStep(Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;
