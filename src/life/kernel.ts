@@ -5,6 +5,7 @@
 // and B (the forge) fork/preview with later — so it stays clean and pure.
 
 import { makeRng, Rng } from "../core/rng";
+import { TILE_SIZE } from "../world/config";
 import { WorldMap } from "../world/types";
 import { CensusLog } from "./census";
 import { Critter, CritterSpecies, updateCritter } from "./fauna";
@@ -82,6 +83,11 @@ export class SimKernel {
   // the click, not a den. Draws only from placeRng, so placement never perturbs
   // the step stream.
   placeCritter(speciesId: number, wx: number, wy: number): Critter {
+    // anchor this kind's den to where it's dropped — otherwise findDen fell back to
+    // map.spawn (no plants on the empty construct) and the critter drifts to center.
+    // den lives on the shared CritterSpecies record, so placing resets the whole
+    // kind's home — fine for slice 1's place-one/few use.
+    this.critterSpecies[speciesId].den = { x: Math.floor(wx / TILE_SIZE), y: Math.floor(wy / TILE_SIZE) };
     const c: Critter = {
       species: speciesId,
       x: wx,

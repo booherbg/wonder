@@ -72,6 +72,18 @@ test("N steps reproduce bit-identically — full fidelity (critters + plants)", 
   expect(a.kernel.tick).toBe(90);
 });
 
+test("placeCritter anchors its kind's den to the drop tile, not map.spawn", () => {
+  const { kernel, critter } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  const wx = at(30);
+  const wy = at(3); // far from map.spawn (the 40x40 construct's center)
+  kernel.placeCritter(critter, wx, wy);
+  expect(kernel.critterSpecies[critter].den).toEqual({
+    x: Math.floor(wx / TILE_SIZE),
+    y: Math.floor(wy / TILE_SIZE),
+  });
+});
+
 test("peaceful: step never births or kills a critter", () => {
   const { kernel, grassPlant, critter } = bench();
   const at = (t: number) => (t + 0.5) * TILE_SIZE;
