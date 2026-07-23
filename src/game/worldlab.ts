@@ -36,6 +36,7 @@ import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { habitatsOf, placeablePlants } from "./simRoster";
+import { BRUSH_SIZES, BrushSize, stampCells } from "./simBrush";
 
 const STARTERS: { kind: StarterKind; name: string }[] = [
   { kind: "playable-island", name: "Playable Island" },
@@ -312,6 +313,9 @@ export function startWorldLab(): void {
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 5000) : 0;
   })();
+  // The ?brushdemo=stamp dev aid: a deterministic block-stamp for the size
+  // picker's own screenshot — display-only, rng-free, same spirit as ?demo.
+  const brushDemo = new URL(location.href).searchParams.get("brushdemo");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -321,8 +325,33 @@ export function startWorldLab(): void {
   let plantKinds: PlantSpecies[] = [];
   let critterKinds: CritterSpecies[] = [];
   let selected: Selected = null;
+  let brushSize: BrushSize = 1;
   let inspected: Inspected = null;
   let ui: Chrome | undefined;
+
+  // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
+  // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
+  // on a biome edge roots only where it legally can — one flash if the CENTRE
+  // cell refused, matching slice 1's single-place feedback. Critters place on
+  // every cell. No-op for the select tool (selected === null, handled by the
+  // caller) — Selected has no "tile" member yet (Task 3's job), so there's
+  // nothing else to gate here.
+  function stampKindAt(tx: number, ty: number): void {
+    if (!selected) return;
+    const cells = stampCells(tx, ty, brushSize, map);
+    let centreRefused = false;
+    for (const { x, y } of cells) {
+      const { x: px, y: py } = worldPxCenter(x, y);
+      if (selected.kind === "plant") {
+        const p = kernel.placePlant(selected.id, px, py);
+        if (p === null && x === tx && y === ty) centreRefused = true;
+      } else {
+        kernel.placeCritter(selected.id, px, py);
+      }
+    }
+    if (centreRefused && ui) ui.flashNote("won't root here — wrong habitat");
+    refreshCensusStrip(); // a fresh block can add latent chain links
+  }
 
   // Re-renders the readout plate from the current `inspected` pick — called
   // after every kernel.step() batch (play, step, step-n) and after a fresh
@@ -432,6 +461,28 @@ export function startWorldLab(): void {
     selected = null;
     if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
     if (runTicks > 0) kernel.step(runTicks, "full");
+    if (brushDemo === "stamp") {
+      // a 3×3 of the first placeable plant kind near the construct's centre,
+      // then a 2×2 of the first critter kind a few tiles off — real sprites,
+      // laid through stampKindAt itself (so the screenshot proves the SAME
+      // path a click takes, not a bespoke placement).
+      const cx = Math.floor(map.width / 2);
+      const cy = Math.floor(map.height / 2);
+      const plantSp = plantKinds[0];
+      if (plantSp) {
+        brushSize = 3;
+        selected = { kind: "plant", id: plantSp.id };
+        const tile = nearestTileOf(map, plantSp.habitat, cx, cy) ?? { x: cx, y: cy };
+        stampKindAt(tile.x, tile.y);
+      }
+      const critterSp = critterKinds[0];
+      if (critterSp) {
+        brushSize = 2;
+        selected = { kind: "critter", id: critterSp.id };
+        stampKindAt(Math.min(map.width - 1, cx + 5), Math.min(map.height - 1, cy + 5));
+      }
+      brushSize = 3; // leaves the picker showing 3× lit — the size behind the plant block above
+    }
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -458,8 +509,13 @@ export function startWorldLab(): void {
     selected = s;
     ui!.setSelected(selected);
   };
+  ui.onBrushSize = (s) => {
+    brushSize = s;
+    ui!.setBrushSize(s);
+  };
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
+  ui.setBrushSize(brushSize);
   // the first real render: build()'s own call above ran before `ui` existed
   refreshInspect();
   refreshCensusStrip();
@@ -566,6 +622,8 @@ export function startWorldLab(): void {
   // === null), the raw (untile-snapped) world point instead hit-tests the
   // kernel's placed critters, then plants, within PICK_RADIUS_PX — a click
   // near nothing quietly clears the readout rather than leaving a stale one.
+  // A placement click hands the tile straight to stampKindAt, which lays the
+  // brush's current N×N block (size 1 = exactly slice 1's single placement).
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     const wx = camX + (e.offsetX / rect.width) * renderer.viewWidth;
@@ -580,14 +638,7 @@ export function startWorldLab(): void {
       refreshInspect();
       return;
     }
-    const { x: px, y: py } = worldPxCenter(tx, ty);
-    if (selected.kind === "plant") {
-      const p = kernel.placePlant(selected.id, px, py);
-      if (p === null && ui) ui.flashNote("won't root here — wrong habitat");
-    } else {
-      kernel.placeCritter(selected.id, px, py);
-    }
-    refreshCensusStrip(); // a fresh placement can add a latent chain link
+    stampKindAt(tx, ty);
   });
 
   // ── the loop: while playing, pace kernel.step() calls off the wall clock
@@ -632,6 +683,8 @@ interface Chrome {
   onSelect: (s: Selected) => void;
   setPalette: (plants: PlantSpecies[], critters: CritterSpecies[]) => void;
   setSelected: (s: Selected) => void;
+  onBrushSize: (s: BrushSize) => void;
+  setBrushSize: (s: BrushSize) => void;
   flashNote: (msg: string) => void;
   // time controls (Task 6)
   onPlay: () => void;
@@ -786,6 +839,20 @@ function buildChrome(initial: StarterKind): Chrome {
   });
   bar.appendChild(group(label("fidelity"), ...fidelityBtns.map((f) => f.b)));
 
+  // ── the stamp brush's size picker: 1×/2×/3× — one click lays that many
+  // tiles square of the selected palette kind (size 1 is slice 1's own
+  // single placement, unchanged). Same active/inactive btn() styling as the
+  // fidelity cluster beside it, so the strip reads as one control family. ──
+  bar.appendChild(sep());
+  const brushBtns = BRUSH_SIZES.map((size) => {
+    const b = document.createElement("button");
+    b.textContent = `${size}×`;
+    b.style.cssText = btn(false);
+    b.onclick = () => chrome.onBrushSize(size);
+    return { size, b };
+  });
+  bar.appendChild(group(label("brush"), ...brushBtns.map((s) => s.b)));
+
   bar.appendChild(sep());
   const tickValue = document.createElement("span");
   tickValue.id = "tick-readout"; // a stable hook: the codex plate has no other bare-number field
@@ -805,6 +872,10 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.setTick = (tick) => {
     tickValue.textContent = String(tick);
+  };
+  chrome.onBrushSize = () => {};
+  chrome.setBrushSize = (size) => {
+    for (const { size: s, b } of brushBtns) b.style.cssText = btn(s === size);
   };
 
   // ── the palette: a select tool + two rows (plants tinted by hue, critters
