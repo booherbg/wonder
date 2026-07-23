@@ -28,7 +28,7 @@ export interface Palate {
 // two literals, so an ordinary island's critters are always exactly "grazer" or
 // "disperser" and updateCritter's new arms are unreached in real play. This is
 // the same additive idiom as Flora.suppressedSpecies / FloraTuning.chains.
-export type CritterRole = "disperser" | "grazer" | "pollinator" | "nutrient-shuttle";
+export type CritterRole = "disperser" | "grazer" | "pollinator" | "nutrient-shuttle" | "aquatic-grazer";
 
 export interface CritterSpecies {
   id: number;
@@ -650,12 +650,20 @@ export function releaseCompanion(critters: Critter[]): Critter | null {
 const STUCK_EPS = 0.25; // px moved in a frame below which it counts as no headway
 const STUCK_LIMIT = 0.6; // seconds pinned before it breaks free
 
+// The movement stack's one gate, hoisted to a type so a fish can swap in its own
+// water rule (fishWalkable) while every ordinary caller keeps the land rule. All
+// four movement functions below take this as an injected parameter defaulting to
+// critterWalkable — so real play, which never passes anything else, is byte-
+// identical.
+export type WalkPredicate = (map: WorldMap, x: number, y: number) => boolean;
+
 // Where a critter will set foot: dry ground always, and a shallow tile only at
 // the SHORE — one that fronts dry, walkable land. So it wades in to reach food
 // growing at the water's edge, but never strikes out into open-sea shallows
 // where a land animal would only end up stranded. (The wanderer wades freely;
-// this is a critter-only rule.)
-function critterWalkable(map: WorldMap, x: number, y: number): boolean {
+// this is a critter-only rule.) Exported so the Simulator's fish tests can
+// contrast it with fishWalkable; behaviour unchanged.
+export function critterWalkable(map: WorldMap, x: number, y: number): boolean {
   if (!isWalkable(map, x, y)) return false;
   if (tileAt(map, x, y) !== Tile.ShallowWater) return true; // dry, walkable ground
   for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]] as const) {
@@ -665,11 +673,26 @@ function critterWalkable(map: WorldMap, x: number, y: number): boolean {
   return false; // open-sea shallow: no dry neighbour — off-limits
 }
 
+// A fish's walkability — the mirror of the land rule (Simulator "aquatic-grazer"
+// role, slice 5b). It swims freely through ANY ShallowWater tile (open-sea
+// shallows included: no shore-adjacency test) and refuses everything else — dry
+// land and deep water alike — so it stays in the shallows where the water plants
+// grow. DeepWater carries no plant species anywhere (HABITAT_FORMS lists only
+// ShallowWater among water tiles), so the shallows are the whole aquatic range a
+// grazer needs. Bench-only: reached solely when sp.role === "aquatic-grazer", a
+// role real play never assigns.
+export function fishWalkable(map: WorldMap, x: number, y: number): boolean {
+  return tileAt(map, x, y) === Tile.ShallowWater;
+}
+
 // One frame's nudge toward a point. A critter enters open-sea shallows only to
 // leave them: it may step off a shallow tile it is already on (so it never
 // freezes there), but never walks fresh into the sea from dry ground. Returns
 // true once it is there.
-function stepToward(c: Critter, px: number, py: number, dt: number, map: WorldMap, speed: number): boolean {
+function stepToward(
+  c: Critter, px: number, py: number, dt: number, map: WorldMap, speed: number,
+  walkable: WalkPredicate = critterWalkable,
+): boolean {
   const dx = px - c.x;
   const dy = py - c.y;
   const dist = Math.hypot(dx, dy);
@@ -678,12 +701,12 @@ function stepToward(c: Critter, px: number, py: number, dt: number, map: WorldMa
   const nx = c.x + (dx / dist) * step;
   const ny = c.y + (dy / dist) * step;
   if (Math.abs(dx) > 0.5) c.facing = dx > 0 ? 1 : -1;
-  // step onto land or a shore-shallow (critterWalkable); only when already stuck
-  // on a bad tile — an open-sea shallow it somehow reached — may it step onto any
-  // walkable tile to escape back toward shore.
-  const onBad = !critterWalkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE));
+  // step where this critter's own rule allows; only when already stuck on a bad
+  // tile (an off-limits tile it somehow reached) may it step onto any walkable
+  // tile to escape. The escape hatch stays isWalkable (byte-identical for land).
+  const onBad = !walkable(map, Math.floor(c.x / TILE_SIZE), Math.floor(c.y / TILE_SIZE));
   const canStep = (tx: number, ty: number): boolean =>
-    critterWalkable(map, tx, ty) || (onBad && isWalkable(map, tx, ty));
+    walkable(map, tx, ty) || (onBad && isWalkable(map, tx, ty));
   if (canStep(Math.floor(nx / TILE_SIZE), Math.floor(c.y / TILE_SIZE))) c.x = nx;
   if (canStep(Math.floor(c.x / TILE_SIZE), Math.floor(ny / TILE_SIZE))) c.y = ny;
   c.hopPhase += dt * 9;
@@ -695,7 +718,10 @@ function stepToward(c: Critter, px: number, py: number, dt: number, map: WorldMa
 // once it is spent — the critter now on the goal tile — does the straight
 // approach resume and "arrived" become possible. The route is dropped the moment
 // the goal tile changes, so a fresh decision never chases a stale path.
-function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED): boolean {
+function moveToward(
+  c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED,
+  walkable: WalkPredicate = critterWalkable,
+): boolean {
   const goalTile = Math.floor(c.targetY / TILE_SIZE) * map.width + Math.floor(c.targetX / TILE_SIZE);
   if (c.pathGoal !== goalTile) {
     c.path = undefined;
@@ -705,17 +731,17 @@ function moveToward(c: Critter, dt: number, map: WorldMap, speed = CRITTER_SPEED
     const wp = c.path[0];
     const wpX = ((wp % map.width) + 0.5) * TILE_SIZE;
     const wpY = (((wp / map.width) | 0) + 0.5) * TILE_SIZE;
-    if (stepToward(c, wpX, wpY, dt, map, speed)) c.path.shift();
+    if (stepToward(c, wpX, wpY, dt, map, speed, walkable)) c.path.shift();
     if (c.path.length > 0) return false; // still detouring — not yet arrived
   }
-  return stepToward(c, c.targetX, c.targetY, dt, map, speed);
+  return stepToward(c, c.targetX, c.targetY, dt, map, speed, walkable);
 }
 
 // Aim a pinned critter at the nearest walkable neighbour tile — cardinals
 // first for a clean side-step, then diagonals. Deterministic (a fixed scan,
 // no dice), so it frees the corner pin without ever perturbing the seeded
 // stream the rest of the sim depends on.
-function stepOffWall(c: Critter, map: WorldMap): void {
+function stepOffWall(c: Critter, map: WorldMap, walkable: WalkPredicate = critterWalkable): void {
   const cx = Math.floor(c.x / TILE_SIZE);
   const cy = Math.floor(c.y / TILE_SIZE);
   const ring = [
@@ -723,7 +749,7 @@ function stepOffWall(c: Critter, map: WorldMap): void {
     [-1, -1], [1, -1], [-1, 1], [1, 1],
   ];
   for (const [dx, dy] of ring) {
-    if (critterWalkable(map, cx + dx, cy + dy)) {
+    if (walkable(map, cx + dx, cy + dy)) {
       c.targetX = (cx + dx + 0.5) * TILE_SIZE;
       c.targetY = (cy + dy + 0.5) * TILE_SIZE;
       c.state = "idle";
@@ -739,7 +765,7 @@ function stepOffWall(c: Critter, map: WorldMap): void {
 // on a real stall (see the stuck gate), and deterministic (fixed scan order, no
 // dice), so the seeded stream is untouched. Returns false when the goal isn't
 // reachable overland within the search box — then the caller side-steps instead.
-function routeToward(c: Critter, map: WorldMap): boolean {
+function routeToward(c: Critter, map: WorldMap, walkable: WalkPredicate = critterWalkable): boolean {
   const { width, height } = map;
   const start = Math.floor(c.y / TILE_SIZE) * width + Math.floor(c.x / TILE_SIZE);
   const goal = Math.floor(c.targetY / TILE_SIZE) * width + Math.floor(c.targetX / TILE_SIZE);
@@ -765,7 +791,7 @@ function routeToward(c: Critter, map: WorldMap): boolean {
       const ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
       const v = ny * width + nx;
-      if (from.has(v) || !critterWalkable(map, nx, ny)) continue;
+      if (from.has(v) || !walkable(map, nx, ny)) continue;
       from.set(v, u);
       queue.push(v);
     }
@@ -807,6 +833,10 @@ export function updateCritter(
   ctx: CritterContext = {},
 ): void {
   const sp = speciesList[c.species];
+  // a fish swims (fishWalkable); every other kind keeps the land rule. Real play
+  // never assigns "aquatic-grazer", so `walk` is always critterWalkable there and
+  // the movement calls below are byte-identical to before this parameter existed.
+  const walk: WalkPredicate = sp.role === "aquatic-grazer" ? fishWalkable : critterWalkable;
   // the bond its kind holds toward the wanderer; 0 when no one has fed it,
   // and 0 leaves every line below exactly as it always was
   const bond = clamp01(ctx.trust?.get(c.species) ?? 0);
@@ -831,7 +861,9 @@ export function updateCritter(
       // bite and the plant loses growth. either way the critter feeds: every
       // visit gives MEAL_ENERGY, only the plant's outcome turns on the role.
       if (c.meal && flora.all[c.meal.idx] === c.meal) {
-        if (sp.role === "grazer") {
+        if (sp.role === "grazer" || sp.role === "aquatic-grazer") {
+          // a fish crops a water plant exactly as a grazer bites a land one — the
+          // feeding is identical; only REACHING the plant differs (see `walk`).
           flora.nibble(c.meal);
         } else if (sp.role === "pollinator") {
           // active cross (Simulator ambient bench): carry this bloom's genes
@@ -889,7 +921,7 @@ export function updateCritter(
       : CRITTER_SPEED;
   const wasX = c.x;
   const wasY = c.y;
-  const arrived = moveToward(c, dt, map, pace);
+  const arrived = moveToward(c, dt, map, pace, walk);
   // pinned against a concave corner: no arrival and no headway. Let the stall
   // build, then step off the wall toward open ground rather than grinding the
   // same blocked target forever — no more deer frozen in a shallow-water
@@ -899,7 +931,7 @@ export function updateCritter(
     c.stuck = (c.stuck ?? 0) + dt;
     if (c.stuck >= STUCK_LIMIT) {
       c.stuck = 0;
-      if (!routeToward(c, map)) stepOffWall(c, map); // route around the obstacle, else side-step
+      if (!routeToward(c, map, walk)) stepOffWall(c, map, walk); // route around the obstacle, else side-step
       return;
     }
   } else {
