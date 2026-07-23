@@ -615,21 +615,51 @@ export function startWorldLab(): void {
     maxPerTile: DEFAULT_TUNING.maxPerTile,
   };
 
+  // A biome brush label for flash copy — the same words the palette swatches use
+  // (not the inspect card's evocative "the meadow"), so a refusal names a tile
+  // the player can actually click.
+  function biomeBrushName(t: Tile): string {
+    return BIOME_TILES.find((b) => b.tile === t)?.name ?? "this ground";
+  }
+
+  // Why a plant refused the centre cell — habitat mismatch vs density cap.
+  // addPlant returns null for both; the old "wrong habitat" flash lied when the
+  // tile was simply full (default maxPerTile = 4; a fifth click on the same
+  // pixel looked like a biome error). Plants may overlap on a tile up to the
+  // cap — past that the tile is full, not the wrong ground.
+  function plantRefuseNote(speciesId: number, wx: number, wy: number): string {
+    const sp = kernel.plantSpecies[speciesId];
+    const tx = Math.floor(wx / TILE_SIZE);
+    const ty = Math.floor(wy / TILE_SIZE);
+    const here = tileAt(map, tx, ty);
+    if (here !== sp.habitat) {
+      return `needs ${biomeBrushName(sp.habitat)} — this is ${biomeBrushName(here)}`;
+    }
+    const cap = kernel.flora.tuning.maxPerTile;
+    return `tile full (${cap} plants) — they can overlap, but each tile only holds so many`;
+  }
+
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
-  // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
-  // on a biome edge roots only where it legally can — one flash if the CENTRE
-  // cell refused, matching slice 1's single-place feedback. Critters place on
-  // every cell. No-op for the select tool (selected === null) and the tile
-  // tool (paintTileAt/repaintRefresh below own that path instead).
-  function stampKindAt(tx: number, ty: number): void {
-    if (!selected || selected.kind === "tile") return;
+  // habitat-gated per cell (kernel.placePlant returns null off-habitat / full),
+  // so a 3×3 on a biome edge roots only where it legally can — one flash if the
+  // CENTRE cell refused, matching slice 1's single-place feedback. Critters
+  // place on every cell. No-op for the select tool (selected === null) and the
+  // tile tool (paintTileAt/repaintRefresh below own that path instead).
+  // Returns whether the centre cell accepted a plant/critter (drag-place uses
+  // this to avoid spamming the same refusal flash every move).
+  function stampKindAt(tx: number, ty: number, opts?: { quiet?: boolean }): boolean {
+    if (!selected || selected.kind === "tile") return false;
     const cells = stampCells(tx, ty, brushSize, map);
+    let centreOk = false;
     let centreRefused = false;
     for (const { x, y } of cells) {
       const { x: px, y: py } = worldPxCenter(x, y);
       if (selected.kind === "plant") {
         const p = kernel.placePlant(selected.id, px, py);
-        if (p === null && x === tx && y === ty) centreRefused = true;
+        if (x === tx && y === ty) {
+          if (p) centreOk = true;
+          else centreRefused = true;
+        }
       } else {
         // a fish (aquatic-grazer) only takes to ShallowWater — the critter mirror
         // of placePlant's habitat gate (§4/§5). Every other critter places on any
@@ -639,12 +669,19 @@ export function startWorldLab(): void {
           continue;
         }
         kernel.placeCritter(selected.id, px, py);
+        if (x === tx && y === ty) centreOk = true;
       }
     }
-    if (centreRefused && ui) {
-      ui.flashNote(selected.kind === "critter" ? "a fish needs shallow water" : "won't root here — wrong habitat");
+    if (centreRefused && ui && !opts?.quiet) {
+      if (selected.kind === "critter") {
+        ui.flashNote("a fish needs shallow water");
+      } else {
+        const { x: px, y: py } = worldPxCenter(tx, ty);
+        ui.flashNote(plantRefuseNote(selected.id, px, py));
+      }
     }
     refreshCensusStrip(); // a fresh block can add latent chain links
+    return centreOk;
   }
 
   // paint the selected tile across an N×N block; mutate map.tiles IN PLACE (the
@@ -1274,6 +1311,10 @@ export function startWorldLab(): void {
     camX = clampX((map.width * TILE_SIZE - renderer.viewWidth) / 2);
     camY = clampY((map.height * TILE_SIZE - renderer.viewHeight) / 2);
   }
+  function clampCamera(): void {
+    camX = clampX(camX);
+    camY = clampY(camY);
+  }
 
   // Zoom out (or in) until the WHOLE construct fits the window, then centre
   // on it — the swarm bench's fit-to-field (simulator.ts's `scale = Math.min
@@ -1281,15 +1322,24 @@ export function startWorldLab(): void {
   // Renderer's focus lens instead of a hand-rolled scale. Reads viewWidth/
   // viewHeight at zoom 1 first (the lens's own unscaled unit), so the fit
   // math never has to know SCALE or TILE_SIZE's relationship directly.
+  // `fitZoom` is the baseline; `zoomMul` is the user's wheel nudge on top
+  // (1 = fitted; scroll in/out from there without losing the fit math).
   const FIT_MARGIN = 0.92; // a little breathing room around the construct's edges
+  let fitZoom = 1;
+  let zoomMul = 1;
+  function applyCameraZoom(): void {
+    renderer.setZoom(Math.max(0.05, fitZoom * zoomMul));
+    clampCamera();
+  }
   function fitCameraToConstruct(): void {
     renderer.setZoom(1);
     const baseW = renderer.viewWidth;
     const baseH = renderer.viewHeight;
     const worldW = map.width * TILE_SIZE;
     const worldH = map.height * TILE_SIZE;
-    const zoom = Math.min(2, (baseW * FIT_MARGIN) / worldW, (baseH * FIT_MARGIN) / worldH);
-    renderer.setZoom(zoom);
+    fitZoom = Math.min(2, (baseW * FIT_MARGIN) / worldW, (baseH * FIT_MARGIN) / worldH);
+    zoomMul = 1;
+    applyCameraZoom();
     centreCamera();
   }
 
@@ -1588,6 +1638,8 @@ export function startWorldLab(): void {
   // otherwise still show the defaults they were built with.
   for (const p of PRESSURES) ui.setPressure(p.id, pressureValues[p.id]);
   if (evoAid || pressuresAid === "wild") ui.openPressures(true);
+  // ?roll=… shots expect the roll pane visible — open it when the aid is on
+  if (rollAid) ui.openRoll(true);
   // the first real render: build()'s own call above ran before `ui` existed
   renderGrid();
   renderFocus();
@@ -1789,6 +1841,19 @@ export function startWorldLab(): void {
     fitCameraToConstruct();
   });
 
+  // Wheel zooms in/out around the fitted baseline. preventDefault so the page
+  // doesn't scroll under the canvas while the user is leaning into the construct.
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.11;
+      zoomMul = Math.min(4, Math.max(0.4, zoomMul * factor));
+      applyCameraZoom();
+    },
+    { passive: false },
+  );
+
   // ── pointer-to-place / pointer-to-paint / click-to-inspect: screen px →
   // world px through the SAME camera math either way (the fit-to-window zoom
   // AND the centred offset — the lens the render loop reads), then
@@ -1801,8 +1866,10 @@ export function startWorldLab(): void {
   // within PICK_RADIUS_PX — a click near nothing quietly clears the readout
   // rather than leaving a stale one. A placement click hands the tile straight
   // to stampKindAt, which lays the brush's current N×N block (size 1 =
-  // exactly slice 1's single placement). A tile pick instead begins a paint
-  // stroke, dragged live via pointermove and refreshed once on pointerup.
+  // exactly slice 1's single placement). Dragging with a plant/critter
+  // selected stamps on each NEW tile the pointer crosses (same stroke model
+  // as the biome brush). A tile pick instead begins a paint stroke, dragged
+  // live via pointermove and refreshed once on pointerup.
   function pointerTile(e: PointerEvent): { tx: number; ty: number; wx: number; wy: number } | null {
     const rect = canvas.getBoundingClientRect();
     const wx = camX + (e.offsetX / rect.width) * renderer.viewWidth;
@@ -1813,19 +1880,19 @@ export function startWorldLab(): void {
     return { tx, ty, wx, wy };
   }
 
-  // The paint stroke's own state: `painting` while the pointer is down with
-  // the tile tool active; `strokeChanged` records whether ANY cell actually
-  // changed across the whole stroke (paintBiome's own return, OR'd in), so
-  // pointerup refreshes the palette only when the stroke did something;
-  // `lastPaintKey` skips re-painting the same tile on every mousemove within
-  // it (a drag fires many move events per tile crossed).
+  // The paint / place stroke's own state: `painting` for biome brush, `placing`
+  // for plant/critter stamps. Both skip re-stamping the same tile on every
+  // mousemove within it. `strokeChanged` only matters for biome (palette may
+  // unlock); for kinds we always refresh census inside stampKindAt.
   let painting = false;
+  let placing = false;
   let strokeChanged = false;
-  let lastPaintKey = -1;
+  let lastStrokeKey = -1;
 
   function endStroke(): void {
     if (painting && strokeChanged) repaintRefresh(); // once per stroke, not per cell
     painting = false;
+    placing = false;
     strokeChanged = false;
   }
 
@@ -1843,20 +1910,31 @@ export function startWorldLab(): void {
     if (selected.kind === "tile") {
       painting = true;
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
-      lastPaintKey = ty * map.width + tx;
+      lastStrokeKey = ty * map.width + tx;
       return;
     }
+    // plant or critter — stamp now, then drag across tiles to lay a path/patch
+    placing = true;
+    lastStrokeKey = ty * map.width + tx;
     stampKindAt(tx, ty);
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!painting || selected?.kind !== "tile") return;
+    if (!painting && !placing) return;
     const hit = pointerTile(e);
     if (!hit) return;
     const { tx, ty } = hit;
     const key = ty * map.width + tx;
-    if (key === lastPaintKey) return; // already painted this tile this stroke's last step
-    strokeChanged = paintTileAt(tx, ty) || strokeChanged;
-    lastPaintKey = key;
+    if (key === lastStrokeKey) return; // already handled this tile this stroke's last step
+    lastStrokeKey = key;
+    if (painting && selected?.kind === "tile") {
+      strokeChanged = paintTileAt(tx, ty) || strokeChanged;
+      return;
+    }
+    if (placing && selected && selected.kind !== "tile") {
+      // quiet: don't flash a refuse on every dragged full/wrong tile — the
+      // pointerdown already named the problem once if the start cell failed.
+      stampKindAt(tx, ty, { quiet: true });
+    }
   });
   canvas.addEventListener("pointerup", endStroke);
   canvas.addEventListener("pointerleave", endStroke);
@@ -1962,6 +2040,10 @@ interface Chrome {
   onPressure: (id: PressureId, value: number) => void;
   setPressure: (id: PressureId, value: number) => void;
   openPressures: (open?: boolean) => void;
+  // map-first side panels (closed by default) — roll kinds / living web / drawer
+  openRoll: (open?: boolean) => void;
+  openWeb: (open?: boolean) => void;
+  openDrawer: (open?: boolean) => void;
   // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
   // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
   // child-of-`stack` tray shape as the pressures tray above — NOT a
@@ -2025,9 +2107,11 @@ function buildChrome(initial: StarterKind): Chrome {
   const eyebrow = document.createElement("div");
   eyebrow.innerHTML =
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
-    `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 22px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
-    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px;">a construct built to study — pick a kind below, click the construct to place it. space plays · → steps · shift+→ steps n; ← ↑ ↓ pan; Esc sails you home.</div>`;
-  eyebrow.style.cssText = "position: fixed; left: 18px; top: 16px; z-index: 5; pointer-events: none; user-select: none;";
+    `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
+    `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
+    `wheel zooms · ←↑↓ pan · select+click reads a genome · roll / web / drawer open the side panels · brush 1–4 stamps a patch · drag to sow a path · space plays · Esc home` +
+    `</div>`;
+  eyebrow.style.cssText = "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);
 
   // the way back, always visible in the header: the bench is a door, not a
@@ -2163,19 +2247,42 @@ function buildChrome(initial: StarterKind): Chrome {
   });
   bar.appendChild(group(label("fidelity"), ...fidelityBtns.map((f) => f.b)));
 
-  // ── the stamp brush's size picker: 1×/2×/3× — one click lays that many
-  // tiles square of the selected palette kind (size 1 is slice 1's own
-  // single placement, unchanged). Same active/inactive btn() styling as the
-  // fidelity cluster beside it, so the strip reads as one control family. ──
+  // ── the stamp brush's size picker: 1×–4× — one click (or drag step) lays
+  // that many tiles square of the selected palette kind (size 1 is slice 1's
+  // own single placement). Same active/inactive btn() chrome as fidelity. ──
   bar.appendChild(sep());
   const brushBtns = BRUSH_SIZES.map((size) => {
     const b = document.createElement("button");
     b.textContent = `${size}×`;
+    b.title = size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`;
     b.style.cssText = btn(false);
     b.onclick = () => chrome.onBrushSize(size);
     return { size, b };
   });
   bar.appendChild(group(label("brush"), ...brushBtns.map((s) => s.b)));
+
+  // ── side-panel toggles (map-first): roll / living-web / drawer stay CLOSED
+  // by default so the construct stays visible on a laptop. Open them from
+  // here — same btn() chrome as pressures/ambient. ─────────────────────────
+  bar.appendChild(sep());
+  const panelRollBtn = document.createElement("button");
+  panelRollBtn.id = "panel-roll-btn";
+  panelRollBtn.textContent = "roll";
+  panelRollBtn.title = "roll new kinds onto the palette";
+  panelRollBtn.style.cssText = btn(false);
+  bar.appendChild(panelRollBtn);
+  const panelWebBtn = document.createElement("button");
+  panelWebBtn.id = "panel-web-btn";
+  panelWebBtn.textContent = "web";
+  panelWebBtn.title = "census · food web · richness";
+  panelWebBtn.style.cssText = btn(false);
+  bar.appendChild(panelWebBtn);
+  const panelDrawerBtn = document.createElement("button");
+  panelDrawerBtn.id = "panel-drawer-btn";
+  panelDrawerBtn.textContent = "drawer";
+  panelDrawerBtn.title = "every kind introduced here";
+  panelDrawerBtn.style.cssText = btn(false);
+  bar.appendChild(panelDrawerBtn);
 
   // ── the pressures tray's toggle: a "pressures ⚘" button beside brush,
   // same btn() chrome as every other bar control. Flips the pressures tray
@@ -2265,7 +2372,7 @@ function buildChrome(initial: StarterKind): Chrome {
   // the whole stack — the palette AND the pressures tray appended above it —
   // up over the header/side panels rather than staying put and scrolling.
   palette.style.cssText =
-    "max-width: 88vw; max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" +
+    "max-width: 88vw; max-height: 26vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" +
     " padding: 9px 12px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
     " user-select: none;";
   stack.appendChild(palette);
@@ -2282,6 +2389,7 @@ function buildChrome(initial: StarterKind): Chrome {
 
   const selectBtn = document.createElement("button");
   selectBtn.textContent = "select";
+  selectBtn.title = "click the construct to read a plant's genome or a critter up close";
   selectBtn.style.cssText = btn(true); // null selection is the default
   selectBtn.onclick = () => chrome.onSelect(null);
   plantRow.appendChild(selectBtn);
@@ -2312,6 +2420,8 @@ function buildChrome(initial: StarterKind): Chrome {
     plantBtns = plants.map((sp) => {
       const b = document.createElement("button");
       b.textContent = sp.name.toLowerCase();
+      const need = BIOME_TILES.find((t) => t.tile === sp.habitat)?.name ?? "its habitat";
+      b.title = `roots on ${need} · brush stamps a patch · drag to sow a path`;
       const tint = hsl(sp.archetype.hue, 0.62, 0.5);
       b.style.cssText = plantBtn(false, tint);
       b.onclick = () => chrome.onSelect({ kind: "plant", id: sp.id });
@@ -2366,19 +2476,20 @@ function buildChrome(initial: StarterKind): Chrome {
   const rightStack = document.createElement("div");
   rightStack.id = "lab-right-stack";
   rightStack.style.cssText =
-    "position: fixed; right: 18px; top: 104px; z-index: 6; display: flex; flex-direction: column;" +
-    " align-items: flex-end; gap: 10px; max-height: calc(100vh - 122px);";
+    "position: fixed; right: 18px; top: 92px; z-index: 6; display: flex; flex-direction: column;" +
+    " align-items: flex-end; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
   document.body.appendChild(rightStack);
 
   // the drawer: every introduced kind (starter/rolled/captured daughter),
   // live status — in play / variations / a three-way alive-extinct-cleared
   // badge — and a delete/bring-back button. Docked above the readout.
+  // Hidden by default (map-first); open from the bar's "drawer" toggle.
   const drawerPanel = document.createElement("div");
   drawerPanel.id = "lab-drawer";
   drawerPanel.style.cssText =
-    "width: 296px; max-height: 42vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
+    "display: none; width: 296px; max-height: 42vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
     " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
-    " user-select: none; flex: 0 0 auto;";
+    " user-select: none; flex: 0 0 auto; pointer-events: auto;";
   rightStack.appendChild(drawerPanel);
 
   const drawerHead = document.createElement("div");
@@ -2456,7 +2567,7 @@ function buildChrome(initial: StarterKind): Chrome {
   readout.style.cssText =
     "display: none; width: 264px; max-height: 42vh; overflow-y: auto; padding: 16px 18px;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
-    " font-family: var(--serif); flex: 0 0 auto;";
+    " font-family: var(--serif); flex: 0 0 auto; pointer-events: auto;";
   rightStack.appendChild(readout);
 
   // ── the left column: the roll pane and the living-web census used to be
@@ -2473,8 +2584,9 @@ function buildChrome(initial: StarterKind): Chrome {
   const leftStack = document.createElement("div");
   leftStack.id = "lab-left-stack";
   leftStack.style.cssText =
-    "position: fixed; left: 18px; top: 104px; z-index: 6; display: flex; flex-direction: column;" +
-    " align-items: flex-start; gap: 10px;";
+    "position: fixed; left: 18px; top: 92px; z-index: 6; display: flex; flex-direction: column;" +
+    " align-items: flex-start; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
+  // Children re-enable pointer-events so the empty stack doesn't block the map.
   document.body.appendChild(leftStack);
 
   // the census (population, the live proof) beside the food web's static
@@ -2484,8 +2596,9 @@ function buildChrome(initial: StarterKind): Chrome {
   const web = document.createElement("div");
   web.id = "lab-census";
   web.style.cssText =
-    "width: 240px; max-height: 74vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
-    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);";
+    "display: none; width: 240px; max-height: 52vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
+    " pointer-events: auto; flex: 0 0 auto;";
   leftStack.appendChild(web);
 
   // shared plate-string helpers, mirroring simulator.ts's own title/head/
@@ -2540,9 +2653,9 @@ function buildChrome(initial: StarterKind): Chrome {
   // the pane's rendered height regardless of what the strip ever grows to,
   // so the census's position never moves by more than the cap itself allows.
   rollPane.style.cssText =
-    "width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
+    "display: none; width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
     " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;" +
-    " max-height: 48vh; overflow-y: auto;";
+    " max-height: 42vh; overflow-y: auto; pointer-events: auto;";
   leftStack.insertBefore(rollPane, web); // above the census — leftStack's first child
 
   const rollHead = document.createElement("div");
@@ -3017,6 +3130,36 @@ function buildChrome(initial: StarterKind): Chrome {
     evoTray.style.display = pressuresOpen ? "block" : "none";
     pressuresBtn.style.cssText = btn(pressuresOpen);
   };
+
+  // Map-first side panels: closed by default so the construct stays visible.
+  // The bar's roll / web / drawer buttons toggle them; ?roll= still opens roll.
+  let rollOpen = false;
+  let webOpen = false;
+  let drawerOpen = false;
+  const syncSidePanels = (): void => {
+    rollPane.style.display = rollOpen ? "block" : "none";
+    web.style.display = webOpen ? "block" : "none";
+    drawerPanel.style.display = drawerOpen ? "block" : "none";
+    panelRollBtn.style.cssText = btn(rollOpen);
+    panelWebBtn.style.cssText = btn(webOpen);
+    panelDrawerBtn.style.cssText = btn(drawerOpen);
+  };
+  chrome.openRoll = (open?: boolean) => {
+    rollOpen = open ?? !rollOpen;
+    syncSidePanels();
+  };
+  chrome.openWeb = (open?: boolean) => {
+    webOpen = open ?? !webOpen;
+    syncSidePanels();
+  };
+  chrome.openDrawer = (open?: boolean) => {
+    drawerOpen = open ?? !drawerOpen;
+    syncSidePanels();
+  };
+  panelRollBtn.onclick = () => chrome.openRoll();
+  panelWebBtn.onclick = () => chrome.openWeb();
+  panelDrawerBtn.onclick = () => chrome.openDrawer();
+  syncSidePanels(); // start closed
 
   // ── the slot panel (Task 9): a centered modal, the same footprint
   // convention as the real-world #picker (index.html) — position: fixed,

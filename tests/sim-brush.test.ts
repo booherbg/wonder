@@ -5,10 +5,11 @@ import { singleBiome } from "../src/world/construct";
 import { generatePlantSpecies } from "../src/life/species";
 import { Tile, isWalkable } from "../src/world/types";
 
-test("stampOffsets: 1×1 / 2×2 / 3×3 lay 1 / 4 / 9 cells", () => {
+test("stampOffsets: 1×1 / 2×2 / 3×3 / 4×4 lay 1 / 4 / 9 / 16 cells", () => {
   expect(stampOffsets(1)).toEqual([{ dx: 0, dy: 0 }]);
   expect(stampOffsets(2).length).toBe(4);
   expect(stampOffsets(3).length).toBe(9);
+  expect(stampOffsets(4).length).toBe(16);
   // 3×3 centres on the clicked tile
   expect(stampOffsets(3)).toContainEqual({ dx: -1, dy: -1 });
   expect(stampOffsets(3)).toContainEqual({ dx: 1, dy: 1 });
@@ -16,6 +17,9 @@ test("stampOffsets: 1×1 / 2×2 / 3×3 lay 1 / 4 / 9 cells", () => {
   expect(stampOffsets(2)).toContainEqual({ dx: 0, dy: 0 });
   expect(stampOffsets(2)).toContainEqual({ dx: 1, dy: 1 });
   expect(stampOffsets(2)).not.toContainEqual({ dx: -1, dy: -1 });
+  // 4×4 spans {-1..2} on each axis (same even-size rule as 2×2)
+  expect(stampOffsets(4)).toContainEqual({ dx: -1, dy: -1 });
+  expect(stampOffsets(4)).toContainEqual({ dx: 2, dy: 2 });
 });
 
 test("stampCells fills the interior and drops out-of-bounds cells at an edge", () => {

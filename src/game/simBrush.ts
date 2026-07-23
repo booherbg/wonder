@@ -6,14 +6,15 @@
 
 import { Tile, WALKABLE, WorldMap } from "../world/types";
 
-// The SimCity stamp sizes: one click lays an N×N block of the selected kind.
-export type BrushSize = 1 | 2 | 3;
-export const BRUSH_SIZES: readonly BrushSize[] = [1, 2, 3];
+// The SimCity stamp sizes: one click (or drag step) lays an N×N block of the
+// selected kind. 4×4 is the densest patch — still one stamp, not a flood.
+export type BrushSize = 1 | 2 | 3 | 4;
+export const BRUSH_SIZES: readonly BrushSize[] = [1, 2, 3, 4];
 
 // The block's tile offsets relative to the clicked tile. Odd sizes centre on
-// it (1×1 = just it; 3×3 = a ring around it); the even 2×2 has no exact centre,
-// so the clicked tile anchors the block's TOP-LEFT — span [0 .. size-1] back
-// from -floor((size-1)/2). So: 1→{0}, 2→{0,1}, 3→{-1,0,1}.
+// it (1×1 = just it; 3×3 = a ring around it); even sizes have no exact centre,
+// so the clicked tile anchors near the block's top-left — span from
+// -floor((size-1)/2) .. floor(size/2). So: 1→{0}, 2→{0,1}, 3→{-1,0,1}, 4→{-1,0,1,2}.
 export function stampOffsets(size: BrushSize): { dx: number; dy: number }[] {
   const lo = -Math.floor((size - 1) / 2) || 0; // avoid -0 (size 1/2: normalize to +0)
   const hi = Math.floor(size / 2);
