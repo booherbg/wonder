@@ -28,7 +28,7 @@ import {
   generateCritterSpecies,
 } from "../life/fauna";
 import { Flora, Plant, nearestPlant } from "../life/flora";
-import { chainLinks, chainStats, richnessWord } from "../life/foodweb";
+import { chainLinks } from "../life/foodweb";
 import { Genome, PlantForm, hsl } from "../life/genome";
 import { Fidelity, SimKernel } from "../life/kernel";
 import {
@@ -42,6 +42,7 @@ import {
   setCritterTraits,
   setPlantTraits,
 } from "../life/roll";
+import { WebChain, rollWeb } from "../life/rollweb";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { critterPortrait } from "../render/critterSprites";
 import { BIOME_WORDS, moodLine, roleLine } from "../render/inspect";
@@ -63,6 +64,7 @@ import {
 } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
+import { richnessMeter } from "./simPressures";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -106,6 +108,12 @@ const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
 // inspect.ts's own ZOOM-scaled sprite cards.
 const ROLL_COUNT = 10;
 const THUMB_ZOOM = 3;
+
+// Roll-a-web's own batch sizes: a starter web (roll a web) vs. a denser one
+// (seed it richer) — both handed straight to rollWeb's own `size` (a chain
+// count, never a species count), so "richer" simply asks for more chains.
+const WEB_SIZE = 3;
+const WEB_SIZE_RICH = 6;
 
 // The iterate strip's own tuning: a bigger zoom for the focused candidate's
 // enlarged thumbnail than the grid's own cells wear, a size stepper's
@@ -249,7 +257,8 @@ interface CensusWebView {
   summary: { live: number; arose: number; lost: number };
   species: { name: string; spark: string; count: number }[];
   chains: { chains: number; closable: number; redundancy: number };
-  richness: string;
+  richness: string; // richnessWord(score) — flat/sparse/living/rich/lush/legendary
+  richnessScore: number; // the same numeric score the word names
 }
 
 // The drawer's per-entry view: a finished row, live off statusOf/bumpPeak —
@@ -267,9 +276,11 @@ interface DrawerRow {
 
 // The living-web strip's data: the census exactly as CensusLog keeps it
 // (summary/list/sparkline never re-derived) paired with the food web's
-// static chain-potential (chainStats/richnessWord, the same score
-// arithmetic diversityScore uses) — population is the live proof a chain
-// closed; the chain count is the standing potential for one to.
+// static chain-potential — population is the live proof a chain closed; the
+// chain count is the standing potential for one to. The chain-potential
+// itself is now the shared richnessMeter (simPressures.ts) — the SAME score
+// arithmetic diversityScore uses, over the construct's own live roster
+// (never a rebuilt-from-seed world), so this recomputes fresh every refresh.
 function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterSpecies: CritterSpecies[]): CensusWebView {
   const species = census
     .list()
@@ -280,9 +291,14 @@ function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterS
       spark: sparkline(tr.counts),
       count: tr.counts[tr.counts.length - 1] ?? 0,
     }));
-  const chains = chainStats(plantSpecies, critterSpecies);
-  const richness = richnessWord(chains.chains + 2 * (chains.redundancy - 1));
-  return { summary: census.summary(), species, chains, richness };
+  const r = richnessMeter(plantSpecies, critterSpecies);
+  return {
+    summary: census.summary(),
+    species,
+    chains: { chains: r.chains, closable: r.closable, redundancy: r.redundancy },
+    richness: r.word,
+    richnessScore: r.score,
+  };
 }
 
 // The iterate strip's view of the focused batch candidate: an enlarged
@@ -343,6 +359,19 @@ function nearestTileOf(map: WorldMap, tile: Tile, cx: number, cy: number): { x: 
   return null;
 }
 
+// The construct's "near centre, but nudged OFF its exact spawn point" anchor:
+// every still-unplaced critter species' den defaults to the spawn point
+// (fauna.ts's findDen fallback, empty scratch flora), so a plant landing on
+// that same tile reads as "smothered by a hut," not a clean bloom. Shared by
+// seedDemoScenario and seedWeb (Task 4's roll-a-web), so a demo scenario and
+// a rolled web anchor to the exact same point.
+function constructCentre(map: WorldMap): { cx: number; cy: number } {
+  return {
+    cx: Math.min(map.width - 1, Math.floor(map.width / 2) + Math.min(8, Math.floor(map.width / 6))),
+    cy: Math.max(0, Math.floor(map.height / 2) - Math.min(6, Math.floor(map.height / 6))),
+  };
+}
+
 // The ?demo dev aid: seeds a deterministic disperser→source→feeder chain (the
 // spec's own chainLinks — never reimplemented) a few tiles apart near the
 // construct's centre, so a screenshot shows a populated bench with no click.
@@ -355,13 +384,7 @@ function seedDemoScenario(map: WorldMap, kernel: SimKernel, placeable: PlantSpec
     return;
   }
   const placeableIds = new Set(placeable.map((p) => p.id));
-  // near the construct's centre, but nudged OFF its exact spawn point: every
-  // still-unplaced critter species' den defaults there (fauna.ts's findDen
-  // fallback, empty scratch flora), so a demo plant landing on that same
-  // tile reads as "smothered by a hut," not a clean bloom. A few tiles off
-  // keeps the "near the centre" spirit while staying legible in a screenshot.
-  const cx = Math.min(map.width - 1, Math.floor(map.width / 2) + Math.min(8, Math.floor(map.width / 6)));
-  const cy = Math.max(0, Math.floor(map.height / 2) - Math.min(6, Math.floor(map.height / 6)));
+  const { cx, cy } = constructCentre(map);
 
   const link = chainLinks(kernel.plantSpecies, kernel.critterSpecies).find(
     (l) => placeableIds.has(l.source.id) && placeableIds.has(l.feeder.id),
@@ -459,6 +482,15 @@ export function startWorldLab(): void {
   const drawerDemoAid = new URL(location.href).searchParams.has("drawerdemo");
   const splitAid = new URL(location.href).searchParams.has("split");
   const drawerDelAid = new URL(location.href).searchParams.get("drawerdel");
+  // Slice-4's roll-a-web dev aids: ?web=1 rolls+introduces+auto-places one
+  // matched web (source/feeder/disperser), the SAME seedWeb a "roll a web"
+  // click runs; ?rich=1 runs the denser "seed it richer" batch instead. Both
+  // fire in build() ahead of the ?run=N pre-step (the same tier ?demo/
+  // ?drawerdemo already fire at), so &run=N composes to show an
+  // already-closing chain. Display-only, rng-free beyond seedWeb's own
+  // seeded roll + seeded placement.
+  const webAid = new URL(location.href).searchParams.has("web");
+  const richAid = new URL(location.href).searchParams.has("rich");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -480,6 +512,10 @@ export function startWorldLab(): void {
   let rollCursor = 0;
   let batch: (PlantSpecies | CritterSpecies)[] = [];
   let drawer: DrawerEntry[] = [];
+  // roll-a-web's own cursor: the seeded stream's slice, advanced once per
+  // seedWeb() call — same "deterministic advance" spirit as rollCursor, kept
+  // separate so rolling a web never perturbs the roll pane's own batch stream.
+  let webCursor = 0;
   // the iterate strip's own state: which batch index is focused (null = the
   // strip is closed) and the seeded rng that drives its looks nudges —
   // reset off rollSeedFor whenever a candidate is (re-)focused or the batch
@@ -613,28 +649,37 @@ export function startWorldLab(): void {
     ui.setBatch(cells);
   }
 
-  // Pick: introduces the batch member at `index` into the kernel FOR REAL
-  // (kernel.introduce*Species assigns the real id === array index) and
-  // records a "rolled" drawer entry — refreshPalette then re-sources the
-  // palette off the drawer's own non-deleted entries, so the new kind is
-  // immediately placeable. The freshly-picked kind becomes the selection, so
-  // the very next click on the construct places it. Kernel-side effects run
-  // regardless of `ui` (so ?rollpick/?drawerdemo can fire from build()'s
-  // first call, ahead of buildChrome()); the UI refresh is guarded and
-  // re-synced by the main flow once `ui` exists.
+  // Introduces a plant/critter def into the kernel FOR REAL (kernel.
+  // introduce*Species assigns the real id === array index) and records a
+  // "rolled" drawer entry off the kernel's own now-stored record. The exact
+  // two-line body pickBatch and seedWeb (below) both need, factored once so
+  // a pick and a rolled-web member land on the drawer/palette identically.
+  function introducePlantDef(def: PlantSpecies): number {
+    const id = kernel.introducePlantSpecies({ ...def, id: PROVISIONAL_ID });
+    drawer.push(makeEntry({ kind: "plant", speciesId: id, def: kernel.plantSpecies[id], origin: "rolled" }));
+    return id;
+  }
+  function introduceCritterDef(def: CritterSpecies): number {
+    const id = kernel.introduceCritterSpecies({ ...def });
+    drawer.push(makeEntry({ kind: "critter", speciesId: id, def: kernel.critterSpecies[id], origin: "rolled" }));
+    return id;
+  }
+
+  // Pick: introduces the batch member at `index` via introducePlantDef/
+  // introduceCritterDef above. The freshly-picked kind becomes the
+  // selection, so the very next click on the construct places it.
+  // Kernel-side effects run regardless of `ui` (so ?rollpick/?drawerdemo can
+  // fire from build()'s first call, ahead of buildChrome()); the UI refresh
+  // is guarded and re-synced by the main flow once `ui` exists.
   function pickBatch(index: number): void {
     const member = batch[index];
     if (!member) return;
     let id: number;
     if (rollKind === "plant") {
-      const sp = member as PlantSpecies;
-      id = kernel.introducePlantSpecies({ ...sp, id: PROVISIONAL_ID });
-      drawer.push(makeEntry({ kind: "plant", speciesId: id, def: kernel.plantSpecies[id], origin: "rolled" }));
+      id = introducePlantDef(member as PlantSpecies);
       selected = { kind: "plant", id };
     } else {
-      const sp = member as CritterSpecies;
-      id = kernel.introduceCritterSpecies({ ...sp });
-      drawer.push(makeEntry({ kind: "critter", speciesId: id, def: kernel.critterSpecies[id], origin: "rolled" }));
+      id = introduceCritterDef(member as CritterSpecies);
       selected = { kind: "critter", id };
     }
     refreshPalette(); // the drawer just grew — plant/critterKinds re-source from it
@@ -644,6 +689,70 @@ export function startWorldLab(): void {
       ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
       ui.setFocus(null);
     }
+  }
+
+  // Roll-a-web: rolls a matched, closable web (rollWeb — a synthesized
+  // source/feeder/disperser set; never reimplemented here) and auto-places a
+  // seed of it. Every chain's three members are introduced for real via
+  // introducePlantDef/introduceCritterDef above (so the drawer + palette pick
+  // them up exactly as a roll-pane pick would), then one instance of each is
+  // dropped near the construct's centre in the exact seedDemoScenario pattern
+  // (nearestTileOf + worldPxCenter + kernel.placePlant/placeCritter), spread
+  // a few tiles apart — so stepping actually closes the chain: the disperser
+  // seeks the source → nibbles it → propagate + addSubstrate(hue H) → the
+  // feeder germinates on the shared-habitat byproduct.
+  //
+  // The disperser's favoriteSpecies is re-pointed at the chain's OWN
+  // introduced source id (never the base roster's placeholder) — the inspect
+  // card's "born loving" line then names a real, present kind.
+  //
+  // Feeder-name guard: rollChain's own fallback (no distinct same-form
+  // candidate in the batch) clones the source for the feeder, so the two can
+  // share a name — a legible pair in the food math (one form/hue family) but
+  // a confusing one on a drawer/palette row ("two Fenmoss?"). A same-name
+  // feeder gets a "· feeder" suffix here, display-only — it never touches the
+  // archetype/hue the chain math keys on.
+  //
+  // "roll a web" and "seed it richer" both call this, differing only in
+  // `size` (rollWeb's own chain count — never a species count).
+  function seedWeb(size: number): void {
+    const cursor = webCursor;
+    webCursor++; // the deterministic advance: same construct, next slice of the stream
+    const web = rollWeb(seed, cursor, size, habitatsOf(map), map);
+    const { cx: cx0, cy: cy0 } = constructCentre(map);
+    web.chains.forEach((chain: WebChain, i) => {
+      const srcId = introducePlantDef(chain.source);
+      const feederDef: PlantSpecies =
+        chain.feeder.name === chain.source.name
+          ? { ...chain.feeder, name: `${chain.feeder.name} · feeder` }
+          : chain.feeder;
+      const feedId = introducePlantDef(feederDef);
+      const dspId = introduceCritterDef({ ...chain.disperser, favoriteSpecies: srcId });
+
+      // each chain (and each successive roll — `cursor` advances every call)
+      // anchors a few tiles from the last, so multiple chains/rolls never
+      // keep stacking onto the very same tile
+      const cx = Math.min(map.width - 1, cx0 + i * 5);
+      const cy = Math.min(map.height - 1, cy0 + cursor * 4);
+
+      const sourceTile = nearestTileOf(map, chain.source.habitat, cx, cy) ?? { x: cx, y: cy };
+      const sp = worldPxCenter(sourceTile.x, sourceTile.y);
+      kernel.placePlant(srcId, sp.x, sp.y);
+
+      const disperserTile = { x: Math.min(map.width - 1, sourceTile.x + 3), y: sourceTile.y };
+      const dp = worldPxCenter(disperserTile.x, disperserTile.y);
+      kernel.placeCritter(dspId, dp.x, dp.y);
+
+      const feederTile =
+        nearestTileOf(map, chain.feeder.habitat, sourceTile.x, Math.min(map.height - 1, sourceTile.y + 3)) ??
+        sourceTile;
+      const fp = worldPxCenter(feederTile.x, feederTile.y);
+      kernel.placePlant(feedId, fp.x, fp.y);
+    });
+    refreshPalette();
+    refreshDrawer();
+    refreshCensusStrip();
+    if (ui) ui.flashNote(`rolled a web — ${web.chains.length} chains introduced + seeded`);
   }
 
   // ── the iterate strip: focus a batch candidate (before it's picked) and
@@ -997,9 +1106,15 @@ export function startWorldLab(): void {
     ];
     refreshPalette(); // plantKinds/critterKinds now sourced from the drawer's non-deleted entries
     rollCursor = 0;
+    webCursor = 0;
     batch = [];
     if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
     if (drawerDemoAid) seedDrawerDemo();
+    // ?web=/?rich=: seeded ahead of the ?run=N pre-step below (same tier as
+    // ?demo/?drawerdemo just above), so &run=N composes to show an
+    // already-closing web, not an unstepped one.
+    if (webAid) seedWeb(WEB_SIZE);
+    if (richAid) seedWeb(WEB_SIZE_RICH);
     if (runTicks > 0) kernel.step(runTicks, "full");
     if (brushDemo === "stamp") {
       // a 3×3 of the first placeable plant kind near the construct's centre,
@@ -1142,6 +1257,8 @@ export function startWorldLab(): void {
     rollBatch();
   };
   ui.onPickBatch = (i) => pickBatch(i);
+  ui.onRollWeb = () => seedWeb(WEB_SIZE);
+  ui.onSeedRicher = () => seedWeb(WEB_SIZE_RICH);
   ui.onFocusBatch = (i) => focusBatch(i);
   ui.onNudgeLooks = () => nudgeFocused();
   ui.onRerollLooks = () => nudgeFocused(REROLL_LOOKS_AMOUNT[rollKind]);
@@ -1379,6 +1496,11 @@ interface Chrome {
   onReRoll: () => void;
   setBatch: (cells: { thumb: HTMLCanvasElement; name: string; tint: string }[]) => void;
   onPickBatch: (index: number) => void;
+  // roll-a-web (Task 4, slice 4): rolls + introduces + auto-places a matched,
+  // closable source/feeder/disperser set — "roll a web" a starter batch,
+  // "seed it richer" a denser one
+  onRollWeb: () => void;
+  onSeedRicher: () => void;
   // the iterate strip: focus a batch candidate → looks (nudge/re-roll) +
   // trait controls (kind-appropriate) + a pick button (Simulator slice 3)
   onFocusBatch: (index: number | null) => void;
@@ -1912,6 +2034,25 @@ function buildChrome(initial: StarterKind): Chrome {
   reRollBtn.onclick = () => chrome.onReRoll();
   rollControls.appendChild(group(rollBtn, reRollBtn));
 
+  // roll-a-web: a second control row, below roll/re-roll, still inside the
+  // roll pane's own capped+scrolling box — rolls (and auto-places) a whole
+  // matched, closable source/feeder/disperser set at once, rather than one
+  // batch member at a time.
+  const webControls = document.createElement("div");
+  webControls.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 10px;";
+  rollPane.appendChild(webControls);
+  const rollWebBtn = document.createElement("button");
+  rollWebBtn.id = "roll-web-btn";
+  rollWebBtn.textContent = "roll a web";
+  rollWebBtn.style.cssText = btn(false);
+  rollWebBtn.onclick = () => chrome.onRollWeb();
+  const seedRicherBtn = document.createElement("button");
+  seedRicherBtn.id = "seed-richer-btn";
+  seedRicherBtn.textContent = "seed it richer";
+  seedRicherBtn.style.cssText = btn(false);
+  seedRicherBtn.onclick = () => chrome.onSeedRicher();
+  webControls.appendChild(group(rollWebBtn, seedRicherBtn));
+
   // bounded so a bigger-than-usual batch scrolls WITHIN the grid instead of
   // growing the pane past this point and reopening the census collision —
   // ~220px comfortably holds the normal 2-row/10-thumbnail batch with room
@@ -1930,6 +2071,8 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onRoll = () => {};
   chrome.onReRoll = () => {};
   chrome.onPickBatch = () => {};
+  chrome.onRollWeb = () => {};
+  chrome.onSeedRicher = () => {};
   chrome.onFocusBatch = () => {};
   chrome.onNudgeLooks = () => {};
   chrome.onRerollLooks = () => {};
@@ -2152,6 +2295,25 @@ function buildChrome(initial: StarterKind): Chrome {
     readout.style.display = "none";
   };
 
+  // The richness meter: hoisted to the TOP of the panel (above "census"), so
+  // "how alive is this island" reads at a glance — the word big in firefly
+  // gold, the score beside it, chains/closable underneath. Rides inside the
+  // panel's own bounded/scrolling box (no new panel, no left-column
+  // overlap); recomputed fresh every setCensusWeb call, so it's live as you
+  // step, not a snapshot taken once at construct time.
+  const richnessMeterBlock = (v: CensusWebView): string =>
+    `<div style="margin: 10px 0 2px; padding: 10px 12px; background: rgba(127,224,196,0.06);` +
+    ` border: 1px solid rgba(244,201,121,0.4); border-radius: 6px;">` +
+    `<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px;">` +
+    `<span style="font-variant: small-caps; letter-spacing: 0.05em; font-size: 21px; color: rgb(var(--firefly));">${esc(v.richness)}</span>` +
+    `<span style="font: 15px var(--mono); color: rgb(var(--firefly));">${v.richnessScore.toFixed(1)}</span>` +
+    `</div>` +
+    `<div style="display: flex; gap: 16px; margin-top: 5px; font: 9.5px var(--mono); letter-spacing: 0.06em;` +
+    ` text-transform: uppercase; color: rgba(228,236,242,0.55);">` +
+    `<span>chains <b style="color: var(--ink-bright);">${v.chains.chains}</b></span>` +
+    `<span>closable <b style="color: ${v.chains.closable > 0 ? "rgb(var(--lumen))" : "var(--ink-bright)"};">${v.chains.closable}</b></span>` +
+    `</div></div>`;
+
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
@@ -2159,6 +2321,7 @@ function buildChrome(initial: StarterKind): Chrome {
     web.innerHTML =
       `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
       `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census · food web — live as you step</div>` +
+      richnessMeterBlock(v) +
       title("census") +
       stat("live", String(v.summary.live), "mint") +
       stat("arose", String(v.summary.arose)) +
@@ -2168,8 +2331,7 @@ function buildChrome(initial: StarterKind): Chrome {
       title("food web") +
       stat("chains", String(v.chains.chains)) +
       stat("closable", String(v.chains.closable), v.chains.closable > 0 ? "mint" : "ink") +
-      stat("redundancy", v.chains.redundancy.toFixed(1) + "×") +
-      stat("richness", v.richness, "gold");
+      stat("redundancy", v.chains.redundancy.toFixed(1) + "×");
   };
 
   return chrome;
