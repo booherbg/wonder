@@ -100,6 +100,29 @@ export interface SwarmEvent {
 export const BOOM_POLLINATIONS = 3; // spreads before a swarm's work reads as a visible boom
 const EVENT_QUEUE_CAP = 8; // undrained moments beyond this quietly age out
 
+// Lab-only: below this nectar a free-roaming cloud refuses a bloom and picks another.
+export const NECTAR_EMPTY_THRESHOLD = 0.15;
+
+export interface SwarmLayerOptions {
+  /** Each plant instance carries its own nectar meter (World-Lab default). */
+  perPlantNectar?: boolean;
+  /** Seed initial swarms on load — off on the construct bench. */
+  autoSpawn?: boolean;
+  /** Ambient insectivory pressure (0 on the bench). */
+  predation?: number;
+  /** Free-roam skips blooms below this nectar (per-plant mode). */
+  emptyNectarThreshold?: number;
+}
+
+export interface PollinationLogEntry {
+  speciesId: number;
+  speciesName: string;
+  count: number;
+  lastTick: number;
+  flowerMap: IdMap;
+  accent: Uint8Array;
+}
+
 // A mote is one slot of render bookkeeping (the gene pool is the sim): the
 // renderer draws the first few as full generative insects and the rest as the
 // faint 1px dust that says "many" without clutter. Wall-clock animation only.
@@ -122,6 +145,12 @@ export interface WorldSwarm {
   motes: Mote[];
   home: { x: number; y: number; species: number } | null; // the bloom it works
   pollinated: number; // successful spreads so far — crossing BOOM_POLLINATIONS emits its boom
+  /** Pin holds this host; free-roam re-homes on nearest viable bloom. */
+  pinned: boolean;
+  /** Concrete plant fed this heartbeat — drives truthful motion. */
+  visitPlantIdx: number | null;
+  /** Successful pollinateSpread by target species (lab Details log). */
+  pollinationLog: Map<number, { count: number; lastTick: number }>;
 }
 
 // ── names, in the codex voice ─────────────────────────────────────────────────
@@ -164,11 +193,17 @@ export interface SwarmInspect {
   name: string; // the codex name the kind wears
   sensor: IdMap; // the 7×7 appearance genome (rendered via appearanceColors)
   population: number;
+  energy: number;
+  cap: number;
   hostName: string; // the flowering plant it works
   resemblance: number; // 0..1 — how close its map has come to that flower
+  matchEfficiency: number; // metabolic efficiency 0..1
+  nectar: number; // host bloom's nectar now (per-plant or species-shared)
+  pinned: boolean;
   behavior: { range: number; nerve: number; cohesion: number };
   flowerMap: IdMap; // the host flower's map — to ring the jackpot cells it matches
   accent: Uint8Array; // 1 where a cell is flower-accent
+  pollinationLog: PollinationLogEntry[];
 }
 
 // Which plant forms can carry a flower map — exactly the forms ambient.isBloom
@@ -209,9 +244,12 @@ export function buildFlowerMaps(seed: number, species: readonly PlantSpecies[]):
 export class SwarmLayer {
   readonly flowers: Map<number, Flower>;
   readonly swarms: WorldSwarm[] = [];
+  readonly perPlantNectar: boolean;
   predation = WORLD_PREDATION; // gentle ambient insectivory; the sim swaps its own value in
   pollinateAssist: PollinateAssist = DEFAULT_POLLINATE_ASSIST;
   private readonly events: SwarmEvent[] = []; // notable moments awaiting a witness
+  private readonly plantNectar = new Map<number, number>(); // per-plant nectar when perPlantNectar
+  private readonly emptyThreshold: number;
   private rng: Rng;
   private readonly seed: number;
   private readonly species: readonly PlantSpecies[]; // the SHARED list — grows as daughters speciate
@@ -222,12 +260,16 @@ export class SwarmLayer {
     species: readonly PlantSpecies[],
     flora: Flora,
     focus?: { x: number; y: number }, // world px — the arrival point; some swarms gather here
+    options: SwarmLayerOptions = {},
   ) {
     this.seed = seed;
     this.species = species;
+    this.perPlantNectar = options.perPlantNectar ?? false;
+    this.emptyThreshold = options.emptyNectarThreshold ?? NECTAR_EMPTY_THRESHOLD;
     this.flowers = buildFlowerMaps(seed, species);
     this.rng = makeRng((seed ^ SWARM_SALT) >>> 0);
-    this.spawn(flora, focus);
+    if (options.predation !== undefined) this.predation = options.predation;
+    if (options.autoSpawn !== false) this.spawn(flora, focus);
   }
 
   // The flower map for a flowering SPECIES, built lazily and cached. Daughters that
@@ -265,6 +307,44 @@ export class SwarmLayer {
   // Scatter a bounded set of swarms, each anchored beside a flowering plant, and
   // let each already live a short while against that bloom — so an island loads
   // with clouds that are already colouring toward their flowers, not blank.
+  private bootstrapEnt(
+    sw: Swarm,
+    x: number,
+    y: number,
+    anchor: Plant | null,
+    lively = false,
+    pinned = false,
+  ): WorldSwarm {
+    const motes: Mote[] = [];
+    for (let m = 0; m < MOTES_MAX; m++) {
+      motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
+    }
+    const ang = this.rng() * Math.PI * 2;
+    const id = this.swarms.length;
+    const ent: WorldSwarm = {
+      sw,
+      id,
+      name: swarmName(this.seed, id, sw.behavior),
+      x,
+      y,
+      orbit: ang,
+      motes,
+      home: anchor ? { x: anchor.x, y: anchor.y, species: anchor.species } : null,
+      pollinated: 0,
+      pinned,
+      visitPlantIdx: anchor?.idx ?? null,
+      pollinationLog: new Map(),
+    };
+    if (lively) {
+      sw.population = LIVELY_POP;
+      if (anchor) {
+        const flower = this.flowerFor(anchor.species)!;
+        for (let w = 0; w < WARM_TICKS; w++) this.stepEntOnHost(ent, anchor, flower);
+      }
+    }
+    return ent;
+  }
+
   private spawn(flora: Flora, focus?: { x: number; y: number }): void {
     // Prefer plants actually in bloom; on a bloom-poor island fall back to any
     // flowering-species plant island-wide, so every island with SOME flowering
@@ -297,52 +377,146 @@ export class SwarmLayer {
           ? nearPool[0]
           : (i < nearCount ? nearPool : blooms)[Math.floor(this.rng() * (i < nearCount ? nearPool : blooms).length)];
       const sw = makeSwarm(this.rng, undefined, SWARM_CAP);
-      sw.population = LIVELY_POP;
-      const motes: Mote[] = [];
-      for (let m = 0; m < MOTES_MAX; m++) {
-        motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
-      }
       const ang = this.rng() * Math.PI * 2;
-      const id = this.swarms.length;
-      const ent: WorldSwarm = {
+      const ent = this.bootstrapEnt(
         sw,
-        id,
-        name: swarmName(this.seed, id, sw.behavior),
-        x: anchor.x + Math.cos(ang) * RING_MIN_PX,
-        y: anchor.y + Math.sin(ang) * RING_MIN_PX,
-        orbit: ang,
-        motes,
-        home: { x: anchor.x, y: anchor.y, species: anchor.species },
-        pollinated: 0,
-      };
-      const flower = this.flowerFor(anchor.species)!;
-      for (let w = 0; w < WARM_TICKS; w++) stepSwarm(ent.sw, flower, this.rng);
+        anchor.x + Math.cos(ang) * RING_MIN_PX,
+        anchor.y + Math.sin(ang) * RING_MIN_PX,
+        anchor,
+        true,
+        false,
+      );
       this.swarms.push(ent);
     }
   }
 
-  // The nearest flowering plant to a swarm's SIM-OWNED home — the live bloom it
-  // works this heartbeat, handed back as the actual Plant so pollination can trip
-  // its propagation. Scanned around `ent.home` (the fixed anchor the sim keeps),
-  // NEVER around the animated `ent.x/ent.y` — so which plant is fed/pollinated is
-  // decided purely by the sim, independent of frame rate (finding 1). Null if none
-  // is in reach (a bloom may have died under the cloud); the caller keeps the
-  // swarm's last home in that case.
-  private nearestBloomPlant(ent: WorldSwarm, flora: Flora): Plant | null {
-    if (!ent.home) return null;
-    const hx = ent.home.x;
-    const hy = ent.home.y;
+  /** Nectar available on one plant instance (lab) or its species pool (main). */
+  nectarOf(p: Plant): number {
+    if (this.perPlantNectar) return this.plantNectar.get(p.idx) ?? 1;
+    return this.flowerFor(p.species)?.nectar ?? 0;
+  }
+
+  /** Feed + evolve one swarm on a concrete host plant — per-plant or species nectar. */
+  private stepEntOnHost(ent: WorldSwarm, host: Plant, flower: Flower): void {
+    if (this.perPlantNectar) {
+      const nectar = this.plantNectar.get(host.idx) ?? 1;
+      const proxy: Flower = { map: flower.map, accent: flower.accent, nectar };
+      stepSwarm(ent.sw, proxy, this.rng, this.predation);
+      this.plantNectar.set(host.idx, proxy.nectar);
+    } else {
+      stepSwarm(ent.sw, flower, this.rng, this.predation);
+    }
+  }
+
+  // Pick the bloom this swarm feeds this heartbeat — pin holds the plant;
+  // free-roam skips spent blooms and prefers fuller nectar nearby.
+  private chooseFeedPlant(ent: WorldSwarm, flora: Flora): Plant | null {
+    if (ent.pinned && ent.visitPlantIdx !== null) {
+      const pinned = flora.all[ent.visitPlantIdx];
+      if (pinned && isBloom(pinned) && this.flowerFor(pinned.species) !== null) return pinned;
+    }
+    const hx = ent.home?.x ?? ent.x;
+    const hy = ent.home?.y ?? ent.y;
+    if (!this.perPlantNectar) {
+      let best: Plant | null = null;
+      let bd = Infinity;
+      for (const p of flora.plantsNear(hx, hy, HOME_SCAN_PX)) {
+        if (!isBloom(p) || this.flowerFor(p.species) === null) continue;
+        const d = (p.x - hx) ** 2 + (p.y - hy) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = p;
+        }
+      }
+      return best;
+    }
     let best: Plant | null = null;
-    let bd = Infinity;
+    let bestScore = -Infinity;
     for (const p of flora.plantsNear(hx, hy, HOME_SCAN_PX)) {
       if (!isBloom(p) || this.flowerFor(p.species) === null) continue;
-      const d = (p.x - hx) ** 2 + (p.y - hy) ** 2;
+      const nectar = this.nectarOf(p);
+      if (!ent.pinned && nectar < this.emptyThreshold) continue;
+      const dist = Math.sqrt((p.x - hx) ** 2 + (p.y - hy) ** 2);
+      const score = nectar - (dist / HOME_SCAN_PX) * 0.25;
+      if (score > bestScore) {
+        bestScore = score;
+        best = p;
+      }
+    }
+    return best;
+  }
+
+  private nearestBloomTo(wx: number, wy: number, flora: Flora): Plant | null {
+    let best: Plant | null = null;
+    let bd = Infinity;
+    for (const p of flora.plantsNear(wx, wy, HOME_SCAN_PX)) {
+      if (!isBloom(p) || this.flowerFor(p.species) === null) continue;
+      const d = (p.x - wx) ** 2 + (p.y - wy) ** 2;
       if (d < bd) {
         bd = d;
         best = p;
       }
     }
     return best;
+  }
+
+  /** Place a naïve cloud — homes on the nearest bloom; free-roams by default. */
+  placeCloud(flora: Flora, wx: number, wy: number): WorldSwarm {
+    const sw = makeSwarm(this.rng, undefined, SWARM_CAP);
+    sw.population = 12;
+    const anchor = this.nearestBloomTo(wx, wy, flora);
+    const ent = this.bootstrapEnt(sw, wx, wy, anchor, false, false);
+    this.swarms.push(ent);
+    return ent;
+  }
+
+  /** Snap a cloud onto one bloom — pinned until toggled or retargeted. */
+  inviteCloud(_flora: Flora, plant: Plant): WorldSwarm | null {
+    if (!isBloom(plant) || this.flowerFor(plant.species) === null) return null;
+    const sw = makeSwarm(this.rng, undefined, SWARM_CAP);
+    sw.population = 18;
+    const ang = this.rng() * Math.PI * 2;
+    const ent = this.bootstrapEnt(
+      sw,
+      plant.x + Math.cos(ang) * RING_MIN_PX,
+      plant.y + Math.sin(ang) * RING_MIN_PX,
+      plant,
+      false,
+      true,
+    );
+    this.swarms.push(ent);
+    return ent;
+  }
+
+  /** God-retarget: pin this cloud on a flowering plant. */
+  retarget(ent: WorldSwarm, plant: Plant): boolean {
+    if (!isBloom(plant) || this.flowerFor(plant.species) === null) return false;
+    ent.home = { x: plant.x, y: plant.y, species: plant.species };
+    ent.visitPlantIdx = plant.idx;
+    ent.pinned = true;
+    return true;
+  }
+
+  setPinned(ent: WorldSwarm, pinned: boolean): void {
+    ent.pinned = pinned;
+  }
+
+  /** Remove clouds whose home tile (or centre tile) falls in the patch. */
+  removeCloudsInTiles(tiles: { x: number; y: number }[]): number {
+    const set = new Set(tiles.map((t) => `${t.x},${t.y}`));
+    const before = this.swarms.length;
+    for (let i = this.swarms.length - 1; i >= 0; i--) {
+      const ent = this.swarms[i];
+      const tx = Math.floor(ent.x / TILE_SIZE);
+      const ty = Math.floor(ent.y / TILE_SIZE);
+      const htx = ent.home ? Math.floor(ent.home.x / TILE_SIZE) : tx;
+      const hty = ent.home ? Math.floor(ent.home.y / TILE_SIZE) : ty;
+      if (set.has(`${tx},${ty}`) || set.has(`${htx},${hty}`)) {
+        if (ent.visitPlantIdx !== null) this.plantNectar.delete(ent.visitPlantIdx);
+        this.swarms.splice(i, 1);
+      }
+    }
+    return before - this.swarms.length;
   }
 
   // One island heartbeat: each swarm homes on its nearest flowering plant and
@@ -359,35 +533,40 @@ export class SwarmLayer {
   tick(flora: Flora): void {
     let pollinations = 0; // island-wide events this heartbeat, held under the cap
     for (const ent of this.swarms) {
-      const host = this.nearestBloomPlant(ent, flora);
-      if (host) ent.home = { x: host.x, y: host.y, species: host.species };
-      // no bloom in reach: keep the bond to the last patch rather than blink away
-      if (!ent.home) continue;
+      const host = this.chooseFeedPlant(ent, flora);
+      if (host) {
+        ent.home = { x: host.x, y: host.y, species: host.species };
+        ent.visitPlantIdx = host.idx;
+      }
+      if (!ent.home || ent.visitPlantIdx === null) continue;
+      const feedHost = flora.all[ent.visitPlantIdx];
+      if (!feedHost || !isBloom(feedHost)) continue;
       const flower = this.flowerFor(ent.home.species);
       if (!flower) continue;
-      stepSwarm(ent.sw, flower, this.rng, this.predation);
-      if (host && pollinations < MAX_POLLINATIONS_PER_TICK) {
+      this.stepEntOnHost(ent, feedHost, flower);
+      if (pollinations < MAX_POLLINATIONS_PER_TICK) {
         const match = metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
         if (match >= POLLINATE_MATCH_MIN) {
-          const fill = ent.sw.population / ent.sw.cap; // a fuller cloud pollinates more
+          const fill = ent.sw.population / ent.sw.cap;
           if (this.rng() < POLLINATE_CHANCE * match * match * fill) {
-            // wider, lower-density reseed so the boom spreads instead of tiling a slab
-            if (flora.pollinateSpread(host, this.pollinateAssist.radius, this.pollinateAssist.maxSame)) {
+            if (flora.pollinateSpread(feedHost, this.pollinateAssist.radius, this.pollinateAssist.maxSame)) {
               pollinations++;
-              // enough spreads to read on the ground → one boom event, once per swarm
+              const log = ent.pollinationLog.get(feedHost.species) ?? { count: 0, lastTick: this.ticks };
+              log.count++;
+              log.lastTick = this.ticks;
+              ent.pollinationLog.set(feedHost.species, log);
               if (++ent.pollinated === BOOM_POLLINATIONS) {
-                this.emit({ kind: "boom", name: ent.name, hostSpecies: host.species, x: host.x, y: host.y });
+                this.emit({ kind: "boom", name: ent.name, hostSpecies: feedHost.species, x: feedHost.x, y: feedHost.y });
               }
             }
           }
         }
       }
     }
-    // divergence → cousins, on a slow cadence and one bud at a time: rare, bounded
     this.ticks++;
     if (this.ticks % DIVERGE_INTERVAL === 0 && this.swarms.length < SWARM_COUNT_CAP) {
       for (const ent of [...this.swarms]) {
-        if (this.budCousin(ent, flora)) break; // at most one cousin per attempt
+        if (this.budCousin(ent, flora)) break;
       }
     }
   }
@@ -416,24 +595,17 @@ export class SwarmLayer {
     if (!other) return null;
     const otherFlower = this.flowerFor(other.species)!;
     const child = divergeSwarm(ent.sw, homeFlower, otherFlower, this.rng);
-    if (!child) return null; // pool wasn't genuinely bimodal — nothing forced
+    if (!child) return null;
     const ang = this.rng() * Math.PI * 2;
-    const motes: Mote[] = [];
-    for (let m = 0; m < MOTES_MAX; m++) {
-      motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
-    }
-    const id = this.swarms.length;
-    const cousin: WorldSwarm = {
-      sw: child,
-      id,
-      name: swarmName(this.seed, id, child.behavior, true), // ✧ — arose here, budded
-      x: other.x + Math.cos(ang) * RING_MIN_PX,
-      y: other.y + Math.sin(ang) * RING_MIN_PX,
-      orbit: ang,
-      motes,
-      home: { x: other.x, y: other.y, species: other.species },
-      pollinated: 0,
-    };
+    const cousin = this.bootstrapEnt(
+      child,
+      other.x + Math.cos(ang) * RING_MIN_PX,
+      other.y + Math.sin(ang) * RING_MIN_PX,
+      other,
+      false,
+      false,
+    );
+    cousin.name = swarmName(this.seed, cousin.id, child.behavior, true);
     this.swarms.push(cousin);
     this.emit({ kind: "cousin", name: cousin.name, hostSpecies: other.species, x: other.x, y: other.y });
     return cousin;
@@ -452,21 +624,32 @@ export class SwarmLayer {
     return this.events.splice(0);
   }
 
-  // Per-frame drift: each cloud eases into a slow orbit around its home bloom —
-  // a well-adapted swarm hugs the flower, a poorly-matched one ranges wider (it
-  // has to forage further for a full meal). Wall-clock animation only; no sim.
+  // Per-frame drift: cloud centre eases toward the plant it actually fed this tick —
+  // a truthful readout of forage, not a decorative orbit around a stale anchor.
   animate(dt: number): void {
     for (const ent of this.swarms) {
       ent.orbit += dt * 0.6;
-      if (!ent.home) continue;
-      const flower = this.flowerFor(ent.home.species);
-      const res = flower ? resemblance(ent.sw.sensor, flower.map) : 0;
-      const ring = RING_MIN_PX + (1 - res) * RING_RANGE_PX;
-      const tx = ent.home.x + Math.cos(ent.orbit) * ring;
-      const ty = ent.home.y + Math.sin(ent.orbit) * ring * 0.8;
-      const k = Math.min(1, dt * 1.4);
+      let tx = ent.x;
+      let ty = ent.y;
+      if (ent.visitPlantIdx !== null && ent.home) {
+        const flower = this.flowerFor(ent.home.species);
+        const res = flower ? resemblance(ent.sw.sensor, flower.map) : 0;
+        const ring = RING_MIN_PX * 0.35 + (1 - res) * RING_RANGE_PX * 0.25;
+        tx = ent.home.x + Math.cos(ent.orbit) * ring;
+        ty = ent.home.y + Math.sin(ent.orbit) * ring * 0.8;
+      } else if (ent.home) {
+        const flower = this.flowerFor(ent.home.species);
+        const res = flower ? resemblance(ent.sw.sensor, flower.map) : 0;
+        const ring = RING_MIN_PX + (1 - res) * RING_RANGE_PX;
+        tx = ent.home.x + Math.cos(ent.orbit) * ring;
+        ty = ent.home.y + Math.sin(ent.orbit) * ring * 0.8;
+      }
+      const k = Math.min(1, dt * 1.8);
       ent.x += (tx - ent.x) * k;
       ent.y += (ty - ent.y) * k;
+      for (const m of ent.motes) {
+        m.a += m.spd * dt;
+      }
     }
   }
 
@@ -500,15 +683,43 @@ export class SwarmLayer {
     const flower = this.flowerFor(ent.home.species);
     const host = species[ent.home.species];
     if (!flower || !host) return null;
+    let nectar = flower.nectar;
+    if (ent.visitPlantIdx !== null) {
+      const pNectar = this.plantNectar.get(ent.visitPlantIdx);
+      if (pNectar !== undefined) nectar = pNectar;
+      else if (this.perPlantNectar) nectar = 1;
+    }
+    const pollinationLog: PollinationLogEntry[] = [];
+    for (const [sid, row] of ent.pollinationLog) {
+      const sp = species[sid];
+      const f = this.flowerFor(sid);
+      if (!sp || !f) continue;
+      pollinationLog.push({
+        speciesId: sid,
+        speciesName: sp.name,
+        count: row.count,
+        lastTick: row.lastTick,
+        flowerMap: f.map,
+        accent: f.accent,
+      });
+    }
+    pollinationLog.sort((a, b) => b.count - a.count || b.lastTick - a.lastTick);
+    const matchEfficiency = metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
     return {
       name: ent.name,
       sensor: ent.sw.sensor,
       population: ent.sw.population,
+      energy: ent.sw.energy,
+      cap: ent.sw.cap,
       hostName: host.name,
       resemblance: resemblance(ent.sw.sensor, flower.map),
+      matchEfficiency,
+      nectar,
+      pinned: ent.pinned,
       behavior: ent.sw.behavior,
       flowerMap: flower.map,
       accent: flower.accent,
+      pollinationLog,
     };
   }
 }
