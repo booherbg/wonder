@@ -329,3 +329,44 @@ So:
 **Real-world graduation:** can land with lab first (feature-flag / only when SwarmLayer constructed with `perPlantNectar: true`) so ordinary islands stay byte-identical until a dedicated playtest.
 
 **UI:** Details shows **this plant’s** nectar bar; species aggregate optional.
+
+### Availability / recovery (tunable)
+
+After a feed, nectar is lower; **regen per tick** (`NECTAR_REGEN`, lab-tunable) refills it — “available again after a period.” Extra lab levers:
+
+| Lever | Meaning |
+|---|---|
+| nectar regen | how fast a drained bloom recovers |
+| nectar draw | how hard one visit hits the bar |
+| empty threshold | below this, free-roam refuses the plant (force move-on) |
+| recovery hold | optional: “spent” until nectar ≥ threshold (UI + forage gate) |
+
+Tune these in the Simulator for a readable drain → leave → recover → return cycle.
+
+---
+
+## Truthful swarm motion (locked for 6c)
+
+### Today (the lie)
+
+- **Sim** feeds/adapts/pollinates at `home` using species-shared nectar.
+- **Animation** only eases the cloud in a **pretty orbit** around `home` (match quality widens the ring).
+- **Insects/motes** are decorative flecks — not tied to which plant was fed this tick or to nectar.
+- Code comment: “Wall-clock animation only; no sim.” What you *see* is not what the ecology *did*.
+
+### Target (truthful visit cycle)
+
+Motion becomes a **readout of forage**, peaceful and tunable:
+
+1. **Visit target** — each sim tick (or every N), choose a concrete plant (pin, or free-roam: nearest / fullest nectar / best match — lab dial).
+2. **Cloud travels** — center eases toward that plant. On arrival: feed + adapt + maybe pollinate.
+3. **Individuals** — a few insects leave the cloud, visit the bloom (or nearby blooms), then return. Activity scales with population/energy (starving cloud looks sparse/idle).
+4. **Spent blooms** — nectar below empty threshold ⇒ free-roam picks another plant; animation follows. Pin still forces the chosen plant.
+5. **Multi-flower patch** — same species, different plants: hop between individuals as meters recover (needs per-plant nectar).
+
+**Lab tunables:** travel ease, visit dwell, mote forage fraction, empty threshold, regen/draw.
+
+**Acceptance:** self-seed=0, two blooms of one kind — you can *see* a cloud drain one, leave for the other, and return when the first recovers.
+
+**6c scope note:** insect bench ships place/Details/pin **and** per-plant nectar + truthful visits (not a later polish-only item).
+
