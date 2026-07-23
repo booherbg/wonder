@@ -73,13 +73,18 @@ export function evolveSwarm(sw: Swarm, flower: Flower, rng: Rng): void {
   sw.sensor = survivors[0];
 }
 
-export function regenNectar(flower: Flower): void {
-  flower.nectar = Math.min(1, flower.nectar + NECTAR_REGEN);
+export interface NectarStepConfig {
+  regen?: number;
+  draw?: number;
+}
+
+export function regenNectar(flower: Flower, regen = NECTAR_REGEN): void {
+  flower.nectar = Math.min(1, flower.nectar + regen);
 }
 
 /** Draw available nectar (capped) and convert it by the swarm's metabolic efficiency. */
-export function feedSwarm(sw: Swarm, flower: Flower): number {
-  const drawn = Math.min(flower.nectar, NECTAR_DRAW);
+export function feedSwarm(sw: Swarm, flower: Flower, draw = NECTAR_DRAW): number {
+  const drawn = Math.min(flower.nectar, draw);
   flower.nectar -= drawn;
   const boldness = 0.6 + 0.4 * sw.behavior.nerve; // a bold swarm works the flower harder
   const gain = drawn * metabolicEfficiency(sw.sensor, flower.map, flower.accent) * FEED_VALUE * boldness;
@@ -113,9 +118,9 @@ export function applyPredation(sw: Swarm, flower: Flower, pressure: number): num
 
 /** One tick: nectar refreshes, the swarm feeds, its pool evolves, it lives, and — if
  *  predators are present — the conspicuous fraction is thinned. */
-export function stepSwarm(sw: Swarm, flower: Flower, rng: Rng, predation = 0): void {
-  regenNectar(flower);
-  feedSwarm(sw, flower);
+export function stepSwarm(sw: Swarm, flower: Flower, rng: Rng, predation = 0, nectar?: NectarStepConfig): void {
+  regenNectar(flower, nectar?.regen);
+  feedSwarm(sw, flower, nectar?.draw);
   evolveSwarm(sw, flower, rng);
   updatePopulation(sw);
   if (predation > 0) applyPredation(sw, flower, predation);

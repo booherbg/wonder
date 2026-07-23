@@ -9,7 +9,7 @@ import { CritterSpecies } from "../life/fauna";
 import { PlantSpecies } from "../life/species";
 
 export type EntryKind = "plant" | "critter";
-export type EntryOrigin = "starter" | "rolled" | "daughter";
+export type EntryOrigin = "starter" | "rolled" | "daughter" | "cloned";
 
 export interface DrawerEntry {
   key: string; // a stable UI key, unique per entry

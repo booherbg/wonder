@@ -16,7 +16,18 @@
 
 import { makeRng, Rng } from "../core/rng";
 import { IdMap, MAP_CELLS, appearanceColors, metabolicEfficiency, resemblance } from "../life/idmap";
-import { BehaviorGenes, Flower, Swarm, makeFlower, makeSwarm, stepSwarm, divergeSwarm } from "../life/swarm";
+import {
+  BehaviorGenes,
+  Flower,
+  Swarm,
+  makeFlower,
+  makeSwarm,
+  stepSwarm,
+  divergeSwarm,
+  NECTAR_REGEN,
+  NECTAR_DRAW,
+  NectarStepConfig,
+} from "../life/swarm";
 import { InsectPlan, insectMorphOf } from "../render/insectSprites";
 import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
 import { Flora, Plant } from "../life/flora";
@@ -249,7 +260,8 @@ export class SwarmLayer {
   pollinateAssist: PollinateAssist = DEFAULT_POLLINATE_ASSIST;
   private readonly events: SwarmEvent[] = []; // notable moments awaiting a witness
   private readonly plantNectar = new Map<number, number>(); // per-plant nectar when perPlantNectar
-  private readonly emptyThreshold: number;
+  emptyThreshold: number;
+  nectarTuning: NectarStepConfig = { regen: NECTAR_REGEN, draw: NECTAR_DRAW };
   private rng: Rng;
   private readonly seed: number;
   private readonly species: readonly PlantSpecies[]; // the SHARED list — grows as daughters speciate
@@ -396,15 +408,24 @@ export class SwarmLayer {
     return this.flowerFor(p.species)?.nectar ?? 0;
   }
 
+  /** Register a custom flower signature (clone-with-mutation on the bench). */
+  setFlower(speciesId: number, flower: Flower): void {
+    this.flowers.set(speciesId, {
+      map: flower.map.slice(),
+      accent: flower.accent.slice(),
+      nectar: flower.nectar,
+    });
+  }
+
   /** Feed + evolve one swarm on a concrete host plant — per-plant or species nectar. */
   private stepEntOnHost(ent: WorldSwarm, host: Plant, flower: Flower): void {
     if (this.perPlantNectar) {
       const nectar = this.plantNectar.get(host.idx) ?? 1;
       const proxy: Flower = { map: flower.map, accent: flower.accent, nectar };
-      stepSwarm(ent.sw, proxy, this.rng, this.predation);
+      stepSwarm(ent.sw, proxy, this.rng, this.predation, this.nectarTuning);
       this.plantNectar.set(host.idx, proxy.nectar);
     } else {
-      stepSwarm(ent.sw, flower, this.rng, this.predation);
+      stepSwarm(ent.sw, flower, this.rng, this.predation, this.nectarTuning);
     }
   }
 
