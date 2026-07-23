@@ -558,3 +558,223 @@ bench. Also still deferred (slice-3 scope, explicitly out of bounds per the
 plan): iterating an already-picked-and-placed kind in place, and a
 genome-first single-kind synthesis path (`rollPlantKind`/`rollCritterKind`)
 as an alternative to today's roster-slice approach.
+
+## 16. The evolutionary layer (Simulator slice 4)
+
+The World-Lab now carries a fourth surface, turning "place & watch" into
+"author & evolve": **roll a matched, closable web** in one action; **crank
+five live pressures** that reshape how the construct evolves as you keep
+stepping; read a **richness/wildness meter** that scores what you've made;
+and **pin a phenotype to re-seed** the construct from it. All four reuse the
+sim's own rules rather than re-deriving them, and all four were carried
+through a five-lens QA pass whose material findings are folded into this
+section rather than left as a separate to-do.
+
+**Roll a foodchain — `src/life/rollweb.ts`.** `foodweb.ts` only *scores* a
+species set (`chainStats`/`chainLinks` read what links already exist — there
+is no "build a matched chain" path), so `rollWeb(base, cursor, size,
+habitats, map)` **synthesises** a set and the tests **verify** closure with
+the sim's own matching rules: `appetite`/`APPETITE_MIN` (a disperser eats a
+plant) and `hueGap`/`SUBSTRATE_HUE_MATCH` (a feeder germinates on a
+byproduct). Because `fauna.appetite` gates *hard* on form equality, one
+palate only ever eats one plant *form* — so each chain closes with **exactly
+one disperser** by giving the **source** and the **feeder** the same
+`(form, hue)` family (the feeder is a real, distinctly-named same-form
+candidate — or a clone of the source if the batch holds none — retuned to
+the source's hue and flagged `substrateFeeder`, on the source's own
+habitat). A disperser's palate is built *by construction*, not search
+(`palateFor` centres `hueCenter`/`hueWidth`/`glowTaste` on the source's
+archetype via `setCritterTraits`), so it eats the source (→ a byproduct at
+hue H) **and** the feeder that wakes on that byproduct — the loop closes.
+`worldlab.ts`'s `seedWeb(size)` introduces the whole triple onto the
+palette/drawer (`introducePlantDef`/`introduceCritterDef` →
+`kernel.introducePlantSpecies`/`introduceCritterSpecies`) and auto-places one
+seed of each near the construct centre so the chain can actually close as
+you step — and re-points the disperser's `favoriteSpecies` at the freshly
+introduced source id, so the inspect card's "born loving" line never indexes
+a stale placeholder. **roll a web** calls `seedWeb(WEB_SIZE = 3)`; **seed it
+richer** calls `seedWeb(WEB_SIZE_RICH = 6)`.
+
+**The pressures panel — `src/game/simPressures.ts` + `kernel.setTuning`/
+`setCritterRole`.** Five sliders, in order: **drift** (`mutationAmount`),
+**speciation** (`splitDistance`), **grazer share** (a role paint, not a
+tuning field), **reseed rate** (`reproChance`), **per-tile cap**
+(`maxPerTile`). `tuningPatchFor(id, value)` maps the four tuning-backed
+pressures to their `FloraTuning` fields — speciation is special-cased to
+also open the companion `splitClusterMin`/`splitCooldownTicks` gates as the
+threshold drops, since a lower `splitDistance` alone is silently blocked by
+those gates otherwise. `grazerAssignment(ids, share)` is a deterministic,
+no-rng role paint: sort every live critter kind's id, the first
+`round(share·N)` become `grazer`, the rest `disperser`. **The load-bearing
+finding that made this slice cheap:** `Flora.tuning` is never captured at
+construction — **every** consumer (`simTick`, `maybeSpeciate`, `hasRoom`,
+`propagate`, `pollinateSpread`, `stepSubstrates`) reads `this.tuning.<field>`
+fresh each call, and `updateCritter` reads `speciesList[c.species].role`
+fresh each tick too — so `kernel.setTuning(patch)`
+(`Object.assign(this.flora.tuning, patch)`) and `kernel.setCritterRole(id,
+role)` (`this.critterSpecies[id].role = role`) land on the *very next*
+`step()`, with the whole plant/critter/tick state preserved. **No rebuild,
+ever.** A slider is a pure parameter write on the running kernel. In the
+chrome, the five sliders live in an **evolution tray** that is an in-flow
+child appended last into the bottom-center `stack` (a column-reverse flex
+container, so it renders above the palette/bar), toggled by a **`pressures
+⚘`** button — not a `position: fixed` overlay as first sketched, and not a
+fourth scrolling column, so the left/right bounded/scrolling stacks stay
+structurally untouched.
+
+**The richness/wildness meter.** `richnessMeter(plants, critters)` reuses
+`chainStats` and the *exact* `diversityScore` arithmetic (`chains +
+2·(redundancy − 1)`), named via `richnessWord`
+(flat/sparse/living/rich/lush/legendary) — display-only, it never mutates
+the sim. It rides inside the existing "living web" census panel's header (no
+new column), and — after a QA fix, see below — it scores only the
+construct's **live** species (`speciesCounts().get(id) > 0` for plants,
+`critterCountOf(id) > 0` for critters), so an untouched construct reads
+`flat 0.0` rather than a lively-sounding score for kinds that were merely
+*introduced*, never placed. "Seed it richer" drops a bigger web (6 chains
+instead of 3), pushing the reading up a tier or two.
+
+**Curate — pin-to-reseed.** `simDrawer.ts` gives every `DrawerEntry` a
+`pinned` flag (`false` by default), with `pinEntry`/`unpinEntry` as
+immutable toggles that preserve the entry's stored `def`, and
+`pinnedEntries` filtering to the non-deleted pinned set — mirroring the
+existing `deleteEntry`/`reviveEntry` tombstone shape exactly. The bench's
+**place pinned** button (renamed from "reseed pinned" in the QA pass, see
+below) calls `reseedPinned()`, which re-places a few fresh instances of each
+pinned kind near the construct centre through the same seeded
+`kernel.placePlant`/`placeCritter` path `reviveDrawerEntry` already uses. One
+honest limitation, surfaced by QA but not itself a fix in this pass:
+placement resolves by `speciesId` against the kernel's **live** species
+record, not literally the drawer's frozen `def` snapshot — harmless for
+plants (nothing in the bench mutates a live `PlantSpecies` record in place
+after introduction), but a critter's `role` is exactly the one species-level
+field the grazer-share slider can repaint live, so a pinned "disperser" that
+the slider has since flipped to "grazer" re-places as a grazer, not as the
+phenotype it was pinned at. Noted here as a known edge, not silently papered
+over.
+
+**The binding invariants, checked.** *Determinism:* `grep -nE
+"Math\.random|Date\.now|new Date" src/life/rollweb.ts src/game/simPressures.ts`
+finds nothing — roll-a-web draws off `roll.ts`'s `rollSeedFor`+`makeRng`;
+`grazerAssignment` and `richnessMeter` are pure arithmetic over their
+arguments; a pressures change adds **no new rng draws**, so it's a pure
+parameter write — proven by a schedule-replay kernel test (same seed, same
+placements, same tuning-write schedule, same step count ⇒ byte-identical
+snapshot). *Peaceful:* `step()` still never births or removes a critter —
+`clearPlantInstances`/`clearCritterInstances`/`setTuning`/`setCritterRole`
+are all player-triggered ops that run outside the step loop, and cranking
+grazer share only ever *thins* (a grazer nibbles via `flora.nibble`, setting
+a mature plant back to sprout — nothing dies); a kernel test flips a placed
+critter to grazer, steps 120 ticks at full fidelity, and confirms
+`critterCount()` is unchanged. *Real worlds untouched:* every new file
+(`rollweb.ts`, `simPressures.ts`) and every edited file (`kernel.ts`,
+`simDrawer.ts`, `worldlab.ts`) is Simulator-only. The **one** touch to a file
+ordinary play also uses — `flora.ts`'s additive `readonly suppressedSpecies
+= new Set<number>()` (added during the QA fix pass, below) — is provably
+inert for ordinary play: it defaults empty, and the only two writers
+(`kernel.clearPlantInstances`, which adds an id, and
+`kernel.unsuppressPlantSpecies`, which removes one) are both Simulator-only
+kernel methods that ordinary play never calls; `stepSubstrates`' feeders
+filter against an empty set returns the identical array, confirmed by the
+full suite (including the pre-existing substrate-germinate tests) staying
+green.
+
+**The QA pass and its fixes.** Five QA lenses ran over the whole bench — UX,
+consistency, functionality, coherence, completeness — and the material
+findings were fixed and shipped to `master` (`c30812e`):
+
+- **BLOCKING (coherence):** the bottom `stack`'s `palette` child had no
+  height cap, so on a wide roster at ≤1100px width the palette's growing
+  rows pushed the whole bottom-anchored, column-reverse stack upward,
+  shoving the evolution tray into the header and side columns and clipping
+  both. Fixed by giving `palette` the same `max-height: 40vh; overflow-y:
+  auto` every sibling panel (roll pane, drawer, readout, evo tray) already
+  had.
+- **The speciation slider ran backwards (UX).** `splitDistance` was the one
+  pressure where a higher raw field value is the *tamer* end, so dragging it
+  right — same direction as every other slider's "wilder" — actually made
+  speciation rarer. Fixed with a `reversed` flag on its `Pressure`
+  descriptor and a new `fieldValueFor(id, sliderValue)`, which mirrors only
+  the reversed slider's position across `[min, max]` before it reaches
+  `tuningPatchFor` — the real field, and `tuningPatchFor`'s own tests, are
+  untouched; only the slider-to-field mapping flips, so right now reads
+  "wilder" for all five.
+- **Deleted substrate-feeders came back on their own (functionality).**
+  `clearPlantInstances` zeroed a feeder's live population but
+  `stepSubstrates`' feeders filter had no notion of a tombstone, so a live
+  disperser elsewhere could germinate a fresh instance of the "cleared"
+  species within roughly a hundred ticks, with the drawer still showing
+  "cleared." Closed by `flora.ts`'s new `suppressedSpecies` set —
+  `clearPlantInstances` adds the id, `unsuppressPlantSpecies` (called on
+  revive) removes it, and the feeders filter excludes anything suppressed.
+- **The richness meter scored potential, not what was actually alive**
+  (flagged independently by three of the five lenses). It read off *every*
+  introduced species definition, including the starter kinds seeded at
+  boot — so a completely untouched construct read "living 14.7" beside a
+  census saying "nothing counted yet." Fixed by scoping the meter's inputs
+  to live species only (population > 0) before calling `richnessMeter`; an
+  empty construct now reads `flat 0.0`, matching the pre-existing
+  `richnessMeter([], [])` unit test.
+- **Grazer share was dishonest at boot and silent on change (UX).** The
+  slider initialised to a bookkeeping `0` regardless of the roster's actual
+  role mix, and the first nudge silently repainted every critter kind's role
+  with no feedback. Fixed by seeding the slider from the live roster's real
+  share on build, and flashing "grazer share N% — repainted M kind(s))" (or
+  "roster unchanged") on every move.
+- **No speed control (completeness).** The spec named pause/play/speed
+  explicitly; only step-1/step-N/fidelity existed. Added a **×1/×2/×4**
+  button that only re-paces the frame loop's accumulator (`stepMs = TICK_MS
+  / speedMul`) — never a sim input, so determinism is untouched.
+- **"Reseed" meant three different things on three panels (coherence).** The
+  pressures tray's reseed rate (`reproChance`), the iterate strip's "reseed:
+  on/off" (actually the `substrateFeeder` flag), and the roll pane's "reseed
+  pinned" (placement from a stored def) all borrowed one word for three
+  unrelated mechanics. Renamed the trait toggle to **substrate feeder:
+  on/off** and the pin action to **place pinned**, leaving "reseed rate" as
+  the one surface that's actually about reproduction.
+
+**The open design calls, resolved.** The slice-4 plan flagged five open
+calls for the controller; each is now a settled decision:
+
+1. **A chain closes with exactly one disperser via a shared `(form, hue)`
+   family**, not a richer multi-form chain — **confirmed** as the v1 shape.
+   A 4-member chain (a second disperser on a second plant form) is a v2
+   idea, not built.
+2. **Richness is realized (live species), not potential** — resolved by the
+   QA fix above. The meter now reads `flat` on an empty or critterless
+   construct, which is the honest reading for a food-*web* meter; the
+   census's `AROSE`/`LIVE` counts beside it carry the biodiversity signal
+   the meter itself doesn't.
+3. **The pressures live in an in-flow bottom-center `stack` child** — not a
+   fourth scrolling column, and (contrary to the plan's original sketch)
+   not a `position: fixed` overlay either — **shipped and confirmed**; the
+   left/right bounded/scrolling stacks are untouched by it.
+4. **Grazer share is a global role repaint of every live critter kind**,
+   overriding any hand-set role — **confirmed** as the intended default
+   selection pressure. The QA fix made its effect visible (a truthful
+   initial value plus a repaint flash) instead of silent; a per-kind
+   exemption (e.g. sparing a roll-a-web-authored disperser) is a v2
+   consideration, not built.
+5. **The `?split=1`/`?pressures=wild` demo tuning is best-effort**, not a
+   guaranteed outcome within any fixed run length — **fine as shipped**,
+   same as slice 3's `?split` precedent.
+
+**Where it lives:** the pure roll/verify maths in `src/life/rollweb.ts`
+(`tests/rollweb.test.ts`); the pure pressures + richness model in
+`src/game/simPressures.ts` (`tests/sim-pressures.test.ts`); the additive,
+Simulator-only kernel seams — `setTuning`, `setCritterRole`,
+`clearPlantInstances`, `unsuppressPlantSpecies` — in `src/life/kernel.ts`
+(`tests/kernel.test.ts`); the pin model (`pinEntry`/`unpinEntry`/
+`pinnedEntries`) in `src/game/simDrawer.ts` (`tests/sim-drawer.test.ts`); the
+one additive, empty-by-default `suppressedSpecies` set in `src/life/flora.ts`
+(`tests/sim-suppress.test.ts`); and all the DOM wiring — the evolution tray,
+the roll-a-web controls, the richness block hoisted into the census panel,
+the pin toggle + "place pinned," the ×1/×2/×4 speed button, and the dev aids
+(`?web=`, `?rich=`, `?evo=`, `?pressures=wild`, `?pin=`, `?reseed=`) — in
+`src/game/worldlab.ts`.
+
+Deferred to slice 5, unchanged: **save/resume to a named slot** with full
+critter-state + RNG persistence (the one item that touches a real shared
+file, `save.ts`) and **the ambient bench** (place pollinators/frogs/
+dragonflies, opt-in experimental roles) — the remaining "frame &
+persistence" v1 items the spec named but no slice has yet claimed.
