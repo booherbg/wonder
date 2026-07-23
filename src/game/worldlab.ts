@@ -13,9 +13,11 @@
 // Chrome mirrors simulator.ts's codex voice and token usage, kept minimal:
 // an eyebrow, a way back, a starter selector, and now the palette itself.
 
+import { makeRng } from "../core/rng";
 import { CensusLog, sparkline } from "../life/census";
 import {
   Critter,
+  CritterRole,
   CritterSpecies,
   DriveName,
   Drives,
@@ -29,7 +31,17 @@ import { Flora, Plant, nearestPlant } from "../life/flora";
 import { chainLinks, chainStats, richnessWord } from "../life/foodweb";
 import { Genome, PlantForm, hsl } from "../life/genome";
 import { Fidelity, SimKernel } from "../life/kernel";
-import { PROVISIONAL_ID, RollKind, rollCritterBatch, rollPlantBatch } from "../life/roll";
+import {
+  PROVISIONAL_ID,
+  RollKind,
+  nudgeCritterLooks,
+  nudgePlantLooks,
+  rollCritterBatch,
+  rollPlantBatch,
+  rollSeedFor,
+  setCritterTraits,
+  setPlantTraits,
+} from "../life/roll";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { critterPortrait } from "../render/critterSprites";
 import { BIOME_WORDS, moodLine, roleLine } from "../render/inspect";
@@ -85,6 +97,17 @@ const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
 // inspect.ts's own ZOOM-scaled sprite cards.
 const ROLL_COUNT = 10;
 const THUMB_ZOOM = 3;
+
+// The iterate strip's own tuning: a bigger zoom for the focused candidate's
+// enlarged thumbnail than the grid's own cells wear, a size stepper's
+// increment (setCritterTraits clamps into the legal band, so this never
+// needs its own clamp), a palate nudge's hueCenter shift (wrapped 0..1), and
+// the "re-roll looks" amount — a visibly bigger jump than a plain "nudge"
+// (which uses roll.ts's own defaults, so the two read as distinct gestures).
+const FOCUS_ZOOM = 3.5;
+const SIZE_STEP = 0.15;
+const PALATE_STEP = 0.12;
+const REROLL_LOOKS_AMOUNT: Record<RollKind, number> = { plant: 0.4, critter: 0.4 };
 
 // A tiny local blit: scale a real sprite canvas (plant or critter, already
 // drawn by getPlantSprite/critterPortrait — never redrawn here) into a fresh
@@ -240,6 +263,36 @@ function censusWebView(census: CensusLog, plantSpecies: PlantSpecies[], critterS
   return { summary: census.summary(), species, chains, richness };
 }
 
+// The iterate strip's view of the focused batch candidate: an enlarged
+// thumbnail (re-rendered live off the mutated def) plus whichever trait
+// fields its kind actually carries — Chrome shows the kind-appropriate
+// controls off which fields are present, never re-deriving anything the
+// candidate's own def doesn't already hold.
+interface FocusView {
+  kind: RollKind;
+  name: string;
+  thumb: HTMLCanvasElement;
+  tint: string;
+  role?: CritterRole; // critter
+  size?: number; // critter
+  palate?: Palate; // critter
+  form?: PlantForm; // plant
+  hue?: number; // plant
+  habitat?: Tile; // plant
+  substrateFeeder?: boolean; // plant
+}
+
+// A trait patch the iterate strip can ask for — the union of everything
+// setPlantTraits/setCritterTraits accept; worldlab.ts routes it to whichever
+// setter matches the focused candidate's kind.
+type TraitPatch = {
+  role?: CritterRole;
+  size?: number;
+  palate?: Partial<Palate>;
+  habitat?: Tile;
+  substrateFeeder?: boolean;
+};
+
 // World px at the centre of a tile — every placement (click or demo) snaps to
 // this, so a plant lands square on the tile you meant, not some sub-tile
 // jitter position.
@@ -366,6 +419,12 @@ export function startWorldLab(): void {
   // the seeded roll itself.
   const rollAid = new URL(location.href).searchParams.get("roll");
   const rollPickAid = new URL(location.href).searchParams.get("rollpick");
+  // ?iterate=looks|traits: focus batch cell 0 and apply one deterministic
+  // looks-nudge or traits-change, so a shot shows the strip open with a
+  // re-rendered thumbnail. Any other truthy value (e.g. ?iterate=1) reads as
+  // "looks" — the same "unrecognized value falls back to the common case"
+  // convention ?roll already uses. Display-only, off iterateRng.
+  const iterateAid = new URL(location.href).searchParams.get("iterate");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -386,6 +445,12 @@ export function startWorldLab(): void {
   let rollCursor = 0;
   let batch: (PlantSpecies | CritterSpecies)[] = [];
   let drawer: DrawerEntry[] = [];
+  // the iterate strip's own state: which batch index is focused (null = the
+  // strip is closed) and the seeded rng that drives its looks nudges —
+  // reset off rollSeedFor whenever a candidate is (re-)focused or the batch
+  // is (re-)rolled, so a shot's single nudge is byte-reproducible.
+  let focus: number | null = null;
+  let iterateRng = makeRng(0);
 
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
   // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
@@ -445,7 +510,18 @@ export function startWorldLab(): void {
       rollKind === "plant"
         ? rollPlantBatch(seed, rollCursor, ROLL_COUNT, { habitats: habitatsOf(map) })
         : rollCritterBatch(seed, rollCursor, ROLL_COUNT, kernel.plantSpecies, map);
+    focus = null; // a fresh batch invalidates whatever candidate was focused
+    resetIterateRng();
     renderGrid();
+    renderFocus();
+  }
+
+  // Off `rollSeedFor` (the SAME per-(kind,cursor) seed the batch itself was
+  // drawn from), salted so the iterate stream is its own — never the batch
+  // draw's own rng replayed. Re-focusing or re-rolling calls this, so a shot
+  // that focuses cell 0 and applies one nudge always lands on the same coat.
+  function resetIterateRng(): void {
+    iterateRng = makeRng(rollSeedFor(seed, rollKind, rollCursor) ^ 0x17e7);
   }
 
   // Rebuilds the grid's thumbnails from the current batch. Plants render via
@@ -503,11 +579,105 @@ export function startWorldLab(): void {
       drawer.push(makeEntry({ kind: "critter", speciesId: id, def: kernel.critterSpecies[id], origin: "rolled" }));
       selected = { kind: "critter", id };
     }
+    focus = null; // the pick is made; the iterate strip's job here is done
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
       ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
+      ui.setFocus(null);
     }
+  }
+
+  // ── the iterate strip: focus a batch candidate (before it's picked) and
+  // reshape it in place — looks (nudge/re-roll the genome or morph; the
+  // thumbnail re-renders) and traits (a critter's palate/role/size; a
+  // plant's habitat/reseed). Whatever the candidate looks like when you
+  // finally pick it is exactly what pickBatch introduces. ──────────────────
+
+  // Focuses (or, with null, closes) a batch index. Re-focusing resets the
+  // iterate rng — see resetIterateRng's own note on why that's the seam that
+  // keeps a dev-aid shot reproducible regardless of which cell it focuses.
+  function focusBatch(i: number | null): void {
+    focus = i !== null && batch[i] ? i : null;
+    if (focus !== null) resetIterateRng();
+    renderFocus();
+  }
+
+  // Rebuilds the iterate strip's view from the currently focused candidate —
+  // called after every focus change and every looks/traits mutation, so the
+  // strip never shows a stale thumbnail or trait value. A harmless no-op
+  // before `ui` exists, mirroring renderGrid/refreshInspect.
+  function renderFocus(): void {
+    if (!ui) return;
+    const member = focus !== null ? batch[focus] : undefined;
+    if (!member) {
+      ui.setFocus(null);
+      return;
+    }
+    if (rollKind === "plant") {
+      const sp = member as PlantSpecies;
+      ui.setFocus({
+        kind: "plant",
+        name: sp.name.toLowerCase(),
+        thumb: drawThumb(getPlantSprite(sp.archetype, sp.habitat === Tile.ShallowWater), FOCUS_ZOOM),
+        tint: hsl(sp.archetype.hue, 0.62, 0.5),
+        form: sp.archetype.form,
+        hue: sp.archetype.hue,
+        habitat: sp.habitat,
+        substrateFeeder: !!sp.substrateFeeder,
+      });
+    } else {
+      const sp = member as CritterSpecies;
+      ui.setFocus({
+        kind: "critter",
+        name: sp.name.toLowerCase(),
+        thumb: drawThumb(critterPortrait(sp), FOCUS_ZOOM),
+        tint: hsl(sp.bodyHue, 0.55, 0.55),
+        role: sp.role,
+        size: sp.size,
+        palate: sp.palate,
+      });
+    }
+  }
+
+  // Looks: nudge (small, roll.ts's own default amount) or re-roll (a bigger,
+  // explicit amount) — both draw from the SAME iterateRng, so consecutive
+  // nudges keep advancing it (never reset mid-stream) while a re-focus/
+  // re-roll starts the stream fresh (resetIterateRng, above). Re-renders
+  // both the grid cell (so the batch reads consistently) and the strip.
+  function nudgeFocused(amount?: number): void {
+    if (focus === null) return;
+    const member = batch[focus];
+    if (!member) return;
+    batch[focus] =
+      rollKind === "plant"
+        ? nudgePlantLooks(member as PlantSpecies, iterateRng, amount)
+        : nudgeCritterLooks(member as CritterSpecies, iterateRng, amount);
+    renderGrid();
+    renderFocus();
+  }
+
+  // Traits: a critter's role/size/palate, a plant's habitat/reseed — routed
+  // to whichever setter matches the focused candidate's kind. A size change
+  // re-derives the critter's morph (setCritterTraits' own job), so the
+  // re-render below shows the body actually scale.
+  function setFocusedTrait(patch: TraitPatch): void {
+    if (focus === null) return;
+    const member = batch[focus];
+    if (!member) return;
+    batch[focus] =
+      rollKind === "plant"
+        ? setPlantTraits(member as PlantSpecies, patch)
+        : setCritterTraits(member as CritterSpecies, patch);
+    renderGrid();
+    renderFocus();
+  }
+
+  // The strip's own pick button: introduces the focused candidate exactly as
+  // it now stands (pickBatch itself closes the strip once the pick lands).
+  function pickFocused(): void {
+    if (focus === null) return;
+    pickBatch(focus);
   }
 
   // Re-renders the readout plate from the current `inspected` pick — called
@@ -690,6 +860,27 @@ export function startWorldLab(): void {
         if (Number.isInteger(idx) && idx >= 0) pickBatch(idx);
       }
     }
+    // ?iterate=looks|traits (any other truthy value reads as "looks"):
+    // deterministically focuses batch cell 0 and applies one looks-nudge or
+    // one traits-change (off iterateRng), so a shot shows the strip open
+    // with a live-re-rendered thumbnail. Needs a populated batch (?roll=
+    // alongside it) — a no-op otherwise.
+    if (iterateAid !== null && batch.length > 0) {
+      focusBatch(0);
+      if (iterateAid === "traits") {
+        const cand = batch[0];
+        if (rollKind === "plant") {
+          const sp = cand as PlantSpecies;
+          const alt = BIOME_TILES.find((t) => t.tile !== sp.habitat)?.tile ?? sp.habitat;
+          setFocusedTrait({ habitat: alt, substrateFeeder: !sp.substrateFeeder });
+        } else {
+          const sp = cand as CritterSpecies;
+          setFocusedTrait({ role: sp.role === "grazer" ? "disperser" : "grazer", size: sp.size + SIZE_STEP });
+        }
+      } else {
+        nudgeFocused();
+      }
+    }
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -701,6 +892,7 @@ export function startWorldLab(): void {
       ui.setSelected(selected);
       ui.setRollKind(rollKind);
       renderGrid();
+      renderFocus();
     }
     refreshInspect();
     refreshCensusStrip();
@@ -725,8 +917,10 @@ export function startWorldLab(): void {
   ui.onRollKind = (k) => {
     rollKind = k;
     batch = []; // a stale batch of the OTHER kind can't render under the new one
+    focus = null; // and whatever it had focused goes with it
     ui!.setRollKind(k);
     ui!.setBatch([]);
+    ui!.setFocus(null);
   };
   ui.onRoll = () => rollBatch();
   ui.onReRoll = () => {
@@ -734,12 +928,18 @@ export function startWorldLab(): void {
     rollBatch();
   };
   ui.onPickBatch = (i) => pickBatch(i);
+  ui.onFocusBatch = (i) => focusBatch(i);
+  ui.onNudgeLooks = () => nudgeFocused();
+  ui.onRerollLooks = () => nudgeFocused(REROLL_LOOKS_AMOUNT[rollKind]);
+  ui.onSetTrait = (patch) => setFocusedTrait(patch);
+  ui.onPickFocused = () => pickFocused();
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
   ui.setBrushSize(brushSize);
   ui.setRollKind(rollKind);
   // the first real render: build()'s own call above ran before `ui` existed
   renderGrid();
+  renderFocus();
   refreshInspect();
   refreshCensusStrip();
 
@@ -963,6 +1163,14 @@ interface Chrome {
   onReRoll: () => void;
   setBatch: (cells: { thumb: HTMLCanvasElement; name: string; tint: string }[]) => void;
   onPickBatch: (index: number) => void;
+  // the iterate strip: focus a batch candidate → looks (nudge/re-roll) +
+  // trait controls (kind-appropriate) + a pick button (Simulator slice 3)
+  onFocusBatch: (index: number | null) => void;
+  setFocus: (view: FocusView | null) => void;
+  onNudgeLooks: () => void;
+  onRerollLooks: () => void;
+  onSetTrait: (patch: TraitPatch) => void;
+  onPickFocused: () => void;
   // time controls (Task 6)
   onPlay: () => void;
   onStep: () => void;
@@ -1348,9 +1556,18 @@ function buildChrome(initial: StarterKind): Chrome {
   // outward. ─────────────────────────────────────────────────────────────
   const rollPane = document.createElement("div");
   rollPane.id = "lab-roll";
+  // capped + its own scroll (same vh-relative move the census panel below it
+  // already makes) — NOT just the grid's own inner scroll. The iterate strip
+  // (Task 5) can grow taller than the grid ever did; without an outer cap the
+  // whole pane would grow with it and shove the census down far enough to
+  // clip its own food-web rows below the viewport — the exact collision
+  // Task 4 fixed the OTHER way (leftStack's flex column). A vh cap bounds
+  // the pane's rendered height regardless of what the strip ever grows to,
+  // so the census's position never moves by more than the cap itself allows.
   rollPane.style.cssText =
     "width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
-    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;";
+    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;" +
+    " max-height: 48vh; overflow-y: auto;";
   leftStack.insertBefore(rollPane, web); // above the census — leftStack's first child
 
   const rollHead = document.createElement("div");
@@ -1407,6 +1624,11 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onRoll = () => {};
   chrome.onReRoll = () => {};
   chrome.onPickBatch = () => {};
+  chrome.onFocusBatch = () => {};
+  chrome.onNudgeLooks = () => {};
+  chrome.onRerollLooks = () => {};
+  chrome.onSetTrait = () => {};
+  chrome.onPickFocused = () => {};
   chrome.setRollKind = (k) => {
     for (const { k: kk, b } of rollKindBtns) b.style.cssText = btn(kk === k);
   };
@@ -1427,9 +1649,154 @@ function buildChrome(initial: StarterKind): Chrome {
         "font-size: 9px; text-align: center; line-height: 1.15; max-width: 54px; overflow: hidden;" +
         " text-overflow: ellipsis; white-space: nowrap;";
       cellBtn.appendChild(nameEl);
-      cellBtn.onclick = () => chrome.onPickBatch(i);
+      // a single click FOCUSES the cell (opens the iterate strip below); a
+      // double-click (or the strip's own pick button) introduces it — the
+      // click that also fires ahead of every dblclick simply re-focuses the
+      // same cell first, which is harmless (focusBatch is idempotent).
+      cellBtn.onclick = () => chrome.onFocusBatch(i);
+      cellBtn.ondblclick = () => chrome.onPickBatch(i);
       rollGrid.appendChild(cellBtn);
     });
+  };
+
+  // ── the iterate strip: the focused candidate's enlarged thumbnail, looks
+  // controls (nudge/re-roll), kind-appropriate trait controls, a trait
+  // readout (reusing title()/stat() from the plate helpers above), and a
+  // pick button. Lives inside the roll pane, below the grid — opening it
+  // SHRINKS the grid's own scroll window (see setFocus below) rather than
+  // growing the pane's total height, so the census panel underneath in
+  // `leftStack` never gets pushed into the overlap Task 4 already fixed. ──
+  const iterateStrip = document.createElement("div");
+  iterateStrip.id = "lab-iterate";
+  iterateStrip.style.cssText =
+    "display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(127,224,196,0.18);";
+  rollPane.appendChild(iterateStrip);
+
+  const iterateHead = document.createElement("div");
+  iterateHead.style.cssText = "display: flex; align-items: center; gap: 8px;";
+  const iterateThumbHost = document.createElement("div");
+  iterateThumbHost.id = "iterate-thumb";
+  iterateThumbHost.style.cssText = "display: flex; align-items: center; justify-content: center;";
+  const iterateName = document.createElement("div");
+  iterateName.id = "iterate-name";
+  iterateName.style.cssText =
+    "font-variant: small-caps; letter-spacing: 0.03em; font-size: 14px; color: var(--ink-bright); flex: 1;";
+  const iterateCloseBtn = document.createElement("button");
+  iterateCloseBtn.id = "iterate-close-btn";
+  iterateCloseBtn.textContent = "close";
+  iterateCloseBtn.style.cssText = btn(false);
+  iterateCloseBtn.onclick = () => chrome.onFocusBatch(null);
+  iterateHead.append(iterateThumbHost, iterateName, iterateCloseBtn);
+  iterateStrip.appendChild(iterateHead);
+
+  const looksRow = document.createElement("div");
+  looksRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px;";
+  const nudgeLooksBtn = document.createElement("button");
+  nudgeLooksBtn.id = "iterate-nudge-btn";
+  nudgeLooksBtn.textContent = "nudge looks";
+  nudgeLooksBtn.style.cssText = btn(false);
+  nudgeLooksBtn.onclick = () => chrome.onNudgeLooks();
+  const rerollLooksBtn = document.createElement("button");
+  rerollLooksBtn.id = "iterate-reroll-looks-btn";
+  rerollLooksBtn.textContent = "re-roll looks";
+  rerollLooksBtn.style.cssText = btn(false);
+  rerollLooksBtn.onclick = () => chrome.onRerollLooks();
+  looksRow.append(label("looks"), nudgeLooksBtn, rerollLooksBtn);
+  iterateStrip.appendChild(looksRow);
+
+  const traitsControls = document.createElement("div");
+  traitsControls.id = "iterate-traits";
+  traitsControls.style.cssText = "display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px;";
+  iterateStrip.appendChild(traitsControls);
+
+  const traitsReadout = document.createElement("div");
+  iterateStrip.appendChild(traitsReadout);
+
+  const pickFocusedBtn = document.createElement("button");
+  pickFocusedBtn.id = "iterate-pick-btn";
+  pickFocusedBtn.textContent = "pick";
+  pickFocusedBtn.style.cssText = btn(true) + " margin-top: 8px;"; // lumen-highlighted — the strip's one call to action
+  pickFocusedBtn.onclick = () => chrome.onPickFocused();
+  iterateStrip.appendChild(pickFocusedBtn);
+
+  chrome.setFocus = (view) => {
+    if (!view) {
+      iterateStrip.style.display = "none";
+      rollGrid.style.maxHeight = "220px"; // the grid's own normal scroll window
+      return;
+    }
+    // shrink the grid's scroll window while the strip is open — its own
+    // extra height eats the freed room, so the roll pane's TOTAL height (and
+    // so the census panel stacked below it) barely moves either way.
+    rollGrid.style.maxHeight = "108px";
+    iterateStrip.style.display = "block";
+    iterateThumbHost.innerHTML = "";
+    view.thumb.style.cssText = "image-rendering: pixelated; display: block;";
+    iterateThumbHost.appendChild(view.thumb);
+    iterateName.textContent = view.name;
+
+    traitsControls.innerHTML = "";
+    if (view.kind === "critter") {
+      const roleBtns = (["disperser", "grazer"] as const).map((r) => {
+        const b = document.createElement("button");
+        b.textContent = r;
+        b.style.cssText = btn(view.role === r);
+        b.onclick = () => chrome.onSetTrait({ role: r });
+        return b;
+      });
+      const sizeSmallerBtn = document.createElement("button");
+      sizeSmallerBtn.id = "iterate-size-smaller-btn";
+      sizeSmallerBtn.textContent = "smaller";
+      sizeSmallerBtn.style.cssText = btn(false);
+      sizeSmallerBtn.onclick = () => chrome.onSetTrait({ size: (view.size ?? 1) - SIZE_STEP });
+      const sizeLargerBtn = document.createElement("button");
+      sizeLargerBtn.id = "iterate-size-larger-btn";
+      sizeLargerBtn.textContent = "larger";
+      sizeLargerBtn.style.cssText = btn(false);
+      sizeLargerBtn.onclick = () => chrome.onSetTrait({ size: (view.size ?? 1) + SIZE_STEP });
+      const palateBtn = document.createElement("button");
+      palateBtn.id = "iterate-palate-btn";
+      palateBtn.textContent = "shift palate";
+      palateBtn.style.cssText = btn(false);
+      palateBtn.onclick = () =>
+        chrome.onSetTrait({ palate: { hueCenter: ((view.palate?.hueCenter ?? 0) + PALATE_STEP) % 1 } });
+      // one flex-wrap row, not three stacked ones — each group() cluster
+      // (label + its own buttons, never split) wraps onto a new line only
+      // once the pane's width actually runs out, same as the bottom bar's
+      // own clusters do; keeps the strip's height down.
+      traitsControls.append(
+        group(label("role"), ...roleBtns),
+        group(label("size"), sizeSmallerBtn, sizeLargerBtn),
+        group(label("palate"), palateBtn),
+      );
+      // one combined readout line, not a whole plate — role/size already
+      // read off the buttons' own active state; palate's numbers (not
+      // otherwise shown) are what's worth reusing stat() for here.
+      traitsReadout.innerHTML = stat("palate", `${pct(view.palate?.hueCenter ?? 0)} ± ${pct(view.palate?.hueWidth ?? 0)}`);
+    } else {
+      const habitatRow = document.createElement("div");
+      habitatRow.id = "iterate-habitat";
+      habitatRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+      const habitatBtns = BIOME_TILES.map(({ tile, name }) => {
+        const color = OVERVIEW_COLORS[tile];
+        const b = document.createElement("button");
+        b.textContent = name;
+        b.style.cssText = tileBtn(view.habitat === tile, color);
+        b.onclick = () => chrome.onSetTrait({ habitat: tile });
+        return b;
+      });
+      habitatRow.append(label("habitat"), ...habitatBtns);
+      const reseedBtn = document.createElement("button");
+      reseedBtn.id = "iterate-reseed-btn";
+      reseedBtn.textContent = view.substrateFeeder ? "reseed: on" : "reseed: off";
+      reseedBtn.style.cssText = btn(!!view.substrateFeeder);
+      reseedBtn.onclick = () => chrome.onSetTrait({ substrateFeeder: !view.substrateFeeder });
+      traitsControls.append(habitatRow, group(label("reseed"), reseedBtn));
+      // one combined readout line — the genome's form/hue aren't shown by
+      // any button (habitat/reseed are); habitat itself is skipped here,
+      // already legible off the habitat picker's own active tile.
+      traitsReadout.innerHTML = stat("genome", `${PlantForm[view.form ?? 0].toLowerCase()} · hue ${pct(view.hue ?? 0)}`);
+    }
   };
 
   chrome.showCritterInspect = (v) => {
