@@ -8,6 +8,7 @@
 
 import { CritterRole, CritterSpecies } from "../life/fauna";
 import { FloraTuning } from "../life/flora";
+import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
 import { ChainStats, chainStats, richnessWord } from "../life/foodweb";
 import { PlantSpecies } from "../life/species";
 
@@ -18,7 +19,9 @@ export type PressureId =
   | "reproChance"    // reseed rate
   | "maxPerTile"     // per-tile cap (the richness ceiling)
   | "reseedRadius"   // spread distance (natural + disperser landing)
-  | "pollinationRadius"; // cross distance (same-species partner search)
+  | "pollinationRadius" // cross distance (same-species partner search)
+  | "pollinatorReach"   // shared pollinateSpread radius (ambient + swarm)
+  | "pollinatorDensity"; // shared pollinateSpread maxSame (ambient + swarm)
 
 export interface Pressure {
   id: PressureId;
@@ -46,6 +49,8 @@ export const PRESSURES: Pressure[] = [
   { id: "maxPerTile", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
   { id: "reseedRadius", label: "spread distance", min: 1, max: 8, step: 1, tuningKey: "reseedRadius" },
   { id: "pollinationRadius", label: "cross distance", min: 0, max: 6, step: 1, tuningKey: "pollinationRadius" },
+  { id: "pollinatorReach", label: "pollinator reach", min: 1, max: 10, step: 1 },
+  { id: "pollinatorDensity", label: "pollinator density", min: 1, max: 4, step: 1 },
 ];
 
 // Clamp a raw slider value to the named pressure's own [min, max] — the panel
@@ -96,9 +101,19 @@ export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuni
         splitCooldownTicks: clamped < 0.2 ? 0 : clamped < 0.35 ? 120 : 500,
       };
     default:
-      return {}; // grazerShare is not a FloraTuning field
+      return {}; // grazerShare / pollinator* are not FloraTuning fields
   }
 }
+
+// Shared pollinator-assist levers (ambient critter + SwarmLayer) — not FloraTuning.
+export function pollinateAssistFor(reach: number, density: number): PollinateAssist {
+  const reachClamped = Math.round(clampToRange("pollinatorReach", reach));
+  const densityClamped = Math.round(clampToRange("pollinatorDensity", density));
+  return { radius: reachClamped, maxSame: densityClamped };
+}
+
+export const DEFAULT_PRESSURE_POLLINATOR_REACH = DEFAULT_POLLINATE_ASSIST.radius;
+export const DEFAULT_PRESSURE_POLLINATOR_DENSITY = DEFAULT_POLLINATE_ASSIST.maxSame;
 
 // The bench-only ambient roles a player sets by hand in the ambient tray.
 // grazerShare must NOT stomp these: dragging the slider would otherwise silently

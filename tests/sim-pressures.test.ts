@@ -10,10 +10,10 @@ import { Tile } from "../src/world/types";
 
 const SEED = 4242;
 
-test("seven pressures are exposed; six tuning-backed ones name a FloraTuning field", () => {
+test("all tuning-backed pressures name a FloraTuning field; grazer + pollinator levers are separate", () => {
   expect(PRESSURES.map((p) => p.id)).toEqual([
     "mutationAmount", "splitDistance", "grazerShare", "reproChance", "maxPerTile",
-    "reseedRadius", "pollinationRadius",
+    "reseedRadius", "pollinationRadius", "pollinatorReach", "pollinatorDensity",
   ]);
   expect(PRESSURES.filter((p) => p.tuningKey).length).toBe(6);
 });

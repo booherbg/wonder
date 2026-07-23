@@ -1,6 +1,7 @@
 import { Rng, makeRng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WALKABLE, WorldMap, isWalkable, tileAt } from "../world/types";
+import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "./pollinateAssist";
 import { Flora, Plant } from "./flora";
 import { Genome, PlantForm } from "./genome";
 import { PlantSpecies } from "./species";
@@ -365,6 +366,7 @@ export interface CritterContext {
   playerStill?: boolean; // the wanderer has kept their feet a moment
   trust?: ReadonlyMap<number, number>; // per-kind bond, 0 wary .. 1 bonded
   camp?: { x: number; y: number } | null; // the wanderer's hearth, world px — a trusted kind dens in beside it
+  pollinateAssist?: PollinateAssist; // bench-only: shared reach/density for pollinator role
 }
 
 export type DriveName = "hunger" | "comfort" | "curiosity";
@@ -815,12 +817,8 @@ function routeToward(c: Critter, map: WorldMap, walkable: WalkPredicate = critte
 
 // The pollinator active-cross's reach — WIDER than a disperser's reseed drift
 // (FloraTuning.reseedRadius, default 3 tiles) and LOWER-density, so a pollination
-// boom reads as airy spread, not a rigid carpet. Bench-local numbers (the
-// Simulator's own), deliberately NOT swarms.ts's POLLINATE_* constants — that
-// file drags the whole SwarmLayer in; these stand alone. pollinateSpread draws
-// only from flora.rng, so this adds no new stream.
-const POLLINATOR_RADIUS = 6; // tiles — > reseedRadius (3): the "wider" of wider/looser
-const POLLINATOR_MAX_SAME = 2; // per-cloud density cap, below the per-tile cap: the "looser"
+// boom reads as airy spread, not a rigid carpet. Defaults live in pollinateAssist
+// (6 / 2 today); CritterContext.pollinateAssist overrides on the bench.
 
 // The nutrient shuttle's pickup reach — how near a loose substrate must be for a
 // ferrying critter to lift it on a feeding visit. A tile or two, in world px
@@ -876,7 +874,8 @@ export function updateCritter(
           // pollinateSpread — it draws only from flora.rng (no new stream) and
           // routes through addPlant, so every cap/habitat gate still holds.
           // Bench-only; real play never assigns "pollinator".
-          flora.pollinateSpread(c.meal, POLLINATOR_RADIUS, POLLINATOR_MAX_SAME);
+          const assist = ctx.pollinateAssist ?? DEFAULT_POLLINATE_ASSIST;
+          flora.pollinateSpread(c.meal, assist.radius, assist.maxSame);
         } else if (sp.role === "nutrient-shuttle") {
           // ferry a loose substrate from where it fed to where it lands next:
           // carrying → set it down here; empty-handed → lift the nearest one.

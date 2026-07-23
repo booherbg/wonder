@@ -8,7 +8,7 @@ import { makeRng, Rng } from "../core/rng";
 import { TILE_SIZE } from "../world/config";
 import { WorldMap } from "../world/types";
 import { CensusLog } from "./census";
-import { Critter, CritterRole, CritterSpecies, updateCritter } from "./fauna";
+import { Critter, CritterContext, CritterRole, CritterSpecies, updateCritter } from "./fauna";
 import { Flora, FloraTuning, Plant, RestoredFlora } from "./flora";
 import { mutate } from "./genome";
 import { PlantSpecies } from "./species";
@@ -228,12 +228,12 @@ export class SimKernel {
   // every critter headless — a null player (nothing draws them to a hearth) and
   // an empty context, so co-adaptation (grazing sets plants back, dispersal
   // spreads + emits substrate) actually happens. Deterministic end to end.
-  step(nTicks = 1, fidelity: Fidelity = "full"): void {
+  step(nTicks = 1, fidelity: Fidelity = "full", critterCtx: CritterContext = {}): void {
     for (let i = 0; i < nTicks; i++) {
       this.flora.simTick();
       if (fidelity === "full") {
         for (const c of this.critters) {
-          updateCritter(c, KERNEL_DT, this.map, this.flora, this.critterSpecies, null, this.critterRng, {});
+          updateCritter(c, KERNEL_DT, this.map, this.flora, this.critterSpecies, null, this.critterRng, critterCtx);
         }
       }
       this.census.sample(this.flora.tick, this.flora.speciesCounts);

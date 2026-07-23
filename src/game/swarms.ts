@@ -18,6 +18,7 @@ import { makeRng, Rng } from "../core/rng";
 import { IdMap, MAP_CELLS, appearanceColors, metabolicEfficiency, resemblance } from "../life/idmap";
 import { BehaviorGenes, Flower, Swarm, makeFlower, makeSwarm, stepSwarm, divergeSwarm } from "../life/swarm";
 import { InsectPlan, insectMorphOf } from "../render/insectSprites";
+import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
 import { Flora, Plant } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
@@ -81,8 +82,7 @@ const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination event
 // cap set BELOW flora's per-tile cap — so a species fills a neighbourhood loosely
 // (open, airy) rather than stacking a rigid single-species carpet. Still bounded:
 // it routes through flora's addPlant, so per-tile + global caps hold on top.
-const POLLINATE_SPREAD_RADIUS = 6; // tiles a pollinated seed may drift (wider than reseedRadius)
-const POLLINATE_MAX_SAME = 2; // most same-species a pollinated seed will add on one tile (< flora.maxPerTile)
+// Defaults live in pollinateAssist (6 / 2 today); SwarmLayer.pollinateAssist overrides.
 
 // ── events (the layer's notable moments, for the game to witness) ─────────────
 // The layer's best beats — a flower visibly thickening under a well-matched
@@ -210,6 +210,7 @@ export class SwarmLayer {
   readonly flowers: Map<number, Flower>;
   readonly swarms: WorldSwarm[] = [];
   predation = WORLD_PREDATION; // gentle ambient insectivory; the sim swaps its own value in
+  pollinateAssist: PollinateAssist = DEFAULT_POLLINATE_ASSIST;
   private readonly events: SwarmEvent[] = []; // notable moments awaiting a witness
   private rng: Rng;
   private readonly seed: number;
@@ -371,7 +372,7 @@ export class SwarmLayer {
           const fill = ent.sw.population / ent.sw.cap; // a fuller cloud pollinates more
           if (this.rng() < POLLINATE_CHANCE * match * match * fill) {
             // wider, lower-density reseed so the boom spreads instead of tiling a slab
-            if (flora.pollinateSpread(host, POLLINATE_SPREAD_RADIUS, POLLINATE_MAX_SAME)) {
+            if (flora.pollinateSpread(host, this.pollinateAssist.radius, this.pollinateAssist.maxSame)) {
               pollinations++;
               // enough spreads to read on the ground → one boom event, once per swarm
               if (++ent.pollinated === BOOM_POLLINATIONS) {

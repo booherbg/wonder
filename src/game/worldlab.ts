@@ -19,6 +19,7 @@ import {
   Critter,
   CritterRole,
   CritterSpecies,
+  CritterContext,
   DriveName,
   Drives,
   Palate,
@@ -67,7 +68,8 @@ import {
 } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
-import { PRESSURES, Pressure, PressureId, fieldValueFor, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
+import { PRESSURES, Pressure, PressureId, DEFAULT_PRESSURE_POLLINATOR_DENSITY, DEFAULT_PRESSURE_POLLINATOR_REACH, fieldValueFor, grazerAssignment, pollinateAssistFor, richnessMeter, tuningPatchFor } from "./simPressures";
+import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
 import { AMBIENT_ROLES, ambientRoleEnabled, roleBadge } from "./simAmbient";
 import {
   RestoredSim,
@@ -618,7 +620,14 @@ export function startWorldLab(): void {
     maxPerTile: DEFAULT_TUNING.maxPerTile,
     reseedRadius: DEFAULT_TUNING.reseedRadius,
     pollinationRadius: DEFAULT_TUNING.pollinationRadius,
+    pollinatorReach: DEFAULT_PRESSURE_POLLINATOR_REACH,
+    pollinatorDensity: DEFAULT_PRESSURE_POLLINATOR_DENSITY,
   };
+  let pollinateAssist: PollinateAssist = { ...DEFAULT_POLLINATE_ASSIST };
+  const benchCritterCtx = (): CritterContext => ({ pollinateAssist });
+  function stepKernel(nTicks: number, fid: Fidelity = "full"): void {
+    kernel.step(nTicks, fid, benchCritterCtx());
+  }
 
   // A biome brush label for flash copy — the same words the palette swatches use
   // (not the inspect card's evocative "the meadow"), so a refusal names a tile
@@ -1312,6 +1321,11 @@ export function startWorldLab(): void {
             : `grazer share ${sharePct}% — repainted ${changed} ${changed === 1 ? "kind" : "kinds"}`,
         );
       }
+    } else if (id === "pollinatorReach" || id === "pollinatorDensity") {
+      pollinateAssist = pollinateAssistFor(
+        id === "pollinatorReach" ? value : pressureValues.pollinatorReach,
+        id === "pollinatorDensity" ? value : pressureValues.pollinatorDensity,
+      );
     }
     refreshCensusStrip();
     if (ui) ui.setPressure(id, value);
@@ -1453,8 +1467,10 @@ export function startWorldLab(): void {
       setPressure("maxPerTile", 10);
       setPressure("reseedRadius", 8);
       setPressure("pollinationRadius", 6);
+      setPressure("pollinatorReach", 10);
+      setPressure("pollinatorDensity", 1);
     }
-    if (runTicks > 0) kernel.step(runTicks, "full");
+    if (runTicks > 0) stepKernel(runTicks, "full");
     if (brushDemo === "stamp") {
       // a 3×3 of the first placeable plant kind near the construct's centre,
       // then a 2×2 of the first critter kind a few tiles off — real sprites,
@@ -1707,14 +1723,14 @@ export function startWorldLab(): void {
   };
   ui.onStep = () => {
     playing = false;
-    kernel.step(1, fidelity);
+    stepKernel(1, fidelity);
     refreshTimeState();
     refreshCensusStrip();
     refreshInspect();
   };
   ui.onStepN = () => {
     playing = false;
-    kernel.step(stepN, fidelity);
+    stepKernel(stepN, fidelity);
     refreshTimeState();
     refreshCensusStrip();
     refreshInspect();
@@ -1842,14 +1858,14 @@ export function startWorldLab(): void {
       // axis costs little (see fitCameraToConstruct's comment)
       e.preventDefault();
       playing = false;
-      kernel.step(stepN, fidelity);
+      stepKernel(stepN, fidelity);
       refreshTimeState();
       refreshCensusStrip();
       refreshInspect();
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       playing = false;
-      kernel.step(1, fidelity);
+      stepKernel(1, fidelity);
       refreshTimeState();
       refreshCensusStrip();
       refreshInspect();
@@ -2019,7 +2035,7 @@ export function startWorldLab(): void {
         ticks++;
       }
       if (ticks > 0) {
-        kernel.step(ticks, fidelity);
+        stepKernel(ticks, fidelity);
         refreshCensusStrip();
         refreshInspect();
       }
@@ -3225,8 +3241,17 @@ function buildChrome(initial: StarterKind): Chrome {
   // fieldValueFor mirrors a reversed pressure's field default to its slider
   // POSITION (identity for the other four), so even this transient boot face
   // agrees with "right = wilder" before worldlab.ts's own re-sync lands.
-  for (const p of PRESSURES)
-    chrome.setPressure(p.id, p.tuningKey ? fieldValueFor(p.id, DEFAULT_TUNING[p.tuningKey] as number) : 0);
+  for (const p of PRESSURES) {
+    const boot =
+      p.tuningKey != null
+        ? fieldValueFor(p.id, DEFAULT_TUNING[p.tuningKey] as number)
+        : p.id === "pollinatorReach"
+          ? DEFAULT_PRESSURE_POLLINATOR_REACH
+          : p.id === "pollinatorDensity"
+            ? DEFAULT_PRESSURE_POLLINATOR_DENSITY
+            : 0;
+    chrome.setPressure(p.id, boot);
+  }
 
   let pressuresOpen = false;
   chrome.openPressures = (open) => {
