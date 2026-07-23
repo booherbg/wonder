@@ -9,6 +9,8 @@
 import { CritterRole, CritterSpecies } from "../life/fauna";
 import { FloraTuning } from "../life/flora";
 import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
+import { NECTAR_DRAW, NECTAR_REGEN } from "../life/swarm";
+import { NECTAR_EMPTY_THRESHOLD } from "./swarms";
 import { ChainStats, chainStats, richnessWord } from "../life/foodweb";
 import { PlantSpecies } from "../life/species";
 
@@ -21,7 +23,11 @@ export type PressureId =
   | "reseedRadius"   // spread distance (natural + disperser landing)
   | "pollinationRadius" // cross distance (same-species partner search)
   | "pollinatorReach"   // shared pollinateSpread radius (ambient + swarm)
-  | "pollinatorDensity"; // shared pollinateSpread maxSame (ambient + swarm)
+  | "pollinatorDensity" // shared pollinateSpread maxSame (ambient + swarm)
+  | "lifespan"          // plant age-death threshold
+  | "nectarRegen"      // swarm feed: species/plant nectar refill per tick
+  | "nectarDraw"        // swarm feed: max drawn per visit
+  | "emptyThreshold";   // free-roam skips blooms below this nectar
 
 export interface Pressure {
   id: PressureId;
@@ -51,6 +57,10 @@ export const PRESSURES: Pressure[] = [
   { id: "pollinationRadius", label: "cross distance", min: 0, max: 6, step: 1, tuningKey: "pollinationRadius" },
   { id: "pollinatorReach", label: "pollinator reach", min: 1, max: 10, step: 1 },
   { id: "pollinatorDensity", label: "pollinator density", min: 1, max: 4, step: 1 },
+  { id: "lifespan", label: "plant lifespan", min: 100, max: 2000, step: 50, tuningKey: "lifespan" },
+  { id: "nectarRegen", label: "nectar regen", min: 0.01, max: 0.2, step: 0.01 },
+  { id: "nectarDraw", label: "nectar draw", min: 0.05, max: 0.5, step: 0.01 },
+  { id: "emptyThreshold", label: "empty threshold", min: 0, max: 0.5, step: 0.01 },
 ];
 
 // Clamp a raw slider value to the named pressure's own [min, max] — the panel
@@ -94,6 +104,8 @@ export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuni
       return { reseedRadius: Math.max(1, Math.round(clamped)) };
     case "pollinationRadius":
       return { pollinationRadius: Math.max(0, Math.round(clamped)) };
+    case "lifespan":
+      return { lifespan: Math.max(1, Math.round(clamped)) };
     case "splitDistance":
       return {
         splitDistance: clamped,
@@ -101,7 +113,7 @@ export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuni
         splitCooldownTicks: clamped < 0.2 ? 0 : clamped < 0.35 ? 120 : 500,
       };
     default:
-      return {}; // grazerShare / pollinator* are not FloraTuning fields
+      return {}; // grazerShare / pollinator* / nectar* are not FloraTuning fields
   }
 }
 
@@ -114,6 +126,23 @@ export function pollinateAssistFor(reach: number, density: number): PollinateAss
 
 export const DEFAULT_PRESSURE_POLLINATOR_REACH = DEFAULT_POLLINATE_ASSIST.radius;
 export const DEFAULT_PRESSURE_POLLINATOR_DENSITY = DEFAULT_POLLINATE_ASSIST.maxSame;
+export const DEFAULT_PRESSURE_NECTAR_REGEN = NECTAR_REGEN;
+export const DEFAULT_PRESSURE_NECTAR_DRAW = NECTAR_DRAW;
+export const DEFAULT_PRESSURE_EMPTY_THRESHOLD = NECTAR_EMPTY_THRESHOLD;
+
+export interface NectarBenchTuning {
+  regen: number;
+  draw: number;
+  emptyThreshold: number;
+}
+
+export function nectarBenchTuningFor(regen: number, draw: number, emptyThreshold: number): NectarBenchTuning {
+  return {
+    regen: clampToRange("nectarRegen", regen),
+    draw: clampToRange("nectarDraw", draw),
+    emptyThreshold: clampToRange("emptyThreshold", emptyThreshold),
+  };
+}
 
 // The bench-only ambient roles a player sets by hand in the ambient tray.
 // grazerShare must NOT stomp these: dragging the slider would otherwise silently

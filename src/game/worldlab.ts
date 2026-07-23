@@ -77,7 +77,30 @@ import {
 } from "./simCamera";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
-import { PRESSURES, Pressure, PressureId, DEFAULT_PRESSURE_POLLINATOR_DENSITY, DEFAULT_PRESSURE_POLLINATOR_REACH, fieldValueFor, grazerAssignment, pollinateAssistFor, richnessMeter, tuningPatchFor } from "./simPressures";
+import {
+  PRESSURES,
+  Pressure,
+  PressureId,
+  DEFAULT_PRESSURE_EMPTY_THRESHOLD,
+  DEFAULT_PRESSURE_NECTAR_DRAW,
+  DEFAULT_PRESSURE_NECTAR_REGEN,
+  DEFAULT_PRESSURE_POLLINATOR_DENSITY,
+  DEFAULT_PRESSURE_POLLINATOR_REACH,
+  fieldValueFor,
+  grazerAssignment,
+  nectarBenchTuningFor,
+  pollinateAssistFor,
+  richnessMeter,
+  tuningPatchFor,
+} from "./simPressures";
+import {
+  ClonePreview,
+  drawerEntryForClone,
+  introduceClonedPlant,
+  mutateCloneFromBaseline,
+  mutateClonePreview,
+  snapshotClone,
+} from "./simCloneFlower";
 import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "../life/pollinateAssist";
 import { SwarmLayer, WorldSwarm, canFlower } from "./swarms";
 import { appearanceColors, MAP_G } from "../life/idmap";
@@ -363,6 +386,7 @@ function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpec
 interface CensusWebView {
   summary: { live: number; arose: number; lost: number };
   species: { name: string; spark: string; count: number }[];
+  swarms: { name: string; spark: string; match: number }[];
   chains: { chains: number; closable: number; redundancy: number };
   richness: string; // richnessWord(score) — flat/sparse/living/rich/lush/legendary
   richnessScore: number; // the same numeric score the word names
@@ -405,6 +429,7 @@ function censusWebView(
   critterSpecies: CritterSpecies[],
   speciesCounts: ReadonlyMap<number, number>,
   critterCountOf: (id: number) => number,
+  swarmSeries: { name: string; spark: string; match: number }[],
 ): CensusWebView {
   const species = census
     .list()
@@ -424,6 +449,7 @@ function censusWebView(
   return {
     summary: census.summary(),
     species,
+    swarms: swarmSeries,
     chains: { chains: r.chains, closable: r.closable, redundancy: r.redundancy },
     richness: r.word,
     richnessScore: r.score,
@@ -704,8 +730,81 @@ export function startWorldLab(): void {
     pollinationRadius: DEFAULT_TUNING.pollinationRadius,
     pollinatorReach: DEFAULT_PRESSURE_POLLINATOR_REACH,
     pollinatorDensity: DEFAULT_PRESSURE_POLLINATOR_DENSITY,
+    lifespan: DEFAULT_TUNING.lifespan,
+    nectarRegen: DEFAULT_PRESSURE_NECTAR_REGEN,
+    nectarDraw: DEFAULT_PRESSURE_NECTAR_DRAW,
+    emptyThreshold: DEFAULT_PRESSURE_EMPTY_THRESHOLD,
   };
   let pollinateAssist: PollinateAssist = { ...DEFAULT_POLLINATE_ASSIST };
+  let cloneBaseline: ClonePreview | null = null;
+  let clonePreview: ClonePreview | null = null;
+  let cloneAmount = DEFAULT_TUNING.mutationAmount;
+  let cloneRng = makeRng(0);
+  const SWARM_SAMPLE_INTERVAL = 40;
+  const SWARM_HISTORY_CAP = 100;
+  const swarmMatchHistory = new Map<number, number[]>();
+  let lastSwarmSample = -Infinity;
+
+  function applyNectarBenchTuning(layer: SwarmLayer = swarmLayer): void {
+    const tuning = nectarBenchTuningFor(
+      pressureValues.nectarRegen,
+      pressureValues.nectarDraw,
+      pressureValues.emptyThreshold,
+    );
+    layer.nectarTuning = { regen: tuning.regen, draw: tuning.draw };
+    layer.emptyThreshold = tuning.emptyThreshold;
+  }
+
+  function sampleSwarmHistory(): void {
+    const tick = kernel.tick;
+    if (tick - lastSwarmSample < SWARM_SAMPLE_INTERVAL) return;
+    lastSwarmSample = tick;
+    for (const ent of swarmLayer.swarms) {
+      const info = swarmLayer.inspect(ent, kernel.plantSpecies);
+      if (!info) continue;
+      let h = swarmMatchHistory.get(ent.id);
+      if (!h) {
+        h = [];
+        swarmMatchHistory.set(ent.id, h);
+      }
+      h.push(Math.round(info.matchEfficiency * 100));
+      if (h.length > SWARM_HISTORY_CAP) h.shift();
+    }
+  }
+
+  function swarmSeriesView(): { name: string; spark: string; match: number }[] {
+    return swarmLayer.swarms
+      .filter((e) => (swarmMatchHistory.get(e.id)?.length ?? 0) > 0)
+      .map((e) => {
+        const hist = swarmMatchHistory.get(e.id)!;
+        return {
+          name: e.name,
+          spark: sparkline(hist),
+          match: hist[hist.length - 1] ?? 0,
+        };
+      });
+  }
+
+  function syncClonePreviewForPlant(sp: PlantSpecies): ClonePreview | null {
+    if (!canFlower(sp.archetype.form)) {
+      cloneBaseline = null;
+      clonePreview = null;
+      return null;
+    }
+    const flower = swarmLayer.flowerFor(sp.id);
+    if (!flower) {
+      cloneBaseline = null;
+      clonePreview = null;
+      return null;
+    }
+    if (cloneBaseline?.parentId !== sp.id) {
+      cloneAmount = fieldValueFor("mutationAmount", pressureValues.mutationAmount);
+      cloneBaseline = snapshotClone(sp, flower, cloneAmount);
+      clonePreview = snapshotClone(sp, flower, cloneAmount);
+      cloneRng = makeRng((seed ^ 0xc10e3 ^ sp.id) >>> 0);
+    }
+    return clonePreview;
+  }
   const benchCritterCtx = (): CritterContext => ({ pollinateAssist });
   function benchSwarmLayer(forMap: WorldMap, forKernel: SimKernel, forSeed: number): SwarmLayer {
     const centre = constructCentre(forMap);
@@ -716,6 +815,7 @@ export function startWorldLab(): void {
       predation: 0,
     });
     layer.pollinateAssist = pollinateAssist;
+    applyNectarBenchTuning(layer);
     return layer;
   }
 
@@ -735,6 +835,7 @@ export function startWorldLab(): void {
       kernel.step(1, fid, benchCritterCtx());
       swarmLayer.pollinateAssist = pollinateAssist;
       swarmLayer.tick(kernel.flora);
+      sampleSwarmHistory();
     }
   }
 
@@ -1162,7 +1263,12 @@ export function startWorldLab(): void {
       return {
         key: e.key,
         name: e.name.toLowerCase(),
-        sub: e.origin === "daughter" ? `daughter of ${(parent?.name ?? "an unknown kind").toLowerCase()}` : `${e.origin} ${e.kind}`,
+        sub:
+          e.origin === "daughter"
+            ? `daughter of ${(parent?.name ?? "an unknown kind").toLowerCase()}`
+            : e.origin === "cloned"
+              ? `cousin of ${(parent?.name ?? "an unknown kind").toLowerCase()}`
+              : `${e.origin} ${e.kind}`,
         count: status.count,
         variations: status.variations,
         extinct: status.extinct,
@@ -1365,7 +1471,15 @@ export function startWorldLab(): void {
     } else if (inspected.kind === "plant") {
       const sp = kernel.plantSpecies[inspected.ref.species];
       const canInvite = isBloom(inspected.ref) && canFlower(sp.archetype.form);
-      ui.showPlantInspect(plantInspectView(inspected.ref, sp, kernel.tick), canInvite);
+      const preview = syncClonePreviewForPlant(sp);
+      const cloneOpts =
+        preview !== null
+          ? {
+              patch: mapPatchDataUrl(preview.map, preview.accent),
+              amount: cloneAmount,
+            }
+          : undefined;
+      ui.showPlantInspect(plantInspectView(inspected.ref, sp, kernel.tick), { canInvite, clone: cloneOpts });
     } else {
       const view = swarmInspectView(swarmLayer, inspected.ref, kernel.plantSpecies);
       if (view) ui.showSwarmInspect(view, inspected.ref);
@@ -1383,8 +1497,13 @@ export function startWorldLab(): void {
   function refreshCensusStrip(): void {
     if (!ui) return;
     ui.setCensusWeb(
-      censusWebView(kernel.census, kernel.plantSpecies, kernel.critterSpecies, kernel.speciesCounts(), (id) =>
-        kernel.critterCountOf(id),
+      censusWebView(
+        kernel.census,
+        kernel.plantSpecies,
+        kernel.critterSpecies,
+        kernel.speciesCounts(),
+        (id) => kernel.critterCountOf(id),
+        swarmSeriesView(),
       ),
     );
     refreshDrawer();
@@ -1447,6 +1566,8 @@ export function startWorldLab(): void {
         id === "pollinatorDensity" ? value : pressureValues.pollinatorDensity,
       );
       swarmLayer.pollinateAssist = pollinateAssist;
+    } else if (id === "nectarRegen" || id === "nectarDraw" || id === "emptyThreshold") {
+      applyNectarBenchTuning();
     }
     refreshCensusStrip();
     if (ui) ui.setPressure(id, value);
@@ -1787,6 +1908,46 @@ export function startWorldLab(): void {
     swarmLayer.setPinned(inspected.ref, !inspected.ref.pinned);
     if (ui) ui.flashNote(inspected.ref.pinned ? "pinned to host" : "free-roam — follows fuller blooms");
     refreshInspect();
+  };
+  ui.onCloneAmount = (amount) => {
+    cloneAmount = amount;
+    if (!cloneBaseline) return;
+    const salt = (seed ^ 0xc10e3 ^ cloneBaseline.parentId ^ Math.floor(amount * 10000)) >>> 0;
+    const tweakRng = makeRng(salt);
+    clonePreview = mutateCloneFromBaseline(cloneBaseline, amount, tweakRng);
+    refreshInspect();
+  };
+  ui.onCloneReroll = () => {
+    if (!cloneBaseline) return;
+    clonePreview = mutateClonePreview({ ...cloneBaseline, mutationAmount: cloneAmount }, cloneRng);
+    refreshInspect();
+  };
+  ui.onCloneReset = () => {
+    if (!cloneBaseline) return;
+    clonePreview = snapshotClone(
+      kernel.plantSpecies[cloneBaseline.parentId],
+      swarmLayer.flowerFor(cloneBaseline.parentId)!,
+      cloneAmount,
+    );
+    refreshInspect();
+  };
+  ui.onIntroduceClone = () => {
+    if (!clonePreview || inspected?.kind !== "plant") return;
+    const parentId = clonePreview.parentId;
+    const id = introduceClonedPlant(kernel, swarmLayer, clonePreview, cloneRng);
+    drawer.push(drawerEntryForClone(id, kernel.plantSpecies[id], parentId));
+    selected = { kind: "plant", id };
+    tool = "place";
+    cloneBaseline = null;
+    clonePreview = null;
+    refreshPalette();
+    refreshDrawer();
+    refreshCensusStrip();
+    if (ui) {
+      ui.setSelected(selected);
+      ui.setTool(tool);
+      ui.flashNote(`introduced ${kernel.plantSpecies[id].name.toLowerCase()} — cousin on the palette`);
+    }
   };
   ui.onPressure = (id, value) => setPressure(id, value);
   ui.onZoomIn = () => nudgeZoom("in");
@@ -2348,7 +2509,14 @@ interface Chrome {
   setTick: (tick: number) => void;
   // the readout plate + living-web strip (Task 7)
   showCritterInspect: (v: CritterInspectView) => void;
-  showPlantInspect: (v: PlantInspectView, canInvite?: boolean) => void;
+  showPlantInspect: (
+    v: PlantInspectView,
+    opts?: { canInvite?: boolean; clone?: { patch: string; amount: number } },
+  ) => void;
+  onCloneAmount: (amount: number) => void;
+  onCloneReroll: () => void;
+  onCloneReset: () => void;
+  onIntroduceClone: () => void;
   showSwarmInspect: (v: SwarmInspectView, ent: WorldSwarm) => void;
   onInviteCloud: () => void;
   onToggleSwarmPin: () => void;
@@ -3367,7 +3535,7 @@ function buildChrome(initial: StarterKind): Chrome {
       drive("curiosity", v.drives.curiosity, v.dominant === "curiosity");
     readout.style.display = "block";
   };
-  chrome.showPlantInspect = (v, canInvite = false) => {
+  chrome.showPlantInspect = (v, opts) => {
     readout.innerHTML =
       head(
         v.name.toLowerCase(),
@@ -3386,7 +3554,55 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("glow", pct(v.genome.glow), v.genome.glow > 0.8 ? "gold" : "ink") +
       title("readout") +
       stat("age", `${v.age} ticks`, "mint");
-    if (canInvite) {
+    if (opts?.clone) {
+      const cloneBlock = document.createElement("div");
+      cloneBlock.style.cssText = "margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(228,236,242,0.12);";
+      cloneBlock.innerHTML =
+        title("clone flower") +
+        `<div style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;">` +
+        `<img id="clone-flower-patch" src="${opts.clone.patch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;" alt="">` +
+        `<div style="flex:1;font:10px var(--mono);color:rgba(228,236,242,0.55);line-height:1.45;">` +
+        `preview a cousin species — its own flower map and drawer entry before you place.</div></div>`;
+      const sliderRow = document.createElement("div");
+      sliderRow.style.cssText = "display:flex;align-items:center;gap:8px;margin:6px 0;";
+      const sliderLabel = document.createElement("span");
+      sliderLabel.style.cssText = `${MONO} font-size:9px; text-transform:uppercase; color:rgba(228,236,242,0.55);`;
+      sliderLabel.textContent = "mutation";
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "0.3";
+      slider.step = "0.01";
+      slider.value = String(opts.clone.amount);
+      slider.style.width = "100px";
+      const sliderVal = document.createElement("span");
+      sliderVal.style.cssText = "font:11px var(--mono);color:var(--ink-bright);min-width:36px;";
+      sliderVal.textContent = opts.clone.amount.toFixed(2);
+      slider.oninput = () => {
+        sliderVal.textContent = Number(slider.value).toFixed(2);
+        chrome.onCloneAmount(Number(slider.value));
+      };
+      sliderRow.append(sliderLabel, slider, sliderVal);
+      cloneBlock.appendChild(sliderRow);
+      const btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;";
+      const rerollBtn = document.createElement("button");
+      rerollBtn.textContent = "re-roll";
+      rerollBtn.style.cssText = btn(false);
+      rerollBtn.onclick = () => chrome.onCloneReroll();
+      const resetBtn = document.createElement("button");
+      resetBtn.textContent = "reset";
+      resetBtn.style.cssText = btn(false);
+      resetBtn.onclick = () => chrome.onCloneReset();
+      const introBtn = document.createElement("button");
+      introBtn.textContent = "introduce cousin";
+      introBtn.style.cssText = btn(true);
+      introBtn.onclick = () => chrome.onIntroduceClone();
+      btnRow.append(rerollBtn, resetBtn, introBtn);
+      cloneBlock.appendChild(btnRow);
+      readout.appendChild(cloneBlock);
+    }
+    if (opts?.canInvite) {
       const row = document.createElement("div");
       row.style.cssText = "margin-top: 10px;";
       const inviteBtn = document.createElement("button");
@@ -3399,6 +3615,10 @@ function buildChrome(initial: StarterKind): Chrome {
     }
     readout.style.display = "block";
   };
+  chrome.onCloneAmount = () => {};
+  chrome.onCloneReroll = () => {};
+  chrome.onCloneReset = () => {};
+  chrome.onIntroduceClone = () => {};
   chrome.showSwarmInspect = (v, ent) => {
     const logRows = v.pollinationLog.length
       ? v.pollinationLog
@@ -3475,6 +3695,9 @@ function buildChrome(initial: StarterKind): Chrome {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
       : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">nothing counted yet — place a kind, or step time</div>`;
+    const swarmRows = v.swarms.length
+      ? v.swarms.map((s) => speciesRow(s.name, s.spark, s.match)).join("")
+      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet — invite a swarm and step</div>`;
     web.innerHTML =
       `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
       `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census · food web — live as you step</div>` +
@@ -3485,6 +3708,8 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("lost", String(v.summary.lost)) +
       title("by species (plants)") +
       rows +
+      title("swarm match %") +
+      swarmRows +
       title("food web") +
       stat("chains", String(v.chains.chains)) +
       stat("closable", String(v.chains.closable), v.chains.closable > 0 ? "mint" : "ink") +
@@ -3534,7 +3759,7 @@ function buildChrome(initial: StarterKind): Chrome {
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed 0 = insects-only · natural · critter pollinator · insect cloud</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed 0 = insects-only · nectar + lifespan below</div>`;
   evoTray.appendChild(evoHead);
 
   // The five sliders sit in a ROW (not a stacked column) — a compact strip

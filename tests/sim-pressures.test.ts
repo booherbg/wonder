@@ -10,12 +10,13 @@ import { Tile } from "../src/world/types";
 
 const SEED = 4242;
 
-test("all tuning-backed pressures name a FloraTuning field; grazer + pollinator levers are separate", () => {
+test("all tuning-backed pressures name a FloraTuning field; grazer + pollinator + nectar levers are separate", () => {
   expect(PRESSURES.map((p) => p.id)).toEqual([
     "mutationAmount", "splitDistance", "grazerShare", "reproChance", "maxPerTile",
     "reseedRadius", "pollinationRadius", "pollinatorReach", "pollinatorDensity",
+    "lifespan", "nectarRegen", "nectarDraw", "emptyThreshold",
   ]);
-  expect(PRESSURES.filter((p) => p.tuningKey).length).toBe(6);
+  expect(PRESSURES.filter((p) => p.tuningKey).length).toBe(7);
 });
 
 test("tuningPatchFor maps each tuning pressure to its field; speciation opens the split gates", () => {
@@ -24,6 +25,7 @@ test("tuningPatchFor maps each tuning pressure to its field; speciation opens th
   expect(tuningPatchFor("maxPerTile", 6.4)).toEqual({ maxPerTile: 6 }); // an integer cap
   expect(tuningPatchFor("reseedRadius", 5.2)).toEqual({ reseedRadius: 5 });
   expect(tuningPatchFor("pollinationRadius", 1.1)).toEqual({ pollinationRadius: 1 });
+  expect(tuningPatchFor("lifespan", 450.2)).toEqual({ lifespan: 450 });
   const wild = tuningPatchFor("splitDistance", 0.1);
   expect(wild.splitDistance).toBe(0.1);
   expect(wild.splitClusterMin).toBe(2);       // a low threshold also frees the cluster gate
