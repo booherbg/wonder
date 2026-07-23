@@ -9,7 +9,7 @@ import { TILE_SIZE } from "../world/config";
 import { WorldMap } from "../world/types";
 import { CensusLog } from "./census";
 import { Critter, CritterRole, CritterSpecies, updateCritter } from "./fauna";
-import { Flora, FloraTuning, Plant } from "./flora";
+import { Flora, FloraTuning, Plant, RestoredFlora } from "./flora";
 import { mutate } from "./genome";
 import { PlantSpecies } from "./species";
 
@@ -28,6 +28,9 @@ export interface KernelInit {
   seed: number;
   tuning?: Partial<FloraTuning>;
   censusInterval?: number; // sim-ticks between census samples (default 1: bench feedback is immediate)
+  restoredFlora?: RestoredFlora; // resume a saved construct's flora (slice 5a); absent = empty bench
+  critterRngState?: number; // resume the critter rng stream; absent = fresh makeRng(seed ^ 0x5112)
+  placeRngState?: number; // resume the placement rng stream; absent = fresh makeRng(seed ^ 0x71a2)
 }
 
 export class SimKernel {
@@ -52,11 +55,11 @@ export class SimKernel {
       init.plantSpecies,
       init.seed,
       { chains: true, ...(init.tuning ?? {}) },
-      { tick: 0, plants: [] },
+      init.restoredFlora ?? { tick: 0, plants: [] }, // empty bench unless resuming a saved construct
     );
     this.census = new CensusLog(init.censusInterval ?? 1, 240);
-    this.critterRng = makeRng(init.seed ^ 0x5112);
-    this.placeRng = makeRng(init.seed ^ 0x71a2);
+    this.critterRng = makeRng(init.critterRngState ?? (init.seed ^ 0x5112));
+    this.placeRng = makeRng(init.placeRngState ?? (init.seed ^ 0x71a2));
   }
 
   get tick(): number {
@@ -67,6 +70,17 @@ export class SimKernel {
   }
   speciesCounts(): ReadonlyMap<number, number> {
     return this.flora.speciesCounts;
+  }
+
+  // Stream-position accessors — captured so a save can resume these exact
+  // streams rather than re-seeding them (slice 5a, mirrors Flora.rngState()).
+  // makeRng always attaches .state, so the assertion is safe.
+  critterRngState(): number {
+    return this.critterRng.state!();
+  }
+
+  placeRngState(): number {
+    return this.placeRng.state!();
   }
 
   // Set one plant of a species down (world px). Habitat-gated exactly as the

@@ -7,6 +7,7 @@ import { singleBiome } from "../src/world/construct"; // built in Task 2
 import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
 import { rollPlantBatch, rollCritterBatch } from "../src/life/roll";
+import { packCrittersV2, restoreCritterRows } from "../src/game/save";
 
 const SEED = 4242;
 
@@ -23,12 +24,20 @@ function bench() {
   return { kernel, grassPlant, critter };
 }
 
-// a compact, comparable snapshot of everything the sim owns
+// a compact, comparable snapshot of everything the sim owns.
+// Zero-value count entries are dropped before compare: Flora.speciesCounts
+// never deletes a key once a species has held one (only decrements it), so a
+// kernel that ran the whole way live can carry a stale [id, 0] for a species
+// that went extinct mid-run, while a kernel rebuilt from a restore snapshot
+// taken AFTER that extinction never creates the key at all (restore only
+// calls addPlant for surviving plants). Both states mean the identical thing
+// — zero live individuals of that species — so the comparison must not care
+// which side happens to still hold the dead key.
 function snap(k: SimKernel) {
   return {
     tick: k.tick,
     floraCount: k.flora.count,
-    counts: [...k.speciesCounts().entries()].sort((a, b) => a[0] - b[0]),
+    counts: [...k.speciesCounts().entries()].filter(([, n]) => n > 0).sort((a, b) => a[0] - b[0]),
     critters: k.critters.map((c) => [
       Math.round(c.x * 1e3), Math.round(c.y * 1e3), c.state,
       Math.round(c.energy * 1e6), c.mood, Math.round(c.targetX * 1e3), Math.round(c.targetY * 1e3),
@@ -172,4 +181,92 @@ test("setCritterRole flips a kind's role live; step still never births/removes a
   const before = kernel.critterCount();
   kernel.step(120, "full"); // a grazer thins plants — but never dies, nor multiplies
   expect(kernel.critterCount()).toBe(before);
+});
+
+test("a kernel resumes bit-identically from a full snapshot — flora + critters + all rng streams", () => {
+  const a = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  a.kernel.placePlant(a.grassPlant, at(8), at(8));
+  a.kernel.placeCritter(a.critter, at(11), at(11)); // within seek range → it will form a meal mid-run
+  a.kernel.step(90, "full");
+
+  // snapshot: flora restore block + critters-as-rows + both kernel rng positions
+  const restoredFlora = {
+    tick: a.kernel.flora.tick,
+    plants: a.kernel.flora.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
+    soil: a.kernel.flora.soilTileKeys(),
+    rngState: a.kernel.flora.rngState(),
+    substrates: a.kernel.flora.substratesSnapshot(),
+    suppressed: [...a.kernel.flora.suppressedSpecies],
+    lastSplitTick: Number.isFinite(a.kernel.flora.lastSplitTickValue()) ? a.kernel.flora.lastSplitTickValue() : undefined,
+  };
+  const critterRows = JSON.parse(JSON.stringify(packCrittersV2(a.kernel.critters, a.kernel.flora))); // JSON-safe rows (meal as idx)
+  const critterRngState = a.kernel.critterRngState();
+  const placeRngState = a.kernel.placeRngState();
+
+  // rebuild the same map + plant roster deterministically; the CRITTER roster
+  // must be CLONED from the live run, not regenerated from seed — placeCritter
+  // (facts §4: kernel.ts:90) mutates the shared CritterSpecies record's `den`,
+  // and this test also mutated its `role`; calling generateCritterSpecies(...)
+  // again would build a fresh roster missing both, and the resumed run could
+  // diverge on homing.
+  const map = singleBiome(SEED, Tile.Grass, 40);
+  const plants = generatePlantSpecies(SEED);
+  const critterSpecies = structuredClone(a.kernel.critterSpecies);
+  const resumed = new SimKernel({
+    map, plantSpecies: plants, critterSpecies, seed: SEED,
+    restoredFlora, critterRngState, placeRngState,
+  });
+  resumed.critters = restoreCritterRows(critterRows, critterSpecies, resumed.flora); // re-resolves meal against resumed.flora
+  expect(resumed.tick).toBe(90);
+  expect(resumed.critterRngState()).toBe(critterRngState);
+
+  // step BOTH forward 90 more; identical
+  a.kernel.step(90, "full");
+  resumed.step(90, "full");
+  expect(snap(resumed)).toEqual(snap(a.kernel));
+  // and the mid-thought behavioral state carried across (not reset to idle)
+  expect(resumed.critters.map((c) => [c.state, Math.round(c.curiosity * 1e6), Math.round(c.hopPhase * 1e6)]))
+    .toEqual(a.kernel.critters.map((c) => [c.state, Math.round(c.curiosity * 1e6), Math.round(c.hopPhase * 1e6)]));
+});
+
+test("resume-then-run equals running N+M straight through from the start (true bit-identical replay)", () => {
+  const a = bench();
+  const straight = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  a.kernel.placePlant(a.grassPlant, at(8), at(8));
+  a.kernel.placeCritter(a.critter, at(11), at(11));
+  straight.kernel.placePlant(straight.grassPlant, at(8), at(8));
+  straight.kernel.placeCritter(straight.critter, at(11), at(11));
+
+  a.kernel.step(90, "full");
+
+  const restoredFlora = {
+    tick: a.kernel.flora.tick,
+    plants: a.kernel.flora.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
+    soil: a.kernel.flora.soilTileKeys(),
+    rngState: a.kernel.flora.rngState(),
+    substrates: a.kernel.flora.substratesSnapshot(),
+    suppressed: [...a.kernel.flora.suppressedSpecies],
+    lastSplitTick: Number.isFinite(a.kernel.flora.lastSplitTickValue()) ? a.kernel.flora.lastSplitTickValue() : undefined,
+  };
+  const critterRows = JSON.parse(JSON.stringify(packCrittersV2(a.kernel.critters, a.kernel.flora)));
+  const critterRngState = a.kernel.critterRngState();
+  const placeRngState = a.kernel.placeRngState();
+
+  const map = singleBiome(SEED, Tile.Grass, 40);
+  const plants = generatePlantSpecies(SEED);
+  const critterSpecies = structuredClone(a.kernel.critterSpecies);
+  const resumed = new SimKernel({
+    map, plantSpecies: plants, critterSpecies, seed: SEED,
+    restoredFlora, critterRngState, placeRngState,
+  });
+  resumed.critters = restoreCritterRows(critterRows, critterSpecies, resumed.flora);
+
+  a.kernel.step(90, "full");
+  resumed.step(90, "full");
+  straight.kernel.step(180, "full"); // the true bit-identical guarantee: 90+90 resumed === 180 straight
+
+  expect(snap(resumed)).toEqual(snap(straight.kernel));
+  expect(snap(a.kernel)).toEqual(snap(straight.kernel));
 });
