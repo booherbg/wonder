@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { generateCritterSpecies, spawnCritters } from "../src/life/fauna";
 import { Flora } from "../src/life/flora";
+import { PlantForm } from "../src/life/genome";
 import { generatePlantSpecies } from "../src/life/species";
 import {
   packCrittersV2,
@@ -218,6 +219,32 @@ test("crittersV2 losslessly round-trips every behavioral field, and re-resolves 
   expect(b.pathGoal).toBe(9);
   expect(b.treat).toBe(true);
   expect(b.meal).toBe(restoredFlora.all[mealIdx]); // re-resolved to the live object, same identity
+});
+
+test("crittersV2 persists a nutrient-shuttle's carried substrate across a save round-trip (F1)", () => {
+  const map = generate(SEED);
+  const species = generatePlantSpecies(SEED);
+  const flora = new Flora(map, species, SEED, { chains: true });
+  const critterSpecies = generateCritterSpecies(SEED, map, flora, species);
+  const critters = spawnCritters(critterSpecies, map, SEED).slice(0, 2);
+
+  // one critter is mid-carry: it lifted a substrate off the pool (takeSubstrateNear
+  // splices it out), so the ferried load now lives ONLY on the critter — the pool
+  // is empty. World total = 1 (0 pooled + 1 carried).
+  critters[0].carriedSubstrate = { hue: 0.37, glow: 0.6, form: PlantForm.Flower };
+  expect(flora.substrates.length).toBe(0);
+
+  const rows = packCrittersV2(critters, flora);
+  const json = JSON.parse(JSON.stringify(rows)); // prove JSON-safe
+  expect(json[0].carriedSubstrate).toEqual({ hue: 0.37, glow: 0.6, form: PlantForm.Flower });
+  expect(json[1].carriedSubstrate).toBeUndefined(); // absent when empty-handed — legacy shape unchanged
+
+  const back = restoreCritterRows(json, critterSpecies, flora);
+  expect(back[0].carriedSubstrate).toEqual({ hue: 0.37, glow: 0.6, form: PlantForm.Flower });
+  expect(back[1].carriedSubstrate).toBeUndefined();
+  // pool STILL empty — the world total stays 1 (still carried, none dropped): the
+  // peaceful-conservation pillar holds across the persistence round trip (C1).
+  expect(flora.substrates.length).toBe(0);
 });
 
 test("crittersV2 preserves null vs. undefined meal, and drops out-of-range species", () => {

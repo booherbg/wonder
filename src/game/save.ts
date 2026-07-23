@@ -215,6 +215,12 @@ export interface SavedCritterV2 {
   stuck?: number;
   path?: number[];
   pathGoal?: number;
+  // Simulator "nutrient-shuttle" role ONLY: a substrate lifted off the pool and
+  // held mid-transit. Absent in real play (bench-only role) and whenever the
+  // shuttle is empty-handed, so ordinary saves are byte-identical. Persisted so
+  // a save taken mid-carry doesn't DESTROY the ferried load (count conserved —
+  // the peaceful pillar; qa C1). Mirrors the Critter.carriedSubstrate shape.
+  carriedSubstrate?: { hue: number; glow: number; form: PlantForm };
 }
 
 export function packCrittersV2(critters: Critter[], flora: Flora): SavedCritterV2[] {
@@ -244,6 +250,10 @@ export function packCrittersV2(critters: Critter[], flora: Flora): SavedCritterV
     if (c.stuck !== undefined) row.stuck = c.stuck;
     if (c.path !== undefined) row.path = c.path.slice();
     if (c.pathGoal !== undefined) row.pathGoal = c.pathGoal;
+    // a shuttle's ferried load — copied (not aliased) so the saved row can't be
+    // mutated by a later drop. Absent when empty-handed, so no new bytes in the
+    // common case; see SavedCritterV2.carriedSubstrate (qa C1).
+    if (c.carriedSubstrate) row.carriedSubstrate = { ...c.carriedSubstrate };
     return row;
   });
 }
@@ -282,6 +292,9 @@ export function restoreCritterRows(
     if (row.stuck !== undefined) c.stuck = row.stuck;
     if (row.path !== undefined) c.path = row.path.slice();
     if (row.pathGoal !== undefined) c.pathGoal = row.pathGoal;
+    // restore the ferried load onto the critter (copied, not aliased), so the
+    // shuttle resumes mid-carry and the pool round-trips its true count (qa C1).
+    if (row.carriedSubstrate) c.carriedSubstrate = { ...row.carriedSubstrate };
     out.push(c);
   }
   return out;
