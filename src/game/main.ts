@@ -116,6 +116,14 @@ const BACKDROP_SEED = 42; // a lush, high-diversity island; tuned by screenshot 
 const BACKDROP_WARM = 1200; // heartbeats pre-run so it greets you already alive
 
 let titleActive = false; // true only while the front door is up over its backdrop
+// true only for the span between the backdrop's own loadWorld() finishing and
+// the NEXT loadWorld() call — lets that next call's leading fog-save (which
+// runs before it knows anything about where you're headed) recognize the
+// world it's leaving was the ephemeral backdrop, not a played session, and
+// skip writing wander.explored for BACKDROP_SEED. Cleared at the top of
+// every loadWorld() call (backdrop or not) right after it's read, then set
+// true again from outside, only right after the boot path's own backdrop load.
+let backdropLoaded = false;
 
 function readLastSeed(): number | null {
   try {
@@ -770,8 +778,11 @@ function loadSave(seed: number): SavedWorld | null {
 }
 
 function loadWorld(seed: number, gen?: GenArgs): void {
-  // the map you drew of the island you're leaving keeps its ink
-  if (explored) saveExplored(currentSeed, explored, map.width, map.height);
+  // the map you drew of the island you're leaving keeps its ink — unless the
+  // island you're leaving was the ephemeral title backdrop (backdropLoaded),
+  // which nobody played and shouldn't leave a wander.explored entry behind
+  if (explored && !backdropLoaded) saveExplored(currentSeed, explored, map.width, map.height);
+  backdropLoaded = false; // consumed: this load's own world is real, so a LATER load leaving it saves normally
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
   // dev aid + the seed of the future terrain slider: ?shape=twin|lowland|...
@@ -1378,6 +1389,7 @@ if (!NOMENU) {
   document.body.classList.add("titling");
 }
 loadWorld(NOMENU ? (seedFromUrl() ?? newIslandSeed()) : BACKDROP_SEED);
+if (!NOMENU) backdropLoaded = true; // the world just loaded was the ephemeral backdrop, not a played session
 const renderer = new Renderer(canvas, map);
 
 if (NOMENU) {
