@@ -65,15 +65,44 @@ export function startWorldLab(): void {
   let camX = 0,
     camY = 0;
 
-  const clampX = (x: number): number => Math.max(0, Math.min(x, Math.max(0, map.width * TILE_SIZE - renderer.viewWidth)));
-  const clampY = (y: number): number => Math.max(0, Math.min(y, Math.max(0, map.height * TILE_SIZE - renderer.viewHeight)));
+  // Clamp a camera axis to the construct's bounds — UNLESS the fit zoom has
+  // left this axis of the construct smaller than the view (a non-square
+  // construct in a non-square window: one axis binds the fit, the other has
+  // slack). Then there's nowhere useful to pan — hold the negative, centred
+  // offset instead of flooring to 0, or the construct would hug one edge
+  // rather than sit centred with even letterboxing on both sides.
+  const clampAxis = (pos: number, worldSize: number, viewSize: number): number => {
+    const maxOffset = worldSize - viewSize;
+    return maxOffset <= 0 ? maxOffset / 2 : Math.max(0, Math.min(pos, maxOffset));
+  };
+  const clampX = (x: number): number => clampAxis(x, map.width * TILE_SIZE, renderer.viewWidth);
+  const clampY = (y: number): number => clampAxis(y, map.height * TILE_SIZE, renderer.viewHeight);
   function centreCamera(): void {
     camX = clampX((map.width * TILE_SIZE - renderer.viewWidth) / 2);
     camY = clampY((map.height * TILE_SIZE - renderer.viewHeight) / 2);
   }
 
+  // Zoom out (or in) until the WHOLE construct fits the window, then centre
+  // on it — the swarm bench's fit-to-field (simulator.ts's `scale = Math.min
+  // ((w-margin)/FIELD_W, (h-margin)/FIELD_H)`), done through the real
+  // Renderer's focus lens instead of a hand-rolled scale. Reads viewWidth/
+  // viewHeight at zoom 1 first (the lens's own unscaled unit), so the fit
+  // math never has to know SCALE or TILE_SIZE's relationship directly.
+  const FIT_MARGIN = 0.92; // a little breathing room around the construct's edges
+  function fitCameraToConstruct(): void {
+    renderer.setZoom(1);
+    const baseW = renderer.viewWidth;
+    const baseH = renderer.viewHeight;
+    const worldW = map.width * TILE_SIZE;
+    const worldH = map.height * TILE_SIZE;
+    const zoom = Math.min(2, (baseW * FIT_MARGIN) / worldW, (baseH * FIT_MARGIN) / worldH);
+    renderer.setZoom(zoom);
+    centreCamera();
+  }
+
   // (Re)builds the construct + kernel from the current starter/seed. Reused
-  // on first boot and every time the starter selector is changed — the
+  // on first boot and every time the starter selector is changed — the three
+  // starters differ in size, so the fit is recomputed every time. The
   // renderer's atlas is expensive to rebuild, so it's made once and re-mapped.
   function build(): void {
     map = buildConstruct(starter, seed);
@@ -86,7 +115,7 @@ export function startWorldLab(): void {
     kernel = new SimKernel({ map, plantSpecies: species, critterSpecies, seed });
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);
-    centreCamera();
+    fitCameraToConstruct();
   }
   build();
 
@@ -119,7 +148,7 @@ export function startWorldLab(): void {
   });
   window.addEventListener("resize", () => {
     renderer.resize();
-    centreCamera();
+    fitCameraToConstruct();
   });
 
   // ── the loop: draw the construct + the kernel's current life every frame.
@@ -151,7 +180,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const eyebrow = document.createElement("div");
   eyebrow.innerHTML =
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
-    `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 22px; color: var(--ink-bright); margin-top: 2px;">the World-Lab</div>` +
+    `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 22px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
     `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px;">a construct built to study — real tile art, a headless kernel underneath. Arrow keys pan; Esc sails you home.</div>`;
   eyebrow.style.cssText = "position: fixed; left: 18px; top: 16px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);

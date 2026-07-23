@@ -94,7 +94,7 @@ export class Renderer {
   private prints: { x: number; y: number; at: number }[] = [];
   private lastPrintX = -999;
   private lastPrintY = -999;
-  private zoomLevel = 1; // the focus lens: 1 = the wide world, 2 = leaned in close
+  private zoomLevel = 1; // the focus lens: 1 = the wide world, 2 = leaned in close, <1 = pulled back (the World-Lab's fit-to-window)
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -117,8 +117,11 @@ export class Renderer {
 
   // The focus lens (Z): main's frame loop eases this toward its target, and
   // the whole pipeline — camera math included — sees only the smaller view.
+  // The floor is a hair above zero, not 1: the played island only ever eases
+  // z UP from 1 toward FOCUS_ZOOM, but the World-Lab bench zooms OUT below 1
+  // to fit a whole construct in the window — the same lens, pulled back.
   setZoom(z: number): void {
-    this.zoomLevel = Math.max(1, z);
+    this.zoomLevel = Math.max(0.05, z);
   }
 
   get viewWidth(): number {
