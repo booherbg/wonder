@@ -21,7 +21,14 @@ export interface Palate {
 // while feeding the critter, so both gain. A minority are grazers who still
 // take a real bite: the thread of friction that keeps a little negative
 // feedback in an otherwise mutualist web.
-export type CritterRole = "disperser" | "grazer";
+//
+// "pollinator" and "nutrient-shuttle" are Simulator ambient-bench roles
+// (slice 5b), OFF by default and producible ONLY through worldlab.ts's ambient
+// tray — generateCritterSpecies and grazerAssignment only ever write the first
+// two literals, so an ordinary island's critters are always exactly "grazer" or
+// "disperser" and updateCritter's new arms are unreached in real play. This is
+// the same additive idiom as Flora.suppressedSpecies / FloraTuning.chains.
+export type CritterRole = "disperser" | "grazer" | "pollinator" | "nutrient-shuttle";
 
 export interface CritterSpecies {
   id: number;
