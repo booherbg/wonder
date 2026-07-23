@@ -76,8 +76,9 @@ import {
   MAX_SAVED_WORLDS,
   SavedWorld,
   WORLD_INDEX_KEY,
+  packCrittersV2,
   packWorld,
-  restoreCritters,
+  restoreCrittersV2,
   restoreDaughters,
   restoreInventory,
   restorePlants,
@@ -758,7 +759,13 @@ function persist(): void {
             : undefined,
       },
       critters,
-      { name: worldName ?? undefined, playMs: Math.round(worldPlayMs), soil: flora.soilTileKeys() },
+      {
+        name: worldName ?? undefined,
+        playMs: Math.round(worldPlayMs),
+        soil: flora.soilTileKeys(),
+        crittersV2: packCrittersV2(critters, flora),
+        critterRngState: critterRng.state?.(),
+      },
     );
     localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
     const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
@@ -876,9 +883,9 @@ function loadWorld(seed: number, gen?: GenArgs): void {
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   // the animals, restored where you left them if this world was saved;
   // otherwise spawned fresh from the seed at their dens
-  const savedCritters = saved ? restoreCritters(saved, critterSpecies) : [];
+  const savedCritters = saved ? restoreCrittersV2(saved, critterSpecies, flora) : [];
   critters = savedCritters.length > 0 ? savedCritters : spawnCritters(critterSpecies, map, seed);
-  critterRng = makeRng(seed ^ 0xcafe);
+  critterRng = makeRng(saved?.critterRngState ?? (seed ^ 0xcafe)); // resume the stream when the save carries it, else fresh
   trust = loadTrust(seed); // friendships made here, remembered here
   companionKind = null; // each island keeps its own friend; this one's is re-called below
   beast = generateBeast(seed, map, species);
