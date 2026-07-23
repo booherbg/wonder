@@ -1,52 +1,56 @@
-# QA — World-Lab iteration 6a–6c
+# QA — World-Lab iteration 6 (close-out)
 
-**Branch:** `worldlab-6`  
+**Branch:** `worldlab-close` → merge to `master`  
 **Date:** 2026-07-23  
-**Gates:** `tsc` clean · **568** vitest tests green  
-**Verdict:** **Ship-ready** for 6a–6c (no open Critical/Important)
-
-## Commits (vs master)
-
-| Area | Commits |
-|---|---|
-| Spec/docs | `c5cecf6`, `a531f5d` |
-| 6a roster/tools/erase | `d50e153` |
-| 6b pressures + assist | `9ac5196`, `20e95f7` |
-| 6c insects | `43c75a7`, `7fc9a77`, `4dcf172` |
-| QA loop 1 | `23d5405` |
-| QA loop 2 | `02e72e9` |
-| QA loop 3 | `ceff774` |
-
-## Three audit loops
-
-| Loop | Important/Critical found | Fixed |
-|---|---|---|
-| 1 | Pin could wander; `?demo` broken after clean slate | Yes |
-| 2 | Stale SwarmLayer on slot load; pinned idx after plant remove; assist not saved; dishonest place flash | Yes |
-| 3 | Legacy load kept stale pollinator reach/density | Yes |
-
-**Counts:** ~7 Important/Critical fixed across loops · Polish deferred to 6d/6e or pre-existing layout.
+**Gates:** `tsc` clean · **589** vitest tests green  
+**Verdict:** **Ship-ready** for 6a–6e + residual polish
 
 ## What shipped
 
+### 6a–6c (core)
 - Clean Live drawer + Archive; tool radio Select/Place/Paint/Erase  
 - Spread + cross + pollinator reach/density pressures  
 - Insect clouds: place, invite, inspect, erase, pin/free-roam, per-plant nectar, travel-to-host  
 - Shared `pollinateAssist` (defaults 6/2 — real play unchanged)
 
-## Residual polish (not blocking)
+### 6d
+- Pan-first camera + zoom HUD
 
-- Individual mote visit/return animation (cloud center travels; flecks still orbit)  
-- Cloud instances not persisted in slots (load flash notes this)  
-- 6e: clone flower, history charts, lifespan lever  
-- Ambient tray clip under roll at ~1100px (pre-6c)
+### 6e
+- Clone flower preview → Live cousin species  
+- Lifespan + nectar regen/draw/empty-threshold pressures  
+- WEB: plant census + swarm **match %** and **energy** sparklines  
+- Census restore on slot load (chart continuity)
+
+### Close-out polish
+- Insect clouds + flower maps + per-plant nectar persist in sim slots  
+- Mote leave → visit bloom → return animation (activity scales with pop × energy)  
+- Ambient tray clip fixed (max-width 260px)
+
+## Close-out commits (on `worldlab-close`)
+
+| Commit | Summary |
+|---|---|
+| `c9f4577` | Persist insect clouds across slots (+ census restore) |
+| `0a1af85` | Mote forage leave-visit-return animation |
+| `ea0a98a` | Swarm energy sparklines in WEB |
+
+## Explicitly out of scope (not blockers)
+
+- Full main-world `charts.ts` ledger panel in the lab (WEB sparklines satisfy 6e “at least one” series)  
+- Mid-session island warm in backtick menu (separate epic; never started)  
+- Critter↔insect predation; bird disperser-on-the-wing  
+- Population history series (energy + match shipped)  
+- In-progress clone preview panel state across save (introduced cousins + maps persist)
 
 ## Manual smoke (`?sim=1`)
 
 1. Empty Live/palette on open  
 2. Roll plant → pick → Place; Archive a kind → Restore  
 3. Erase brush clears life  
-4. Pressures: reseed 0, crank pollinator reach  
-5. Place flowering plant → **cloud** / **invite a cloud** → Play/Step  
-6. Select cloud → Details (match, nectar, maps) → pin / retarget  
-7. Save slot → load → assist defaults or restores; sky empty until re-invite  
+4. Pressures: reseed 0, crank pollinator reach / nectar dials  
+5. Place flowering plant → **cloud** / **invite a cloud** → Play/Step — watch motes forage  
+6. Select cloud → Details → pin / retarget  
+7. WEB → match + energy sparklines after stepping  
+8. Clone flower → introduce cousin → Place  
+9. Save slot → load → clouds, nectar, custom flower maps, census continue  

@@ -1,7 +1,7 @@
 # World-Lab iteration — clean slate, tools, pressures, insects
 
 **Date:** 2026-07-23  
-**Status:** draft for review (builds on Simulator slices 1–5b + post-ship UX feedback)  
+**Status:** shipped 2026-07-23 (6a–6e + close-out polish; builds on Simulator slices 1–5b)  
 **Surface:** World-Lab Simulator (`?sim=1`)  
 **Out of scope for this spec:** Forge auto-preview (separate), mid-session island warm (separate), full god-view / Door A deep-time
 
