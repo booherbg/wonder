@@ -781,6 +781,15 @@ function routeToward(c: Critter, map: WorldMap): boolean {
   return true;
 }
 
+// The pollinator active-cross's reach — WIDER than a disperser's reseed drift
+// (FloraTuning.reseedRadius, default 3 tiles) and LOWER-density, so a pollination
+// boom reads as airy spread, not a rigid carpet. Bench-local numbers (the
+// Simulator's own), deliberately NOT swarms.ts's POLLINATE_* constants — that
+// file drags the whole SwarmLayer in; these stand alone. pollinateSpread draws
+// only from flora.rng, so this adds no new stream.
+const POLLINATOR_RADIUS = 6; // tiles — > reseedRadius (3): the "wider" of wider/looser
+const POLLINATOR_MAX_SAME = 2; // per-cloud density cap, below the per-tile cap: the "looser"
+
 export function updateCritter(
   c: Critter,
   dt: number,
@@ -818,6 +827,13 @@ export function updateCritter(
       if (c.meal && flora.all[c.meal.idx] === c.meal) {
         if (sp.role === "grazer") {
           flora.nibble(c.meal);
+        } else if (sp.role === "pollinator") {
+          // active cross (Simulator ambient bench): carry this bloom's genes
+          // WIDER and LOOSER than a disperser's reseed drift, via the standalone
+          // pollinateSpread — it draws only from flora.rng (no new stream) and
+          // routes through addPlant, so every cap/habitat gate still holds.
+          // Bench-only; real play never assigns "pollinator".
+          flora.pollinateSpread(c.meal, POLLINATOR_RADIUS, POLLINATOR_MAX_SAME);
         } else {
           flora.propagate(c.meal);
           // a disperser leaves a byproduct where it fed, tagged with the eaten
