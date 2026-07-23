@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CHAINS_KEY, resolveChains, LAST_SEED_KEY, parseLastSeed } from "../src/game/flags";
+import { CHAINS_KEY, resolveChains, LAST_SEED_KEY, parseLastSeed, parseSimMode } from "../src/game/flags";
 
 test("chains default on when nothing is set", () => {
   expect(resolveChains(null, null)).toBe(true);
@@ -41,4 +41,17 @@ test("parseLastSeed rejects non-canonical integer strings Number() would silentl
   expect(parseLastSeed("-0")).toBeNull(); // signed zero
   expect(parseLastSeed("42")).toBe(42); // still works
   expect(parseLastSeed("0")).toBe(0); // still works
+});
+
+test("parseSimMode: absent ?sim is not sim mode", () => {
+  expect(parseSimMode("?seed=42")).toBeNull();
+  expect(parseSimMode("")).toBeNull();
+});
+test("parseSimMode: ?sim / ?sim=1 / any other value → the World-Lab", () => {
+  expect(parseSimMode("?sim")).toBe("lab");
+  expect(parseSimMode("?sim=1")).toBe("lab");
+  expect(parseSimMode("?sim=lab")).toBe("lab");
+});
+test("parseSimMode: ?sim=swarm preserves the swarm bench", () => {
+  expect(parseSimMode("?sim=swarm")).toBe("swarm");
 });

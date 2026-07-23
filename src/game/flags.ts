@@ -39,3 +39,13 @@ export function parseLastSeed(stored: string | null): number | null {
   const n = Number(stored);
   return n >= 0 ? n : null;
 }
+
+// Which bench a ?sim URL asks for. Today's ?sim=1 is the swarm/identity-map
+// bench; the World-Lab (slice-1 construct) takes over the default, and the
+// swarm bench is preserved behind ?sim=swarm. null ⇒ ordinary play.
+export type SimMode = "lab" | "swarm";
+export function parseSimMode(search: string): SimMode | null {
+  const params = new URLSearchParams(search.startsWith("?") ? search : "?" + search);
+  if (!params.has("sim")) return null;
+  return params.get("sim") === "swarm" ? "swarm" : "lab";
+}

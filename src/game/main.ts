@@ -101,12 +101,18 @@ import { OVERVIEW_COLORS } from "../render/palette";
 import { Renderer, SOW_LINGER_MS } from "../render/renderer";
 import { InputState, Player } from "./player";
 import { startSimulator } from "./simulator";
+import { parseSimMode } from "./flags";
+import { startWorldLab } from "./worldlab";
 
-// The Simulator (?sim=1) is a separate mode: it takes over the page entirely and
+// The Simulator (?sim) is a separate mode: it takes over the page entirely and
 // the normal island never boots, so ordinary play is byte-for-byte unchanged.
-// Everything below is the game, run only when we're NOT in the Simulator.
-if (new URL(location.href).searchParams.has("sim")) {
-  startSimulator();
+// ?sim (default/any value) opens the World-Lab; ?sim=swarm preserves the
+// original swarm/identity-map bench. Everything below is the game, run only
+// when we're NOT in the Simulator.
+const simMode = parseSimMode(location.search);
+if (simMode) {
+  if (simMode === "swarm") startSimulator();
+  else startWorldLab();
 } else {
 
 const SIM_MS = 2000; // one flora heartbeat every 2s
