@@ -10,9 +10,60 @@ import { IslandRelief, IslandShape, RELIEF_PHRASE, RELIEFS, SHAPE_PHRASE, SHAPES
 import { DEFAULT_CONFIG, WorldConfig } from "../world/config";
 
 export interface ForgeHandlers {
-  preview: (state: ForgeState) => void;
-  generate: (state: ForgeState) => void;
+  preview: (state: ForgeState) => void | Promise<void>;
+  generate: (state: ForgeState) => void | Promise<void>;
   rerollSeed: () => number;
+}
+
+const PREVIEW_DEBOUNCE_MS = 160;
+
+let live: ForgeState | null = null;
+let liveHandlers: ForgeHandlers | null = null;
+let noticeEl: HTMLElement | null = null; // the "no island took shape" line under the actions
+let progressEl: HTMLElement | null = null; // "shaping… 42%" over the mini map
+let previewTimer: number | undefined;
+let busy = false; // true while sail/generate is mid-flight (locks knobs)
+
+// Sets (or clears, with "") the forge's notice line — the error net's mouthpiece:
+// a bad config re-opens/stays in the forge with a word about it instead of
+// throwing uncaught into a white screen. A no-op if the panel isn't mounted.
+export function forgeNotice(msg: string): void {
+  if (noticeEl) noticeEl.textContent = msg;
+}
+
+// Live progress over the preview canvas. Pass null (or omit) to clear.
+// pct is 0..1 — shown as a whole percent. "shaping…" alone at 0.
+export function forgeProgress(pct: number | null): void {
+  if (!progressEl) return;
+  if (pct === null) {
+    progressEl.hidden = true;
+    progressEl.textContent = "";
+    return;
+  }
+  const n = Math.max(0, Math.min(100, Math.round(pct * 100)));
+  progressEl.hidden = false;
+  progressEl.textContent = n <= 0 ? "shaping…" : `shaping… ${n}%`;
+}
+
+export function forgeBusy(): boolean {
+  return busy;
+}
+
+export function setForgeBusy(v: boolean): void {
+  busy = v;
+  const el = panel();
+  el.classList.toggle("busy", v);
+}
+
+// Debounced live preview — every knob change schedules one. Skipped while a
+// sail/generate is mid-flight so we don't stomp its progress readout.
+function schedulePreview(): void {
+  if (!live || !liveHandlers || busy) return;
+  window.clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    if (!live || !liveHandlers || busy) return;
+    liveHandlers.preview(live);
+  }, PREVIEW_DEBOUNCE_MS);
 }
 
 // INTEGER_FIELDS (imported from forgeArgs.ts, shared with forgeArgs()'s
@@ -59,10 +110,6 @@ export function isForgeOpen(): boolean {
   return panel().classList.contains("on");
 }
 
-export function closeForge(): void {
-  panel().classList.remove("on");
-}
-
 function cloneState(s: ForgeState): ForgeState {
   return { ...s, cfg: { ...s.cfg } };
 }
@@ -91,17 +138,6 @@ const RANDOMIZE_SKIP = new Set([
   "snowLevel",
 ]);
 
-let live: ForgeState | null = null;
-let liveHandlers: ForgeHandlers | null = null;
-let noticeEl: HTMLElement | null = null; // the "no island took shape" line under the actions
-
-// Sets (or clears, with "") the forge's notice line — the error net's mouthpiece:
-// a bad config re-opens/stays in the forge with a word about it instead of
-// throwing uncaught into a white screen. A no-op if the panel isn't mounted.
-export function forgeNotice(msg: string): void {
-  if (noticeEl) noticeEl.textContent = msg;
-}
-
 function row(parent: HTMLElement, cls = "forge-row"): HTMLElement {
   const r = document.createElement("div");
   r.className = cls;
@@ -129,10 +165,15 @@ function fineInput(field: keyof WorldConfig): HTMLInputElement {
   input.step = stepFor(field, bounds);
   const current = live!.cfg[field];
   input.value = String(current !== undefined ? current : DEFAULT_CONFIG[field]);
-  input.addEventListener("change", () => {
+  const apply = () => {
     const n = Number(input.value);
-    if (Number.isFinite(n)) (live!.cfg as any)[field] = n;
-  });
+    if (Number.isFinite(n)) {
+      (live!.cfg as any)[field] = n;
+      schedulePreview();
+    }
+  };
+  input.addEventListener("input", apply);
+  input.addEventListener("change", apply);
   return input;
 }
 
@@ -140,6 +181,7 @@ function render(): void {
   const el = panel();
   el.innerHTML = "";
   noticeEl = null; // the old element (if any) just left the DOM with el.innerHTML
+  progressEl = null;
   const state = live!;
   const handlers = liveHandlers!;
 
@@ -161,6 +203,10 @@ function render(): void {
   canvas.width = 180;
   canvas.height = 180;
   preview.appendChild(canvas);
+  progressEl = document.createElement("div");
+  progressEl.className = "forge-progress";
+  progressEl.hidden = true;
+  preview.appendChild(progressEl);
   el.appendChild(preview);
 
   // ── headline controls ────────────────────────────────────────────────
@@ -179,10 +225,15 @@ function render(): void {
     input.className = "forge-num forge-seed";
     input.step = "1";
     input.value = String(state.seed);
-    input.addEventListener("change", () => {
+    const applySeed = () => {
       const n = Number(input.value);
-      if (Number.isFinite(n)) state.seed = Math.trunc(n);
-    });
+      if (Number.isFinite(n)) {
+        state.seed = Math.trunc(n);
+        schedulePreview();
+      }
+    };
+    input.addEventListener("input", applySeed);
+    input.addEventListener("change", applySeed);
     const reroll = document.createElement("button");
     reroll.type = "button";
     reroll.className = "forge-btn forge-reroll";
@@ -191,6 +242,7 @@ function render(): void {
     reroll.addEventListener("click", () => {
       state.seed = handlers.rerollSeed();
       input.value = String(state.seed);
+      schedulePreview();
     });
     group.append(input, reroll);
     r.appendChild(group);
@@ -215,6 +267,7 @@ function render(): void {
     select.value = state.shape;
     select.addEventListener("change", () => {
       state.shape = select.value as IslandShape | "roll";
+      schedulePreview();
     });
     r.appendChild(select);
   }
@@ -238,6 +291,7 @@ function render(): void {
     select.value = state.relief;
     select.addEventListener("change", () => {
       state.relief = select.value as IslandRelief | "roll";
+      schedulePreview();
     });
     r.appendChild(select);
   }
@@ -256,10 +310,15 @@ function render(): void {
     wInput.max = String(wBounds[1]);
     wInput.step = "1";
     wInput.value = String(state.width);
-    wInput.addEventListener("change", () => {
+    const applyW = () => {
       const n = Number(wInput.value);
-      if (Number.isFinite(n)) state.width = Math.trunc(n);
-    });
+      if (Number.isFinite(n)) {
+        state.width = Math.trunc(n);
+        schedulePreview();
+      }
+    };
+    wInput.addEventListener("input", applyW);
+    wInput.addEventListener("change", applyW);
     const by = document.createElement("span");
     by.className = "forge-by";
     by.textContent = "×";
@@ -271,10 +330,15 @@ function render(): void {
     hInput.max = String(hBounds[1]);
     hInput.step = "1";
     hInput.value = String(state.height);
-    hInput.addEventListener("change", () => {
+    const applyH = () => {
       const n = Number(hInput.value);
-      if (Number.isFinite(n)) state.height = Math.trunc(n);
-    });
+      if (Number.isFinite(n)) {
+        state.height = Math.trunc(n);
+        schedulePreview();
+      }
+    };
+    hInput.addEventListener("input", applyH);
+    hInput.addEventListener("change", applyH);
     group.append(wInput, by, hInput);
     r.appendChild(group);
   }
@@ -349,15 +413,9 @@ function render(): void {
     }
     state.warm = randomInRange("warm", RANDOMIZE_RANGES.warm ?? FORGE_BOUNDS.warm);
     render(); // knobs moved out from under the panel — rebuild it in place
+    schedulePreview();
   });
   actions.appendChild(randomizeAll);
-
-  const previewBtn = document.createElement("button");
-  previewBtn.type = "button";
-  previewBtn.className = "forge-btn forge-act";
-  previewBtn.textContent = "preview";
-  previewBtn.addEventListener("click", () => handlers.preview(state));
-  actions.appendChild(previewBtn);
 
   const generateBtn = document.createElement("button");
   generateBtn.type = "button";
@@ -368,7 +426,7 @@ function render(): void {
 
   const hint = document.createElement("div");
   hint.className = "forge-hint";
-  hint.textContent = "esc to close";
+  hint.textContent = "preview updates as you edit · esc to close";
   actions.appendChild(hint);
 
   // the error net's mouthpiece — empty until forgeNotice() has something to
@@ -388,6 +446,16 @@ function render(): void {
 export function openForge(state: ForgeState, handlers: ForgeHandlers): void {
   live = cloneState(state);
   liveHandlers = handlers;
+  busy = false;
   render();
   panel().classList.add("on");
+  panel().classList.remove("busy");
+  schedulePreview(); // first look as soon as the panel opens
+}
+
+export function closeForge(): void {
+  window.clearTimeout(previewTimer);
+  forgeProgress(null);
+  setForgeBusy(false);
+  panel().classList.remove("on");
 }

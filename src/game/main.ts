@@ -92,9 +92,9 @@ const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
-import { IslandShape, SHAPES, SHAPE_PHRASE, generate, rollShape } from "../world/generate";
+import { IslandShape, SHAPES, SHAPE_PHRASE, generate, generateAsync, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
-import { closeForge, forgeNotice, isForgeOpen, openForge } from "../render/forge";
+import { closeForge, forgeNotice, forgeProgress, isForgeOpen, openForge, setForgeBusy } from "../render/forge";
 import { islandName } from "../world/name";
 import { Tile, WorldMap, isWalkable, pocketAt, tileAt } from "../world/types";
 import { easeToward } from "../render/depth";
@@ -790,7 +790,7 @@ function loadSave(seed: number): SavedWorld | null {
   }
 }
 
-function loadWorld(seed: number, gen?: GenArgs): void {
+function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   // the map you drew of the island you're leaving keeps its ink — unless the
   // island you're leaving was the ephemeral title backdrop (backdropLoaded),
   // which nobody played and shouldn't leave a wander.explored entry behind
@@ -804,14 +804,18 @@ function loadWorld(seed: number, gen?: GenArgs): void {
   const cfg = gen?.config ?? DEFAULT_CONFIG;
   const useShape = gen ? gen.shape : urlShape;
   const useRelief = gen?.relief; // undefined ⇒ generate rolls it (today's behavior)
-  let attempts = 0;
-  for (;;) {
-    try {
-      map = generate(seed, cfg, useShape, useRelief);
-      break;
-    } catch {
-      if (++attempts >= 5) throw new Error("no island found on five voyages");
-      seed = randomSeed();
+  if (prebuilt) {
+    map = prebuilt;
+  } else {
+    let attempts = 0;
+    for (;;) {
+      try {
+        map = generate(seed, cfg, useShape, useRelief);
+        break;
+      } catch {
+        if (++attempts >= 5) throw new Error("no island found on five voyages");
+        seed = randomSeed();
+      }
     }
   }
   currentSeed = seed;
@@ -1431,22 +1435,42 @@ if (NOMENU) {
 // does not touch currentSeed/map/flora or any ledger/persist path — nothing
 // here is played, so nothing here is saved. Warmth isn't previewed (it
 // seeds life density at spawn, not terrain), so it has no effect here.
-// A config that can't take shape (fine-grain edits can still push the
-// guards past what any map satisfies) throws inside generate() — caught
-// here so a bad roll leaves the panel open with a word about it instead of
-// an uncaught exception the canvas paints as a white screen.
-function previewForge(state: ForgeState): void {
-  const { seed, gen } = forgeArgs(state);
-  let m: WorldMap;
+// Async + queued so retries can paint a progress % and rapid knob changes
+// don't stack concurrent generates (that was the freeze).
+let forgePreviewToken = 0;
+let forgePreviewQueued: ForgeState | null = null;
+let forgePreviewRunning = false;
+
+async function previewForge(state: ForgeState): Promise<void> {
+  forgePreviewQueued = state;
+  if (forgePreviewRunning) return;
+  forgePreviewRunning = true;
   try {
-    m = generate(seed, gen.config, gen.shape, gen.relief);
-  } catch {
-    forgeNotice("no island took shape at these settings — reroll or ease the guards");
-    return;
+    while (forgePreviewQueued) {
+      const next = forgePreviewQueued;
+      forgePreviewQueued = null;
+      const token = ++forgePreviewToken;
+      const { seed, gen } = forgeArgs(next);
+      forgeNotice("");
+      forgeProgress(0);
+      try {
+        const m = await generateAsync(seed, gen.config, gen.shape, gen.relief, ({ attempt, max }) => {
+          if (token !== forgePreviewToken) return;
+          forgeProgress(attempt / max);
+        });
+        if (token !== forgePreviewToken) continue;
+        forgeProgress(null);
+        const canvas = document.querySelector("#forge .forge-mini") as HTMLCanvasElement | null;
+        if (canvas) paintMiniMap(m, canvas);
+      } catch {
+        if (token !== forgePreviewToken) continue;
+        forgeProgress(null);
+        forgeNotice("no island took shape at these settings — reroll or ease the guards");
+      }
+    }
+  } finally {
+    forgePreviewRunning = false;
   }
-  forgeNotice("");
-  const canvas = document.querySelector("#forge .forge-mini") as HTMLCanvasElement | null;
-  if (canvas) paintMiniMap(m, canvas);
 }
 
 // the front door's state: the island last entered (if any, for "continue")
@@ -1510,22 +1534,33 @@ function openForgeFromTitle(): void {
     rerollSeed: newIslandSeed,
   });
 }
-function onForgeGenerate(state: ForgeState): void {
+async function onForgeGenerate(state: ForgeState): Promise<void> {
   const { seed, gen } = forgeArgs(state);
-  // pre-validate BEFORE tearing down the title: a throw here must leave the
-  // forge (and the backdrop under it) exactly as they were, not mid-teardown
-  // with nothing loaded. generate() is a pure function of (seed, config,
-  // shape, relief), so this exact call is what loadWorld's own generate()
-  // will make below — if it doesn't throw here, it won't throw there either.
+  // Drop any in-flight / queued preview so it can't paint over sail progress.
+  forgePreviewToken++;
+  forgePreviewQueued = null;
+  setForgeBusy(true);
+  forgeNotice("");
+  forgeProgress(0);
+  let m: WorldMap;
   try {
-    generate(seed, gen.config, gen.shape, gen.relief);
+    // Pre-validate BEFORE tearing down the title: a throw here must leave the
+    // forge (and the backdrop under it) exactly as they were, not mid-teardown
+    // with nothing loaded. Reuse this map in loadWorld so we don't generate twice.
+    m = await generateAsync(seed, gen.config, gen.shape, gen.relief, ({ attempt, max }) => {
+      forgeProgress(attempt / max);
+    });
   } catch {
+    forgeProgress(null);
+    setForgeBusy(false);
     forgeNotice("no island took shape here — try another seed or ease the guards");
     return; // stay in the forge; the title/backdrop are untouched
   }
+  forgeProgress(null);
+  setForgeBusy(false);
   closeForge();
   leaveTitle(); // titleActive → false: loadWorld records lastSeed, backdrop not persisted
-  loadWorld(seed, gen);
+  loadWorld(seed, gen, m);
   renderer.setMap(map);
 }
 

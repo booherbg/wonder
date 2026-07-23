@@ -410,6 +410,30 @@ export function generate(
   );
 }
 
+// Same search as generate(), but yields between attempts so the UI can paint a
+// progress readout (the forge's live preview / generate button). Callback
+// fires BEFORE each attempt with 1-based attempt index. Sync generate() stays
+// for tests and loadWorld; only interactive forge paths use this.
+export async function generateAsync(
+  seed: number,
+  config: WorldConfig = DEFAULT_CONFIG,
+  shape?: IslandShape,
+  relief?: IslandRelief,
+  onProgress?: (info: { attempt: number; max: number }) => void,
+): Promise<WorldMap> {
+  const max = config.maxGenerationAttempts;
+  for (let attempt = 0; attempt < max; attempt++) {
+    onProgress?.({ attempt: attempt + 1, max });
+    // let the browser paint the progress frame before the (sync) attempt work
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const map = tryGenerate(seed, seed + attempt, config, shape, relief);
+    if (map) return map;
+  }
+  throw new Error(
+    `no viable island within ${config.maxGenerationAttempts} attempts of seed ${seed}`,
+  );
+}
+
 function tryGenerate(
   displaySeed: number,
   genSeed: number,

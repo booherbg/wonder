@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { DEFAULT_CONFIG } from "../src/world/config";
-import { generate } from "../src/world/generate";
+import { generate, generateAsync } from "../src/world/generate";
 import { Tile, WALKABLE, WorldMap, isWalkable, tileAt } from "../src/world/types";
 
 const cfg = DEFAULT_CONFIG;
@@ -30,6 +30,18 @@ test("same seed generates an identical world", () => {
   expect(a.spawn).toEqual(b.spawn);
   expect(a.rivers).toEqual(b.rivers);
   expect(a.seed).toBe(12345);
+});
+
+test("generateAsync matches sync generate and reports progress", async () => {
+  const sync = generate(12345, cfg);
+  const seen: number[] = [];
+  const asyncMap = await generateAsync(12345, cfg, undefined, undefined, ({ attempt }) => {
+    seen.push(attempt);
+  });
+  expect(asyncMap.tiles).toEqual(sync.tiles);
+  expect(asyncMap.spawn).toEqual(sync.spawn);
+  expect(seen.length).toBeGreaterThanOrEqual(1);
+  expect(seen[0]).toBe(1);
 });
 
 test("different seeds generate different worlds", () => {

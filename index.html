@@ -477,12 +477,34 @@
         margin: 4px 0 14px; padding-bottom: 10px;
         border-bottom: 1px solid rgba(var(--lumen), 0.14);
       }
-      #forge .forge-preview { display: flex; justify-content: center; margin-bottom: 14px; }
+      #forge .forge-preview {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        margin-bottom: 14px;
+      }
       #forge .forge-mini {
         width: 180px; height: 180px; image-rendering: pixelated;
         border-radius: 3px; background: rgba(var(--abyss), 0.5);
         box-shadow: 0 0 0 1px rgba(var(--lumen), 0.2), inset 0 0 24px rgba(0, 0, 0, 0.4);
       }
+      #forge .forge-progress {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(8, 14, 18, 0.55);
+        font: 12px var(--mono);
+        letter-spacing: 0.04em;
+        color: rgba(228, 236, 242, 0.92);
+        border-radius: 3px;
+        pointer-events: none;
+      }
+      #forge .forge-progress[hidden] { display: none; }
+      #forge.busy .forge-head,
+      #forge.busy .forge-fine,
+      #forge.busy .forge-actions { pointer-events: none; opacity: 0.55; }
       #forge .forge-head { display: flex; flex-direction: column; gap: 2px; }
       #forge .forge-row {
         display: flex; align-items: center; justify-content: space-between;
