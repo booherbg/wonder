@@ -2433,30 +2433,61 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("redundancy", v.chains.redundancy.toFixed(1) + "×");
   };
 
-  // ── the evolution tray (Task 5, slice 4): the marquee of the evolutionary
-  // layer made literal — five LIVE sliders, each an onInput straight onto
-  // the running kernel (worldlab.ts's setPressure, wired through onPressure
-  // below). A toggled `position: fixed` overlay — the pressuresBtn built
-  // beside brush, above, flips it — deliberately NOT a leftStack/rightStack
-  // child, so opening it can never push either bounded/scrolling column
-  // into the overlap those stacks exist to avoid. Hidden by default; docked
-  // right so it overlays the bench without permanently hiding either
-  // column; its own max-height + scroll caps it regardless of window size,
-  // so it can never grow to cover the whole view. ─────────────────────────
+  // ── the evolution tray (Task 5, slice 4 — LAYOUT FIXED in review): the
+  // marquee of the evolutionary layer made literal — five LIVE sliders, each
+  // an onInput straight onto the running kernel (worldlab.ts's setPressure,
+  // wired through onPressure below). The original pass docked this bottom-
+  // RIGHT as an independent `position: fixed` overlay; at the brief's own
+  // shot viewport that collided with the drawer's own right-docked column
+  // (both right-corner fixed panels, no mutual awareness) and clipped its
+  // rows. Fixed by making the tray a child of the bottom-CENTER `stack`
+  // instead — the SAME self-healing column-reverse mechanism the starter/
+  // time bar and palette already share (see `stack`'s own comment, above):
+  // appended LAST, so it stacks ABOVE the palette rather than below it,
+  // growing the stack's total height without moving the bar's own
+  // bottom-anchored position.
+  //
+  // Centering alone isn't quite enough, though: `stack`'s own box sizes to
+  // its WIDEST child (here, the palette, which on a big roster can already
+  // run wide — a separate, pre-existing "the palette can underlap the side
+  // columns" behavior this task doesn't touch), and `align-items: center`
+  // only centers each child WITHIN that box, not within the narrower gap
+  // between leftStack's right edge (~386px: 18px + the roll pane's own
+  // 336px content + its 32px of padding) and rightStack's left edge
+  // (~328px in from the right: 18px + the drawer's 296px content + its
+  // 32px of padding) — a gap that narrows on a smaller window. So the tray
+  // caps its OWN max-width well under that gap (independent of whatever the
+  // palette does) and lays its five sliders in a compact, narrow-columned
+  // row that wraps (flex-wrap) onto as many lines as it needs — 2 per row
+  // at this cap, so 3 rows for five sliders — bounded so the tray's total
+  // rendered width can never reach into either side column's footprint, at
+  // the brief's own 1400px shot OR the narrower 1100px one, rather than a
+  // viewport-width guess that only holds at one specific size.
+  // Toggled by the pressuresBtn beside brush, above; hidden by default. ────
   const evoTray = document.createElement("div");
   evoTray.id = "lab-evo-tray";
   evoTray.style.cssText =
-    "display: none; position: fixed; right: 18px; bottom: 96px; z-index: 7; width: 242px;" +
-    " max-height: 70vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
-    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
-    " user-select: none;";
-  document.body.appendChild(evoTray);
+    "display: none; max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
+    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
+    " font-family: var(--serif); user-select: none;";
+  stack.appendChild(evoTray); // appended LAST — column-reverse stacks it above bar + palette
 
   const evoHead = document.createElement("div");
+  evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the evolution tray</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">crank a pressure — evolution changes live, nothing resets</div>`;
   evoTray.appendChild(evoHead);
+
+  // The five sliders sit in a ROW (not a stacked column) — a compact strip
+  // above the bottom bar rather than a tall panel. Each group is narrow
+  // enough (with the tray's own 340px cap above) that either three fit per
+  // row at that cap, or all five fit in one row on a wide enough window
+  // (flex-wrap handles both), the same convention the bottom bar's own
+  // clusters already use.
+  const evoRow = document.createElement("div");
+  evoRow.style.cssText = "display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px;";
+  evoTray.appendChild(evoRow);
 
   // A raw slider value's own legible face: the four FloraTuning-backed
   // pressures (fine steps, 0.01) read as a two-decimal fraction; the coarse
@@ -2468,8 +2499,8 @@ function buildChrome(initial: StarterKind): Chrome {
     p.id === "grazerShare" ? pct(v) : p.step >= 1 ? String(Math.round(v)) : v.toFixed(2);
 
   const pressureRows = PRESSURES.map((p) => {
-    const row = document.createElement("div");
-    row.style.cssText = "margin-top: 12px;";
+    const group = document.createElement("div");
+    group.style.cssText = "width: 100px; flex: 0 0 auto; text-align: center;";
     const rowLabel = document.createElement("div");
     rowLabel.style.cssText = `${MONO} text-transform: uppercase; color: rgba(228,236,242,0.65);`;
     rowLabel.textContent = p.label;
@@ -2482,8 +2513,9 @@ function buildChrome(initial: StarterKind): Chrome {
     input.style.cssText = "width: 100%; margin-top: 4px; accent-color: rgb(var(--lumen));";
     input.oninput = () => chrome.onPressure(p.id, Number(input.value));
     const valueRow = document.createElement("div");
-    row.append(rowLabel, input, valueRow);
-    evoTray.appendChild(row);
+    valueRow.style.cssText = "font: 13px var(--mono); color: rgb(var(--lumen)); margin-top: 3px;";
+    group.append(rowLabel, input, valueRow);
+    evoRow.appendChild(group);
     return { p, input, valueRow };
   });
 
@@ -2492,7 +2524,7 @@ function buildChrome(initial: StarterKind): Chrome {
     const row = pressureRows.find((r) => r.p.id === id);
     if (!row) return;
     if (Number(row.input.value) !== value) row.input.value = String(value);
-    row.valueRow.innerHTML = stat(row.p.label, formatPressure(row.p, value));
+    row.valueRow.textContent = formatPressure(row.p, value);
   };
   // the tray's own boot-time face: DEFAULT_TUNING's values (this function
   // has no access to worldlab.ts's pressureValues closure) — worldlab.ts
