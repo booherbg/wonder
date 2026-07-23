@@ -188,7 +188,23 @@ test("a kernel resumes bit-identically from a full snapshot — flora + critters
   const at = (t: number) => (t + 0.5) * TILE_SIZE;
   a.kernel.placePlant(a.grassPlant, at(8), at(8));
   a.kernel.placeCritter(a.critter, at(11), at(11)); // within seek range → it will form a meal mid-run
+  // A small grass cluster planted well past the grazer's den+seek reach (its
+  // SEEK_RADIUS_PX and HOME_RANGE_TILES both top out under 10 tiles; this sits
+  // ~30 tiles off in the far corner) — it survives being nibbled at (there's
+  // nothing to nibble it), matures, and keeps propagating for the WHOLE run.
+  // Without this, the lone plant above is fully eaten by ~tick 12, flora sits
+  // at 0 for the rest of the run, and the 90→180 window this test compares
+  // never draws from the flora rng at all — trivially "identical" because
+  // nothing happens. This keeps flora genuinely live and stepping across the
+  // resume boundary, so the plant-restore path is exercised with real plants.
+  for (let dx = 0; dx < 3; dx++) {
+    for (let dy = 0; dy < 2; dy++) {
+      a.kernel.placePlant(a.grassPlant, at(34 + dx), at(34 + dy));
+    }
+  }
   a.kernel.step(90, "full");
+  expect(a.kernel.flora.count).toBeGreaterThan(0); // flora is LIVE at the snapshot tick — not hollow
+  const floraRngAt90 = a.kernel.flora.rngState();
 
   // snapshot: flora restore block + critters-as-rows + both kernel rng positions
   const restoredFlora = {
@@ -220,11 +236,15 @@ test("a kernel resumes bit-identically from a full snapshot — flora + critters
   resumed.critters = restoreCritterRows(critterRows, critterSpecies, resumed.flora); // re-resolves meal against resumed.flora
   expect(resumed.tick).toBe(90);
   expect(resumed.critterRngState()).toBe(critterRngState);
+  expect(resumed.flora.count).toBeGreaterThan(0); // the plant-restore path carried real, non-empty flora
 
   // step BOTH forward 90 more; identical
   a.kernel.step(90, "full");
   resumed.step(90, "full");
   expect(snap(resumed)).toEqual(snap(a.kernel));
+  // flora kept propagating across the resume boundary — its rng stream is not
+  // frozen at the snapshot tick (the hollow-flora gap this bench now closes)
+  expect(a.kernel.flora.rngState()).not.toBe(floraRngAt90);
   // and the mid-thought behavioral state carried across (not reset to idle)
   expect(resumed.critters.map((c) => [c.state, Math.round(c.curiosity * 1e6), Math.round(c.hopPhase * 1e6)]))
     .toEqual(a.kernel.critters.map((c) => [c.state, Math.round(c.curiosity * 1e6), Math.round(c.hopPhase * 1e6)]));
@@ -238,8 +258,19 @@ test("resume-then-run equals running N+M straight through from the start (true b
   a.kernel.placeCritter(a.critter, at(11), at(11));
   straight.kernel.placePlant(straight.grassPlant, at(8), at(8));
   straight.kernel.placeCritter(straight.critter, at(11), at(11));
+  // Same far-corner grass cluster as the test above (well past the grazer's
+  // reach), planted identically on BOTH kernels — so flora is genuinely live
+  // and propagating on both sides of the 90→180 seam this test compares.
+  for (const s of [a, straight]) {
+    for (let dx = 0; dx < 3; dx++) {
+      for (let dy = 0; dy < 2; dy++) {
+        s.kernel.placePlant(s.grassPlant, at(34 + dx), at(34 + dy));
+      }
+    }
+  }
 
   a.kernel.step(90, "full");
+  expect(a.kernel.flora.count).toBeGreaterThan(0); // flora is LIVE at the snapshot tick — not hollow
 
   const restoredFlora = {
     tick: a.kernel.flora.tick,
