@@ -16,11 +16,12 @@ read the ledger, `git log`, and you can continue cold. **Trust the ledger + git 
   (tech-doc §16). Do not redo any of it.
 - **Slice 5 = "frame & persistence"** — the remaining spec-v1 scope. Blaine explicitly chose **"build
   slice 5 fully"** (persistence AND the ambient bench). It splits into two independent sub-slices:
-  - **5a — persistence** (touches the REAL save format; higher stakes): **~90% done** on branch
-    `sim-slice5a`. Tasks 1–8 complete + reviewed. **Task 9 (save/load-slot UI) was in flight when this
-    doc was written; Task 10 (verify + doc) not started.** NOT yet merged to master.
-  - **5b — ambient bench** (Simulator-only; lower stakes): **not started.** Plan written,
-    pre-flight-reviewed, and patched — ready to execute cold.
+  - **5a — persistence** (touches the REAL save format; higher stakes): **DONE + SHIPPED to master**
+    (commit `60af5bd`, deployed). All 10 tasks complete, reviewed, broad-reviewed READY TO MERGE, all
+    guards held. Two harmless follow-ups logged below (M1/M2) — NOT blockers, optional polish.
+  - **5b — ambient bench** (Simulator-only; lower stakes): **NOT STARTED — this is all that remains.**
+    Plan written, pre-flight-reviewed, and patched — ready to execute cold on a fresh `sim-slice5b`
+    branch off master. **START HERE.**
 
 ## The two plans (already written, pre-flight-reviewed, patched — execute as-is)
 
@@ -71,37 +72,38 @@ from (exact file:line refs — invaluable, but line numbers have DRIFTED; grep t
 
 ---
 
-## 5a — FINISH IT (highest priority; ~90% done)
+## 5a — SHIPPED (master `60af5bd`, deployed) — reference only
 
-Branch `sim-slice5a`, base off master `80efeaf`. Commits so far `c761b64..4c8e2b1` (Tasks 1–8, all
-reviewed). **Stage 1 (Tasks 1–4) already delivers the real-game benefit: animals resume mid-thought +
-the critter RNG continues.** Stage 2 (Tasks 5–8) delivers the full Simulator slot save/restore, proven
-bit-identical end-to-end (kernel replay test: resume ≡ a continuous run, live flora + all rng streams).
+All 10 tasks landed, each implementer→reviewed; the broad whole-branch review (opus) returned READY TO
+MERGE with 0 Critical / 0 Important and every binding constraint traced clean (backward-compat with real
+player data, bit-identical replay, real-worlds byte-identical, namespace isolation, cross-task seams,
+layering, peaceful). Stage 1 (Tasks 1–4) delivers the real-game benefit (animals resume mid-thought +
+the critter RNG continues); Stage 2 (Tasks 5–10) delivers the full Simulator slot save/load, proven
+bit-identical end-to-end. Nothing here needs doing. Documented in tech-doc §17.
 
-**Remaining:**
-- **Task 9 — World-Lab save/load-slot UI** (`src/game/worldlab.ts`). Was in flight at write time; CHECK
-  `git log` — if `4c8e2b1` is still HEAD, T9 didn't land; re-dispatch from
-  `.superpowers/sdd/task-9-brief.md`. DOM-wiring task: no unit harness, gate on check + full suite +
-  screenshot (`node scripts/shot.mjs "sim=1&slots=1" shots/qa3/slots.png 3500 1400 950`, open it).
-  Wires `packSim`/`restoreSim`/slot-storage (from `src/game/simSave.ts`) into a save button (prompt for
-  a name, mirror `nameWorld()`) + a slot picker (mirror the isle picker). Must call `syncKeySeq(entries)`
-  after restoring the drawer.
-- **Task 10 — full verify + guards + doc note** (`.superpowers/sdd/task-10-brief.md`). Confirms
-  determinism/peaceful/mode-isolation guards, `npm run build` clean, and adds a tech-doc §17 for slice 5a
-  in `docs/superpowers/2026-07-22-plant-insect-ecology-tech.md` (mirror the existing §13–§16 style).
-- **Then:** broad whole-branch review (opus) with `scripts/review-package $(git merge-base master
-  sim-slice5a) sim-slice5a`; fix findings; `git checkout master && git merge --ff-only sim-slice5a &&
-  git push origin master`; delete the branch; update this handoff + memory.
+**Two harmless follow-ups the broad review logged (OPTIONAL polish — NOT blockers, safe as shipped):**
+- **M1 — real-game `meal` staleness under away-reload.** `main.ts` load order is: restore plants →
+  `catchUp` simTicks → `warm` simTicks → *then* `restoreCrittersV2` re-resolves `meal` by index. Those
+  simTicks reorder `flora.all` (removePlant swap-pop / addPlant append), so a critter that was mid-nibble
+  at save can resolve `meal` to a *different* live plant after a `catchUp>0` reload. Harmless + self-
+  correcting (the `flora.all[idx]===meal` guard passes on a valid-but-wrong plant, it grazes one plant,
+  then `meal=null`, idle; no crash; peaceful; determinism unaffected — the SIM SLOT re-resolves with no
+  intervening tick, so it's exact there). One-line polish if ever wanted: null a restored `meal` when
+  `catchUp>0` in the real-game restore path.
+- **M2 — `restoreSim` skips the dim check on the UNPAINTED path.** `simSave.ts` compares
+  `saved.tiles.length` only when tiles are present (painted); `saved.width/height` are packed but never
+  compared. Purely a theoretical cross-version concern (would need `buildConstruct`'s default size to
+  change between save and load); cannot occur within one deployed version. One-line polish: also assert
+  `saved.width/height` match the rebuilt map on the unpainted path.
 
-**5a risk notes (things a reviewer already caught — watch for the same class):**
-- `flora.ts` `addPlant` gained an opt-in `skipCap` param (restore-only, defaults false) so restore
-  REPRODUCES saved plants instead of re-adjudicating them through a (possibly-lowered) per-tile cap —
-  a real Critical that was found + fixed (`4c8e2b1`). Real play never passes `skipCap` → byte-identical.
+**5a design facts worth carrying forward (so 5b or future work doesn't regress them):**
+- `flora.ts` `addPlant` has an opt-in `skipCap` param passed `true` ONLY by the restore loop
+  (`flora.ts:185`) — real play never passes it → byte-identical. Don't add other `skipCap:true` callers.
 - `packSim` serializes the FULL live `plantSpecies`/`critterSpecies` rosters wholesale (speciated
   daughters have ids beyond a fresh generate; `placeCritter` mutates `den`, `setCritterRole` mutates
-  `role`) AND the live `FloraTuning` — do NOT let any future change regenerate rosters from seed.
-- `census` is packed but not restored (chart history resets on resume) — a known deferred UX nicety,
-  not determinism-critical. Fine to leave.
+  `role`) AND the live `FloraTuning` — never regenerate rosters from seed on restore.
+- The RNG `.state()` accessor (its seed IS its state) is the resume primitive; the Task-2 GUARD test
+  (`tests/save.test.ts`) pins legacy critter restore and MUST stay green through any future save change.
 
 ---
 
