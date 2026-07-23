@@ -331,6 +331,16 @@ export function startWorldLab(): void {
   // call, ahead of buildChrome()).
   function refreshInspect(): void {
     if (!ui) return;
+    // a plant the sim has since removed (grazed young, aged out, or thinned
+    // by crowding — all ordinary live behavior, not a future erase tool)
+    // must not linger as a ghost with a forever-climbing age (age = kernel.tick
+    // - plant.born, and tick never stops) — drop it, matching fauna.ts:811's
+    // own held-ref liveness guard (`flora.all[c.meal.idx] === c.meal`).
+    // Critters never need this: placeCritter only ever adds, and nothing in
+    // this bench removes a critter, so a critter ref can't go stale.
+    if (inspected?.kind === "plant" && kernel.flora.all[inspected.ref.idx] !== inspected.ref) {
+      inspected = null;
+    }
     if (!inspected) {
       ui.hideInspect();
       return;
