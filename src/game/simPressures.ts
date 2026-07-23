@@ -37,24 +37,35 @@ export const PRESSURES: Pressure[] = [
   { id: "maxPerTile", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
 ];
 
+// Clamp a raw slider value to the named pressure's own [min, max] — the panel
+// SHOULD only ever hand us an in-range value, but tuningPatchFor must not
+// trust that: a caller sourcing value some other way (a save file, a typed
+// query param, a future macro) is a wild slider too, and the global
+// constraint is that no slider can break the sim.
+function clampToRange(id: PressureId, value: number): number {
+  const p = PRESSURES.find((pr) => pr.id === id);
+  return p ? Math.max(p.min, Math.min(p.max, value)) : value;
+}
+
 // A FloraTuning patch for a tuning-backed pressure. Speciation is special: a
 // LOWER threshold means "speciate more readily", but a lower splitDistance alone
 // is silently blocked by the cluster/cooldown gates — so we open them in step
 // (the same permissive direction ?split=1 uses), keeping the panel's one slider
 // honest as "how wild speciation runs".
 export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuning> {
+  const clamped = clampToRange(id, value);
   switch (id) {
     case "mutationAmount":
-      return { mutationAmount: value };
+      return { mutationAmount: clamped };
     case "reproChance":
-      return { reproChance: value };
+      return { reproChance: clamped };
     case "maxPerTile":
-      return { maxPerTile: Math.round(value) };
+      return { maxPerTile: Math.max(1, Math.round(clamped)) }; // never freeze a tile at 0
     case "splitDistance":
       return {
-        splitDistance: value,
-        splitClusterMin: value < 0.2 ? 2 : value < 0.35 ? 4 : 6,
-        splitCooldownTicks: value < 0.2 ? 0 : value < 0.35 ? 120 : 500,
+        splitDistance: clamped,
+        splitClusterMin: clamped < 0.2 ? 2 : clamped < 0.35 ? 4 : 6,
+        splitCooldownTicks: clamped < 0.2 ? 0 : clamped < 0.35 ? 120 : 500,
       };
     default:
       return {}; // grazerShare is not a FloraTuning field

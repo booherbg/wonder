@@ -27,6 +27,23 @@ test("tuningPatchFor maps each tuning pressure to its field; speciation opens th
   expect(tuningPatchFor("grazerShare", 0.5)).toEqual({}); // not a tuning field
 });
 
+test("tuningPatchFor clamps a wild value to the pressure's own range, so a wild slider can't break the sim", () => {
+  const maxPerTile = PRESSURES.find((p) => p.id === "maxPerTile")!;
+  expect(tuningPatchFor("maxPerTile", -5).maxPerTile).toBeGreaterThanOrEqual(1);
+  expect(tuningPatchFor("maxPerTile", -5).maxPerTile).toBeGreaterThanOrEqual(maxPerTile.min);
+
+  const mutation = PRESSURES.find((p) => p.id === "mutationAmount")!;
+  const wildMutation = tuningPatchFor("mutationAmount", 999);
+  expect(wildMutation.mutationAmount).toBeLessThanOrEqual(mutation.max);
+  expect(wildMutation.mutationAmount).toBeGreaterThanOrEqual(mutation.min);
+
+  const repro = PRESSURES.find((p) => p.id === "reproChance")!;
+  expect(tuningPatchFor("reproChance", -10).reproChance).toBeGreaterThanOrEqual(repro.min);
+
+  const split = PRESSURES.find((p) => p.id === "splitDistance")!;
+  expect(tuningPatchFor("splitDistance", 5).splitDistance).toBeLessThanOrEqual(split.max);
+});
+
 test("grazerAssignment flips a deterministic share of kinds to grazer", () => {
   const ids = [5, 2, 9, 1]; // unsorted on purpose
   const a = grazerAssignment(ids, 0.5);
