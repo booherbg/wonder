@@ -2372,8 +2372,8 @@ function buildChrome(initial: StarterKind): Chrome {
   // the whole stack — the palette AND the pressures tray appended above it —
   // up over the header/side panels rather than staying put and scrolling.
   palette.style.cssText =
-    "max-width: 88vw; max-height: 26vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;" +
-    " padding: 9px 12px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
+    "max-width: 88vw; max-height: 18vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;" +
+    " padding: 7px 10px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
     " user-select: none;";
   stack.appendChild(palette);
 
