@@ -223,11 +223,133 @@ function unpackFlower(saved: SavedFlower): Flower {
 // A mote is one slot of render bookkeeping (the gene pool is the sim): the
 // renderer draws the first few as full generative insects and the rest as the
 // faint 1px dust that says "many" without clutter. Wall-clock animation only.
-interface Mote {
+export type MotePhase = "orbit" | "outbound" | "visit" | "inbound";
+
+export interface Mote {
   a: number; // orbit angle around the cloud centre
   r: number; // 0..1 radial offset within the cloud
   spd: number; // angular drift speed
   z: number; // 0..1 depth, for size/alpha variation
+  phase: MotePhase;
+  prog: number; // 0..1 within outbound/visit/inbound
+  cooldown: number; // orbit dwell before another forage (seconds)
+}
+
+const MOTE_OUTBOUND_S = 1.1;
+const MOTE_VISIT_S = 0.5;
+const MOTE_INBOUND_S = 0.95;
+
+function freshMote(a: number, r: number, spd: number, z: number): Mote {
+  return { a, r, spd, z, phase: "orbit", prog: 0, cooldown: z * 2.2 };
+}
+
+/** How lively foraging looks — scales with cloud fill and energy. Pure. */
+export function moteActivity(population: number, cap: number, energy: number): number {
+  const fill = cap > 0 ? population / cap : 0;
+  return Math.max(0, Math.min(1, fill * Math.max(0, Math.min(1, energy))));
+}
+
+export interface MoteAdvanceInput {
+  dt: number;
+  activity: number;
+  hasHome: boolean;
+  slot: number;
+  orbit: number;
+}
+
+/** Advance one mote's forage phase — animation-only, wall-clock. Pure. */
+export function advanceMote(m: Mote, input: MoteAdvanceInput): void {
+  const { dt, activity, hasHome, slot, orbit } = input;
+  m.a += m.spd * dt;
+
+  if (!hasHome || activity < 0.06) {
+    if (m.phase !== "orbit") {
+      m.phase = "orbit";
+      m.prog = 0;
+    }
+    m.cooldown = Math.max(0, m.cooldown - dt);
+    return;
+  }
+
+  const activeSlots = Math.max(1, Math.floor(MOTES_MAX * activity * 0.38));
+  const cycle = 4.8 - activity * 2.2;
+  const gate = Math.sin(orbit * 0.85 + slot * 0.41 + m.z * 4.1);
+  const canForage = slot < activeSlots;
+
+  switch (m.phase) {
+    case "orbit":
+      m.cooldown = Math.max(0, m.cooldown - dt);
+      if (canForage && m.cooldown <= 0 && gate > 0.55 - activity * 0.45) {
+        m.phase = "outbound";
+        m.prog = 0;
+      }
+      break;
+    case "outbound":
+      m.prog += dt / MOTE_OUTBOUND_S;
+      if (m.prog >= 1) {
+        m.phase = "visit";
+        m.prog = 0;
+      }
+      break;
+    case "visit":
+      m.prog += dt / MOTE_VISIT_S;
+      if (m.prog >= 1) {
+        m.phase = "inbound";
+        m.prog = 0;
+      }
+      break;
+    case "inbound":
+      m.prog += dt / MOTE_INBOUND_S;
+      if (m.prog >= 1) {
+        m.phase = "orbit";
+        m.prog = 0;
+        m.cooldown = 1.2 + m.z * cycle * 0.35;
+      }
+      break;
+  }
+}
+
+function moteBloomOffset(m: Mote): { dx: number; dy: number } {
+  const j = ((m.z * 17.3 + m.a * 0.07) % 1 + 1) % 1;
+  const k = ((m.z * 9.1 + m.r * 0.11) % 1 + 1) % 1;
+  return { dx: (j - 0.5) * 7, dy: -3 - k * 4 };
+}
+
+function ease(u: number): number {
+  const t = Math.max(0, Math.min(1, u));
+  return t * t * (3 - 2 * t);
+}
+
+/** World position of one mote — orbit, or eased leave/visit/return. Pure. */
+export function moteWorldPosition(
+  m: Mote,
+  cx: number,
+  cy: number,
+  homeX: number,
+  homeY: number,
+  scatterR: number,
+): { x: number; y: number } {
+  const rr = scatterR * (0.3 + m.r * 0.7);
+  const orbitX = cx + Math.cos(m.a) * rr;
+  const orbitY = cy + Math.sin(m.a) * rr * 0.82;
+  const { dx, dy } = moteBloomOffset(m);
+  const bloomX = homeX + dx;
+  const bloomY = homeY + dy;
+
+  switch (m.phase) {
+    case "orbit":
+      return { x: orbitX, y: orbitY };
+    case "outbound": {
+      const e = ease(m.prog);
+      return { x: orbitX + (bloomX - orbitX) * e, y: orbitY + (bloomY - orbitY) * e };
+    }
+    case "visit":
+      return { x: bloomX, y: bloomY };
+    case "inbound": {
+      const e = ease(m.prog);
+      return { x: bloomX + (orbitX - bloomX) * e, y: bloomY + (orbitY - bloomY) * e };
+    }
+  }
 }
 
 // A single spatial swarm: the tested core Swarm (cloud + gene pool) given a spot
@@ -409,7 +531,7 @@ export class SwarmLayer {
     const r = makeRng((this.seed ^ Math.imul(moteSalt + 1, 0x9e3779b1) ^ 0xa073e) >>> 0);
     const motes: Mote[] = [];
     for (let m = 0; m < MOTES_MAX; m++) {
-      motes.push({ a: r() * Math.PI * 2, r: 0.32 + r() * 0.68, spd: 0.2 + r() * 0.5, z: r() });
+      motes.push(freshMote(r() * Math.PI * 2, 0.32 + r() * 0.68, 0.2 + r() * 0.5, r()));
     }
     return motes;
   }
@@ -424,7 +546,14 @@ export class SwarmLayer {
   ): WorldSwarm {
     const motes: Mote[] = [];
     for (let m = 0; m < MOTES_MAX; m++) {
-      motes.push({ a: this.rng() * Math.PI * 2, r: 0.32 + this.rng() * 0.68, spd: 0.2 + this.rng() * 0.5, z: this.rng() });
+      motes.push(
+        freshMote(
+          this.rng() * Math.PI * 2,
+          0.32 + this.rng() * 0.68,
+          0.2 + this.rng() * 0.5,
+          this.rng(),
+        ),
+      );
     }
     const ang = this.rng() * Math.PI * 2;
     const id = this.swarms.length;
@@ -780,8 +909,10 @@ export class SwarmLayer {
       const k = Math.min(1, dt * 1.8);
       ent.x += (tx - ent.x) * k;
       ent.y += (ty - ent.y) * k;
-      for (const m of ent.motes) {
-        m.a += m.spd * dt;
+      const activity = moteActivity(ent.sw.population, ent.sw.cap, ent.sw.energy);
+      const hasHome = ent.visitPlantIdx !== null && ent.home !== null;
+      for (let i = 0; i < ent.motes.length; i++) {
+        advanceMote(ent.motes[i], { dt, activity, hasHome, slot: i, orbit: ent.orbit });
       }
     }
   }

@@ -9,7 +9,7 @@ import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
 import { TidePool, exposureAt } from "../game/tide";
 import { resemblance } from "../life/idmap";
 import { conspicuousness } from "../life/swarm";
-import { SwarmLayer, dominantColor, tint } from "../game/swarms";
+import { SwarmLayer, dominantColor, moteWorldPosition, tint } from "../game/swarms";
 import { Dragonflies, FishSchool, FrogPatch, drawClouds, drawForegroundMotes } from "./ambient";
 import { CALM, FlightField, blitInsect, getInsectSprites, insectPose } from "./insectSprites";
 import { drawBeast } from "./beastSprite";
@@ -911,10 +911,12 @@ export class Renderer {
       const dust = Math.min(ent.motes.length - insects, Math.round(frac * 16));
       for (let i = 0; i < dust; i++) {
         const m = ent.motes[insects + i];
-        const a = m.a + (CALM ? 0 : t * m.spd * (1 + (i % 3) * 0.15));
-        const rr = baseR * (0.3 + m.r * (1 + (1 - cohesion) * 0.8));
+        const scatterR = baseR * (0.3 + m.r * (1 + (1 - cohesion) * 0.8));
+        const hx = ent.home?.x ?? ent.x;
+        const hy = ent.home?.y ?? ent.y;
+        const pos = moteWorldPosition(m, ent.x, ent.y, hx, hy - 4, scatterR);
         ctx.fillStyle = tint(dom, 0.22 + 0.2 * darkness);
-        ctx.fillRect(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.82), 1, 1);
+        ctx.fillRect(Math.round(pos.x - camX), Math.round(pos.y - camY), 1, 1);
       }
       // the insects themselves — the same sprites the codex card portraits
       const sprites = getInsectSprites(sw);
