@@ -16,7 +16,9 @@ export type PressureId =
   | "splitDistance"  // speciation threshold (how far a daughter must drift)
   | "grazerShare"    // grazer share / selection strength (a role-flip, not a tuning field)
   | "reproChance"    // reseed rate
-  | "maxPerTile";    // per-tile cap (the richness ceiling)
+  | "maxPerTile"     // per-tile cap (the richness ceiling)
+  | "reseedRadius"   // spread distance (natural + disperser landing)
+  | "pollinationRadius"; // cross distance (same-species partner search)
 
 export interface Pressure {
   id: PressureId;
@@ -34,7 +36,7 @@ export interface Pressure {
   reversed?: boolean;
 }
 
-// The five pressures, in panel order. Ranges bracket DEFAULT_TUNING so the
+// The pressures, in panel order. Ranges bracket DEFAULT_TUNING so the
 // default sits mid-slider and cranking a knob is a visible change.
 export const PRESSURES: Pressure[] = [
   { id: "mutationAmount", label: "drift", min: 0, max: 0.3, step: 0.01, tuningKey: "mutationAmount" },
@@ -42,6 +44,8 @@ export const PRESSURES: Pressure[] = [
   { id: "grazerShare", label: "grazer share", min: 0, max: 1, step: 0.05 },
   { id: "reproChance", label: "reseed rate", min: 0, max: 0.4, step: 0.01, tuningKey: "reproChance" },
   { id: "maxPerTile", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
+  { id: "reseedRadius", label: "spread distance", min: 1, max: 8, step: 1, tuningKey: "reseedRadius" },
+  { id: "pollinationRadius", label: "cross distance", min: 0, max: 6, step: 1, tuningKey: "pollinationRadius" },
 ];
 
 // Clamp a raw slider value to the named pressure's own [min, max] — the panel
@@ -81,6 +85,10 @@ export function tuningPatchFor(id: PressureId, value: number): Partial<FloraTuni
       return { reproChance: clamped };
     case "maxPerTile":
       return { maxPerTile: Math.max(1, Math.round(clamped)) }; // never freeze a tile at 0
+    case "reseedRadius":
+      return { reseedRadius: Math.max(1, Math.round(clamped)) };
+    case "pollinationRadius":
+      return { pollinationRadius: Math.max(0, Math.round(clamped)) };
     case "splitDistance":
       return {
         splitDistance: clamped,

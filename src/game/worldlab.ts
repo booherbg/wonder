@@ -616,6 +616,8 @@ export function startWorldLab(): void {
     grazerShare: 0,
     reproChance: DEFAULT_TUNING.reproChance,
     maxPerTile: DEFAULT_TUNING.maxPerTile,
+    reseedRadius: DEFAULT_TUNING.reseedRadius,
+    pollinationRadius: DEFAULT_TUNING.pollinationRadius,
   };
 
   // A biome brush label for flash copy — the same words the palette swatches use
@@ -1449,6 +1451,8 @@ export function startWorldLab(): void {
       setPressure("grazerShare", 0.5);
       setPressure("reproChance", 0.35);
       setPressure("maxPerTile", 10);
+      setPressure("reseedRadius", 8);
+      setPressure("pollinationRadius", 6);
     }
     if (runTicks > 0) kernel.step(runTicks, "full");
     if (brushDemo === "stamp") {
@@ -3162,7 +3166,7 @@ function buildChrome(initial: StarterKind): Chrome {
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">crank a pressure — evolution changes live, nothing resets</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed rate 0 = insects-only</div>`;
   evoTray.appendChild(evoHead);
 
   // The five sliders sit in a ROW (not a stacked column) — a compact strip

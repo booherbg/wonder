@@ -10,17 +10,20 @@ import { Tile } from "../src/world/types";
 
 const SEED = 4242;
 
-test("all five pressures are exposed; the four tuning-backed ones name a FloraTuning field", () => {
+test("seven pressures are exposed; six tuning-backed ones name a FloraTuning field", () => {
   expect(PRESSURES.map((p) => p.id)).toEqual([
     "mutationAmount", "splitDistance", "grazerShare", "reproChance", "maxPerTile",
+    "reseedRadius", "pollinationRadius",
   ]);
-  expect(PRESSURES.filter((p) => p.tuningKey).length).toBe(4); // grazerShare is the role-flip one
+  expect(PRESSURES.filter((p) => p.tuningKey).length).toBe(6);
 });
 
 test("tuningPatchFor maps each tuning pressure to its field; speciation opens the split gates", () => {
   expect(tuningPatchFor("mutationAmount", 0.2)).toEqual({ mutationAmount: 0.2 });
   expect(tuningPatchFor("reproChance", 0.3)).toEqual({ reproChance: 0.3 });
   expect(tuningPatchFor("maxPerTile", 6.4)).toEqual({ maxPerTile: 6 }); // an integer cap
+  expect(tuningPatchFor("reseedRadius", 5.2)).toEqual({ reseedRadius: 5 });
+  expect(tuningPatchFor("pollinationRadius", 1.1)).toEqual({ pollinationRadius: 1 });
   const wild = tuningPatchFor("splitDistance", 0.1);
   expect(wild.splitDistance).toBe(0.1);
   expect(wild.splitClusterMin).toBe(2);       // a low threshold also frees the cluster gate
