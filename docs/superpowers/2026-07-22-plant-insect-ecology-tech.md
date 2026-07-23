@@ -370,9 +370,10 @@ island loads already booming.
 - **`G` the ledger:** "the pollinators aloft" plots **each named swarm's match-% over
   island-time**, climbing toward a dashed "matched — pollinates above" (50%) rule — so
   you watch adaptation happen (above the plant-population census).
-- **`?sim=1` / Tab → the Simulator:** place flowers & swarms, run time, toggle
-  Predators, dial the size Cap, watch a cloud find and *become* its flower — and
-  "back to the island ↩" when you're done.
+- **`?sim=swarm` → the identity-map bench:** place flowers & swarms, run time,
+  toggle Predators, dial the size Cap, watch a cloud find and *become* its
+  flower — and "back to the island ↩" when you're done. (`?sim=1` now opens the
+  World-Lab, §13 below; the swarm bench moved to `?sim=swarm` to make room.)
 
 ---
 
@@ -394,3 +395,35 @@ island loads already booming.
 
 *Any of these is a one-line change; the tests (`ecology-holds`, `pollination`,
 `swarm-layer`) will catch a retune that breaks the balance.*
+
+---
+
+## 13. The World-Lab (Simulator slice 1)
+
+`?sim=1` now opens **the World-Lab**, a from-scratch bench for the plant/insect
+core (the `flora`/`fauna` ecology, not the swarm layer above): a real-tile
+construct — playable island / biome sampler / single biome, never a void tile
+— rendered fit-to-window over the game's own renderer, with a habitat-gated
+place-one palette (click a plant or critter kind, click the construct to set
+it down), pause/play/step-1/step-N time controls with a plants/full fidelity
+toggle, and a data readout — a picked critter's or plant's full internal state
+(drives, mood, target, meal; genome, age) beside a live census + food-web
+strip. The old swarm/identity-map bench is preserved, unchanged, at
+`?sim=swarm`; ordinary play (no `?sim`) is untouched — one router
+(`parseSimMode` in `src/game/flags.ts`) sends the three down entirely separate
+paths, so a played island is byte-identical whether or not this bench exists.
+
+Where to tune or extend it: `src/life/kernel.ts` is the reusable headless
+core — one deterministic `SimKernel.step()` over `Flora` + a critter array +
+`CensusLog`, no renderer, no player, seeded RNG only (the piece Doors A/B of
+the wider ecology plan will fork/preview with later). `src/world/construct.ts`
+is the starter surface — `buildConstruct(kind, seed)` for the three canvases
+above; a biome brush would repaint their tiles in a later slice.
+`src/game/worldlab.ts` is the bench itself — palette, click-to-place, time
+controls, and the readout, all DOM/render-layer code that reuses the kernel
+and construct rather than re-deriving anything.
+
+Deferred to later slices (not lost, just not slice 1): the biome brush +
+stamp brush, the roll pane + drawer, the evolutionary layer (pressures panel,
+roll-a-web, richness meter), save/resume to a slot with full critter state +
+RNG persistence, and an ambient/title-screen bench.
