@@ -473,3 +473,88 @@ Deferred to later slices, unchanged: the roll pane + drawer (slice 3), the
 evolutionary layer — pressures panel, roll-a-web, richness meter (slice 4),
 save/resume to a slot with full critter state + RNG persistence (slice 5),
 and an ambient/title-screen bench.
+
+## 15. The species lab (Simulator slice 3)
+
+The World-Lab now carries a third surface: **roll a fresh kind, iterate its
+look/traits, then keep or clear it from a live drawer.** The **roll
+pane** draws a seeded batch of ~9–12 candidate plant or critter kinds —
+`rollPlantBatch`/`rollCritterBatch` in `src/life/roll.ts` reuse the tested
+whole-roster generators (`generatePlantSpecies`/`generateCritterSpecies`)
+off a per-roll seed (`rollSeedFor(base, kind, cursor)`) and slice members
+out, so no new genome/species-generation math exists anywhere; re-roll just
+advances the cursor to a fresh, still-reproducible slice of the same seeded
+stream. Thumbnails reuse the real sprite renderers — `getPlantSprite` for
+plants, the uncached `critterPortrait` for critters (candidates carry a
+`PROVISIONAL_ID` of -1, and the ordinary `getCritterSprites` cache is keyed
+by id, so the uncached path is the one that can't collide) — scaled into a
+small pixelated canvas, the only new DOM plumbing. Picking a candidate calls
+`kernel.introducePlantSpecies`/`introduceCritterSpecies`, which append the
+def with `id === array.length` (never assigned earlier) so Flora's own
+`speciesList[species]` indexing — the same array, held by reference — stays
+correct the instant a rolled kind joins it. Iterating a pick before it's
+placed nudges looks (`nudgePlantLooks`/`nudgeCritterLooks`, re-rendering the
+thumbnail off a fresh genome/morph) or traits (`setPlantTraits`/
+`setCritterTraits`, patching habitat/reseed or role/size/palate — a size
+change re-derives the morph, the one trait that also reshapes the look).
+
+The **drawer** (`src/game/simDrawer.ts`, a pure model — no DOM, no RNG, no
+wall clock) is the cast list: every starter, rolled, and daughter kind gets
+an entry holding a deep-cloned definition (`cloneDef`), so deleting a kind
+never loses it. Status is computed fresh each refresh (`statusOf` against
+the kernel's live count): **alive** while count > 0 or never yet placed,
+**extinct** once a kind has lived (`peak` > 0, tracked by `bumpPeak`) and
+fallen back to zero on its own, **cleared** once deliberately deleted — a
+tombstone (`deleteEntry`/`reviveEntry`), never a splice, so a kind's id
+never moves and reviving just re-places instances against the still-present
+record. **Delete is a roster op, not a kill**: `kernel.clearPlantInstances`/
+`clearCritterInstances` zero a kind's live population while keeping its
+species record at its id — the spec's "populations rise and fall," never a
+violent removal, and both run entirely outside `step()` so the peaceful
+invariant below is untouched. Variations count iterated looks plus captured
+daughters; `captureDaughters` auto-promotes any `plantSpecies` record
+carrying a `parent` that the drawer doesn't yet know (flora's own ✧
+speciation records, scanned rather than evented since `takeEvents()` carries
+no id) — idempotent, so it's safe to call on every refresh.
+
+**Determinism and the peaceful pillar, checked:** `grep -nE
+"Math\.random|Date\.now|new Date" src/life/roll.ts src/game/simDrawer.ts`
+finds nothing — the roll pane is seeded end to end (`rollSeedFor` +
+`makeRng`), and the drawer is pure arithmetic over its inputs. Peaceful is
+guarded two ways already in the suite: slice 1's `critterCount()`-across-
+`step()` invariant (delete/revive sit outside `step`, so it never moved) and
+a slice-3 kernel test that introduces a rolled kind, steps the kernel, and
+asserts it's still there (`tests/kernel.test.ts`, "introduceCritterSpecies
+appends with id === index; the kind places + steps").
+
+**Real worlds are byte-identical.** The only touched shared file is
+`src/life/kernel.ts`, and every slice-3 addition to it (`introduce*`,
+`clear*Instances`, `critterCountOf`) is a new, additive method — no
+existing method changed, and `main.ts`/`species.ts`/`fauna.ts`/`flora.ts`
+are untouched. The router (`parseSimMode` in `src/game/flags.ts`) still
+sends `?sim=1` (lab), `?sim=swarm` (bench), and no `?sim` (ordinary play)
+down three separate paths, and its existing truth-table test still guards
+it; a visual pass (`?seed=42`, `?sim=swarm`, `?sim=1`) confirmed the three
+destinations stay distinct — ordinary play unchanged, the identity-map
+bench intact, and the World-Lab now additionally carrying the roll pane +
+drawer with no life until something is placed or rolled.
+
+Where it lives: the pure roll/iterate maths in `src/life/roll.ts`
+(`tests/roll.test.ts`), the pure drawer model in `src/game/simDrawer.ts`
+(`tests/sim-drawer.test.ts`), the additive kernel seams in
+`src/life/kernel.ts` (`tests/kernel.test.ts`), and all the DOM wiring — the
+roll pane, the iterate strip, the drawer panel, the dev aids (`?roll=`,
+`?rollpick=`, `?iterate=`, `?drawerdemo=`, `?drawerdel=`, `?split=`) — in
+`src/game/worldlab.ts`. Tuning surface: `SIZE_MIN`/`SIZE_MAX` in `roll.ts`
+clamp a critter-size trait patch; the batch count and re-roll amounts
+(`REROLL_LOOKS_AMOUNT`) are call-site constants in `worldlab.ts`; ids are
+positional (array index), so a long session's deletes grow the arrays with
+cheap tombstones rather than ever compacting.
+
+Deferred to later slices, unchanged: the evolutionary layer — pressures
+panel, roll-a-web, richness meter (slice 4), save/resume to a slot with full
+critter state + RNG persistence (slice 5), and an ambient/title-screen
+bench. Also still deferred (slice-3 scope, explicitly out of bounds per the
+plan): iterating an already-picked-and-placed kind in place, and a
+genome-first single-kind synthesis path (`rollPlantKind`/`rollCritterKind`)
+as an alternative to today's roster-slice approach.
