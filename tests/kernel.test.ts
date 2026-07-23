@@ -6,6 +6,7 @@ import { Flora } from "../src/life/flora";
 import { singleBiome } from "../src/world/construct"; // built in Task 2
 import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
+import { rollPlantBatch, rollCritterBatch } from "../src/life/roll";
 
 const SEED = 4242;
 
@@ -92,4 +93,44 @@ test("peaceful: step never births or kills a critter", () => {
   const before = kernel.critterCount();
   kernel.step(120, "full");
   expect(kernel.critterCount()).toBe(before); // animals never die (nor multiply) in slice 1
+});
+
+test("introducePlantSpecies appends with id === index and Flora accepts it live", () => {
+  const { kernel } = bench();
+  const before = kernel.plantSpecies.length;
+  const [cand] = rollPlantBatch(SEED, 0, 1, { habitats: new Set([Tile.Grass]) });
+  const id = kernel.introducePlantSpecies({ ...cand, habitat: Tile.Grass });
+  expect(id).toBe(before);
+  expect(kernel.plantSpecies[id].id).toBe(id); // id === array index (the invariant Flora relies on)
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  expect(kernel.placePlant(id, at(5), at(5))).not.toBeNull(); // the fresh kind roots
+  expect(kernel.speciesCounts().get(id)).toBe(1);
+});
+
+test("introduceCritterSpecies appends with id === index; the kind places + steps", () => {
+  const { kernel } = bench();
+  const before = kernel.critterSpecies.length;
+  const [cand] = rollCritterBatch(SEED, 0, 1, kernel.plantSpecies, kernel.map);
+  const id = kernel.introduceCritterSpecies({ ...cand });
+  expect(id).toBe(before);
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  kernel.placeCritter(id, at(6), at(6));
+  expect(kernel.critterCountOf(id)).toBe(1);
+  kernel.step(10, "full"); // the new kind updates headless without throwing
+  expect(kernel.critterCountOf(id)).toBe(1); // peaceful: step never removes it
+});
+
+test("clearPlantInstances / clearCritterInstances zero a kind but keep its record (no splice)", () => {
+  const { kernel, grassPlant, critter } = bench();
+  const at = (t: number) => (t + 0.5) * TILE_SIZE;
+  for (let i = 0; i < 4; i++) kernel.placePlant(grassPlant, at(4 + i), at(4));
+  kernel.placeCritter(critter, at(7), at(6));
+  const plantRecords = kernel.plantSpecies.length;
+  const critterRecords = kernel.critterSpecies.length;
+  expect(kernel.clearPlantInstances(grassPlant)).toBe(4);
+  expect(kernel.clearCritterInstances(critter)).toBe(1);
+  expect(kernel.speciesCounts().get(grassPlant) ?? 0).toBe(0); // population → 0
+  expect(kernel.critterCountOf(critter)).toBe(0);
+  expect(kernel.plantSpecies.length).toBe(plantRecords); // record kept — ids stay stable
+  expect(kernel.critterSpecies.length).toBe(critterRecords);
 });

@@ -106,6 +106,49 @@ export class SimKernel {
     return c;
   }
 
+  // Append a PICKED plant kind — its id is its array index (the invariant
+  // placePlant, Flora.addPlant, and flora speciation all rely on: they index
+  // plantSpecies[id]). Flora holds this very array by reference, so the new
+  // kind is live the instant it's pushed. Called only from the bench's roll
+  // pane, never by step().
+  introducePlantSpecies(sp: PlantSpecies): number {
+    const id = this.plantSpecies.length;
+    sp.id = id;
+    this.plantSpecies.push(sp);
+    return id;
+  }
+
+  introduceCritterSpecies(sp: CritterSpecies): number {
+    const id = this.critterSpecies.length;
+    sp.id = id;
+    this.critterSpecies.push(sp);
+    return id;
+  }
+
+  // Clear a kind's live instances — its population falls to zero — WITHOUT
+  // removing the species record (ids are positional; splicing would renumber
+  // every later kind and every placed plant's `.species`). The drawer keeps the
+  // definition and can bring it back. Peaceful: a roster op, not a violent kill
+  // (the spec's "populations rise and fall"). removePlant maintains
+  // speciesCounts, so the count reads 0 afterward.
+  clearPlantInstances(id: number): number {
+    const doomed = this.flora.all.filter((p) => p.species === id);
+    for (const p of doomed) this.flora.removePlant(p);
+    return doomed.length;
+  }
+
+  clearCritterInstances(id: number): number {
+    const before = this.critters.length;
+    this.critters = this.critters.filter((c) => c.species !== id);
+    return before - this.critters.length;
+  }
+
+  critterCountOf(id: number): number {
+    let n = 0;
+    for (const c of this.critters) if (c.species === id) n++;
+    return n;
+  }
+
   // Run time. "plants" scrubs flora + census only (fast); "full" also steps
   // every critter headless — a null player (nothing draws them to a hearth) and
   // an empty context, so co-adaptation (grazing sets plants back, dispersal
