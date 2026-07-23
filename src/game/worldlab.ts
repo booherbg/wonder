@@ -32,11 +32,27 @@ import { Fidelity, SimKernel } from "../life/kernel";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
 import { BIOME_WORDS, moodLine, roleLine } from "../render/inspect";
 import { Renderer, Scene } from "../render/renderer";
+import { OVERVIEW_COLORS } from "../render/palette";
 import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { habitatsOf, placeablePlants } from "./simRoster";
-import { BRUSH_SIZES, BrushSize, stampCells } from "./simBrush";
+import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
+
+// The biome brush's palette: real tiles you can paint, each swatched with its
+// own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
+// — not an invented hex). Covers every plant habitat plus open water/terrain;
+// trivially extended with any other Tile.
+const BIOME_TILES: { tile: Tile; name: string }[] = [
+  { tile: Tile.DeepWater, name: "deep water" },
+  { tile: Tile.ShallowWater, name: "water" },
+  { tile: Tile.Sand, name: "sand" },
+  { tile: Tile.Grass, name: "grass" },
+  { tile: Tile.Forest, name: "forest" },
+  { tile: Tile.Marsh, name: "marsh" },
+  { tile: Tile.Rock, name: "rock" },
+  { tile: Tile.Highland, name: "highland" },
+];
 
 const STARTERS: { kind: StarterKind; name: string }[] = [
   { kind: "playable-island", name: "Playable Island" },
@@ -44,10 +60,11 @@ const STARTERS: { kind: StarterKind; name: string }[] = [
   { kind: "single-biome", name: "Single Biome" },
 ];
 
-// The palette's current pick: a plant or critter kind by id, or null for the
-// select tool (the default) — a null-selection click inspects whatever
-// stands nearest it instead of placing anything (see `Inspected` below).
-type Selected = { kind: "plant" | "critter"; id: number } | null;
+// The palette's current pick: a plant or critter kind by id, a real Tile for
+// the biome brush, or null for the select tool (the default) — a
+// null-selection click inspects whatever stands nearest it instead of placing
+// or painting anything (see `Inspected` below).
+type Selected = { kind: "plant" | "critter"; id: number } | { kind: "tile"; tile: Tile } | null;
 
 // The select tool's own pick: the critter or plant currently read out on the
 // codex plate, or null when nothing's chosen. A direct object reference, not
@@ -333,11 +350,10 @@ export function startWorldLab(): void {
   // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
   // on a biome edge roots only where it legally can — one flash if the CENTRE
   // cell refused, matching slice 1's single-place feedback. Critters place on
-  // every cell. No-op for the select tool (selected === null, handled by the
-  // caller) — Selected has no "tile" member yet (Task 3's job), so there's
-  // nothing else to gate here.
+  // every cell. No-op for the select tool (selected === null) and the tile
+  // tool (paintTileAt/repaintRefresh below own that path instead).
   function stampKindAt(tx: number, ty: number): void {
-    if (!selected) return;
+    if (!selected || selected.kind === "tile") return;
     const cells = stampCells(tx, ty, brushSize, map);
     let centreRefused = false;
     for (const { x, y } of cells) {
@@ -351,6 +367,31 @@ export function startWorldLab(): void {
     }
     if (centreRefused && ui) ui.flashNote("won't root here — wrong habitat");
     refreshCensusStrip(); // a fresh block can add latent chain links
+  }
+
+  // paint the selected tile across an N×N block; mutate map.tiles IN PLACE (the
+  // array Flora + the Renderer share), so the running frame loop shows it next
+  // draw — no setMap, no atlas rebuild. Returns whether anything changed, so the
+  // stroke knows to refresh the palette on pointerup.
+  function paintTileAt(tx: number, ty: number): boolean {
+    if (selected?.kind !== "tile") return false;
+    return paintBiome(map, stampCells(tx, ty, brushSize, map), selected.tile) > 0;
+  }
+
+  // After a paint stroke, re-filter the plant palette: a newly-painted habitat
+  // unlocks its plants; a painted-away one drops them. Uses the exact slice-1
+  // gating. If the selected plant kind is no longer placeable (its habitat was
+  // erased), fall back to the select tool so no stale id survives.
+  function repaintRefresh(): void {
+    plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
+    if (selected?.kind === "plant") {
+      const id = selected.id; // hoisted out of the closure below: TS can't narrow a captured `let`
+      if (!plantKinds.some((s) => s.id === id)) selected = null;
+    }
+    if (ui) {
+      ui.setPalette(plantKinds, critterKinds);
+      ui.setSelected(selected);
+    }
   }
 
   // Re-renders the readout plate from the current `inspected` pick — called
@@ -483,6 +524,31 @@ export function startWorldLab(): void {
       }
       brushSize = 3; // leaves the picker showing 3× lit — the size behind the plant block above
     }
+    if (brushDemo === "biome") {
+      // pick a plant kind whose habitat this starter's construct does NOT
+      // have — excluded from the initial palette, the same "off" search
+      // sim-brush.test.ts's unlock test uses — then paint that habitat in
+      // near the centre (the raw mutation a hand-drag makes) and run it
+      // through the REAL repaintRefresh path (proving the unlock, not just
+      // asserting it), before stamping the now-unlocked plant onto the patch.
+      const cx = Math.floor(map.width / 2);
+      const cy = Math.floor(map.height / 2);
+      const off = kernel.plantSpecies.find((s) => !habitatsOf(map).has(s.habitat));
+      if (off) {
+        paintBiome(map, stampCells(cx, cy, 3, map), off.habitat);
+        repaintRefresh(); // re-filters plantKinds — off's kind is now placeable
+        brushSize = 3;
+        selected = { kind: "plant", id: off.id };
+        stampKindAt(cx, cy); // roots on the freshly-painted patch, proving Flora agrees
+      } else {
+        console.warn(
+          "world-lab biome demo: every habitat is already present on this construct " +
+            "— painting a ShallowWater patch instead (nothing new to unlock)",
+        );
+        paintBiome(map, stampCells(cx, cy, 3, map), Tile.ShallowWater);
+        repaintRefresh();
+      }
+    }
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -614,23 +680,50 @@ export function startWorldLab(): void {
     fitCameraToConstruct();
   });
 
-  // ── click-to-place / click-to-inspect: screen px → world px through the
-  // SAME camera math either way (the fit-to-window zoom AND the centred
-  // offset — the lens the render loop reads), then tile-snapped for
-  // placement so a plant lands square on the tile you clicked rather than
-  // some sub-tile jitter position. With the select tool active (selected
-  // === null), the raw (untile-snapped) world point instead hit-tests the
-  // kernel's placed critters, then plants, within PICK_RADIUS_PX — a click
-  // near nothing quietly clears the readout rather than leaving a stale one.
-  // A placement click hands the tile straight to stampKindAt, which lays the
-  // brush's current N×N block (size 1 = exactly slice 1's single placement).
-  canvas.addEventListener("click", (e) => {
+  // ── pointer-to-place / pointer-to-paint / click-to-inspect: screen px →
+  // world px through the SAME camera math either way (the fit-to-window zoom
+  // AND the centred offset — the lens the render loop reads), then
+  // tile-snapped for placement/painting so a plant or a tile lands square on
+  // the tile under the pointer rather than some sub-tile jitter position.
+  // These lines are the slice-1 click handler's own mapping, unchanged —
+  // pulled into a helper only so pointerdown/pointermove can share it. With
+  // the select tool active (selected === null), the raw (untile-snapped)
+  // world point instead hit-tests the kernel's placed critters, then plants,
+  // within PICK_RADIUS_PX — a click near nothing quietly clears the readout
+  // rather than leaving a stale one. A placement click hands the tile straight
+  // to stampKindAt, which lays the brush's current N×N block (size 1 =
+  // exactly slice 1's single placement). A tile pick instead begins a paint
+  // stroke, dragged live via pointermove and refreshed once on pointerup.
+  function pointerTile(e: PointerEvent): { tx: number; ty: number; wx: number; wy: number } | null {
     const rect = canvas.getBoundingClientRect();
     const wx = camX + (e.offsetX / rect.width) * renderer.viewWidth;
     const wy = camY + (e.offsetY / rect.height) * renderer.viewHeight;
     const tx = Math.floor(wx / TILE_SIZE);
     const ty = Math.floor(wy / TILE_SIZE);
-    if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return; // off the construct — nothing to click
+    if (tx < 0 || ty < 0 || tx >= map.width || ty >= map.height) return null; // off the construct
+    return { tx, ty, wx, wy };
+  }
+
+  // The paint stroke's own state: `painting` while the pointer is down with
+  // the tile tool active; `strokeChanged` records whether ANY cell actually
+  // changed across the whole stroke (paintBiome's own return, OR'd in), so
+  // pointerup refreshes the palette only when the stroke did something;
+  // `lastPaintKey` skips re-painting the same tile on every mousemove within
+  // it (a drag fires many move events per tile crossed).
+  let painting = false;
+  let strokeChanged = false;
+  let lastPaintKey = -1;
+
+  function endStroke(): void {
+    if (painting && strokeChanged) repaintRefresh(); // once per stroke, not per cell
+    painting = false;
+    strokeChanged = false;
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    const hit = pointerTile(e);
+    if (!hit) return;
+    const { tx, ty, wx, wy } = hit;
     if (!selected) {
       const c = pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
       const p = c ? null : nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
@@ -638,8 +731,27 @@ export function startWorldLab(): void {
       refreshInspect();
       return;
     }
+    if (selected.kind === "tile") {
+      painting = true;
+      strokeChanged = paintTileAt(tx, ty) || strokeChanged;
+      lastPaintKey = ty * map.width + tx;
+      return;
+    }
     stampKindAt(tx, ty);
   });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!painting || selected?.kind !== "tile") return;
+    const hit = pointerTile(e);
+    if (!hit) return;
+    const { tx, ty } = hit;
+    const key = ty * map.width + tx;
+    if (key === lastPaintKey) return; // already painted this tile this stroke's last step
+    strokeChanged = paintTileAt(tx, ty) || strokeChanged;
+    lastPaintKey = key;
+  });
+  canvas.addEventListener("pointerup", endStroke);
+  canvas.addEventListener("pointerleave", endStroke);
+  canvas.addEventListener("pointercancel", endStroke);
 
   // ── the loop: while playing, pace kernel.step() calls off the wall clock
   // (an accumulator, guard-capped as simulator.ts's own tick() loop is, so a
@@ -716,6 +828,27 @@ function buildChrome(initial: StarterKind): Chrome {
     ` background: ${active ? tint : "rgba(23,42,54,0.72)"};` +
     ` border: 1px solid ${tint}; border-left: 4px solid ${tint};` +
     ` border-radius: 4px; padding: 5px 10px 5px 8px; cursor: pointer; white-space: nowrap;`;
+  // a biome swatch: the same chrome as a palette chip, but the FACE (not just
+  // the edge) always carries the tile's OVERVIEW_COLORS tint — a swatch reads
+  // as a little square of that ground even before it's picked. Some tiles
+  // (sand, highland) are light enough that white text goes muddy, so the
+  // label color is picked from the swatch's own luminance, not hardcoded.
+  const luminanceOf = (hex: string): number => {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16) / 255;
+    const g = parseInt(h.slice(2, 4), 16) / 255;
+    const b = parseInt(h.slice(4, 6), 16) / 255;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const tileBtn = (active: boolean, color: string): string => {
+    const legibleDark = luminanceOf(color) > 0.55; // light swatch → dark text
+    const ink = legibleDark ? "rgb(var(--abyss))" : "rgba(228,236,242,0.92)";
+    return (
+      `${MONO} text-transform: none; color: ${ink}; background: ${color};` +
+      ` border: 1px solid ${color}; border-radius: 4px; padding: 5px 10px; cursor: pointer;` +
+      ` white-space: nowrap; box-shadow: ${active ? "0 0 0 2px rgb(var(--lumen)) inset" : "none"};`
+    );
+  };
 
   const eyebrow = document.createElement("div");
   eyebrow.innerHTML =
@@ -892,9 +1025,11 @@ function buildChrome(initial: StarterKind): Chrome {
   plantRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const critterRow = document.createElement("div");
   critterRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+  const biomeRow = document.createElement("div");
+  biomeRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const hint = document.createElement("div");
   hint.style.cssText = `${MONO} color: rgb(var(--rose)); min-height: 13px; opacity: 0; transition: opacity 0.15s;`;
-  palette.append(plantRow, critterRow, hint);
+  palette.append(plantRow, critterRow, biomeRow, hint);
 
   const selectBtn = document.createElement("button");
   selectBtn.textContent = "select";
@@ -903,10 +1038,24 @@ function buildChrome(initial: StarterKind): Chrome {
   plantRow.appendChild(selectBtn);
   plantRow.appendChild(label("plant"));
   critterRow.appendChild(label("critter"));
+  biomeRow.appendChild(label("biome"));
 
   let plantBtns: { id: number; b: HTMLButtonElement; tint: string }[] = [];
   let critterBtns: { id: number; b: HTMLButtonElement }[] = [];
   let hintTimer: number | undefined;
+
+  // the biome swatch row is static (BIOME_TILES never changes across a
+  // construct rebuild), so it's built once here rather than in setPalette —
+  // unlike the plant/critter rows, which depend on the seed's rolled kinds.
+  const tileBtns = BIOME_TILES.map(({ tile, name }) => {
+    const color = OVERVIEW_COLORS[tile];
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.style.cssText = tileBtn(false, color);
+    b.onclick = () => chrome.onSelect({ kind: "tile", tile });
+    biomeRow.appendChild(b);
+    return { tile, b, color };
+  });
 
   chrome.setPalette = (plants, critters) => {
     for (const { b } of plantBtns) b.remove();
@@ -936,6 +1085,9 @@ function buildChrome(initial: StarterKind): Chrome {
     }
     for (const { id, b } of critterBtns) {
       b.style.cssText = btn(sel !== null && sel.kind === "critter" && sel.id === id);
+    }
+    for (const { tile, b, color } of tileBtns) {
+      b.style.cssText = tileBtn(sel !== null && sel.kind === "tile" && sel.tile === tile, color);
     }
   };
   chrome.flashNote = (msg) => {
