@@ -778,3 +778,177 @@ critter-state + RNG persistence (the one item that touches a real shared
 file, `save.ts`) and **the ambient bench** (place pollinators/frogs/
 dragonflies, opt-in experimental roles) — the remaining "frame &
 persistence" v1 items the spec named but no slice has yet claimed.
+
+## 17. Persistence (Simulator slice 5a)
+
+Two saves get a memory upgrade in the same slice: the real game's own save
+file, and a brand-new save slot for the World-Lab bench. The foundation
+shared by both is a small insight about the seeded RNG: its **seed and its
+running state are the same number**, so exposing that number is enough to
+make every stream in the codebase resumable, with no separate "resume"
+constructor needed anywhere.
+
+**The `.state()` accessor — `src/core/rng.ts`.** `makeRng(seed)` keeps its
+running position in one closed-over counter, and that counter starts at
+exactly the `seed` argument's value — so `rng.state = () => a` costs one
+line, and `makeRng(rng.state())` **is** the resume call: the ordinary
+constructor already accepts a mid-stream position, because a seed always
+was one. `Rng` widens to `(() => number) & { state?: () => number }`, still
+callable exactly as before for every existing caller — `tests/rng.test.ts`
+pins both the new behavior (a captured `.state()` resumes the exact
+continuation, never restarting the draw sequence) and the old (`makeRng`
+with a fresh seed matches its pre-slice-5a self byte for byte).
+
+**Real game: `crittersV2` + `critterRng`, additive.** `SavedWorld`
+(`src/game/save.ts`) gains two optional fields: `crittersV2?:
+SavedCritterV2[]` and `critterRngState?: number`. `SavedCritterV2` is the
+**lossless** full `Critter` row — every field of the runtime interface
+(state, target, stateTime, hopPhase, facing, curiosity, mood, stuck, path,
+pathGoal, meal), unrounded — unlike the legacy 4-column `critters:
+number[][]` rows, which round position to `r1` and energy to `r3` for
+compactness. That rounding is fine for "the animals are where you left
+them" but fatal for bit-identity, so `crittersV2` is a new, parallel field
+rather than a change to the old one. `meal` — a live `Plant` reference —
+can't survive JSON, so it's packed as its index into `flora.all` and
+re-resolved after restore, guarded against `removePlant`'s swap-pop having
+moved a *different* plant into that slot before the save happened
+(`flora.all[c.meal.idx] === c.meal`). `restoreCrittersV2` is a two-branch
+dispatcher: `crittersV2` present → the new full restore (`restoreCritterRows`);
+absent → the untouched legacy `restoreCritters` path, unchanged. Old saves
+take the second branch and get today's exact behavior — locked by a GUARD
+test (`tests/save.test.ts`, written before the schema changed) that loads a
+legacy-shaped save (no `crittersV2`, no `critterRngState`) and asserts the
+exact legacy defaults; a second dispatcher test re-confirms the fallback
+branch directly. The payoff this earns: **the real game's animals now
+resume mid-thought** — a critter mid-hop toward a berry bush, three
+waypoints into a path, wearing "wary," restarts exactly there, rather than
+snapping to idle-and-freshly-decided the way the legacy 4-column format
+always did.
+
+**`Flora` and `SimKernel` gain resume threading.** `Flora`'s constructor
+already took an optional `RestoredFlora` for `tick`/`plants`/`soil`
+(pre-slice-5a, the real game's away-time catch-up); slice 5a adds four more
+optional fields — `rngState` (resume the flora rng stream instead of
+reseeding at `seed ^ 0xf10a`), `substrates` (in-flight byproduct-chain
+markers), `suppressed` (`suppressedSpecies` ids to re-apply), and
+`lastSplitTick` (the speciation-cooldown gate, serialized as `undefined`
+when `-Infinity` — not JSON-safe — and restored to `-Infinity` when absent).
+Three new accessors — `rngState()`, `substratesSnapshot()`,
+`lastSplitTickValue()` — let a caller capture live state without any of it
+routing through `save.ts` (so `flora.ts` still never imports upward out of
+`src/life`). `SimKernel` gained the matching `KernelInit` fields
+(`restoredFlora`, `critterRngState`, `placeRngState`) plus its own
+`critterRngState()`/`placeRngState()` accessors, all additive to
+`KernelInit`'s existing shape.
+
+**The `skipCap` fix — restore reproduces, it doesn't re-adjudicate.** The
+resume path surfaced a subtlety: `Flora.addPlant` normally re-checks every
+seed against the live density caps (`hasRoom`/`inHabitat`) before it roots —
+correct for ordinary growth, wrong for restore. A plant that legally rooted
+under yesterday's tuning could be silently rejected on replay if the live
+tuning had since tightened (say, the pressures panel's `maxPerTile`
+slider). `addPlant` gained a sixth, restore-only `skipCap` parameter:
+`true` bypasses the density-cap half of the gate only — never the habitat
+half, so a saved plant is still expected to sit on its own species' tile —
+so restore **reproduces** the saved set instead of re-arbitrating it under
+whatever tuning happens to be live now. Exactly one call site passes
+`true`: the restore loop inside `Flora`'s own constructor (`flora.ts:185`);
+every other `addPlant` call — ordinary growth, propagation, substrate
+germination, the player's own sow — defaults `skipCap` to `false` and is
+untouched. `tests/sim-save.test.ts`'s "PROBE3" regression plants over-cap
+under a loose tuning, tightens the tuning, and confirms restore still
+reproduces the over-cap tile rather than thinning it back down.
+
+**`SavedSim` — a separate slot, in a separate namespace.** A World-Lab
+construct is not a `SavedWorld`: it can hold rolled/introduced species
+mid-session, drawer tombstones, hand-painted tiles, live tuning drift —
+nothing the real save format models. `src/game/simSave.ts` (new) defines
+`SavedSim` (its own `v: 1`, no shared migration path with `SavedWorld`) and
+a slot store keyed `wander.sim.<id>` / indexed at `wander.sims`, deliberately
+parallel to — and never overlapping — `worldKey`'s `wander.world.<seed>` /
+`wander.worlds`. A sim slot can never collide with, evict, or be evicted by
+a real island: `tests/sim-save.test.ts`'s non-collision test asserts the key
+functions and index-key constants are pairwise distinct, and its round-trip
+test asserts a sim-slot save leaves `store.getItem(worldKey(seed))` at
+`null`. Slots are capped at `MAX_SAVED_SIMS = 8` and evicted oldest-first —
+the same shape and cap `MAX_SAVED_WORLDS` already uses, sibling data in a
+sibling namespace.
+
+**`packSim`/`restoreSim` — the whole construct, bit-identically.** `packSim`
+gathers every determinism-critical crumb of a running `SimKernel` plus its
+`DrawerEntry[]` roster: flora (tick, plants, soil, rng state, substrates,
+suppressed species, `lastSplitTick`, and the **live** `FloraTuning` —
+captured wholesale so a resumed run doesn't silently snap back to defaults
+if the pressures panel had drifted it), the full lossless
+`SavedCritterV2[]` roster (reusing the real game's own `packCrittersV2`),
+both rng streams (critter + placement), the plant/critter species arrays
+wholesale (so runtime `introducePlantSpecies`/`introduceCritterSpecies`
+additions and in-place mutations — a den relocation, a role repaint —
+survive), the drawer, and the tile grid **only when it's been hand-painted**
+away from the pure `buildConstruct(starter, seed)` baseline (a byte-for-byte
+diff against a freshly built map; an unpainted construct costs nothing
+extra). `restoreSim` reverses each field exactly: rebuilds the map from
+`starter`+`seed`, overlays painted tiles if present, reconstructs the
+`SimKernel` via the new `KernelInit` resume fields, restores critters last
+(so `meal` re-resolves against the live, just-rebuilt `flora.all`), and
+calls the drawer's new `syncKeySeq` so freshly-minted keys can never collide
+with a resumed entry's key. `tests/sim-save.test.ts`'s round-trip test
+proves the whole thing: pack, `JSON.stringify`, `JSON.parse`, restore, step
+N more ticks — snapshot-equal to a kernel that never stopped, including
+carry-forward tests for a speciated daughter species and for non-default
+tuning.
+
+**The bit-identical replay proof, at four compounding levels.** Slice 5a
+proves *resumption* — not merely restoration — holds at every layer it
+touches: (1) `tests/rng.test.ts` — a captured `.state()` resumes the exact
+continuation of a bare stream; (2) `tests/flora.test.ts` — a `Flora`
+resumed from a snapshot at tick N, stepped M more, matches a `Flora` run
+straight through to N+M; (3) `tests/kernel.test.ts` — the same proof one
+layer up, over the whole `SimKernel` (flora + critters + both rng streams),
+including an explicit "resume-then-run equals running N+M straight through
+from the start" test; (4) `tests/sim-save.test.ts` — the same proof again,
+through a full JSON round-trip of `packSim`/`restoreSim`. Each level is a
+strictly stronger claim than the one below it — a JSON round-trip subsumes
+an in-memory resume, which subsumes a bare stream continuation — and all
+four are green.
+
+**The binding invariants, checked.** *Determinism:* `grep -nE
+"Math\.random|Date\.now|new Date\(" src/core/rng.ts src/game/save.ts
+src/game/simSave.ts src/life/flora.ts src/life/kernel.ts` finds **nothing**
+— not even a `savedAt` stamp; all five files treat `savedAt` as data handed
+in by a caller, never a clock any of them reads itself. The one wall-clock
+read in the whole feature (`Date.now()` at the moment a save button is
+clicked) lives one layer up, in `main.ts`/`worldlab.ts`/`picker.ts` — the UI
+chrome, outside anything the sim/restore logic touches. *Real-play
+inertness:* `addPlant`'s `skipCap` is `true` at exactly one call site (the
+restore loop inside `Flora`'s own constructor); every `RestoredFlora`/
+`KernelInit` resume field is optional, and the real game's only `Flora`
+construction site (`main.ts`, restoring `tick`/`plants`/`soil` — pre-existing,
+unrelated to this slice) never passes `rngState`/`substrates`/`suppressed`/
+`lastSplitTick`; `main.ts` never constructs a `SimKernel` at all. *Mode
+isolation:* `main.ts` dispatches once, at boot, to either ordinary play or
+`startWorldLab()` (`?sim`) — never both — so `kernel.ts`'s and
+`simSave.ts`'s resume machinery only ever runs inside the Simulator; the
+router's own truth-table test still guards the split.
+
+**Where it lives:** the accessor in `src/core/rng.ts` (`tests/rng.test.ts`);
+the additive real-game fields + lossless critter-row functions in
+`src/game/save.ts`, shared by both the real game and the sim slot
+(`tests/save.test.ts`); the resume threading in `src/life/flora.ts`
+(`tests/flora.test.ts`) and `src/life/kernel.ts` (`tests/kernel.test.ts`);
+the new slot type + storage + `packSim`/`restoreSim` in
+`src/game/simSave.ts` (`tests/sim-save.test.ts`); the drawer's
+`nextDrawerKey`/`syncKeySeq` in `src/game/simDrawer.ts`
+(`tests/sim-drawer.test.ts`); and the World-Lab's save/load-slot row — a
+name-on-save `window.prompt` mirroring `nameWorld`'s, and a slot picker
+mirroring the isle picker — in `src/game/worldlab.ts`.
+
+Deferred: a `census: SpeciesTrace[]` is captured in every `SavedSim` for
+chart continuity, but `restoreSim` has no path yet to feed it back into a
+resumed kernel's own census log (chart-only, feeds no rng — noted directly
+in `packSim`'s own comment); persisting the **real game's** flora/bird/beast
+rng streams is explicitly out of scope for slice 5a — only the critter
+stream is persisted there (the sim slot, by contrast, persists flora's rng
+stream too, since the Simulator has no separate bird/beast layer to omit);
+and a `v: 2` migration framework for either save format, should a future
+schema change ever need one.
