@@ -129,6 +129,20 @@ test("placeCloud with no blooms still adds a cloud but homes on nothing yet", ()
   expect(layer.swarms[0].home).toBeNull();
 });
 
+test("placeCloud with no blooms homes on a bloom placed nearby after tick", () => {
+  const { kernel, layer, flowerSp } = bench(25);
+  const tx = 4;
+  const ty = 4;
+  const wx = tx * TILE_SIZE + TILE_SIZE / 2;
+  const wy = ty * TILE_SIZE + TILE_SIZE / 2;
+  const cloud = layer.placeCloud(kernel.flora, wx, wy);
+  expect(cloud.home).toBeNull();
+  placeBloom(kernel, flowerSp.id, tx, ty);
+  layer.tick(kernel.flora);
+  expect(cloud.home).not.toBeNull();
+  expect(layer.inspect(cloud, kernel.plantSpecies)).not.toBeNull();
+});
+
 test("pinned cloud stops feeding after its host plant is erased, not a swapped idx", () => {
   const { kernel, layer, flowerSp } = bench(21);
   const host = placeBloom(kernel, flowerSp.id, 4, 4);

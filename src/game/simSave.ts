@@ -12,7 +12,7 @@ import { packCrittersV2, restoreCritterRows, type SavedCritterV2 } from "./save"
 import type { DrawerEntry } from "./simDrawer";
 import { cloneDef, syncKeySeq } from "./simDrawer";
 import type { SpeciesTrace } from "../life/census";
-import type { PollinateAssist } from "../life/pollinateAssist";
+import { DEFAULT_POLLINATE_ASSIST, type PollinateAssist } from "../life/pollinateAssist";
 import { SimKernel } from "../life/kernel";
 
 export const SIM_INDEX_KEY = "wander.sims"; // parallel to WORLD_INDEX_KEY = "wander.worlds"
@@ -186,7 +186,7 @@ export interface RestoredSim {
   drawer: DrawerEntry[];
   starter: StarterKind;
   control?: SavedSimControl;
-  pollinateAssist?: PollinateAssist;
+  pollinateAssist: PollinateAssist;
 }
 
 export function restoreSim(saved: SavedSim): RestoredSim {
@@ -226,6 +226,8 @@ export function restoreSim(saved: SavedSim): RestoredSim {
     drawer,
     starter: saved.starter,
     control: saved.control,
-    pollinateAssist: saved.pollinateAssist ? cloneDef(saved.pollinateAssist) : undefined,
+    pollinateAssist: saved.pollinateAssist
+      ? cloneDef(saved.pollinateAssist)
+      : cloneDef(DEFAULT_POLLINATE_ASSIST),
   };
 }

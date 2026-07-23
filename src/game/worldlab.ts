@@ -710,8 +710,7 @@ export function startWorldLab(): void {
     return layer;
   }
 
-  function syncPollinateAssistFromBlob(assist: PollinateAssist | undefined): void {
-    if (!assist) return;
+  function syncPollinateAssistFromBlob(assist: PollinateAssist): void {
     pollinateAssist = { ...assist };
     pressureValues.pollinatorReach = assist.radius;
     pressureValues.pollinatorDensity = assist.maxSame;
@@ -1967,7 +1966,7 @@ export function startWorldLab(): void {
     refreshInspect(); // inspected is now null → the readout plate hides
     renderGrid();
     renderFocus();
-    ui!.flashNote(`loaded · ${name}`);
+    ui!.flashNote(`loaded · ${name} — insect clouds aren't saved; place them again`);
   }
 
   // The slot panel's own dev aid (Task 9, mirrors ?evo=1 above): opens the

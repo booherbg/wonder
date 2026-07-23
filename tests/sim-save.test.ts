@@ -23,6 +23,7 @@ import { Tile } from "../src/world/types";
 import { TILE_SIZE } from "../src/world/config";
 import { paintBiome } from "../src/game/simBrush";
 import { makeRng } from "../src/core/rng";
+import { DEFAULT_POLLINATE_ASSIST, type PollinateAssist } from "../src/life/pollinateAssist";
 
 // an in-memory Storage so the localStorage round-trip is testable in node
 function memStore(): Storage {
@@ -291,4 +292,14 @@ test("pollinateAssist reach/density round-trips on packSim/restoreSim", () => {
   expect(blob.pollinateAssist).toEqual(assist);
   const r = restoreSim(blob);
   expect(r.pollinateAssist).toEqual(assist);
+});
+
+test("restoreSim defaults pollinateAssist when omitted from an older blob", () => {
+  const { kernel } = liveBench();
+  const blob = JSON.parse(
+    JSON.stringify(packSim({ kernel, drawer: [], starter: "single-biome", seed: SEED, name: "legacy", savedAt: 1 })),
+  ) as SavedSim & { pollinateAssist?: PollinateAssist };
+  delete blob.pollinateAssist;
+  const r = restoreSim(blob);
+  expect(r.pollinateAssist).toEqual(DEFAULT_POLLINATE_ASSIST);
 });
