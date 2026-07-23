@@ -29,13 +29,17 @@ import { Flora, Plant, nearestPlant } from "../life/flora";
 import { chainLinks, chainStats, richnessWord } from "../life/foodweb";
 import { Genome, PlantForm, hsl } from "../life/genome";
 import { Fidelity, SimKernel } from "../life/kernel";
+import { PROVISIONAL_ID, RollKind, rollCritterBatch, rollPlantBatch } from "../life/roll";
 import { PlantSpecies, generatePlantSpecies } from "../life/species";
+import { critterPortrait } from "../render/critterSprites";
 import { BIOME_WORDS, moodLine, roleLine } from "../render/inspect";
+import { getPlantSprite } from "../render/plantSprites";
 import { Renderer, Scene } from "../render/renderer";
 import { OVERVIEW_COLORS } from "../render/palette";
 import { StarterKind, buildConstruct } from "../world/construct";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
+import { DrawerEntry, makeEntry } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 
@@ -75,6 +79,27 @@ type Selected = { kind: "plant" | "critter"; id: number } | { kind: "tile"; tile
 type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | null;
 
 const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
+
+// The roll pane's batch size (the spec's 9–12) and thumbnail zoom — a grid
+// cell stays legible at 16×~28px source art scaled up, same spirit as
+// inspect.ts's own ZOOM-scaled sprite cards.
+const ROLL_COUNT = 10;
+const THUMB_ZOOM = 3;
+
+// A tiny local blit: scale a real sprite canvas (plant or critter, already
+// drawn by getPlantSprite/critterPortrait — never redrawn here) into a fresh
+// display canvas, nearest-neighbor. Mirrors inspect.ts's own sprite-thumbnail
+// pattern (imageSmoothingEnabled=false + a scaled drawImage) without its
+// alpha-bounds cropping, which this grid's fixed-size cells don't need.
+function drawThumb(src: HTMLCanvasElement, zoom: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = src.width * zoom;
+  c.height = src.height * zoom;
+  const ctx = c.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, 0, 0, c.width, c.height);
+  return c;
+}
 
 // The select tool's critter half of the hit-test: nearest critter within
 // reach, else null. No fauna.ts helper does this (flora.ts's own
@@ -333,6 +358,14 @@ export function startWorldLab(): void {
   // The ?brushdemo=stamp dev aid: a deterministic block-stamp for the size
   // picker's own screenshot — display-only, rng-free, same spirit as ?demo.
   const brushDemo = new URL(location.href).searchParams.get("brushdemo");
+  // The roll pane's dev aids: ?roll=plant|critter opens the pane pre-rolled
+  // (any other truthy value, e.g. ?roll=1, defaults to critter) so a shot
+  // shows a populated grid with no click; ?rollpick=0,3 additionally
+  // introduces those batch indices for real, so a shot can show the
+  // picked-onto-the-palette state too. Both display-only, rng-free beyond
+  // the seeded roll itself.
+  const rollAid = new URL(location.href).searchParams.get("roll");
+  const rollPickAid = new URL(location.href).searchParams.get("rollpick");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -345,6 +378,14 @@ export function startWorldLab(): void {
   let brushSize: BrushSize = 1;
   let inspected: Inspected = null;
   let ui: Chrome | undefined;
+  // the roll pane's own state: which kind the toggle shows, the seeded
+  // stream's cursor (re-roll advances it), the current batch of candidates
+  // (PROVISIONAL_ID until picked), and the drawer roster (Task 6 renders it —
+  // this task only keeps it seeded/growing so the roster is never empty).
+  let rollKind: RollKind = "critter";
+  let rollCursor = 0;
+  let batch: (PlantSpecies | CritterSpecies)[] = [];
+  let drawer: DrawerEntry[] = [];
 
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
   // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
@@ -391,6 +432,81 @@ export function startWorldLab(): void {
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
+    }
+  }
+
+  // ── the roll pane: seeded batch → live thumbnails → pick onto the palette
+  // (Simulator slice 3). rollBatch() draws (or re-draws) the current kind's
+  // batch at the current cursor — a bare "roll" and a construct rebuild both
+  // call it at cursor 0; "re-roll" bumps the cursor first, so the stream
+  // advances deterministically instead of repeating the same draw. ─────────
+  function rollBatch(): void {
+    batch =
+      rollKind === "plant"
+        ? rollPlantBatch(seed, rollCursor, ROLL_COUNT, { habitats: habitatsOf(map) })
+        : rollCritterBatch(seed, rollCursor, ROLL_COUNT, kernel.plantSpecies, map);
+    renderGrid();
+  }
+
+  // Rebuilds the grid's thumbnails from the current batch. Plants render via
+  // the cached getPlantSprite (keyed on the genome's phenoKey — distinct
+  // archetypes never collide, and a repeated archetype is legitimately the
+  // same look). Critters render via the UNCACHED critterPortrait — seam #2:
+  // getCritterSprites caches by species id, and every candidate in a batch
+  // still carries the shared PROVISIONAL_ID (-1), so an id-keyed cache would
+  // paint the whole grid with whichever candidate rendered first. Guarded for
+  // `ui` not yet existing (build()'s first call, ahead of buildChrome()) —
+  // the main flow re-calls this once `ui` is ready.
+  function renderGrid(): void {
+    if (!ui) return;
+    const cells = batch.map((m) => {
+      if (rollKind === "plant") {
+        const sp = m as PlantSpecies;
+        return {
+          thumb: drawThumb(getPlantSprite(sp.archetype, sp.habitat === Tile.ShallowWater), THUMB_ZOOM),
+          name: sp.name.toLowerCase(),
+          tint: hsl(sp.archetype.hue, 0.62, 0.5),
+        };
+      }
+      const sp = m as CritterSpecies;
+      return {
+        thumb: drawThumb(critterPortrait(sp), THUMB_ZOOM),
+        name: sp.name.toLowerCase(),
+        tint: hsl(sp.bodyHue, 0.55, 0.55),
+      };
+    });
+    ui.setBatch(cells);
+  }
+
+  // Pick: introduces the batch member at `index` into the kernel FOR REAL
+  // (kernel.introduce*Species assigns the real id === array index), re-filters
+  // the palette so the new kind is immediately placeable, and records a
+  // "rolled" drawer entry. The freshly-picked kind becomes the selection, so
+  // the very next click on the construct places it. Kernel-side effects run
+  // regardless of `ui` (so ?rollpick can fire from build()'s first call,
+  // ahead of buildChrome()); the UI refresh is guarded and re-synced by the
+  // main flow once `ui` exists.
+  function pickBatch(index: number): void {
+    const member = batch[index];
+    if (!member) return;
+    let id: number;
+    if (rollKind === "plant") {
+      const sp = member as PlantSpecies;
+      id = kernel.introducePlantSpecies({ ...sp, id: PROVISIONAL_ID });
+      plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
+      drawer.push(makeEntry({ kind: "plant", speciesId: id, def: kernel.plantSpecies[id], origin: "rolled" }));
+      selected = { kind: "plant", id };
+    } else {
+      const sp = member as CritterSpecies;
+      id = kernel.introduceCritterSpecies({ ...sp });
+      critterKinds = kernel.critterSpecies;
+      drawer.push(makeEntry({ kind: "critter", speciesId: id, def: kernel.critterSpecies[id], origin: "rolled" }));
+      selected = { kind: "critter", id };
+    }
+    if (ui) {
+      ui.setPalette(plantKinds, critterKinds);
+      ui.setSelected(selected);
+      ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
     }
   }
 
@@ -500,6 +616,17 @@ export function startWorldLab(): void {
     plantKinds = placeablePlants(kernel.plantSpecies, habitatsOf(map));
     critterKinds = kernel.critterSpecies;
     selected = null;
+    // the drawer's roster resets with the construct — seeded with every
+    // starter kind (origin "starter") so the roll pane's roster is never
+    // empty, even before a single kind is rolled.
+    drawer = [
+      ...kernel.plantSpecies.map((sp) => makeEntry({ kind: "plant", speciesId: sp.id, def: sp, origin: "starter" })),
+      ...kernel.critterSpecies.map((sp) =>
+        makeEntry({ kind: "critter", speciesId: sp.id, def: sp, origin: "starter" }),
+      ),
+    ];
+    rollCursor = 0;
+    batch = [];
     if (demoRequested) seedDemoScenario(map, kernel, plantKinds);
     if (runTicks > 0) kernel.step(runTicks, "full");
     if (brushDemo === "stamp") {
@@ -549,6 +676,20 @@ export function startWorldLab(): void {
         repaintRefresh();
       }
     }
+    // ?roll=plant|critter pre-rolls the pane's grid for a shot (any other
+    // truthy value, e.g. ?roll=1, defaults to critter); ?rollpick=0,3
+    // additionally introduces those batch indices for real, so a shot can
+    // also show the picked-onto-the-palette state.
+    if (rollAid !== null) {
+      rollKind = rollAid === "plant" || rollAid === "critter" ? rollAid : "critter";
+      rollBatch();
+    }
+    if (rollPickAid) {
+      for (const raw of rollPickAid.split(",")) {
+        const idx = Number(raw.trim());
+        if (Number.isInteger(idx) && idx >= 0) pickBatch(idx);
+      }
+    }
     inspected =
       inspectAid === "critter" && kernel.critters.length > 0
         ? { kind: "critter", ref: kernel.critters[0] }
@@ -558,6 +699,8 @@ export function startWorldLab(): void {
     if (ui) {
       ui.setPalette(plantKinds, critterKinds);
       ui.setSelected(selected);
+      ui.setRollKind(rollKind);
+      renderGrid();
     }
     refreshInspect();
     refreshCensusStrip();
@@ -579,10 +722,24 @@ export function startWorldLab(): void {
     brushSize = s;
     ui!.setBrushSize(s);
   };
+  ui.onRollKind = (k) => {
+    rollKind = k;
+    batch = []; // a stale batch of the OTHER kind can't render under the new one
+    ui!.setRollKind(k);
+    ui!.setBatch([]);
+  };
+  ui.onRoll = () => rollBatch();
+  ui.onReRoll = () => {
+    rollCursor++; // the deterministic advance: same kind, next slice of the stream
+    rollBatch();
+  };
+  ui.onPickBatch = (i) => pickBatch(i);
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
   ui.setBrushSize(brushSize);
+  ui.setRollKind(rollKind);
   // the first real render: build()'s own call above ran before `ui` existed
+  renderGrid();
   refreshInspect();
   refreshCensusStrip();
 
@@ -798,6 +955,14 @@ interface Chrome {
   onBrushSize: (s: BrushSize) => void;
   setBrushSize: (s: BrushSize) => void;
   flashNote: (msg: string) => void;
+  // the roll pane: kind toggle + roll/re-roll + a grid of live thumbnails →
+  // pick onto the palette (Simulator slice 3)
+  onRollKind: (k: RollKind) => void;
+  setRollKind: (k: RollKind) => void;
+  onRoll: () => void;
+  onReRoll: () => void;
+  setBatch: (cells: { thumb: HTMLCanvasElement; name: string; tint: string }[]) => void;
+  onPickBatch: (index: number) => void;
   // time controls (Task 6)
   onPlay: () => void;
   onStep: () => void;
@@ -1016,6 +1181,7 @@ function buildChrome(initial: StarterKind): Chrome {
   // now) so the two read as one strip of chrome. A third quiet row carries
   // the "won't root here" note. ────────────────────────────────────────────
   const palette = document.createElement("div");
+  palette.id = "lab-palette"; // a stable hook, same convention as #lab-readout/#lab-census
   palette.style.cssText =
     "max-width: 88vw; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); user-select: none;";
@@ -1152,6 +1318,94 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span style="color: var(--ink-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px;">${esc(name.toLowerCase())}</span>` +
     `<span style="color: rgb(var(--lumen)); letter-spacing: 0.03em;">${spark}</span>` +
     `<span style="color: rgba(228,236,242,0.7); min-width: 22px; text-align: right;">${count}</span></div>`;
+
+  // ── the roll pane: the species lab's dice made visible — a kind toggle, a
+  // roll/re-roll pair, and a grid of live thumbnails whose cells ARE the pick
+  // buttons. Docked top-left, under the eyebrow, opposite nothing (the web
+  // strip sits vertically centred, so there's no collision). This chrome
+  // never rolls or renders a sprite itself — worldlab.ts hands it finished
+  // canvases via setBatch; a click only ever reports its index outward. ────
+  const rollPane = document.createElement("div");
+  rollPane.id = "lab-roll";
+  rollPane.style.cssText =
+    "position: fixed; left: 18px; top: 104px; z-index: 6; width: 336px; max-height: 62vh;" +
+    " overflow-y: auto; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none;";
+  document.body.appendChild(rollPane);
+
+  const rollHead = document.createElement("div");
+  rollHead.innerHTML =
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the roll pane</div>` +
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">roll a batch, pick a kind for the palette</div>`;
+  rollPane.appendChild(rollHead);
+
+  const rollControls = document.createElement("div");
+  rollControls.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 10px 0 10px;";
+  rollPane.appendChild(rollControls);
+
+  const ROLL_KINDS: { k: RollKind; name: string }[] = [
+    { k: "critter", name: "critter" },
+    { k: "plant", name: "plant" },
+  ];
+  const rollKindBtns = ROLL_KINDS.map(({ k, name }) => {
+    const b = document.createElement("button");
+    b.id = `roll-kind-${k}`; // a stable hook, same convention as #play-btn/#step-btn
+    b.textContent = name;
+    b.style.cssText = btn(false);
+    b.onclick = () => chrome.onRollKind(k);
+    return { k, b };
+  });
+  rollControls.appendChild(group(label("kind"), ...rollKindBtns.map((k) => k.b)));
+
+  const rollBtn = document.createElement("button");
+  rollBtn.id = "roll-btn";
+  rollBtn.textContent = "roll";
+  rollBtn.style.cssText = btn(false);
+  rollBtn.onclick = () => chrome.onRoll();
+  const reRollBtn = document.createElement("button");
+  reRollBtn.id = "reroll-btn";
+  reRollBtn.textContent = "re-roll";
+  reRollBtn.style.cssText = btn(false);
+  reRollBtn.onclick = () => chrome.onReRoll();
+  rollControls.appendChild(group(rollBtn, reRollBtn));
+
+  const rollGrid = document.createElement("div");
+  rollGrid.style.cssText = "display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;";
+  rollPane.appendChild(rollGrid);
+
+  const rollEmpty = document.createElement("div");
+  rollEmpty.style.cssText = "font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;";
+  rollEmpty.textContent = "nothing rolled yet — hit roll";
+  rollPane.appendChild(rollEmpty);
+
+  chrome.onRollKind = () => {};
+  chrome.onRoll = () => {};
+  chrome.onReRoll = () => {};
+  chrome.onPickBatch = () => {};
+  chrome.setRollKind = (k) => {
+    for (const { k: kk, b } of rollKindBtns) b.style.cssText = btn(kk === k);
+  };
+  chrome.setBatch = (cells) => {
+    rollGrid.innerHTML = "";
+    rollEmpty.style.display = cells.length ? "none" : "block";
+    cells.forEach((cell, i) => {
+      const cellBtn = document.createElement("button");
+      cellBtn.style.cssText =
+        `${MONO} display: flex; flex-direction: column; align-items: center; gap: 3px; text-transform: none;` +
+        ` background: rgba(23,42,54,0.72); border: 1px solid ${cell.tint}; border-radius: 4px;` +
+        ` padding: 4px 2px 5px; cursor: pointer; color: rgba(228,236,242,0.82);`;
+      cell.thumb.style.cssText = "image-rendering: pixelated; display: block;";
+      cellBtn.appendChild(cell.thumb);
+      const nameEl = document.createElement("span");
+      nameEl.textContent = cell.name;
+      nameEl.style.cssText =
+        "font-size: 9px; text-align: center; line-height: 1.15; max-width: 54px; overflow: hidden;" +
+        " text-overflow: ellipsis; white-space: nowrap;";
+      cellBtn.appendChild(nameEl);
+      cellBtn.onclick = () => chrome.onPickBatch(i);
+      rollGrid.appendChild(cellBtn);
+    });
+  };
 
   chrome.showCritterInspect = (v) => {
     readout.innerHTML =
