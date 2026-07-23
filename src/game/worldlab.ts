@@ -564,7 +564,11 @@ export function startWorldLab(): void {
   // own readout — setPressure below is what actually reaches the kernel.
   let pressureValues: Record<PressureId, number> = {
     mutationAmount: DEFAULT_TUNING.mutationAmount,
-    splitDistance: DEFAULT_TUNING.splitDistance,
+    // speciation's slider is reversed (right = wilder, FIX 2), so its stored
+    // POSITION is the mirror of the raw field default — else the untouched
+    // handle sits left-of-centre while the field value (0.3) is wilder-than-
+    // median, the exact confusion the flip exists to remove.
+    splitDistance: fieldValueFor("splitDistance", DEFAULT_TUNING.splitDistance),
     grazerShare: 0,
     reproChance: DEFAULT_TUNING.reproChance,
     maxPerTile: DEFAULT_TUNING.maxPerTile,
@@ -947,7 +951,11 @@ export function startWorldLab(): void {
     else kernel.clearCritterInstances(e.speciesId);
     drawer[i] = deleteEntry(e);
     refreshPalette();
-    refreshDrawer();
+    // refreshCensusStrip (not bare refreshDrawer) — since FIX 4 the richness
+    // reading depends on LIVE population, so clearing a chain-critical kind
+    // must re-score the living-web strip too, not just the drawer (else it
+    // reads stale while paused). refreshCensusStrip refreshes the drawer too.
+    refreshCensusStrip();
     if (ui) ui.flashNote(`cleared ${e.name.toLowerCase()} — its definition is kept; bring it back any time`);
   }
 
@@ -984,7 +992,10 @@ export function startWorldLab(): void {
       }
     }
     refreshPalette();
-    refreshDrawer();
+    // refreshCensusStrip — reviving re-places live instances, which changes
+    // the population-dependent richness reading (FIX 4); re-score the strip,
+    // not just the drawer, so the living-web numbers don't lag while paused.
+    refreshCensusStrip();
     if (ui) ui.flashNote(`brought back ${e.name.toLowerCase()}`);
   }
 
@@ -2741,7 +2752,11 @@ function buildChrome(initial: StarterKind): Chrome {
   // returns (the same "if (ui) sync" round-trip every other chrome control
   // here already uses), so a dev-aid-cranked value never sticks at showing
   // the wrong position.
-  for (const p of PRESSURES) chrome.setPressure(p.id, p.tuningKey ? (DEFAULT_TUNING[p.tuningKey] as number) : 0);
+  // fieldValueFor mirrors a reversed pressure's field default to its slider
+  // POSITION (identity for the other four), so even this transient boot face
+  // agrees with "right = wilder" before worldlab.ts's own re-sync lands.
+  for (const p of PRESSURES)
+    chrome.setPressure(p.id, p.tuningKey ? fieldValueFor(p.id, DEFAULT_TUNING[p.tuningKey] as number) : 0);
 
   let pressuresOpen = false;
   chrome.openPressures = (open) => {
