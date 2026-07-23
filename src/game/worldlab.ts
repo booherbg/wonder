@@ -103,10 +103,12 @@ const STARTERS: { kind: StarterKind; name: string }[] = [
 ];
 
 // The palette's current pick: a plant or critter kind by id, a real Tile for
-// the biome brush, or null for the select tool (the default) — a
-// null-selection click inspects whatever stands nearest it instead of placing
-// or painting anything (see `Inspected` below).
+// the biome brush, or null when Select/Erase is active.
 type Selected = { kind: "plant" | "critter"; id: number } | { kind: "tile"; tile: Tile } | null;
+
+// Tool radio (iteration 6a): what the pointer does. Catalog chips only matter
+// for place/paint; select + erase ignore the catalog.
+type LabTool = "select" | "place" | "paint" | "erase";
 
 // The select tool's own pick: the critter or plant currently read out on the
 // codex plate, or null when nothing's chosen. A direct object reference, not
@@ -568,6 +570,7 @@ export function startWorldLab(): void {
   let plantKinds: PlantSpecies[] = [];
   let critterKinds: CritterSpecies[] = [];
   let selected: Selected = null;
+  let tool: LabTool = "select";
   let brushSize: BrushSize = 1;
   let inspected: Inspected = null;
   let ui: Chrome | undefined;
@@ -637,6 +640,18 @@ export function startWorldLab(): void {
     }
     const cap = kernel.flora.tuning.maxPerTile;
     return `tile full (${cap} plants) — they can overlap, but each tile only holds so many`;
+  }
+
+  // Erase life under the brush (plants + critters). Does not archive kinds.
+  function eraseAt(tx: number, ty: number): { plants: number; critters: number } {
+    let plants = 0;
+    let critters = 0;
+    for (const { x, y } of stampCells(tx, ty, brushSize, map)) {
+      const r = kernel.eraseAtTile(x, y);
+      plants += r.plants;
+      critters += r.critters;
+    }
+    return { plants, critters };
   }
 
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
@@ -825,8 +840,13 @@ export function startWorldLab(): void {
       id = introduceCritterDef(member as CritterSpecies);
       selected = { kind: "critter", id };
     }
+    tool = "place";
     refreshPalette(); // the drawer just grew — plant/critterKinds re-source from it
     refreshDrawer();
+    if (ui) {
+      ui.setSelected(selected);
+      ui.setTool(tool);
+    }
     focus = null; // the pick is made; the iterate strip's job here is done
     if (ui) {
       ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
@@ -1048,7 +1068,7 @@ export function startWorldLab(): void {
     // must re-score the living-web strip too, not just the drawer (else it
     // reads stale while paused). refreshCensusStrip refreshes the drawer too.
     refreshCensusStrip();
-    if (ui) ui.flashNote(`cleared ${e.name.toLowerCase()} — its definition is kept; bring it back any time`);
+    if (ui) ui.flashNote(`archived ${e.name.toLowerCase()} — restore it any time`);
   }
 
   // Bring back: the drawer's own tombstone swap, then a few fresh instances
@@ -1088,7 +1108,7 @@ export function startWorldLab(): void {
     // the population-dependent richness reading (FIX 4); re-score the strip,
     // not just the drawer, so the living-web numbers don't lag while paused.
     refreshCensusStrip();
-    if (ui) ui.flashNote(`brought back ${e.name.toLowerCase()}`);
+    if (ui) ui.flashNote(`restored ${e.name.toLowerCase()} to live`);
   }
 
   // Curate — pin/unpin: a pure flag toggle on the drawer entry (pinEntry/
@@ -1383,16 +1403,10 @@ export function startWorldLab(): void {
     fitCameraToConstruct();
 
     selected = null;
-    // the drawer's roster resets with the construct — seeded with every
-    // starter kind (origin "starter") so the roster (and, from here on, the
-    // palette itself — refreshPalette sources it FROM the drawer) is never
-    // empty, even before a single kind is rolled.
-    drawer = [
-      ...kernel.plantSpecies.map((sp) => makeEntry({ kind: "plant", speciesId: sp.id, def: sp, origin: "starter" })),
-      ...kernel.critterSpecies.map((sp) =>
-        makeEntry({ kind: "critter", speciesId: sp.id, def: sp, origin: "starter" }),
-      ),
-    ];
+    // Clean slate (iteration 6a): Live drawer starts empty — starters still
+    // exist in the kernel for roll streams, but the palette only shows kinds
+    // you've rolled/picked (or restored from Archive).
+    drawer = [];
     refreshPalette(); // plantKinds/critterKinds now sourced from the drawer's non-deleted entries
     rollCursor = 0;
     webCursor = 0;
@@ -1569,7 +1583,26 @@ export function startWorldLab(): void {
   };
   ui.onSelect = (s) => {
     selected = s;
-    ui!.setSelected(selected);
+    if (s === null) tool = "select";
+    else if (s.kind === "tile") tool = "paint";
+    else tool = "place";
+    ui!.setSelected(s);
+    ui!.setTool(tool);
+  };
+  ui.onTool = (t) => {
+    tool = t;
+    if (t === "select" || t === "erase") {
+      selected = null;
+      ui!.setSelected(null);
+    } else if (t === "paint" && selected?.kind !== "tile") {
+      // stay on paint; user picks a biome chip next
+      selected = null;
+      ui!.setSelected(null);
+    } else if (t === "place" && (!selected || selected.kind === "tile")) {
+      selected = null;
+      ui!.setSelected(null);
+    }
+    ui!.setTool(t);
   };
   ui.onBrushSize = (s) => {
     brushSize = s;
@@ -1900,23 +1933,39 @@ export function startWorldLab(): void {
     const hit = pointerTile(e);
     if (!hit) return;
     const { tx, ty, wx, wy } = hit;
-    if (!selected) {
+    if (tool === "select" || !selected) {
       const c = pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
       const p = c ? null : nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
       inspected = c ? { kind: "critter", ref: c } : p ? { kind: "plant", ref: p } : null;
       refreshInspect();
       return;
     }
-    if (selected.kind === "tile") {
+    if (tool === "erase") {
+      placing = true; // reuse stroke tracking for drag-erase
+      lastStrokeKey = ty * map.width + tx;
+      const r = eraseAt(tx, ty);
+      if (r.plants || r.critters) {
+        refreshCensusStrip();
+        refreshInspect();
+        const bits = [
+          r.plants ? `${r.plants} plant${r.plants === 1 ? "" : "s"}` : "",
+          r.critters ? `${r.critters} critter${r.critters === 1 ? "" : "s"}` : "",
+        ].filter(Boolean);
+        if (ui) ui.flashNote(`erased ${bits.join(" · ")}`);
+      }
+      return;
+    }
+    if (tool === "paint" && selected.kind === "tile") {
       painting = true;
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
       lastStrokeKey = ty * map.width + tx;
       return;
     }
-    // plant or critter — stamp now, then drag across tiles to lay a path/patch
-    placing = true;
-    lastStrokeKey = ty * map.width + tx;
-    stampKindAt(tx, ty);
+    if (tool === "place" && selected.kind !== "tile") {
+      placing = true;
+      lastStrokeKey = ty * map.width + tx;
+      stampKindAt(tx, ty);
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
     if (!painting && !placing) return;
@@ -1926,6 +1975,11 @@ export function startWorldLab(): void {
     const key = ty * map.width + tx;
     if (key === lastStrokeKey) return; // already handled this tile this stroke's last step
     lastStrokeKey = key;
+    if (tool === "erase") {
+      eraseAt(tx, ty);
+      refreshCensusStrip();
+      return;
+    }
     if (painting && selected?.kind === "tile") {
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
       return;
@@ -1983,6 +2037,8 @@ interface Chrome {
   onSelect: (s: Selected) => void;
   setPalette: (plants: PlantSpecies[], critters: CritterSpecies[]) => void;
   setSelected: (s: Selected) => void;
+  setTool: (t: LabTool) => void;
+  onTool: (t: LabTool) => void;
   onBrushSize: (s: BrushSize) => void;
   setBrushSize: (s: BrushSize) => void;
   flashNote: (msg: string) => void;
@@ -2109,7 +2165,7 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
     `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
-    `wheel zooms · ←↑↓ pan · select+click reads a genome · roll / web / drawer open the side panels · brush 1–4 stamps a patch · drag to sow a path · space plays · Esc home` +
+    `select · place · paint · erase · brush 1–4 · wheel zooms · ←↑↓ pan · roll / web / drawer · space plays · Esc home` +
     `</div>`;
   eyebrow.style.cssText = "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);
@@ -2377,6 +2433,8 @@ function buildChrome(initial: StarterKind): Chrome {
     " user-select: none;";
   stack.appendChild(palette);
 
+  const toolRow = document.createElement("div");
+  toolRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const plantRow = document.createElement("div");
   plantRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const critterRow = document.createElement("div");
@@ -2385,14 +2443,23 @@ function buildChrome(initial: StarterKind): Chrome {
   biomeRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const hint = document.createElement("div");
   hint.style.cssText = `${MONO} color: rgb(var(--rose)); min-height: 13px; opacity: 0; transition: opacity 0.15s;`;
-  palette.append(plantRow, critterRow, biomeRow, hint);
+  palette.append(toolRow, plantRow, critterRow, biomeRow, hint);
 
-  const selectBtn = document.createElement("button");
-  selectBtn.textContent = "select";
-  selectBtn.title = "click the construct to read a plant's genome or a critter up close";
-  selectBtn.style.cssText = btn(true); // null selection is the default
-  selectBtn.onclick = () => chrome.onSelect(null);
-  plantRow.appendChild(selectBtn);
+  const TOOLS: { id: LabTool; name: string; title: string }[] = [
+    { id: "select", name: "select", title: "click to read a genome up close" },
+    { id: "place", name: "place", title: "stamp the selected plant or critter" },
+    { id: "paint", name: "paint", title: "paint biomes with the brush" },
+    { id: "erase", name: "erase", title: "clear plants and critters under the brush" },
+  ];
+  const toolBtns = TOOLS.map(({ id, name, title }) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.title = title;
+    b.style.cssText = btn(id === "select");
+    b.onclick = () => chrome.onTool(id);
+    return { id, b };
+  });
+  toolRow.append(label("tool"), ...toolBtns.map((t) => t.b));
   plantRow.appendChild(label("plant"));
   critterRow.appendChild(label("critter"));
   biomeRow.appendChild(label("biome"));
@@ -2440,8 +2507,11 @@ function buildChrome(initial: StarterKind): Chrome {
       return { id: c.id, b };
     });
   };
+  chrome.setTool = (t) => {
+    for (const { id, b } of toolBtns) b.style.cssText = btn(id === t);
+  };
+  chrome.onTool = () => {};
   chrome.setSelected = (sel) => {
-    selectBtn.style.cssText = btn(sel === null);
     for (const { id, b, tint } of plantBtns) {
       b.style.cssText = plantBtn(sel !== null && sel.kind === "plant" && sel.id === id, tint);
     }
@@ -2495,35 +2565,63 @@ function buildChrome(initial: StarterKind): Chrome {
   const drawerHead = document.createElement("div");
   drawerHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the drawer</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">every kind introduced here — live status, delete, bring back</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.45); margin-top: -2px;">live kinds you introduced — archive holds cleared ones</div>`;
   drawerPanel.appendChild(drawerHead);
 
-  const drawerEmptyMsg =
-    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">nothing in the drawer yet</div>`;
+  let drawerTab: "live" | "archive" = "live";
+  const drawerTabs = document.createElement("div");
+  drawerTabs.style.cssText = "display: flex; gap: 6px; margin: 8px 0 4px;";
+  const liveTabBtn = document.createElement("button");
+  liveTabBtn.textContent = "live";
+  const archiveTabBtn = document.createElement("button");
+  archiveTabBtn.textContent = "archive";
+  const syncDrawerTabs = (): void => {
+    liveTabBtn.style.cssText = btn(drawerTab === "live");
+    archiveTabBtn.style.cssText = btn(drawerTab === "archive");
+  };
+  liveTabBtn.onclick = () => {
+    drawerTab = "live";
+    syncDrawerTabs();
+    chrome.setDrawer(drawerRowsCache);
+  };
+  archiveTabBtn.onclick = () => {
+    drawerTab = "archive";
+    syncDrawerTabs();
+    chrome.setDrawer(drawerRowsCache);
+  };
+  syncDrawerTabs();
+  drawerTabs.append(liveTabBtn, archiveTabBtn);
+  drawerPanel.appendChild(drawerTabs);
+
+  const drawerEmptyLive =
+    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">nothing live yet — roll a kind and pick it</div>`;
+  const drawerEmptyArchive =
+    `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">archive is empty — cleared kinds land here</div>`;
   const drawerList = document.createElement("div");
   drawerList.style.cssText = "margin-top: 8px;";
-  drawerList.innerHTML = drawerEmptyMsg;
+  drawerList.innerHTML = drawerEmptyLive;
   drawerPanel.appendChild(drawerList);
 
   chrome.onDeleteEntry = () => {};
   chrome.onReviveEntry = () => {};
   chrome.onPinEntry = () => {};
   chrome.onUnpinEntry = () => {};
+  let drawerRowsCache: DrawerRow[] = [];
   // Renders the roster from scratch every call — the drawer is never large
   // enough (a handful of starters + whatever's been rolled/captured) for a
   // full-innerHTML rebuild to be worth avoiding, and it keeps each row's
-  // delete/bring-back button trivially wired to the CURRENT key, no stale
-  // closures to worry about. Three-way state (deleted → cleared; extinct →
-  // lived, now gone; else alive) is exactly the model's own reading of
-  // `extinct`/`deleted` — this is the only place that turns it into a label.
+  // delete/restore button trivially wired to the CURRENT key, no stale
+  // closures to worry about. Live tab = !deleted; Archive tab = deleted.
   chrome.setDrawer = (rows) => {
-    if (rows.length === 0) {
-      drawerList.innerHTML = drawerEmptyMsg;
+    drawerRowsCache = rows;
+    const shown = rows.filter((r) => (drawerTab === "archive" ? r.deleted : !r.deleted));
+    if (shown.length === 0) {
+      drawerList.innerHTML = drawerTab === "archive" ? drawerEmptyArchive : drawerEmptyLive;
       return;
     }
     drawerList.innerHTML = "";
-    for (const r of rows) {
-      const state = r.deleted ? "cleared" : r.extinct ? "extinct" : "alive";
+    for (const r of shown) {
+      const state = r.deleted ? "archived" : r.extinct ? "extinct" : "alive";
       const stateColor =
         state === "alive" ? "rgb(var(--lumen))" : state === "extinct" ? "rgb(var(--rose))" : "rgba(228,236,242,0.45)";
       const row = document.createElement("div");
@@ -2539,21 +2637,23 @@ function buildChrome(initial: StarterKind): Chrome {
       const actionBtn = document.createElement("button");
       actionBtn.style.cssText = btn(false) + " margin-top: 4px; padding: 3px 9px; font-size: 9px;";
       if (r.deleted) {
-        actionBtn.textContent = "bring back";
+        actionBtn.textContent = "restore";
         actionBtn.onclick = () => chrome.onReviveEntry(r.key);
       } else {
-        actionBtn.textContent = "delete";
+        actionBtn.textContent = "archive";
         actionBtn.onclick = () => chrome.onDeleteEntry(r.key);
       }
       row.appendChild(actionBtn);
       // curate: pin this phenotype so `place pinned` re-places fresh
       // instances from its stored def — the active (lumen-filled) face of
       // btn() IS the pinned ⭑ state, no separate badge needed.
-      const pinBtn = document.createElement("button");
-      pinBtn.style.cssText = btn(r.pinned) + " margin-top: 4px; margin-left: 6px; padding: 3px 9px; font-size: 9px;";
-      pinBtn.textContent = r.pinned ? "⭑ pinned" : "pin ⭑";
-      pinBtn.onclick = () => (r.pinned ? chrome.onUnpinEntry(r.key) : chrome.onPinEntry(r.key));
-      row.appendChild(pinBtn);
+      if (!r.deleted) {
+        const pinBtn = document.createElement("button");
+        pinBtn.style.cssText = btn(r.pinned) + " margin-top: 4px; margin-left: 6px; padding: 3px 9px; font-size: 9px;";
+        pinBtn.textContent = r.pinned ? "⭑ pinned" : "pin ⭑";
+        pinBtn.onclick = () => (r.pinned ? chrome.onUnpinEntry(r.key) : chrome.onPinEntry(r.key));
+        row.appendChild(pinBtn);
+      }
       drawerList.appendChild(row);
     }
   };

@@ -140,3 +140,13 @@ export function unpinEntry(entry: DrawerEntry): DrawerEntry {
 export function pinnedEntries(entries: readonly DrawerEntry[]): DrawerEntry[] {
   return entries.filter((e) => e.pinned && !e.deleted);
 }
+
+/** Live tab: kinds still on the roster (not tombstoned). */
+export function livePartition(entries: readonly DrawerEntry[]): DrawerEntry[] {
+  return entries.filter((e) => !e.deleted);
+}
+
+/** Archive tab: cleared kinds kept for restore. */
+export function archivePartition(entries: readonly DrawerEntry[]): DrawerEntry[] {
+  return entries.filter((e) => e.deleted);
+}

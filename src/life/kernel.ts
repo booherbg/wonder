@@ -83,6 +83,20 @@ export class SimKernel {
     return this.placeRng.state!();
   }
 
+  // Erase one tile's life — plants rooted there and critters standing there.
+  // Species defs stay put (same peaceful posture as clear*Instances).
+  eraseAtTile(tx: number, ty: number): { plants: number; critters: number } {
+    const doomed = this.flora.all.filter(
+      (p) => Math.floor(p.x / TILE_SIZE) === tx && Math.floor(p.y / TILE_SIZE) === ty,
+    );
+    for (const p of doomed) this.flora.removePlant(p);
+    const before = this.critters.length;
+    this.critters = this.critters.filter(
+      (c) => !(Math.floor(c.x / TILE_SIZE) === tx && Math.floor(c.y / TILE_SIZE) === ty),
+    );
+    return { plants: doomed.length, critters: before - this.critters.length };
+  }
+
   // Set one plant of a species down (world px). Habitat-gated exactly as the
   // wild sim: addPlant refuses an off-habitat or full tile (returns null), so a
   // grass plant simply won't root on sand — the spec's "paint water first"
