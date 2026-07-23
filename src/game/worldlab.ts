@@ -27,7 +27,7 @@ import {
   dominantDrive,
   generateCritterSpecies,
 } from "../life/fauna";
-import { Flora, Plant, nearestPlant } from "../life/flora";
+import { DEFAULT_TUNING, Flora, Plant, nearestPlant } from "../life/flora";
 import { chainLinks } from "../life/foodweb";
 import { Genome, PlantForm, hsl } from "../life/genome";
 import { Fidelity, SimKernel } from "../life/kernel";
@@ -64,7 +64,7 @@ import {
 } from "./simDrawer";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
-import { richnessMeter } from "./simPressures";
+import { PRESSURES, Pressure, PressureId, grazerAssignment, richnessMeter, tuningPatchFor } from "./simPressures";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -491,6 +491,14 @@ export function startWorldLab(): void {
   // seeded roll + seeded placement.
   const webAid = new URL(location.href).searchParams.has("web");
   const richAid = new URL(location.href).searchParams.has("rich");
+  // The pressures panel's own dev aids (Task 5, slice 4): ?evo=1 opens the
+  // evolution tray so a shot shows the five sliders at their defaults;
+  // ?pressures=wild ALSO cranks every pressure to its wild end — applied
+  // inside build(), ahead of the ?run=N pre-step above, so a pre-stepped
+  // shot actually RUNS wild rather than just showing wild-looking knobs.
+  // Both display-only, rng-free — setPressure adds no rng draws.
+  const evoAid = new URL(location.href).searchParams.has("evo");
+  const pressuresAid = new URL(location.href).searchParams.get("pressures");
   let starter: StarterKind =
     (new URL(location.href).searchParams.get("starter") as StarterKind) || "biome-sampler";
 
@@ -522,6 +530,21 @@ export function startWorldLab(): void {
   // is (re-)rolled, so a shot's single nudge is byte-reproducible.
   let focus: number | null = null;
   let iterateRng = makeRng(0);
+  // The pressures panel's own live state (Task 5, slice 4): one value per
+  // PRESSURES entry, seeded from DEFAULT_TUNING for the four FloraTuning-
+  // backed pressures (mutationAmount/splitDistance/reproChance/maxPerTile).
+  // grazerShare seeds 0 — critterKinds is still empty this early in
+  // construction (build() hasn't run yet), so there's no real roster to
+  // read a fraction off yet; the first real value is whatever a slider drag
+  // (or the ?pressures=wild dev aid) sets. Just bookkeeping for the tray's
+  // own readout — setPressure below is what actually reaches the kernel.
+  let pressureValues: Record<PressureId, number> = {
+    mutationAmount: DEFAULT_TUNING.mutationAmount,
+    splitDistance: DEFAULT_TUNING.splitDistance,
+    grazerShare: 0,
+    reproChance: DEFAULT_TUNING.reproChance,
+    maxPerTile: DEFAULT_TUNING.maxPerTile,
+  };
 
   // Lay the selected KIND across an N×N block centred on (tx, ty). Plants stay
   // habitat-gated per cell (kernel.placePlant returns null off-habitat), so a 3×3
@@ -1019,6 +1042,38 @@ export function startWorldLab(): void {
     refreshDrawer();
   }
 
+  // The pressures panel's one lever (Task 5, slice 4 — "crank a pressure,
+  // watch evolution change"): a slider write straight onto the RUNNING
+  // kernel. The four FloraTuning-backed pressures go through kernel.
+  // setTuning(tuningPatchFor(...)) — live, no rebuild, Flora reads
+  // this.tuning fresh every tick, so the very next step() evolves under the
+  // new pressure with the current tick/plants/critters untouched. Grazer-
+  // share is a role-flip instead: grazerAssignment's own deterministic
+  // per-species paint over the CURRENT critterKinds roster, written back via
+  // kernel.setCritterRole (peaceful — a role flip thins by dispersal, never
+  // a kill). Neither branch draws any rng, so the same seed + placements +
+  // slider-at-tick + step count always reaches the identical census.
+  // refreshCensusStrip reflects the new potential (the richness meter) right
+  // away; the population itself only moves as you step. `if (ui)` mirrors
+  // every other bench setter here (refreshPalette, chrome.setBrushSize's own
+  // call site, etc.) — a harmless no-op when a dev aid calls this ahead of
+  // buildChrome().
+  function setPressure(id: PressureId, value: number): void {
+    pressureValues[id] = value;
+    const pressure = PRESSURES.find((p) => p.id === id);
+    if (pressure?.tuningKey) {
+      kernel.setTuning(tuningPatchFor(id, value));
+    } else if (id === "grazerShare") {
+      const ids = critterKinds.map((c) => c.id);
+      const roles = grazerAssignment(ids, value);
+      for (const [cid, role] of roles) kernel.setCritterRole(cid, role);
+      refreshPalette();
+      refreshDrawer();
+    }
+    refreshCensusStrip();
+    if (ui) ui.setPressure(id, value);
+  }
+
   // Clamp a camera axis to the construct's bounds — UNLESS the fit zoom has
   // left this axis of the construct smaller than the view (a non-square
   // construct in a non-square window: one axis binds the fit, the other has
@@ -1115,6 +1170,22 @@ export function startWorldLab(): void {
     // already-closing web, not an unstepped one.
     if (webAid) seedWeb(WEB_SIZE);
     if (richAid) seedWeb(WEB_SIZE_RICH);
+    // ?pressures=wild: crank every pressure to its wild end BEFORE the
+    // ?run=N pre-step just below, so a pre-stepped shot actually RUNS wild
+    // rather than just showing wild-looking knobs over a defaults-evolved
+    // construct. Placed after ?web=/?rich= (both already refreshPalette()'d
+    // the roster) so grazerShare's role-flip reaches any web-introduced
+    // disperser too. `ui` doesn't exist yet on the very first build() call —
+    // setPressure's own `if (ui)` guard skips the slider sync here; the
+    // post-buildChrome loop (outside build(), below) re-lights the sliders
+    // to match once `ui` does.
+    if (pressuresAid === "wild") {
+      setPressure("mutationAmount", 0.28);
+      setPressure("splitDistance", 0.1);
+      setPressure("grazerShare", 0.5);
+      setPressure("reproChance", 0.35);
+      setPressure("maxPerTile", 10);
+    }
     if (runTicks > 0) kernel.step(runTicks, "full");
     if (brushDemo === "stamp") {
       // a 3×3 of the first placeable plant kind near the construct's centre,
@@ -1266,10 +1337,18 @@ export function startWorldLab(): void {
   ui.onPickFocused = () => pickFocused();
   ui.onDeleteEntry = (key) => deleteDrawerEntry(key);
   ui.onReviveEntry = (key) => reviveDrawerEntry(key);
+  ui.onPressure = (id, value) => setPressure(id, value);
   ui.setPalette(plantKinds, critterKinds);
   ui.setSelected(selected);
   ui.setBrushSize(brushSize);
   ui.setRollKind(rollKind);
+  // re-light the tray's sliders to whatever pressureValues actually holds —
+  // buildChrome() itself only knows DEFAULT_TUNING (it has no access to this
+  // closure's state), so if ?pressures=wild already cranked pressureValues
+  // inside build() above (ahead of `ui` existing), the sliders would
+  // otherwise still show the defaults they were built with.
+  for (const p of PRESSURES) ui.setPressure(p.id, pressureValues[p.id]);
+  if (evoAid || pressuresAid === "wild") ui.openPressures(true);
   // the first real render: build()'s own call above ran before `ui` existed
   renderGrid();
   renderFocus();
@@ -1526,6 +1605,13 @@ interface Chrome {
   setDrawer: (rows: DrawerRow[]) => void;
   onDeleteEntry: (key: string) => void;
   onReviveEntry: (key: string) => void;
+  // the evolution tray (Task 5, slice 4): five LIVE pressure sliders in a
+  // toggled `position: fixed` overlay — not a leftStack/rightStack child, so
+  // it can't push either bounded column into the overlap those stacks exist
+  // to avoid.
+  onPressure: (id: PressureId, value: number) => void;
+  setPressure: (id: PressureId, value: number) => void;
+  openPressures: (open?: boolean) => void;
 }
 
 function buildChrome(initial: StarterKind): Chrome {
@@ -1700,6 +1786,19 @@ function buildChrome(initial: StarterKind): Chrome {
     return { size, b };
   });
   bar.appendChild(group(label("brush"), ...brushBtns.map((s) => s.b)));
+
+  // ── the evolution tray's toggle: a "pressures ⚘" button beside brush,
+  // same btn() chrome as every other bar control. Flips a `position: fixed`
+  // overlay tray (built near the end of this function, once stat() exists)
+  // open/closed — the marquee of the evolutionary layer, one click away
+  // (Task 5, slice 4). ───────────────────────────────────────────────────
+  bar.appendChild(sep());
+  const pressuresBtn = document.createElement("button");
+  pressuresBtn.id = "pressures-btn";
+  pressuresBtn.textContent = "pressures ⚘";
+  pressuresBtn.style.cssText = btn(false);
+  pressuresBtn.onclick = () => chrome.openPressures();
+  bar.appendChild(pressuresBtn);
 
   bar.appendChild(sep());
   const tickValue = document.createElement("span");
@@ -2332,6 +2431,82 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("chains", String(v.chains.chains)) +
       stat("closable", String(v.chains.closable), v.chains.closable > 0 ? "mint" : "ink") +
       stat("redundancy", v.chains.redundancy.toFixed(1) + "×");
+  };
+
+  // ── the evolution tray (Task 5, slice 4): the marquee of the evolutionary
+  // layer made literal — five LIVE sliders, each an onInput straight onto
+  // the running kernel (worldlab.ts's setPressure, wired through onPressure
+  // below). A toggled `position: fixed` overlay — the pressuresBtn built
+  // beside brush, above, flips it — deliberately NOT a leftStack/rightStack
+  // child, so opening it can never push either bounded/scrolling column
+  // into the overlap those stacks exist to avoid. Hidden by default; docked
+  // right so it overlays the bench without permanently hiding either
+  // column; its own max-height + scroll caps it regardless of window size,
+  // so it can never grow to cover the whole view. ─────────────────────────
+  const evoTray = document.createElement("div");
+  evoTray.id = "lab-evo-tray";
+  evoTray.style.cssText =
+    "display: none; position: fixed; right: 18px; bottom: 96px; z-index: 7; width: 242px;" +
+    " max-height: 70vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
+    " user-select: none;";
+  document.body.appendChild(evoTray);
+
+  const evoHead = document.createElement("div");
+  evoHead.innerHTML =
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the evolution tray</div>` +
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">crank a pressure — evolution changes live, nothing resets</div>`;
+  evoTray.appendChild(evoHead);
+
+  // A raw slider value's own legible face: the four FloraTuning-backed
+  // pressures (fine steps, 0.01) read as a two-decimal fraction; the coarse
+  // ones (maxPerTile's whole tiles, grazerShare's 0.05 steps) round to
+  // whatever their own step can actually land on — grazerShare as a
+  // percent (it reads as a share), maxPerTile as a bare integer (it reads
+  // as a tile count).
+  const formatPressure = (p: Pressure, v: number): string =>
+    p.id === "grazerShare" ? pct(v) : p.step >= 1 ? String(Math.round(v)) : v.toFixed(2);
+
+  const pressureRows = PRESSURES.map((p) => {
+    const row = document.createElement("div");
+    row.style.cssText = "margin-top: 12px;";
+    const rowLabel = document.createElement("div");
+    rowLabel.style.cssText = `${MONO} text-transform: uppercase; color: rgba(228,236,242,0.65);`;
+    rowLabel.textContent = p.label;
+    const input = document.createElement("input");
+    input.id = `pressure-${p.id}`;
+    input.type = "range";
+    input.min = String(p.min);
+    input.max = String(p.max);
+    input.step = String(p.step);
+    input.style.cssText = "width: 100%; margin-top: 4px; accent-color: rgb(var(--lumen));";
+    input.oninput = () => chrome.onPressure(p.id, Number(input.value));
+    const valueRow = document.createElement("div");
+    row.append(rowLabel, input, valueRow);
+    evoTray.appendChild(row);
+    return { p, input, valueRow };
+  });
+
+  chrome.onPressure = () => {};
+  chrome.setPressure = (id, value) => {
+    const row = pressureRows.find((r) => r.p.id === id);
+    if (!row) return;
+    if (Number(row.input.value) !== value) row.input.value = String(value);
+    row.valueRow.innerHTML = stat(row.p.label, formatPressure(row.p, value));
+  };
+  // the tray's own boot-time face: DEFAULT_TUNING's values (this function
+  // has no access to worldlab.ts's pressureValues closure) — worldlab.ts
+  // re-syncs every slider to its own live pressureValues right after this
+  // returns (the same "if (ui) sync" round-trip every other chrome control
+  // here already uses), so a dev-aid-cranked value never sticks at showing
+  // the wrong position.
+  for (const p of PRESSURES) chrome.setPressure(p.id, p.tuningKey ? (DEFAULT_TUNING[p.tuningKey] as number) : 0);
+
+  let pressuresOpen = false;
+  chrome.openPressures = (open) => {
+    pressuresOpen = open ?? !pressuresOpen;
+    evoTray.style.display = pressuresOpen ? "block" : "none";
+    pressuresBtn.style.cssText = btn(pressuresOpen);
   };
 
   return chrome;
