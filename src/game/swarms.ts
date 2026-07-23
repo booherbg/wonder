@@ -134,6 +134,92 @@ export interface PollinationLogEntry {
   accent: Uint8Array;
 }
 
+// ── save/restore (World-Lab sim slots) ──────────────────────────────────────
+// Pure snapshot types for packSim/restoreSim. Motes are animation-only and
+// regenerate on restore; everything else needed for bit-identical continuation
+// is captured here.
+
+export interface SavedSwarmCore {
+  pool: number[][];
+  sensor: number[];
+  population: number;
+  energy: number;
+  cap: number;
+  behavior: BehaviorGenes;
+}
+
+export interface SavedPollinationLogEntry {
+  speciesId: number;
+  count: number;
+  lastTick: number;
+}
+
+export interface SavedWorldSwarm {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  orbit: number;
+  pinned: boolean;
+  visitPlantIdx: number | null;
+  pollinated: number;
+  pollinationLog: SavedPollinationLogEntry[];
+  home: { x: number; y: number; species: number } | null;
+  sw: SavedSwarmCore;
+}
+
+export interface SavedFlower {
+  map: number[];
+  accent: number[];
+  nectar: number;
+}
+
+export interface SavedSwarmLayer {
+  rngState: number;
+  ticks: number;
+  swarms: SavedWorldSwarm[];
+  flowers: { speciesId: number; flower: SavedFlower }[];
+  plantNectar?: { idx: number; nectar: number }[];
+}
+
+function packMap(m: IdMap): number[] {
+  return Array.from(m);
+}
+
+function unpackMap(a: number[]): IdMap {
+  return Uint8Array.from(a);
+}
+
+function packSwarm(sw: Swarm): SavedSwarmCore {
+  return {
+    pool: sw.pool.map(packMap),
+    sensor: packMap(sw.sensor),
+    population: sw.population,
+    energy: sw.energy,
+    cap: sw.cap,
+    behavior: { ...sw.behavior },
+  };
+}
+
+function unpackSwarm(saved: SavedSwarmCore): Swarm {
+  return {
+    pool: saved.pool.map(unpackMap),
+    sensor: unpackMap(saved.sensor),
+    population: saved.population,
+    energy: saved.energy,
+    cap: saved.cap,
+    behavior: { ...saved.behavior },
+  };
+}
+
+function packFlower(flower: Flower): SavedFlower {
+  return { map: packMap(flower.map), accent: packMap(flower.accent), nectar: flower.nectar };
+}
+
+function unpackFlower(saved: SavedFlower): Flower {
+  return { map: unpackMap(saved.map), accent: unpackMap(saved.accent), nectar: saved.nectar };
+}
+
 // A mote is one slot of render bookkeeping (the gene pool is the sim): the
 // renderer draws the first few as full generative insects and the rest as the
 // faint 1px dust that says "many" without clutter. Wall-clock animation only.
@@ -319,6 +405,15 @@ export class SwarmLayer {
   // Scatter a bounded set of swarms, each anchored beside a flowering plant, and
   // let each already live a short while against that bloom — so an island loads
   // with clouds that are already colouring toward their flowers, not blank.
+  private makeMotesForRestore(moteSalt: number): Mote[] {
+    const r = makeRng((this.seed ^ Math.imul(moteSalt + 1, 0x9e3779b1) ^ 0xa073e) >>> 0);
+    const motes: Mote[] = [];
+    for (let m = 0; m < MOTES_MAX; m++) {
+      motes.push({ a: r() * Math.PI * 2, r: 0.32 + r() * 0.68, spd: 0.2 + r() * 0.5, z: r() });
+    }
+    return motes;
+  }
+
   private bootstrapEnt(
     sw: Swarm,
     x: number,
@@ -759,6 +854,75 @@ export class SwarmLayer {
       accent: flower.accent,
       pollinationLog,
     };
+  }
+
+  /** Capture the layer for a sim-slot save — deterministic sim state only. */
+  snapshot(): SavedSwarmLayer {
+    const flowers: SavedSwarmLayer["flowers"] = [];
+    for (const [speciesId, flower] of this.flowers) {
+      flowers.push({ speciesId, flower: packFlower(flower) });
+    }
+    const plantNectar: SavedSwarmLayer["plantNectar"] = [];
+    if (this.perPlantNectar) {
+      for (const [idx, nectar] of this.plantNectar) plantNectar.push({ idx, nectar });
+    }
+    return {
+      rngState: this.rng.state!(),
+      ticks: this.ticks,
+      swarms: this.swarms.map((ent) => ({
+        id: ent.id,
+        name: ent.name,
+        x: ent.x,
+        y: ent.y,
+        orbit: ent.orbit,
+        pinned: ent.pinned,
+        visitPlantIdx: ent.visitPlantIdx,
+        pollinated: ent.pollinated,
+        pollinationLog: [...ent.pollinationLog.entries()].map(([speciesId, row]) => ({
+          speciesId,
+          count: row.count,
+          lastTick: row.lastTick,
+        })),
+        home: ent.home ? { ...ent.home } : null,
+        sw: packSwarm(ent.sw),
+      })),
+      flowers,
+      plantNectar: plantNectar.length ? plantNectar : undefined,
+    };
+  }
+
+  /** Rebuild sim state from a saved snapshot into this (empty) bench layer. */
+  restore(snapshot: SavedSwarmLayer): void {
+    this.rng = makeRng(snapshot.rngState);
+    this.ticks = snapshot.ticks;
+    this.swarms.length = 0;
+    this.flowers.clear();
+    for (const { speciesId, flower } of snapshot.flowers) {
+      this.flowers.set(speciesId, unpackFlower(flower));
+    }
+    this.plantNectar.clear();
+    if (snapshot.plantNectar) {
+      for (const { idx, nectar } of snapshot.plantNectar) this.plantNectar.set(idx, nectar);
+    }
+    for (const saved of snapshot.swarms) {
+      const ent: WorldSwarm = {
+        sw: unpackSwarm(saved.sw),
+        id: saved.id,
+        name: saved.name,
+        x: saved.x,
+        y: saved.y,
+        orbit: saved.orbit,
+        motes: this.makeMotesForRestore(saved.id),
+        home: saved.home ? { ...saved.home } : null,
+        pollinated: saved.pollinated,
+        pinned: saved.pinned,
+        visitPlantIdx: saved.visitPlantIdx,
+        pollinationLog: new Map(
+          saved.pollinationLog.map((row) => [row.speciesId, { count: row.count, lastTick: row.lastTick }]),
+        ),
+      };
+      this.swarms.push(ent);
+    }
   }
 }
 

@@ -13,6 +13,7 @@ import type { DrawerEntry } from "./simDrawer";
 import { cloneDef, syncKeySeq } from "./simDrawer";
 import type { SpeciesTrace } from "../life/census";
 import { DEFAULT_POLLINATE_ASSIST, type PollinateAssist } from "../life/pollinateAssist";
+import type { SavedSwarmLayer } from "./swarms";
 import { SimKernel } from "../life/kernel";
 
 export const SIM_INDEX_KEY = "wander.sims"; // parallel to WORLD_INDEX_KEY = "wander.worlds"
@@ -77,6 +78,8 @@ export interface SavedSim {
   census?: SpeciesTrace[]; // optional — chart continuity only, feeds no rng
   pollinateAssist?: PollinateAssist; // shared ambient + swarm reach/density (not FloraTuning)
   control?: SavedSimControl; // optional — UI pacing continuity
+  swarms?: SavedSwarmLayer; // optional — World-Lab insect clouds (bench-only)
+  swarmMatchHistory?: Record<string, number[]>; // swarm id → match % samples (chart continuity)
 }
 
 export function readSimIndex(store: Storage): SimSlotMeta[] {
@@ -133,6 +136,8 @@ export interface PackSimInput {
   savedAt: number;
   control?: SavedSimControl;
   pollinateAssist?: PollinateAssist;
+  swarms?: SavedSwarmLayer;
+  swarmMatchHistory?: Record<string, number[]>;
 }
 
 // The tile grid ONLY when it has been hand-painted away from the pure
@@ -146,7 +151,7 @@ function tilesIfPainted(tiles: Uint8Array, starter: StarterKind, seed: number): 
 }
 
 export function packSim(input: PackSimInput): SavedSim {
-  const { kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist } = input;
+  const { kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist, swarms, swarmMatchHistory } = input;
   const lastSplit = kernel.flora.lastSplitTickValue();
   return {
     v: 1,
@@ -173,11 +178,11 @@ export function packSim(input: PackSimInput): SavedSim {
     plantSpecies: cloneDef(kernel.plantSpecies), // wholesale, incl. runtime introduces (carry-forward #1)
     critterSpecies: cloneDef(kernel.critterSpecies), // wholesale, incl. den/role mutations (carry-forward #1)
     drawer: cloneDef(drawer),
-    // captured for a future chart-continuity nicety only — restoreSim has no path
-    // to rebuild it yet (deferred; not determinism-critical, feeds no rng).
     census: kernel.census.list(),
     pollinateAssist: pollinateAssist ? cloneDef(pollinateAssist) : undefined,
     control,
+    swarms: swarms ? cloneDef(swarms) : undefined,
+    swarmMatchHistory: swarmMatchHistory ? cloneDef(swarmMatchHistory) : undefined,
   };
 }
 
@@ -187,6 +192,9 @@ export interface RestoredSim {
   starter: StarterKind;
   control?: SavedSimControl;
   pollinateAssist: PollinateAssist;
+  census?: SpeciesTrace[];
+  swarms?: SavedSwarmLayer;
+  swarmMatchHistory?: Record<string, number[]>;
 }
 
 export function restoreSim(saved: SavedSim): RestoredSim {
@@ -221,6 +229,7 @@ export function restoreSim(saved: SavedSim): RestoredSim {
   kernel.critters = restoreCritterRows(saved.critters, critterSpecies, kernel.flora);
   const drawer = cloneDef(saved.drawer);
   syncKeySeq(drawer); // new entries won't collide with resumed keys
+  if (saved.census?.length) kernel.census.restore(saved.census);
   return {
     kernel,
     drawer,
@@ -229,5 +238,8 @@ export function restoreSim(saved: SavedSim): RestoredSim {
     pollinateAssist: saved.pollinateAssist
       ? cloneDef(saved.pollinateAssist)
       : cloneDef(DEFAULT_POLLINATE_ASSIST),
+    census: saved.census ? cloneDef(saved.census) : undefined,
+    swarms: saved.swarms ? cloneDef(saved.swarms) : undefined,
+    swarmMatchHistory: saved.swarmMatchHistory ? cloneDef(saved.swarmMatchHistory) : undefined,
   };
 }

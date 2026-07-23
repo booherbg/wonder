@@ -2055,13 +2055,37 @@ export function startWorldLab(): void {
   // construct came from or was last saved to, so a re-save on the SAME
   // construct overwrites its own slot rather than minting a fresh one every
   // time. ───────────────────────────────────────────────────────────────────
+  function packSwarmMatchHistory(): Record<string, number[]> {
+    const out: Record<string, number[]> = {};
+    for (const [id, hist] of swarmMatchHistory) out[String(id)] = [...hist];
+    return out;
+  }
+
+  function restoreSwarmMatchHistory(saved: Record<string, number[]> | undefined): void {
+    swarmMatchHistory.clear();
+    lastSwarmSample = -Infinity;
+    if (!saved) return;
+    for (const [id, hist] of Object.entries(saved)) swarmMatchHistory.set(Number(id), [...hist]);
+  }
+
   ui.onSaveSlot = () => {
     const name = window.prompt("name this construct", currentSlotName ?? "construct")?.trim();
     if (!name) return; // empty/cancel → no save (mirrors nameWorld's null/empty guard)
     const savedAt = Date.now(); // UI metadata only — never a sim input
     const id = currentSlotId ?? `${savedAt.toString(36)}-${Math.floor(savedAt % 1000)}`;
     const control: SavedSimControl = { playing, fidelity, speedMul, stepN };
-    const blob = packSim({ kernel, drawer, starter, seed, name, savedAt, control, pollinateAssist });
+    const blob = packSim({
+      kernel,
+      drawer,
+      starter,
+      seed,
+      name,
+      savedAt,
+      control,
+      pollinateAssist,
+      swarms: swarmLayer.snapshot(),
+      swarmMatchHistory: packSwarmMatchHistory(),
+    });
     saveSimSlot(localStorage, { id, name, savedAt }, blob);
     currentSlotId = id;
     currentSlotName = name;
@@ -2111,6 +2135,12 @@ export function startWorldLab(): void {
     seed = restoredSeed;
     syncPollinateAssistFromBlob(r.pollinateAssist);
     swarmLayer = benchSwarmLayer(map, kernel, seed);
+    if (r.swarms) {
+      swarmLayer.restore(r.swarms);
+      restoreSwarmMatchHistory(r.swarmMatchHistory);
+    } else {
+      restoreSwarmMatchHistory(undefined);
+    }
     if (r.control) {
       playing = r.control.playing;
       fidelity = r.control.fidelity;
@@ -2134,7 +2164,11 @@ export function startWorldLab(): void {
     refreshInspect(); // inspected is now null → the readout plate hides
     renderGrid();
     renderFocus();
-    ui!.flashNote(`loaded · ${name} — insect clouds aren't saved; place them again`);
+    ui!.flashNote(
+      r.swarms
+        ? `loaded · ${name}`
+        : `loaded · ${name} — insect clouds aren't saved; place them again`,
+    );
   }
 
   // The slot panel's own dev aid (Task 9, mirrors ?evo=1 above): opens the

@@ -115,6 +115,26 @@ export class CensusLog {
     return [...this.traces.values()];
   }
 
+  /** Restore chart history from a saved slot — continuity only, not sim-critical. */
+  restore(traces: SpeciesTrace[]): void {
+    this.traces.clear();
+    for (const tr of traces) {
+      this.traces.set(tr.id, {
+        id: tr.id,
+        counts: [...tr.counts],
+        firstTick: tr.firstTick,
+        peak: tr.peak,
+        peakTick: tr.peakTick,
+      });
+    }
+    if (traces.length > 0) {
+      this.firstTick = Math.min(...traces.map((t) => t.firstTick));
+    } else {
+      this.firstTick = NaN;
+    }
+    this.lastTick = -Infinity;
+  }
+
   trace(id: number): SpeciesTrace | undefined {
     return this.traces.get(id);
   }
