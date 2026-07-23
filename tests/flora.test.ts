@@ -201,6 +201,16 @@ test("a Flora resumes bit-identically from a full restore blob (rng + substrates
   const a = new Flora(map, species, SEED);
   const N = 60, M = 60;
   for (let i = 0; i < N; i++) a.simTick();
+  // default tuning keeps chains off, so a.substrates would stay [] and
+  // suppressedSpecies would stay empty on its own — push real, non-empty
+  // values by hand so the round-trip below actually exercises the restore
+  // code instead of trivially matching two empty containers.
+  a.substrates.push(
+    { x: 40, y: 40, hue: 0.3, glow: 0.5, form: PlantForm.Flower, born: a.tick },
+    { x: 88, y: 120, hue: 0.65, glow: 0.2, form: PlantForm.Fungus, born: a.tick },
+  );
+  a.suppressedSpecies.add(0);
+  a.suppressedSpecies.add(2);
   const blob = {
     tick: a.tick,
     plants: a.all.map((p) => ({ species: p.species, genome: p.genome, x: p.x, y: p.y, born: p.born })),
@@ -210,12 +220,16 @@ test("a Flora resumes bit-identically from a full restore blob (rng + substrates
     suppressed: [...a.suppressedSpecies],
     lastSplitTick: Number.isFinite(a.lastSplitTickValue()) ? a.lastSplitTickValue() : undefined,
   };
+  expect(blob.substrates.length).toBe(2); // sanity: the snapshot really carries our substrates
+  expect(blob.suppressed).toEqual([0, 2]); // sanity: the snapshot really carries our suppressed ids
   for (let i = 0; i < M; i++) a.simTick();
 
   // (b) a resumed run from the N-snapshot, then M more
   const b = new Flora(map, species, SEED, {}, blob);
   expect(b.tick).toBe(N); // resumed at the snapshot tick
   expect(b.rngState()).toBe(blob.rngState); // the stream position was injected, not re-seeded
+  expect(b.substratesSnapshot()).toEqual(blob.substrates); // substrates round-tripped, not silently dropped
+  expect([...b.suppressedSpecies]).toEqual([0, 2]); // suppressed ids round-tripped, not silently dropped
   for (let i = 0; i < M; i++) b.simTick();
 
   // identical continuation
