@@ -22,3 +22,9 @@ test("a true first visit: only new, simulator, guide", () => {
   const rows = titleRows({ lastSeed: null, lastName: null, savedCount: 0 });
   expect(rows.map((r) => r.id)).toEqual(["new", "sim", "guide"]);
 });
+
+test("a last island with no remembered name falls back to 'your island'", () => {
+  const rows = titleRows({ lastSeed: 42, lastName: null, savedCount: 0 });
+  const continueRow = rows.find((r) => r.id === "continue");
+  expect(continueRow?.label).toBe("continue — your island");
+});
