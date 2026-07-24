@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CensusLog, downsample, sparkline, trend } from "../src/life/census";
+import { CENSUS_DEFAULT_CAP, CensusLog, downsample, sparkline, trend } from "../src/life/census";
 
 test("sparkline scales a series to its own shape", () => {
   // a clean rise fills bottom to top; a flat line reads as all-low
@@ -51,4 +51,30 @@ test("summary counts live, arisen, and lost kinds", () => {
   expect(s.live).toBe(1); // only kind 1 still alive
   expect(s.arose).toBe(1); // kind 2 arose during the log
   expect(s.lost).toBe(1); // kind 2 is now at zero
+});
+
+test("default census cap holds ~100k ticks at the usual cadence", () => {
+  expect(CENSUS_DEFAULT_CAP).toBe(2500);
+  const log = new CensusLog();
+  expect(log.sampleInterval).toBe(40);
+  expect(log.sampleCap).toBe(2500);
+});
+
+test("lastSampleTick tracks the newest accepted sample", () => {
+  const log = new CensusLog(10, 100);
+  expect(log.lastSampleTick).toBeNull();
+  log.sample(0, new Map([[1, 1]]));
+  log.sample(10, new Map([[1, 2]]));
+  log.sample(20, new Map([[1, 3]]));
+  expect(log.lastSampleTick).toBe(20);
+  expect(log.sampleInterval).toBe(10);
+});
+
+test("restore recovers lastSampleTick for chart axis math", () => {
+  const log = new CensusLog(10, 100);
+  log.restore([
+    { id: 1, counts: [10, 20, 30], firstTick: 100, peak: 30, peakTick: 120 },
+  ]);
+  expect(log.lastSampleTick).toBe(120); // firstTick + (len-1)*interval
+  expect(log.sampleInterval).toBe(10);
 });

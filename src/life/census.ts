@@ -11,6 +11,10 @@ export interface SpeciesTrace {
   peakTick: number;
 }
 
+/** Samples kept at the default 40-tick cadence ≈ 100k island ticks of history. */
+export const CENSUS_DEFAULT_CAP = 2500;
+export const CENSUS_DEFAULT_INTERVAL = 40;
+
 const BARS = "▁▂▃▄▅▆▇█";
 
 // average a series down to at most `width` buckets, so a long history still
@@ -61,9 +65,22 @@ export class CensusLog {
   private firstTick = NaN;
 
   constructor(
-    private readonly interval = 40, // sim-ticks between samples
-    private readonly cap = 100, // samples kept per kind
+    private readonly interval = CENSUS_DEFAULT_INTERVAL, // sim-ticks between samples
+    private readonly cap = CENSUS_DEFAULT_CAP, // samples kept per kind
   ) {}
+
+  get sampleInterval(): number {
+    return this.interval;
+  }
+
+  get sampleCap(): number {
+    return this.cap;
+  }
+
+  /** Tick of the newest accepted sample, or null before any sample. */
+  get lastSampleTick(): number | null {
+    return Number.isFinite(this.lastTick) ? this.lastTick : null;
+  }
 
   reset(): void {
     this.traces.clear();
@@ -129,10 +146,20 @@ export class CensusLog {
     }
     if (traces.length > 0) {
       this.firstTick = Math.min(...traces.map((t) => t.firstTick));
+      // Recover the ring's "now" so tick-axis math works after load without
+      // per-sample tick arrays in the save.
+      let newest = -Infinity;
+      for (const tr of traces) {
+        if (tr.counts.length === 0) continue;
+        const end = tr.firstTick + (tr.counts.length - 1) * this.interval;
+        if (end > newest) newest = end;
+        if (tr.peakTick > newest) newest = tr.peakTick;
+      }
+      this.lastTick = Number.isFinite(newest) ? newest : -Infinity;
     } else {
       this.firstTick = NaN;
+      this.lastTick = -Infinity;
     }
-    this.lastTick = -Infinity;
   }
 
   trace(id: number): SpeciesTrace | undefined {
