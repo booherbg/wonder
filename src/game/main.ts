@@ -101,6 +101,7 @@ import { easeToward } from "../render/depth";
 import { OVERVIEW_COLORS } from "../render/palette";
 import { Renderer, SOW_LINGER_MS } from "../render/renderer";
 import { InputState, Player } from "./player";
+import { clampWarmTicks, runWarmBatches } from "./midWarm";
 import { startSimulator } from "./simulator";
 import { parseSimMode } from "./flags";
 import { startWorldLab } from "./worldlab";
@@ -202,10 +203,16 @@ const canvas = document.getElementById("game") as HTMLCanvasElement;
 const seedLabel = document.getElementById("seed-label")!;
 const hud = document.getElementById("hud")!;
 const dev = document.getElementById("dev")!;
+const devReadout = dev.querySelector(".dev-readout")!;
+const devWarmProgress = dev.querySelector(".dev-warm-progress")!;
+const devWarmInput = dev.querySelector<HTMLInputElement>(".dev-warm-input")!;
+const devWarmBtns = dev.querySelectorAll<HTMLButtonElement>(".dev-warm-btn, .dev-warm-run");
 
 // the debug readout (backtick): fps, seed, island, live species census — the
 // numbers behind the world, so you can watch the sim and copy the seed
 let devOn = false;
+let midWarmBusy = false;
+let midWarmProgress = "";
 let fpsSmooth = 60;
 let devAcc = 0; // throttles the readout to a few redraws a second
 let devTileComp = ""; // biome census, recomputed only when the island changes
@@ -623,6 +630,45 @@ function openBackpackNow(): void {
   openBackpack(buildBackpackView());
 }
 
+function setDevWarmControlsDisabled(disabled: boolean): void {
+  for (const btn of devWarmBtns) btn.disabled = disabled;
+  devWarmInput.disabled = disabled;
+}
+
+async function runMidWarm(raw: number): Promise<void> {
+  const n = clampWarmTicks(raw);
+  if (n === 0 || midWarmBusy || titleActive) return;
+  midWarmBusy = true;
+  midWarmProgress = "warming… 0%";
+  setDevWarmControlsDisabled(true);
+  renderDev();
+  await runWarmBatches({
+    total: n,
+    onProgress: (done, total) => {
+      midWarmProgress = `warming… ${Math.floor((done / total) * 100)}%`;
+      renderDev();
+    },
+    step: () => {
+      flora.simTick();
+      census.sample(flora.tick, flora.speciesCounts);
+      swarmLayer.tick(flora);
+      sampleSwarms();
+    },
+  });
+  midWarmBusy = false;
+  midWarmProgress = "";
+  setDevWarmControlsDisabled(titleActive);
+  renderDev();
+  flashHud(`warmed ${n} → tick ${flora.tick}`);
+}
+
+dev.addEventListener("click", (e) => {
+  if (midWarmBusy || titleActive) return;
+  const t = e.target as HTMLElement;
+  if (t.classList.contains("dev-warm-btn")) void runMidWarm(Number(t.dataset.warm));
+  else if (t.classList.contains("dev-warm-run")) void runMidWarm(Number(devWarmInput.value));
+});
+
 // the debug readout: the numbers behind the living world
 function renderDev(): void {
   const itx = Math.floor(player.x / TILE_SIZE);
@@ -648,7 +694,7 @@ function renderDev(): void {
   const floraLine = census.started
     ? `flora: ${flora.count} plants · ${sum.live} kinds · ${sum.arose} arose · ${sum.lost} lost`
     : `flora: ${flora.count} plants · ${liveKinds.length} kinds`;
-  dev.textContent = [
+  devReadout.textContent = [
     `seed ${currentSeed}    ${worldName ?? islandName(currentSeed)}`,
     `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}    here ${fmtDur(worldPlayMs)}`,
     `fps ${fpsSmooth.toFixed(0)}    tick ${flora.tick}`,
@@ -659,6 +705,8 @@ function renderDev(): void {
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
     ...(CHAINS ? webLines() : []),
   ].join("\n");
+  devWarmProgress.textContent = midWarmProgress;
+  if (!midWarmBusy) setDevWarmControlsDisabled(titleActive);
 }
 
 // the seed-label, bottom-left: a given name if you set one, else the island's
@@ -1861,7 +1909,7 @@ window.addEventListener("keydown", (e) => {
   if (k === "`" || k === "~") {
     // the debug readout: everything the sim knows, for the curious
     devOn = !devOn;
-    dev.style.display = devOn ? "block" : "none";
+    dev.style.display = devOn ? "flex" : "none";
     if (devOn) renderDev();
     return;
   }

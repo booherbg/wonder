@@ -40,11 +40,41 @@
       }
       /* the debug readout (backtick): selectable, so the seed can be copied */
       #dev {
-        position: fixed; left: 12px; top: 12px; display: none;
-        font: 11px/1.55 monospace; color: rgba(214, 232, 246, 0.94);
+        position: fixed; left: 12px; top: 12px; display: none; flex-direction: column; gap: 8px;
+        font: 11px/1.55 var(--mono); color: rgba(214, 232, 246, 0.94);
         background: rgba(6, 10, 16, 0.86); border: 1px solid rgba(255, 255, 255, 0.16);
-        border-radius: 6px; padding: 9px 13px; white-space: pre; max-width: 52vw;
+        border-radius: 6px; padding: 9px 13px; max-width: 52vw;
         pointer-events: auto; user-select: text; z-index: 6;
+      }
+      #dev .dev-readout {
+        margin: 0; white-space: pre; font: inherit; color: inherit;
+      }
+      #dev .dev-warm {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+        padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.12);
+        user-select: none;
+      }
+      #dev .dev-warm-label {
+        font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+        color: rgba(var(--lumen), 0.72); margin-right: 2px;
+      }
+      #dev .dev-warm-btn, #dev .dev-warm-run {
+        font: 10px var(--mono); color: rgba(228, 236, 242, 0.82); cursor: pointer;
+        background: rgba(var(--lumen), 0.08); border: 1px solid rgba(var(--lumen), 0.22);
+        border-radius: 4px; padding: 2px 7px;
+      }
+      #dev .dev-warm-btn:hover:enabled, #dev .dev-warm-run:hover:enabled {
+        background: rgba(var(--lumen), 0.16);
+      }
+      #dev .dev-warm-btn:disabled, #dev .dev-warm-run:disabled { opacity: 0.45; cursor: default; }
+      #dev .dev-warm-input {
+        width: 58px; font: 10px var(--mono); color: rgba(228, 236, 242, 0.9);
+        background: rgba(8, 15, 22, 0.72); border: 1px solid rgba(var(--lumen), 0.18);
+        border-radius: 4px; padding: 2px 5px;
+      }
+      #dev .dev-warm-input:disabled { opacity: 0.45; }
+      #dev .dev-warm-progress {
+        font: 10px var(--mono); color: rgb(var(--firefly)); min-width: 6em;
       }
       #hud .msg { display: block; margin-bottom: 6px; color: rgba(255, 255, 255, 0.9); }
       /* the hotbar — three functional slots (hand · hoe · pouch), codex-styled */
@@ -578,7 +608,19 @@
     <canvas id="game"></canvas>
     <div id="seed-label"></div>
     <div id="hud"></div>
-    <div id="dev"></div>
+    <div id="dev">
+      <pre class="dev-readout"></pre>
+      <div class="dev-warm">
+        <span class="dev-warm-label">warm</span>
+        <button type="button" class="dev-warm-btn" data-warm="300">300</button>
+        <button type="button" class="dev-warm-btn" data-warm="1000">1k</button>
+        <button type="button" class="dev-warm-btn" data-warm="3000">3k</button>
+        <button type="button" class="dev-warm-btn" data-warm="10000">10k</button>
+        <input type="number" class="dev-warm-input" min="1" max="50000" placeholder="n" />
+        <button type="button" class="dev-warm-run">warm</button>
+        <span class="dev-warm-progress"></span>
+      </div>
+    </div>
     <div id="inspect"></div>
     <div id="murmur"></div>
     <div id="anthology"></div>
