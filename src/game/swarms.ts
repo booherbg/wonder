@@ -941,18 +941,11 @@ export class SwarmLayer {
   }
 
   // The codex readout for one swarm — its map, population, host bloom, how far it
-  // has come to resemble it, and its personality. Null if it has no live host.
-  inspect(ent: WorldSwarm, species: readonly PlantSpecies[]): SwarmInspect | null {
-    if (!ent.home) return null;
-    const flower = this.flowerFor(ent.home.species);
-    const host = species[ent.home.species];
-    if (!flower || !host) return null;
-    let nectar = flower.nectar;
-    if (ent.visitPlantIdx !== null) {
-      const pNectar = this.plantNectar.get(ent.visitPlantIdx);
-      if (pNectar !== undefined) nectar = pNectar;
-      else if (this.perPlantNectar) nectar = 1;
-    }
+  // has come to resemble it, and its personality. Always returns a card (even with
+  // no host yet) so the lab select tool never looks "broken" on a click.
+  inspect(ent: WorldSwarm, species: readonly PlantSpecies[]): SwarmInspect {
+    const emptyMap = new Uint8Array(MAP_CELLS);
+    const emptyAccent = new Uint8Array(MAP_CELLS);
     const pollinationLog: PollinationLogEntry[] = [];
     for (const [sid, row] of ent.pollinationLog) {
       const sp = species[sid];
@@ -968,6 +961,51 @@ export class SwarmLayer {
       });
     }
     pollinationLog.sort((a, b) => b.count - a.count || b.lastTick - a.lastTick);
+
+    if (!ent.home) {
+      return {
+        name: ent.name,
+        sensor: ent.sw.sensor,
+        population: ent.sw.population,
+        energy: ent.sw.energy,
+        cap: ent.sw.cap,
+        hostName: "no host yet",
+        resemblance: 0,
+        matchEfficiency: 0,
+        nectar: 0,
+        pinned: ent.pinned,
+        behavior: ent.sw.behavior,
+        flowerMap: emptyMap,
+        accent: emptyAccent,
+        pollinationLog,
+      };
+    }
+    const flower = this.flowerFor(ent.home.species);
+    const host = species[ent.home.species];
+    if (!flower || !host) {
+      return {
+        name: ent.name,
+        sensor: ent.sw.sensor,
+        population: ent.sw.population,
+        energy: ent.sw.energy,
+        cap: ent.sw.cap,
+        hostName: "lost host",
+        resemblance: 0,
+        matchEfficiency: 0,
+        nectar: 0,
+        pinned: ent.pinned,
+        behavior: ent.sw.behavior,
+        flowerMap: emptyMap,
+        accent: emptyAccent,
+        pollinationLog,
+      };
+    }
+    let nectar = flower.nectar;
+    if (ent.visitPlantIdx !== null) {
+      const pNectar = this.plantNectar.get(ent.visitPlantIdx);
+      if (pNectar !== undefined) nectar = pNectar;
+      else if (this.perPlantNectar) nectar = 1;
+    }
     const matchEfficiency = metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
     return {
       name: ent.name,

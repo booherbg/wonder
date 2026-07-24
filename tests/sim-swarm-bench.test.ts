@@ -137,10 +137,13 @@ test("placeCloud with no blooms homes on a bloom placed nearby after tick", () =
   const wy = ty * TILE_SIZE + TILE_SIZE / 2;
   const cloud = layer.placeCloud(kernel.flora, wx, wy);
   expect(cloud.home).toBeNull();
+  const homeless = layer.inspect(cloud, kernel.plantSpecies);
+  expect(homeless.hostName).toBe("no host yet");
+  expect(homeless.population).toBeGreaterThan(0);
   placeBloom(kernel, flowerSp.id, tx, ty);
   layer.tick(kernel.flora);
   expect(cloud.home).not.toBeNull();
-  expect(layer.inspect(cloud, kernel.plantSpecies)).not.toBeNull();
+  expect(layer.inspect(cloud, kernel.plantSpecies).hostName).not.toBe("no host yet");
 });
 
 test("pinned cloud stops feeding after its host plant is erased, not a swapped idx", () => {

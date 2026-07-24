@@ -159,6 +159,7 @@ type LabTool = "select" | "place" | "paint" | "erase";
 type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | { kind: "swarm"; ref: WorldSwarm } | null;
 
 const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
+const SWARM_PICK_RADIUS_PX = 3.5 * TILE_SIZE; // clouds drift; give the click more reach than plants
 
 // The roll pane's batch size (the spec's 9–12) and thumbnail zoom — a grid
 // cell stays legible at 16×~28px source art scaled up, same spirit as
@@ -356,9 +357,8 @@ function mapPatchDataUrl(map: Uint8Array, accent?: Uint8Array, ring?: Set<number
   return c.toDataURL();
 }
 
-function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpecies[]): SwarmInspectView | null {
+function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpecies[]): SwarmInspectView {
   const info = layer.inspect(ent, species);
-  if (!info) return null;
   const ring = new Set<number>();
   for (let i = 0; i < info.sensor.length; i++) {
     if (info.accent[i] && info.sensor[i] === info.flowerMap[i]) ring.add(i);
@@ -764,7 +764,6 @@ export function startWorldLab(): void {
     lastSwarmSample = tick;
     for (const ent of swarmLayer.swarms) {
       const info = swarmLayer.inspect(ent, kernel.plantSpecies);
-      if (!info) continue;
       let matchH = swarmMatchHistory.get(ent.id);
       if (!matchH) {
         matchH = [];
@@ -1504,9 +1503,7 @@ export function startWorldLab(): void {
           : undefined;
       ui.showPlantInspect(plantInspectView(inspected.ref, sp, kernel.tick), { canInvite, clone: cloneOpts });
     } else {
-      const view = swarmInspectView(swarmLayer, inspected.ref, kernel.plantSpecies);
-      if (view) ui.showSwarmInspect(view, inspected.ref);
-      else ui.hideInspect();
+      ui.showSwarmInspect(swarmInspectView(swarmLayer, inspected.ref, kernel.plantSpecies), inspected.ref);
     }
   }
 
@@ -1951,8 +1948,16 @@ export function startWorldLab(): void {
     const hostName = kernel.plantSpecies[plant.species].name.toLowerCase();
     const ent = swarmLayer.inviteCloud(kernel.flora, plant);
     if (ent) {
+      tool = "select";
+      selected = null;
       inspected = { kind: "swarm", ref: ent };
-      if (ui) ui.flashNote(`invited ${ent.name.toLowerCase()} onto ${hostName}`);
+      if (ui) {
+        ui.setTool(tool);
+        ui.setSelected(null);
+        ui.flashNote(
+          `invited ${ent.name.toLowerCase()} onto ${hostName} · pinned — free-roam to let it pick blooms`,
+        );
+      }
       refreshInspect();
     } else if (ui) ui.flashNote("needs a flowering plant in bloom");
   };
@@ -2418,6 +2423,18 @@ export function startWorldLab(): void {
     strokeChanged = false;
   }
 
+  function enterSelectInspectSwarm(ent: WorldSwarm, note?: string): void {
+    tool = "select";
+    selected = null;
+    inspected = { kind: "swarm", ref: ent };
+    if (ui) {
+      ui.setTool(tool);
+      ui.setSelected(null);
+      if (note) ui.flashNote(note);
+    }
+    refreshInspect();
+  }
+
   canvas.addEventListener("pointerdown", (e) => {
     if (e.button === 1 || spaceDown) {
       e.preventDefault();
@@ -2431,6 +2448,25 @@ export function startWorldLab(): void {
     const hit = pointerTile(e);
     if (!hit) return;
     const { tx, ty, wx, wy } = hit;
+    // Place-cloud mode: clicking an existing cloud inspects it (don't stack another).
+    if (tool === "place" && selected?.kind === "cloud") {
+      const existing = swarmLayer.pick(wx, wy, SWARM_PICK_RADIUS_PX);
+      if (existing) {
+        enterSelectInspectSwarm(existing);
+        return;
+      }
+      placing = true;
+      lastStrokeKey = ty * map.width + tx;
+      const { x: px, y: py } = worldPxCenter(tx, ty);
+      const placed = swarmLayer.placeCloud(kernel.flora, px, py);
+      enterSelectInspectSwarm(
+        placed,
+        placed.home
+          ? `${placed.name.toLowerCase()} · free-roam — press play/step to watch it forage`
+          : `${placed.name.toLowerCase()} · no blooms nearby yet — place a flowering plant, then play`,
+      );
+      return;
+    }
     if (tool === "select" || !selected) {
       const p = nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
       if (inspected?.kind === "swarm" && p && isBloom(p) && canFlower(kernel.plantSpecies[p.species].archetype.form)) {
@@ -2440,7 +2476,7 @@ export function startWorldLab(): void {
           return;
         }
       }
-      const sw = swarmLayer.pick(wx, wy, PICK_RADIUS_PX);
+      const sw = swarmLayer.pick(wx, wy, SWARM_PICK_RADIUS_PX);
       const c = sw ? null : pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
       const plantPick = c || sw ? null : p;
       inspected = sw ? { kind: "swarm", ref: sw } : c ? { kind: "critter", ref: c } : plantPick ? { kind: "plant", ref: plantPick } : null;
@@ -2467,21 +2503,6 @@ export function startWorldLab(): void {
       painting = true;
       strokeChanged = paintTileAt(tx, ty) || strokeChanged;
       lastStrokeKey = ty * map.width + tx;
-      return;
-    }
-    if (tool === "place" && selected?.kind === "cloud") {
-      placing = true;
-      lastStrokeKey = ty * map.width + tx;
-      const { x: px, y: py } = worldPxCenter(tx, ty);
-      swarmLayer.placeCloud(kernel.flora, px, py);
-      if (ui) {
-        const placed = swarmLayer.swarms[swarmLayer.swarms.length - 1];
-        ui.flashNote(
-          placed?.home
-            ? "placed an insect cloud — it will home on the nearest bloom"
-            : "placed an insect cloud — no blooms nearby yet",
-        );
-      }
       return;
     }
     if (tool === "place" && selected.kind !== "tile") {
@@ -3063,7 +3084,7 @@ function buildChrome(initial: StarterKind): Chrome {
   toolRow.append(label("tool"), ...toolBtns.map((t) => t.b));
   const cloudBtn = document.createElement("button");
   cloudBtn.textContent = "cloud";
-  cloudBtn.title = "place a naïve insect cloud — it homes on the nearest bloom";
+  cloudBtn.title = "place a naïve insect cloud — opens its details; play/step to watch it forage";
   cloudBtn.style.cssText = btn(false);
   cloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
   toolRow.appendChild(cloudBtn);
@@ -3768,6 +3789,7 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onCloneReset = () => {};
   chrome.onIntroduceClone = () => {};
   chrome.showSwarmInspect = (v, ent) => {
+    const hasHost = v.hostName !== "no host yet" && v.hostName !== "lost host";
     const logRows = v.pollinationLog.length
       ? v.pollinationLog
           .map(
@@ -3777,20 +3799,23 @@ function buildChrome(initial: StarterKind): Chrome {
               `<span>${esc(row.name.toLowerCase())} · ${row.count} spread${row.count === 1 ? "" : "s"} · tick ${row.lastTick}</span></div>`,
           )
           .join("")
-      : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no assisted spreads yet</div>`;
+      : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no assisted spreads yet — play/step while match is high</div>`;
     readout.innerHTML =
-      head(v.name.toLowerCase(), `insect cloud · works ${esc(v.hostName.toLowerCase())}`) +
+      head(v.name.toLowerCase(), `insect cloud · ${hasHost ? `works ${esc(v.hostName.toLowerCase())}` : "waiting for a bloom"}`) +
       title("vitals") +
       stat("population", `${Math.round(v.population)} / ${Math.round(v.cap)}`, "mint") +
       stat("energy", pct(v.energy), "mint") +
       stat("match", pct(v.matchEfficiency), "mint") +
       stat("resemblance", pct(v.resemblance)) +
-      stat("host nectar", pct(v.nectar), v.nectar < 0.2 ? "ink" : "mint") +
+      (hasHost ? stat("host nectar", pct(v.nectar), v.nectar < 0.2 ? "ink" : "mint") : "") +
       stat("mode", v.pinned ? "pinned to host" : "free-roam") +
-      title("maps") +
+      title("maps · the insect genome") +
       `<div style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;">` +
       `<div style="text-align:center;"><img src="${v.sensorPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">insect</div></div>` +
-      `<div style="text-align:center;"><img src="${v.flowerPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">flower</div></div></div>` +
+      (hasHost
+        ? `<div style="text-align:center;"><img src="${v.flowerPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">flower</div></div>`
+        : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45); max-width: 120px;">place a flowering plant, then play — it homes on its own</div>`) +
+      `</div>` +
       `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.5); margin-bottom: 6px;">${esc(v.behaviorLine)}</div>` +
       title("pollination log") +
       logRows;
@@ -3803,7 +3828,9 @@ function buildChrome(initial: StarterKind): Chrome {
     controls.appendChild(pinBtn);
     const hint = document.createElement("div");
     hint.style.cssText = "font: 10px var(--mono); color: rgba(228,236,242,0.45); flex: 1 1 100%;";
-    hint.textContent = "select a bloom while this cloud is open to retarget";
+    hint.textContent = ent.pinned
+      ? "pinned — stays on this bloom · free-roam to forage · click another bloom to retarget"
+      : "free-roam — picks fuller blooms on play/step · click a bloom to pin it there";
     controls.append(hint);
     readout.appendChild(controls);
     readout.style.display = "block";
