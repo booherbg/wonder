@@ -1,4 +1,5 @@
 import { hash2d, makeRng } from "../core/rng";
+import { lruEvictOldest, lruTouch } from "../core/lru";
 import { IdMap, MAP_CELLS, appearanceColors } from "../life/idmap";
 import { BehaviorGenes } from "../life/swarm";
 
@@ -236,7 +237,10 @@ export function insectSpriteCacheStats(): { sets: number; cap: number } {
 export function getInsectSprites(sw: { sensor: IdMap; behavior: BehaviorGenes }): InsectSpriteSet {
   const key = insectSpriteKey(sw.sensor, sw.behavior);
   const hit = cache.get(key);
-  if (hit) return hit;
+  if (hit) {
+    lruTouch(cache, key, hit);
+    return hit;
+  }
   const morph = insectMorphOf(sw.behavior);
   const pal = insectPalette(sw.sensor);
   const set: InsectSpriteSet = {
@@ -255,7 +259,7 @@ export function getInsectSprites(sw: { sensor: IdMap; behavior: BehaviorGenes })
     };
     set.diag = { wingA: make("wingA"), wingB: make("wingB"), perch: make("perch") };
   }
-  if (cache.size >= CACHE_CAP) cache.clear();
+  lruEvictOldest(cache, CACHE_CAP);
   cache.set(key, set);
   return set;
 }

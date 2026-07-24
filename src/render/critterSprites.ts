@@ -1,4 +1,5 @@
 import { makeRng } from "../core/rng";
+import { lruEvictOldest, lruTouch } from "../core/lru";
 import { CritterMorph, CritterSpecies, morphOf } from "../life/fauna";
 import { hsl } from "../life/genome";
 
@@ -27,15 +28,20 @@ export interface CritterSpriteSet {
 }
 
 const cache = new Map<number, CritterSpriteSet>();
+const CACHE_CAP = 64; // island rosters are small; lab rolls can churn species ids
 
-/** Debug: critter sprite-set cache occupancy (keyed by species id; uncapped). */
-export function critterSpriteCacheStats(): { sets: number } {
-  return { sets: cache.size };
+/** Debug: critter sprite-set cache occupancy (keyed by species id). */
+export function critterSpriteCacheStats(): { sets: number; cap: number } {
+  return { sets: cache.size, cap: CACHE_CAP };
 }
 
 export function getCritterSprites(sp: CritterSpecies): CritterSpriteSet {
   const hit = cache.get(sp.id);
-  if (hit) return hit;
+  if (hit) {
+    lruTouch(cache, sp.id, hit);
+    return hit;
+  }
+  lruEvictOldest(cache, CACHE_CAP);
   const rest = drawCritter(sp, false);
   const hop = drawCritter(sp, true);
   const blink = drawCritter(sp, false, true);

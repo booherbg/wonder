@@ -40,6 +40,7 @@ import { clearCritterSpriteCache, critterSpriteCacheStats } from "../render/crit
 import { plantSpriteCacheStats } from "../render/plantSprites";
 import { insectSpriteCacheStats } from "../render/insectSprites";
 import { formatDevPerf, readJsHeap } from "./devPerf";
+import { pruneMapKeys } from "../core/lru";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { TitleRowId, TitleState, hideTitle, isTitleOpen, showTitle } from "../render/title";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
@@ -244,7 +245,9 @@ function sampleSwarms(): void {
   swarmSampleTick++;
   if (swarmSampleTick - lastSwarmSample < SWARM_SAMPLE_INTERVAL) return;
   lastSwarmSample = swarmSampleTick;
+  const live = new Set<number>();
   for (const e of swarmLayer.swarms) {
+    live.add(e.id);
     const info = swarmLayer.inspect(e, species);
     if (!info) continue;
     let h = swarmMatchHistory.get(e.id);
@@ -255,6 +258,7 @@ function sampleSwarms(): void {
     h.push(Math.round(info.resemblance * 100));
     if (h.length > SWARM_HISTORY_CAP) h.shift();
   }
+  pruneMapKeys(swarmMatchHistory, live);
 }
 // this world's identity: a name you gave it, and the real time you've spent here
 let worldName: string | null = null;
@@ -721,6 +725,7 @@ function renderDev(): void {
     insectSpriteSets: insectCache.sets,
     insectSpriteCap: insectCache.cap,
     critterSpriteSets: critterCache.sets,
+    critterSpriteCap: critterCache.cap,
     heapUsedMb: heap?.usedMb,
     heapLimitMb: heap?.limitMb,
   });

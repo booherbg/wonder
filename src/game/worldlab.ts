@@ -14,6 +14,7 @@
 // an eyebrow, a way back, a starter selector, and now the palette itself.
 
 import { makeRng } from "../core/rng";
+import { pruneMapKeys } from "../core/lru";
 import { CensusLog, sparkline } from "../life/census";
 import {
   Critter,
@@ -762,7 +763,9 @@ export function startWorldLab(): void {
     const tick = kernel.tick;
     if (tick - lastSwarmSample < SWARM_SAMPLE_INTERVAL) return;
     lastSwarmSample = tick;
+    const live = new Set<number>();
     for (const ent of swarmLayer.swarms) {
+      live.add(ent.id);
       const info = swarmLayer.inspect(ent, kernel.plantSpecies);
       let matchH = swarmMatchHistory.get(ent.id);
       if (!matchH) {
@@ -780,6 +783,8 @@ export function startWorldLab(): void {
       energyH.push(Math.round(info.energy * 100));
       if (energyH.length > SWARM_HISTORY_CAP) energyH.shift();
     }
+    pruneMapKeys(swarmMatchHistory, live);
+    pruneMapKeys(swarmEnergyHistory, live);
   }
 
   function swarmSeriesView(): {

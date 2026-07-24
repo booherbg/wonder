@@ -20,6 +20,7 @@ export interface DevPerfSnapshot {
   insectSpriteSets: number;
   insectSpriteCap: number;
   critterSpriteSets: number;
+  critterSpriteCap: number;
   heapUsedMb?: number;
   heapLimitMb?: number;
 }
@@ -45,7 +46,7 @@ export function formatDevPerf(s: DevPerfSnapshot): string[] {
     `    · critters ${pad(s.critters)} · kinds ${s.critterKinds} · clouds ${s.swarms} · motes ${s.swarmMotes}`,
     `    · flocks ${s.flocks} (${s.flockBirds} birds) · map ${s.mapTiles} tiles`,
     `    · census ${s.censusTraces} traces / ${s.censusSamples} samples`,
-    `    · sprites plant ${s.plantSprites}/${s.plantSpriteCap} · insect ${s.insectSpriteSets}/${s.insectSpriteCap} · critter ${s.critterSpriteSets}`,
+    `    · sprites plant ${s.plantSprites}/${s.plantSpriteCap} · insect ${s.insectSpriteSets}/${s.insectSpriteCap} · critter ${s.critterSpriteSets}/${s.critterSpriteCap}`,
   ];
   if (s.heapUsedMb !== undefined && s.heapLimitMb !== undefined) {
     const heapPct = s.heapLimitMb > 0 ? Math.round((100 * s.heapUsedMb) / s.heapLimitMb) : 0;

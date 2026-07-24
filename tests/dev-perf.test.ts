@@ -20,6 +20,7 @@ const base: DevPerfSnapshot = {
   insectSpriteSets: 8,
   insectSpriteCap: 160,
   critterSpriteSets: 8,
+  critterSpriteCap: 64,
   heapUsedMb: 64.2,
   heapLimitMb: 2048,
 };

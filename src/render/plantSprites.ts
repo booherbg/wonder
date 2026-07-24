@@ -1,4 +1,5 @@
 import { Genome, PlantForm, hsl, phenoKey } from "../life/genome";
+import { lruEvictOldest, lruTouch } from "../core/lru";
 
 // All plant sprites share one canvas footprint; the plant's base (where it
 // meets the ground) sits at the anchor.
@@ -55,8 +56,11 @@ type Ctx = PixelCtx;
 export function getPlantSprite(g: Genome, aquatic = false): HTMLCanvasElement {
   const key = (aquatic ? "w:" : "") + phenoKey(g);
   const hit = cache.get(key);
-  if (hit) return hit;
-  if (cache.size >= CACHE_CAP) cache.clear();
+  if (hit) {
+    lruTouch(cache, key, hit);
+    return hit;
+  }
+  lruEvictOldest(cache, CACHE_CAP);
   const c = document.createElement("canvas");
   c.width = PLANT_SPRITE_W;
   c.height = PLANT_SPRITE_H;
