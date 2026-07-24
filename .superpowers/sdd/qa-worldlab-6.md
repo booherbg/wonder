@@ -35,13 +35,18 @@
 | `0a1af85` | Mote forage leave-visit-return animation |
 | `ea0a98a` | Swarm energy sparklines in WEB |
 
-## Explicitly out of scope (not blockers)
+## Explicitly out of scope / later (not blockers)
 
-- Full main-world `charts.ts` ledger panel in the lab (WEB sparklines satisfy 6e “at least one” series)  
-- Mid-session island warm in backtick menu (separate epic; never started)  
 - Critter↔insect predation; bird disperser-on-the-wing  
-- Population history series (energy + match shipped)  
-- In-progress clone preview panel state across save (introduced cousins + maps persist)
+- Population history series in Details (match + energy live in WEB; ledger has match curves)  
+- In-progress clone preview panel state across save (introduced cousins + maps persist)  
+- Optional 6e bookmark snapshots; D6 remember roll/web/drawer open state  
+- Motion fine-tunables (travel ease / dwell / mote fraction) — regen/draw/empty exist  
+
+## Shipped later (sibling epic — see `qa-charts-midwarm.md`)
+
+- Full lab `charts.ts` ledger (button + `G`)  
+- Mid-session island warm in backtick `` ` `` panel
 
 ## Manual smoke (`?sim=1`)
 

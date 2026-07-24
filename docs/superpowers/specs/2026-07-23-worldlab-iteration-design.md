@@ -191,11 +191,11 @@ From the UX audit; can ship in the same epic or a sibling plan:
 |---|---|---|
 | Census sparklines + arose/lost | Dev ` + G ledger | **Yes** — Living web panel (`WEB`) |
 | Richness / food-web score | Ledger + seed label | **Yes** — same meter in WEB |
-| Full **G** charts (population lines, swarm match charts) | `openCharts` / `charts.ts` | **No** |
-| Swarm pollination web / identity maps | Inspect + swarm card / `?sim=swarm` | **No** on construct |
+| Full **G** charts (population lines, swarm match charts) | `openCharts` / `charts.ts` | **Yes** — lab ledger via button + `G` (`simCharts.ts`) |
+| Swarm pollination web / identity maps | Inspect + swarm card / `?sim=swarm` | **Yes** on construct (Details + WEB sparklines) |
 | Species field guide pages | Journal | Inspect plate only (genome text) |
 
-**Conclusion:** you have a **light species/census view** in the lab (WEB), not the main world’s ledger charts. Phase **6e** ports chart muscle into the lab and adds insect Details + histories.
+**Conclusion (updated):** lab has WEB sparklines **and** the full ledger panel. Residual polish: History sparklines on the insect Details card (today WEB-only), optional bookmark snapshots.
 
 ---
 
@@ -252,9 +252,9 @@ From the UX audit; can ship in the same epic or a sibling plan:
 | Q5 | Clone flower | **New Live species** + mutation preview (slider / re-roll / reset) before introduce. |
 | Q6 | Retarget | **Pin / free-roam toggle** (default pin when god-retargeting). |
 
-### Q3 — how “swarm reach” works *today* (no lever yet)
+### Q3 — how “swarm reach” works
 
-There is **no** swarm reach slider. Both assist paths use hardcoded **6** tiles / max **2** same-species (`swarms.ts` / `fauna.ts`). Match floor, chance, and per-tick caps also gate swarms. New UI levers default to those values.
+Shared **pollinator reach / density** levers default to today’s hardcodes (**6** tiles / max **2** same-species). Ambient + swarm assist both read `pollinateAssist`. Match floor, chance, and per-tick caps still gate swarms.
 
 ### Q4 — both placement modes
 
@@ -291,8 +291,8 @@ So:
 |---|---|
 | Finite food? | **Yes** — shared species nectar drains and refills slowly |
 | Incentive to move/compete? | **Indirect** — two clouds on the same species **share one nectar pool** (first in tick order feeds more); a better-matched cloud converts the same draw into more energy. Homing is “nearest bloom,” not an explicit “leave empty flowers” brain. |
-| See nectar now? | **Not in UI** — only in memory on `Flower.nectar` |
-| See swarm strength? | Partially in inspect (`population`); **energy / cap / match** exist on the swarm object but aren’t a clear lab readout |
+| See nectar now? | **Yes in lab** — Details shows host plant nectar; main islands still species-shared |
+| See swarm strength? | **Yes in lab** — Details shows energy / population / cap / match % |
 
 **Tunables for the lab (add to pressures or an Insects tray in 6c/6e):**
 

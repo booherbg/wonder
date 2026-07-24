@@ -1,7 +1,7 @@
 # Lab ledger + mid-session warm — design
 
 **Date:** 2026-07-23  
-**Status:** approved for implementation  
+**Status:** shipped 2026-07-23 (Milestones A + B on master)  
 **Surfaces:** World-Lab (`?sim=1`) ledger; main island backtick (`\``) mid-session warm  
 **Out of scope:** predation, bird disperser-on-the-wing
 
