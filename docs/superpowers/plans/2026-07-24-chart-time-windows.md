@@ -68,7 +68,7 @@
 
 ### Task 4: Verify
 
-- [ ] **4.1** Full `npx vitest run` + `npx tsc --noEmit`
+- [x] **4.1** Full `npx vitest run` + `npx tsc --noEmit`
 - [ ] **4.2** Manual note: open `G` after warm → All / 5k labels and zoom
 
 ---
