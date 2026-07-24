@@ -8,13 +8,18 @@ export const PLANT_SPRITE_H = 28;
 export const PLANT_ANCHOR_X = 8;
 export const PLANT_ANCHOR_Y = 26;
 
-const CACHE_CAP = 512;
+// Warm islands drift genomes every generation, so unique phenoKeys in one
+// fullscreen view can exceed 2k (measured ~2076 densest across seeds/sizes;
+// world totals 3–5k+). Cap 512 thrashed every frame in those views (bake +
+// evict forever → ~20 fps). 4096 clears thrash with pan headroom; a full
+// table is only ~7 MB of 16×28 canvases — fine against multi‑GB JS heaps.
+export const PLANT_SPRITE_CACHE_CAP = 4096;
 const cache = new Map<string, HTMLCanvasElement>();
 const glowCache = new Map<number, HTMLCanvasElement>();
 
 /** Debug: plant sprite + glow halo cache occupancy. */
 export function plantSpriteCacheStats(): { sprites: number; spriteCap: number; glows: number } {
-  return { sprites: cache.size, spriteCap: CACHE_CAP, glows: glowCache.size };
+  return { sprites: cache.size, spriteCap: PLANT_SPRITE_CACHE_CAP, glows: glowCache.size };
 }
 
 // Soft diamond of colored light, drawn additively at night around glowers.
@@ -60,7 +65,7 @@ export function getPlantSprite(g: Genome, aquatic = false): HTMLCanvasElement {
     lruTouch(cache, key, hit);
     return hit;
   }
-  lruEvictOldest(cache, CACHE_CAP);
+  lruEvictOldest(cache, PLANT_SPRITE_CACHE_CAP);
   const c = document.createElement("canvas");
   c.width = PLANT_SPRITE_W;
   c.height = PLANT_SPRITE_H;
