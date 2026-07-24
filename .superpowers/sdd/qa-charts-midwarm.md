@@ -39,4 +39,31 @@
 
 ## Milestone B — Mid-session warm
 
-**Status:** not started (see plan task B1–B3)
+**Status:** implemented  
+**Gates:** `npx tsc --noEmit` · full `npx vitest run`
+
+### Ships
+
+- Pure helpers in `src/game/midWarm.ts`: `clampWarmTicks`, `runWarmBatches`, cap 50k
+- Backtick `#dev` panel: preset warm buttons (300 · 1k · 3k · 10k), custom input + run
+- Async yielded batches; progress `warming… N%`; busy lock; HUD flash `warmed N → tick T`
+- Ecology scope matches `?warm`: flora.simTick + census.sample + swarmLayer.tick + sampleSwarms only
+- Tests: `tests/mid-warm.test.ts`
+
+### Smoke checklist (live island)
+
+1. Start or resume an island (not title screen)
+2. Press `` ` `` — dev readout shows numeric stats **and** warm row
+3. Click **1k** — progress counts up; tick advances ~1000; UI stays responsive
+4. Custom input **500** + **warm** — works; tick advances ~500 more
+5. Enter **99999** — clamps to 50k (watch tick jump)
+6. Enter **0** or blank — ignored (no warm)
+7. While warming, preset/run buttons disabled; duplicate clicks ignored
+8. On finish, HUD flashes `warmed N → tick T`; dev readout refreshes
+9. Title screen: dev panel may open but warm controls stay disabled
+
+### Non-goals (B)
+
+- Warm from World-Lab (`?sim=1`)
+- Changing forge / `?warm` load-time warmth
+- Critter/beast/flock simulation during warm
