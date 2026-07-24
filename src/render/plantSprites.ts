@@ -11,6 +11,11 @@ const CACHE_CAP = 512;
 const cache = new Map<string, HTMLCanvasElement>();
 const glowCache = new Map<number, HTMLCanvasElement>();
 
+/** Debug: plant sprite + glow halo cache occupancy. */
+export function plantSpriteCacheStats(): { sprites: number; spriteCap: number; glows: number } {
+  return { sprites: cache.size, spriteCap: CACHE_CAP, glows: glowCache.size };
+}
+
 // Soft diamond of colored light, drawn additively at night around glowers.
 export const GLOW_R = 12;
 export function getGlowHalo(hue: number): HTMLCanvasElement {

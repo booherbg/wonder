@@ -28,6 +28,11 @@ export interface CritterSpriteSet {
 
 const cache = new Map<number, CritterSpriteSet>();
 
+/** Debug: critter sprite-set cache occupancy (keyed by species id; uncapped). */
+export function critterSpriteCacheStats(): { sets: number } {
+  return { sets: cache.size };
+}
+
 export function getCritterSprites(sp: CritterSpecies): CritterSpriteSet {
   const hit = cache.get(sp.id);
   if (hit) return hit;

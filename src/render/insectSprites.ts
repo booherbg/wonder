@@ -228,6 +228,11 @@ export function insectSpriteKey(sensor: IdMap, behavior: BehaviorGenes): number 
 const cache = new Map<number, InsectSpriteSet>();
 const CACHE_CAP = 160; // a couple dozen swarms × a few heartbeats of history
 
+/** Debug: insect sprite-set cache occupancy. */
+export function insectSpriteCacheStats(): { sets: number; cap: number } {
+  return { sets: cache.size, cap: CACHE_CAP };
+}
+
 export function getInsectSprites(sw: { sensor: IdMap; behavior: BehaviorGenes }): InsectSpriteSet {
   const key = insectSpriteKey(sw.sensor, sw.behavior);
   const hit = cache.get(key);

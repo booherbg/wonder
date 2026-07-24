@@ -36,11 +36,14 @@ import {
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
-import { clearCritterSpriteCache } from "../render/critterSprites";
+import { clearCritterSpriteCache, critterSpriteCacheStats } from "../render/critterSprites";
+import { plantSpriteCacheStats } from "../render/plantSprites";
+import { insectSpriteCacheStats } from "../render/insectSprites";
+import { formatDevPerf, readJsHeap } from "./devPerf";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { TitleRowId, TitleState, hideTitle, isTitleOpen, showTitle } from "../render/title";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
-import { SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
+import { MOTES_MAX, SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
@@ -694,6 +697,33 @@ function renderDev(): void {
   const floraLine = census.started
     ? `flora: ${flora.count} plants · ${sum.live} kinds · ${sum.arose} arose · ${sum.lost} lost`
     : `flora: ${flora.count} plants · ${liveKinds.length} kinds`;
+  const censusList = census.list();
+  const plantCache = plantSpriteCacheStats();
+  const insectCache = insectSpriteCacheStats();
+  const critterCache = critterSpriteCacheStats();
+  const heap = readJsHeap();
+  const perfLines = formatDevPerf({
+    plants: flora.count,
+    maxPlants: flora.tuning.maxPlants,
+    plantKindsLive: liveKinds.length,
+    plantSpeciesDefs: species.length,
+    critters: critters.length,
+    critterKinds: critterSpecies.length,
+    swarms: swarmLayer.swarms.length,
+    swarmMotes: swarmLayer.swarms.length * MOTES_MAX,
+    flocks: flocks.length,
+    flockBirds: flocks.reduce((n, f) => n + f.offsets.length, 0),
+    censusTraces: censusList.length,
+    censusSamples: censusList.reduce((n, t) => n + t.counts.length, 0),
+    mapTiles: map.width * map.height,
+    plantSprites: plantCache.sprites,
+    plantSpriteCap: plantCache.spriteCap,
+    insectSpriteSets: insectCache.sets,
+    insectSpriteCap: insectCache.cap,
+    critterSpriteSets: critterCache.sets,
+    heapUsedMb: heap?.usedMb,
+    heapLimitMb: heap?.limitMb,
+  });
   devReadout.textContent = [
     `seed ${currentSeed}    ${worldName ?? islandName(currentSeed)}`,
     `${map.shape ?? "?"} · ${map.relief ?? "?"}    ${map.width}×${map.height}    here ${fmtDur(worldPlayMs)}`,
@@ -704,6 +734,7 @@ function renderDev(): void {
     top,
     `critters: ${critters.length} afoot · ${critterSpecies.length} kinds`,
     ...(CHAINS ? webLines() : []),
+    ...perfLines,
   ].join("\n");
   devWarmProgress.textContent = midWarmProgress;
   if (!midWarmBusy) setDevWarmControlsDisabled(titleActive);
