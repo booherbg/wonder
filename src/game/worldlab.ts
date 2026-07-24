@@ -118,6 +118,8 @@ import {
   saveSimSlot,
 } from "./simSave";
 import { agoPhrase } from "../render/picker";
+import { closeCharts, isChartsOpen, openCharts } from "../render/charts";
+import { buildLabChartsView } from "./simCharts";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -1530,6 +1532,35 @@ export function startWorldLab(): void {
     refreshDrawer();
   }
 
+  function constructLabel(): string {
+    return currentSlotName ?? STARTERS.find((s) => s.kind === starter)?.name ?? "this construct";
+  }
+
+  function openLabLedger(): void {
+    if (inspected) {
+      inspected = null;
+      refreshInspect();
+    }
+    openCharts(
+      buildLabChartsView({
+        name: constructLabel(),
+        tick: kernel.tick,
+        census: kernel.census,
+        plantSpecies: kernel.plantSpecies,
+        critterSpecies: kernel.critterSpecies,
+        map,
+        flora: kernel.flora,
+        swarmLayer,
+        swarmMatchHistory,
+      }),
+    );
+  }
+
+  function toggleLabLedger(): void {
+    if (isChartsOpen()) closeCharts();
+    else openLabLedger();
+  }
+
   // The pressures panel's one lever (Task 5, slice 4 — "crank a pressure,
   // watch evolution change"): a slider write straight onto the RUNNING
   // kernel. The four FloraTuning-backed pressures go through kernel.
@@ -1855,6 +1886,7 @@ export function startWorldLab(): void {
 
   // ── the codex chrome: eyebrow, back button, starter selector, palette ───
   ui = buildChrome(starter);
+  ui.openLedger = () => toggleLabLedger();
   ui.onStarter = (k) => {
     starter = k;
     build(); // rebuilds the palette + resets selection; setStarter just re-lights the buttons
@@ -2282,9 +2314,16 @@ export function startWorldLab(): void {
     } else if (e.key === "ArrowDown") {
       camY = clampY(camY + PAN_STEP);
       e.preventDefault();
+    } else if (e.key === "g" || e.key === "G") {
+      e.preventDefault();
+      toggleLabLedger();
     } else if (e.key === "Escape") {
-      // Esc closes the current thing: a readout first (simulator.ts's own
-      // rule); with nothing inspected, the bench itself — back to the island
+      // Esc closes the ledger first, then the readout, then the bench — same
+      // stacking as main island (charts before inspect before leave).
+      if (isChartsOpen()) {
+        closeCharts();
+        return;
+      }
       if (inspected) {
         inspected = null;
         refreshInspect();
@@ -2618,6 +2657,7 @@ interface Chrome {
   openRoll: (open?: boolean) => void;
   openWeb: (open?: boolean) => void;
   openDrawer: (open?: boolean) => void;
+  openLedger: () => void;
   // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
   // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
   // child-of-`stack` tray shape as the pressures tray above — NOT a
@@ -2688,7 +2728,7 @@ function buildChrome(initial: StarterKind): Chrome {
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
     `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
-    `select · place · paint · erase · cloud · brush 1–4 · wheel pans · ⌃/⌘+wheel zooms · −/+ / 0 fit · space+drag pan · ←↑↓ nudge · roll / web / drawer · space play · Esc home` +
+    `select · place · paint · erase · cloud · brush 1–4 · wheel pans · ⌃/⌘+wheel zooms · −/+ / 0 fit · space+drag pan · ←↑↓ nudge · roll / web / drawer · G ledger · space play · Esc home` +
     `<div style="margin-top: 3px; font: 10px var(--mono); letter-spacing: 0.04em; color: rgba(228,236,242,0.42);">` +
     `spread paths: natural reseed · critter pollinator (ambient) · insect cloud</div>` +
     `</div>`;
@@ -2888,6 +2928,12 @@ function buildChrome(initial: StarterKind): Chrome {
   panelWebBtn.title = "census · food web · richness";
   panelWebBtn.style.cssText = btn(false);
   bar.appendChild(panelWebBtn);
+  const panelLedgerBtn = document.createElement("button");
+  panelLedgerBtn.id = "panel-ledger-btn";
+  panelLedgerBtn.textContent = "ledger";
+  panelLedgerBtn.title = "full census ledger (G)";
+  panelLedgerBtn.style.cssText = btn(false);
+  bar.appendChild(panelLedgerBtn);
   const panelDrawerBtn = document.createElement("button");
   panelDrawerBtn.id = "panel-drawer-btn";
   panelDrawerBtn.textContent = "drawer";
@@ -3262,6 +3308,15 @@ function buildChrome(initial: StarterKind): Chrome {
     " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
     " pointer-events: auto; flex: 0 0 auto;";
   leftStack.appendChild(web);
+  const webContent = document.createElement("div");
+  web.appendChild(webContent);
+  const webLedgerBtn = document.createElement("button");
+  webLedgerBtn.id = "web-ledger-btn";
+  webLedgerBtn.textContent = "open ledger";
+  webLedgerBtn.title = "full census ledger (G)";
+  webLedgerBtn.style.cssText = btn(false) + " display: block; width: 100%; margin-top: 10px;";
+  webLedgerBtn.onclick = () => chrome.openLedger();
+  web.appendChild(webLedgerBtn);
 
   // shared plate-string helpers, mirroring simulator.ts's own title/head/
   // stat token usage so the two benches' plates read as one family
@@ -3784,6 +3839,7 @@ function buildChrome(initial: StarterKind): Chrome {
     `counts dispersers — ambient roles don't move this number</div>` +
     `</div>`;
 
+  chrome.openLedger = () => {};
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
@@ -3793,7 +3849,7 @@ function buildChrome(initial: StarterKind): Chrome {
           .map((s) => swarmRow(s.name, s.matchSpark, s.match, s.energySpark, s.energy))
           .join("")
       : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet — invite a swarm and step</div>`;
-    web.innerHTML =
+    webContent.innerHTML =
       `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
       `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census · food web — live as you step</div>` +
       richnessMeterBlock(v) +
@@ -3959,6 +4015,7 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   panelRollBtn.onclick = () => chrome.openRoll();
   panelWebBtn.onclick = () => chrome.openWeb();
+  panelLedgerBtn.onclick = () => chrome.openLedger();
   panelDrawerBtn.onclick = () => chrome.openDrawer();
   syncSidePanels(); // start closed
 
