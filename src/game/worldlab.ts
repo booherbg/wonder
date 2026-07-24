@@ -744,7 +744,7 @@ export function startWorldLab(): void {
   let cloneAmount = DEFAULT_TUNING.mutationAmount;
   let cloneRng = makeRng(0);
   const SWARM_SAMPLE_INTERVAL = 40;
-  const SWARM_HISTORY_CAP = 100;
+  const SWARM_HISTORY_CAP = 2500;
   const swarmMatchHistory = new Map<number, number[]>();
   const swarmEnergyHistory = new Map<number, number[]>();
   let lastSwarmSample = -Infinity;

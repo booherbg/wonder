@@ -52,6 +52,8 @@ test("buildLabChartsView returns census series and construct metadata", () => {
   expect(view.biomes[0].name).toBe("grass");
   expect(view.richness.word).toBeTruthy();
   expect(view.chains.chains).toBeGreaterThanOrEqual(0);
+  expect(view.sampleInterval).toBe(kernel.census.sampleInterval);
+  expect(view.lastTick).toBe(kernel.census.lastSampleTick ?? kernel.tick);
 });
 
 test("buildLabChartsView maps swarm match history into swarmSeries", () => {

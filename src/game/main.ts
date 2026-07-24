@@ -232,7 +232,7 @@ const census = new CensusLog();
 // Reset with the island; sampled beside each swarm heartbeat. Bounded: at most
 // SWARM_COUNT_CAP clouds, each with a capped history.
 const SWARM_SAMPLE_INTERVAL = 40; // ticks between samples, matching CensusLog's default
-const SWARM_HISTORY_CAP = 100; // samples kept per cloud — a bounded history like the census
+const SWARM_HISTORY_CAP = 2500; // ~100k ticks at interval 40 — matches census retention
 const swarmMatchHistory = new Map<number, number[]>(); // swarm id → match % over island-time
 let swarmSampleTick = 0;
 let lastSwarmSample = -Infinity;
@@ -593,6 +593,8 @@ function buildChartsView(): ChartsView {
   return {
     name: worldName ?? "this island",
     timeLabel: `${fmtDur(worldPlayMs)} here`,
+    sampleInterval: census.sampleInterval,
+    lastTick: census.lastSampleTick ?? flora.tick,
     totals: { plants: flora.count, kinds: sum.live, arose: sum.arose, lost: sum.lost },
     richness: { score, word: richnessWord(score) },
     chains: stats,

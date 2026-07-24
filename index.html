@@ -395,6 +395,15 @@
         border-bottom: 1px solid rgba(var(--lumen), 0.16); padding-bottom: 10px; margin-bottom: 14px; }
       #charts .ch-title { font-variant: small-caps; letter-spacing: 0.08em; font-size: 20px; color: var(--ink-bright); }
       #charts .ch-sub { font: 11px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.06em; color: rgba(228, 236, 242, 0.5); }
+      #charts .ch-windows { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+      #charts .ch-win {
+        font: 10px ui-monospace, Menlo, monospace; letter-spacing: 0.08em; text-transform: uppercase;
+        color: rgba(228, 236, 242, 0.55); background: rgba(8, 15, 22, 0.45);
+        border: 1px solid rgba(var(--lumen), 0.16); border-radius: 4px; padding: 4px 9px; cursor: pointer;
+      }
+      #charts .ch-win:hover { color: var(--ink-bright); border-color: rgba(var(--lumen), 0.35); }
+      #charts .ch-win.on { color: rgb(var(--firefly)); border-color: rgba(var(--firefly), 0.45);
+        background: rgba(var(--firefly), 0.08); }
       #charts .ch-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
       #charts .ch-tile { flex: 1 1 0; min-width: 96px; padding: 9px 12px; border-radius: 7px;
         background: linear-gradient(180deg, rgba(var(--lumen), 0.06), rgba(8, 15, 22, 0.4));

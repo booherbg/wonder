@@ -1,3 +1,13 @@
+import {
+  CHART_WINDOWS,
+  ChartWindowId,
+  axisTicks,
+  samplesForWindow,
+  sliceRight,
+  tickAtIndex,
+  ticksForWindow,
+} from "./chartWindow";
+
 // The island's ledger: the census and food-web data the sim already computes,
 // promoted from tiny debug sparklines into real charts — population over
 // island-time, the diversity at a glance, the biome makeup, and the food web's
@@ -16,6 +26,10 @@ export interface ChartSeries {
 export interface ChartsView {
   name: string; // island name
   timeLabel: string; // "3h 20m here" / tick
+  /** Census sample cadence in sim-ticks (for window → sample math). */
+  sampleInterval: number;
+  /** Absolute tick of the newest census sample (chart x-axis "now"). */
+  lastTick: number;
   totals: { plants: number; kinds: number; arose: number; lost: number };
   richness: { score: number; word: string };
   chains: { chains: number; closable: number; redundancy: number };
@@ -30,6 +44,57 @@ export interface ChartsView {
   // newest), one series per swarm in its own live genome colour — adaptation,
   // the pollinators' real story (total population just sits at the cap)
   swarmSeries: { name: string; color: string; matches: number[] }[];
+}
+
+let chartWindow: ChartWindowId = "all";
+let lastChartsView: ChartsView | null = null;
+
+/** Slice a full ChartsView to the active time window (right-aligned to now). */
+export function viewForWindow(v: ChartsView, id: ChartWindowId): ChartsView {
+  const available = Math.max(
+    0,
+    ...v.series.map((s) => s.counts.length),
+    ...v.swarmSeries.map((s) => s.matches.length),
+    v.totalCounts.length,
+  );
+  const n = samplesForWindow(ticksForWindow(id), v.sampleInterval, available);
+  if (n <= 0 || n >= available) return v;
+  const series = v.series.map((s) => {
+    const counts = sliceRight(s.counts, n);
+    return { ...s, counts, peak: Math.max(1, ...counts, 0) };
+  });
+  return {
+    ...v,
+    series,
+    totalCounts: sliceRight(v.totalCounts, n),
+    swarmSeries: v.swarmSeries.map((s) => ({ ...s, matches: sliceRight(s.matches, n) })),
+  };
+}
+
+function axisSvg(
+  padL: number,
+  plotW: number,
+  y: number,
+  lastTick: number,
+  interval: number,
+  samples: number,
+): string {
+  if (samples < 1 || !Number.isFinite(lastTick)) {
+    return (
+      `<text x="${padL}" y="${y}" class="ch-axis" text-anchor="start">first log</text>` +
+      `<text x="${padL + plotW}" y="${y}" class="ch-axis" text-anchor="end">now</text>`
+    );
+  }
+  const first = tickAtIndex(lastTick, interval, samples, 0);
+  const last = tickAtIndex(lastTick, interval, samples, samples - 1);
+  const withMid = samples >= 4 && last - first >= interval * 2;
+  return axisTicks(first, last, withMid)
+    .map((t) => {
+      const x = padL + t.at * plotW;
+      const anchor = t.at <= 0 ? "start" : t.at >= 1 ? "end" : "middle";
+      return `<text x="${x.toFixed(1)}" y="${y}" class="ch-axis" text-anchor="${anchor}">${escapeText(t.label)}</text>`;
+    })
+    .join("");
 }
 
 // genome hue → a legible line colour (mid-light, saturated enough to read on the
@@ -118,8 +183,7 @@ function populationChart(v: ChartsView): string {
 
   return `<svg class="ch-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="population of each kind over island-time">
     ${grid}
-    <text x="${padL}" y="${H - 6}" class="ch-axis" text-anchor="start">first log</text>
-    <text x="${padL + plotW}" y="${H - 6}" class="ch-axis" text-anchor="end">now</text>
+    ${axisSvg(padL, plotW, H - 6, v.lastTick, v.sampleInterval, samples)}
     ${lines}
   </svg>`;
 }
@@ -238,8 +302,7 @@ function swarmChart(v: ChartsView): string {
     `<svg class="ch-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="each swarm's match to its flower over island-time">
       ${grid}
       ${rule}
-      <text x="${padL}" y="${H - 6}" class="ch-axis" text-anchor="start">first log</text>
-      <text x="${padL + plotW}" y="${H - 6}" class="ch-axis" text-anchor="end">now</text>
+      ${axisSvg(padL, plotW, H - 6, v.lastTick, v.sampleInterval, samples)}
       ${lines}
     </svg>`
   );
@@ -277,15 +340,26 @@ export function isChartsOpen(): boolean {
 
 export function closeCharts(): void {
   panel().style.display = "none";
+  lastChartsView = null;
 }
 
-export function openCharts(v: ChartsView): void {
+function windowRow(active: ChartWindowId): string {
+  const buttons = CHART_WINDOWS.map(
+    (w) =>
+      `<button type="button" class="ch-win${w.id === active ? " on" : ""}" data-win="${w.id}">${w.label}</button>`,
+  ).join("");
+  return `<div class="ch-windows" role="group" aria-label="time window">${buttons}</div>`;
+}
+
+function renderChartsPanel(full: ChartsView): void {
+  const v = viewForWindow(full, chartWindow);
   const el = panel();
   el.innerHTML = `
     <div class="ch-head">
       <span class="ch-title">the island's ledger</span>
       <span class="ch-sub">${escapeText(v.name)}${NB}·${NB}${escapeText(v.timeLabel)}</span>
     </div>
+    ${windowRow(chartWindow)}
     ${statTiles(v)}
     <div class="ch-section">population over island-time</div>
     ${populationChart(v)}
@@ -299,5 +373,18 @@ export function openCharts(v: ChartsView): void {
     <div class="ch-hint">G or Esc to close</div>
   `;
   el.style.display = "block";
-  el.scrollTop = 0;
+  for (const btn of el.querySelectorAll<HTMLButtonElement>("button.ch-win")) {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.win as ChartWindowId | undefined;
+      if (!id || !lastChartsView) return;
+      chartWindow = id;
+      renderChartsPanel(lastChartsView);
+    });
+  }
+}
+
+export function openCharts(v: ChartsView): void {
+  lastChartsView = v;
+  renderChartsPanel(v);
+  panel().scrollTop = 0;
 }

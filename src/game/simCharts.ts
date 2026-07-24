@@ -110,6 +110,8 @@ export function buildLabChartsView(input: LabChartsInput): ChartsView {
   return {
     name,
     timeLabel: `tick ${tick}`,
+    sampleInterval: census.sampleInterval,
+    lastTick: census.lastSampleTick ?? tick,
     totals: { plants: flora.count, kinds: sum.live, arose: sum.arose, lost: sum.lost },
     richness: { score, word: richnessWord(score) },
     chains: stats,
