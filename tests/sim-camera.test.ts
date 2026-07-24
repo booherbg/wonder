@@ -12,13 +12,18 @@ import {
   ZOOM_WHEEL_IN,
 } from "../src/game/simCamera";
 
-test("clampCameraAxis centres when the world fits inside the view", () => {
-  expect(clampCameraAxis(999, 400, 800)).toBe(-200);
-});
-
 test("clampCameraAxis clamps pan within bounds when the world is larger", () => {
   expect(clampCameraAxis(-50, 1600, 800)).toBe(0);
   expect(clampCameraAxis(900, 1600, 800)).toBe(800);
+});
+
+test("clampCameraAxis allows sliding within letterbox when the world fits", () => {
+  // world 400, view 800 → maxOffset -400; may sit anywhere in [-400, 0]
+  expect(clampCameraAxis(-200, 400, 800)).toBe(-200);
+  expect(clampCameraAxis(50, 400, 800)).toBe(0);
+  expect(clampCameraAxis(-999, 400, 800)).toBe(-400);
+  // centreCamera uses maxOffset/2 — still a valid point inside the range
+  expect(clampCameraAxis((400 - 800) / 2, 400, 800)).toBe(-200);
 });
 
 test("fitZoomFor scales down wide constructs", () => {
@@ -35,6 +40,10 @@ test("wheel defaults to pan; modifier or pinch zooms", () => {
 
 test("wheelPanDelta maps screen deltas into view space", () => {
   expect(wheelPanDelta(100, 50, 800, 400, 400, 200)).toEqual({ dx: 200, dy: 100 });
+});
+
+test("wheelPanDelta maps shift+vertical wheel to horizontal pan", () => {
+  expect(wheelPanDelta(0, 40, 800, 400, 400, 200, { shiftKey: true })).toEqual({ dx: 80, dy: 0 });
 });
 
 test("wheelZoomFactor uses a soft step", () => {

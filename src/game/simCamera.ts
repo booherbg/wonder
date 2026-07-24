@@ -9,7 +9,11 @@ export const FIT_MARGIN = 0.92;
 
 export function clampCameraAxis(pos: number, worldSize: number, viewSize: number): number {
   const maxOffset = worldSize - viewSize;
-  return maxOffset <= 0 ? maxOffset / 2 : Math.max(0, Math.min(pos, maxOffset));
+  if (maxOffset >= 0) return Math.max(0, Math.min(pos, maxOffset));
+  // World fits inside the view (letterboxed): allow sliding within the slack
+  // instead of hard-centering. Otherwise a wide monitor locks left/right pan
+  // while vertical still moves after a modest zoom-in.
+  return Math.max(maxOffset, Math.min(pos, 0));
 }
 
 export function fitZoomFor(
@@ -49,10 +53,19 @@ export function wheelPanDelta(
   viewH: number,
   canvasW: number,
   canvasH: number,
+  opts: { shiftKey?: boolean } = {},
 ): { dx: number; dy: number } {
   const sx = canvasW > 0 ? viewW / canvasW : 1;
   const sy = canvasH > 0 ? viewH / canvasH : 1;
-  return { dx: deltaX * sx, dy: deltaY * sy };
+  // Shift+wheel (common on mice with only a Y wheel) means "horizontal scroll".
+  // Trackpads usually already send deltaX for two-finger sideways swipes.
+  let dx = deltaX;
+  let dy = deltaY;
+  if (opts.shiftKey && Math.abs(deltaX) < Math.abs(deltaY)) {
+    dx = deltaY;
+    dy = 0;
+  }
+  return { dx: dx * sx, dy: dy * sy };
 }
 
 export function wheelZoomFactor(deltaY: number): number {

@@ -2374,6 +2374,7 @@ export function startWorldLab(): void {
         renderer.viewHeight,
         rect.width,
         rect.height,
+        { shiftKey: e.shiftKey },
       );
       camX = clampX(camX + dx);
       camY = clampY(camY + dy);
