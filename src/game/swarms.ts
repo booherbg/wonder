@@ -85,8 +85,8 @@ const DIVERGE_INTERVAL = 50; // heartbeats between divergence attempts
 //   • an island-wide cap on pollination events per heartbeat.
 // Bounded on the far side too: propagate routes through addPlant, so per-tile +
 // global caps hold the ceiling — a saturated neighbourhood simply refuses.
-const POLLINATE_MATCH_MIN = 0.3; // metabolic efficiency a swarm needs before it pollinates at all
-const POLLINATE_CHANCE = 0.5; // scales the per-swarm, per-heartbeat pollination probability
+export const POLLINATE_MATCH_MIN = 0.3; // metabolic efficiency a swarm needs before it pollinates at all
+export const POLLINATE_CHANCE = 0.5; // scales the per-swarm, per-heartbeat pollination probability
 const MAX_POLLINATIONS_PER_TICK = 3; // island-wide ceiling on pollination events each heartbeat
 // The boom reads as natural SPREAD, not a tiled slab: a pollinated reseed drifts
 // wider than flora's own self-seed radius and thins out under a per-cloud density
