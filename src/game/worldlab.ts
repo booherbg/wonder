@@ -1555,8 +1555,12 @@ export function startWorldLab(): void {
   }
 
   function toggleLabLedger(): void {
-    if (isChartsOpen()) closeCharts();
+    if (isChartsOpen()) {
+      closeCharts();
+      ui?.setLedgerOpen(false);
+    }
     else openLabLedger();
+    ui?.setLedgerOpen(isChartsOpen());
   }
 
   // The pressures panel's one lever (Task 5, slice 4 — "crank a pressure,
@@ -2358,6 +2362,7 @@ export function startWorldLab(): void {
       }
       if (isChartsOpen()) {
         closeCharts();
+        ui?.setLedgerOpen(false);
         return;
       }
       if (inspected) {
@@ -2802,6 +2807,9 @@ interface Chrome {
   openWeb: (open?: boolean) => void;
   openDrawer: (open?: boolean) => void;
   openLedger: () => void;
+  /** Light the ledger button while the ledger is open — it is a toggle, but
+   *  nothing said so, so the only way to close it was to remember the key. */
+  setLedgerOpen: (on: boolean) => void;
   // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
   // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
   // child-of-`stack` tray shape as the pressures tray above — NOT a
@@ -4041,6 +4049,9 @@ function buildChrome(initial: StarterKind): Chrome {
     `</div>`;
 
   chrome.openLedger = () => {};
+  chrome.setLedgerOpen = (on) => {
+    panelLedgerBtn.style.cssText = btn(on);
+  };
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
