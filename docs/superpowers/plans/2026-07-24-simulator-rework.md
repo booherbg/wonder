@@ -1580,3 +1580,54 @@ git log --oneline master..sim-rework
 **Spec coverage:** §3.1 → Task 5. §3.2 → Tasks 1, 4. §3.3 → Tasks 2, 3. §3.4 → Tasks 7, 8. §3.5 → Tasks 6, 9, 11. §3.6 → Task 12. §3.7 → Task 13. §4 module list → produced incrementally by Tasks 2, 5, 6, 7, 8, 9, 10, 12 (see the stated deviation above). §8 → Task 14.
 
 **Known gap, accepted:** spec §4 targets `worldlab.ts` "under 900 lines". This plan extracts eight modules but does not chase that number; whatever remains after Task 13 is reported in Task 14 and split further only if it is still unwieldy. Chasing a line count for its own sake is not worth a risky sweep.
+
+---
+
+## Progress — 2026-07-24 (branch `sim-rework`, base `f18b927`)
+
+**Green at every commit:** `npm run check`, `npx vitest run`, `npm run build`.
+Tests **617 → 646**.
+
+| commit | what landed |
+|---|---|
+| `300ce6a` | Task 1 — zoom about the pointer; wheel step 1.05 → 1.12 (measured 47.2 → 21 events across the range) |
+| `2caf307` | Tasks 2–4 — distance-ranked selection + click-to-cycle + `here` chip; retarget as an armed mode; `animate()` gated on `playing`; off-construct drag pans |
+| `90f758c` | **Unplanned, folded in** — `rehomeAnywhere`: a homeless bench cloud finds a bloom anywhere on the construct |
+| `f672da7` | Task 5 — the construct gets a measured box; chrome reserves space instead of covering it |
+| `23b5393` | Part of Task 6 — the ledger button reflects open state |
+
+### The unplanned fix, and why it mattered
+
+The bench could not demonstrate pollination **at all**. `HOME_SCAN_PX` is 10
+tiles; a placed cloud is almost never that close to a flower, so it sat
+"waiting for a bloom", drew no nectar, starved, and was culled. Every construct
+read *0 swarms aloft*. Confirmed identical on master, so pre-existing.
+
+This blocked Tasks 8–9 outright — the working view and the Exchange tab have
+nothing to render without a homed swarm. Fixed bench-only (`rehomeAnywhere`,
+default false) with a guard test pinning the island's unchanged behaviour.
+
+### Still open
+
+- **Task 6 (rest)** — the five-tab dock. The panels no longer overlap the
+  construct, but they are still four independent fixed overlays; the bottom
+  pile is capped at 34vh as a holding measure rather than emptied into a dock.
+- **Tasks 7–9** — telemetry, the working view, Subject/Exchange tabs. Now
+  unblocked by `90f758c`.
+- **Tasks 10–11** — the web graph + table.
+- **Tasks 12–13** — tooltips, the voice pass.
+- **Task 14** — acceptance walk.
+
+### Notes for whoever continues
+
+- `?sim=1&rich=1` seeds plants but **no cloud** (`autoSpawn: false`). To see
+  pollination: CLOUD tool, click inside the construct, press play. Placing
+  outside the construct now pans the camera instead — that is deliberate.
+- The bench's plant band sits around screen y≈344–376 at the default fit;
+  x≈500 on that row is a good "far from any bloom" placement for testing rehome.
+- Pause stops mote foraging but **not** wing-beat or water glint: those are
+  wall-clock driven by design. If everything should freeze, that is a decision
+  Blaine has not yet made.
+- `richnessMeter` still scores species *definitions*, not live populations —
+  the lab reads "LUSH 35.3" beside "CENSUS LIVE 0". That is audit item B3 and
+  is still open.
