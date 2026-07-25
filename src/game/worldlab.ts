@@ -84,7 +84,7 @@ import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
 import { metabolicEfficiency } from "../life/idmap";
 import { habitatsOf, placeablePlants } from "./simRoster";
-import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
+import { BrushSize, paintBiome, stampCells } from "./simBrush";
 import {
   PRESSURES,
   Pressure,
@@ -3049,39 +3049,28 @@ function buildChrome(initial: StarterKind): Chrome {
   zoomHud.append(zoomOutBtn, zoomPctEl, zoomInBtn, zoomFitBtn);
   document.body.appendChild(zoomHud);
 
-  // The bottom stack: the starter/time bar and the palette panel both live
-  // here now, as plain flow children laid out bottom-up (column-reverse) —
-  // NOT two independently `position: fixed` panels at hardcoded offsets
-  // (66px used to assume a short one-line bar; Task 6's wider bar can wrap
-  // to two lines on a construct with a big palette, and a fixed offset would
-  // then let the two panels collide). The flexbox does the stacking math
-  // instead, so either panel can grow without colliding with the other.
+  // The bottom Run strip: one slim non-wrapping row (time · fidelity · session ·
+  // tick). Palette / ambient leave this stack in Task 4–6; Build rail re-homes
+  // tools in Task 5. No column-reverse pile, no max-height scroll stack.
   const stack = document.createElement("div");
   stack.id = "lab-bottom-stack";
-  // Capped to the viewport with its OWN scroll. Each child self-caps (palette
-  // 40vh, evoTray/ambientTray 46vh), but nothing bounded the stack's TOTAL
-  // height — bar + palette + a third open tray could exceed 100vh, and since the
-  // stack is bottom-anchored + column-reverse with no cap, the overflow went off
-  // the TOP of the viewport, unreachable by mouse or scroll (the ambient tray's
-  // heading + first kind row vanished at laptop heights — qa coherence Blocking /
-  // ux #1). A max-height + overflow-y here keeps the bottom anchor and the
-  // reverse stacking, but now the top overflow SCROLLS into reach instead.
   stack.style.cssText =
-    "position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;" +
-    " display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; max-width: 92vw;" +
-    // Capped to a THIRD of the window, not nearly all of it. The old
-    // calc(100vh - 36px) let the bottom pile grow to 864px on a 900px window
-    // as trays opened — it did not merely cover the construct, it left no room
-    // to reserve, so the frame could not give the construct anything. A hard
-    // cap plus its own scroll bounds the damage; the trays move into the right
-    // dock next, which removes the pile entirely.
-    " max-height: 34vh; overflow-y: auto;";
+    "position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6;" +
+    " display: flex; align-items: center; justify-content: center;";
   document.body.appendChild(stack);
+
+  // Left host for Task 5 Build rail — parks the detached palette off the
+  // bottom strip until tools/materials flyouts land there.
+  const buildHost = document.createElement("div");
+  buildHost.id = "lab-build-host";
+  buildHost.style.cssText = "display: none;";
+  document.body.appendChild(buildHost);
 
   const bar = document.createElement("div");
   bar.style.cssText =
-    "display: flex; align-items: center; gap: 8px; padding: 9px 12px; flex-wrap: wrap; justify-content: center;" +
-    " max-width: 100%; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); user-select: none;";
+    "display: flex; align-items: center; gap: 8px; padding: 8px 12px; flex-wrap: nowrap;" +
+    " max-width: min(96vw, 1100px); overflow-x: auto; height: 44px; box-sizing: border-box;" +
+    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); user-select: none;";
   stack.appendChild(bar);
 
   const label = (t: string): HTMLElement => {
@@ -3115,25 +3104,8 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onZoomIn = () => {};
   chrome.onZoomOut = () => {};
   chrome.onZoomFit = () => {};
-  const starterBtns = STARTERS.map(({ kind, name }) => {
-    const b = document.createElement("button");
-    b.textContent = name;
-    attachTooltip(b, `build the ${name} construct`);
-    b.style.cssText = btn(kind === initial);
-    b.onclick = () => chrome.onStarter(kind);
-    return { kind, b };
-  });
-  bar.appendChild(group(label("construct"), ...starterBtns.map((s) => s.b)));
 
-  chrome.setStarter = (k) => {
-    for (const { kind, b } of starterBtns) b.style.cssText = btn(kind === k);
-  };
-  chrome.onStarter = () => {};
-
-  // ── time controls: pause/play, step, step-N, fidelity, tick readout —
-  // same bar as the starter selector (a sep() divides the two clusters), so
-  // the strip reads as one control surface, per simulator.ts's own bar. ────
-  bar.appendChild(sep());
+  // ── Run strip: time · fidelity · session (new ▾ · save · load) · tick ────
   bar.appendChild(label("time"));
   const playBtn = document.createElement("button");
   playBtn.id = "play-btn";
@@ -3197,94 +3169,51 @@ function buildChrome(initial: StarterKind): Chrome {
   });
   bar.appendChild(group(label("fidelity"), ...fidelityBtns.map((f) => f.b)));
 
-  // ── the stamp brush's size picker: 1×–4× — one click (or drag step) lays
-  // that many tiles square of the selected palette kind (size 1 is slice 1's
-  // own single placement). Same active/inactive btn() chrome as fidelity. ──
+  // ── Session: new ▾ · save · load (replaces always-visible construct starters;
+  // brush / panel toggles leave the bar — Tasks 5–6 re-home them). ──────────
   bar.appendChild(sep());
-  const brushBtns = BRUSH_SIZES.map((size) => {
-    // stamp footprint: how many tiles one click lays
-    const b = document.createElement("button");
-    b.textContent = `${size}×`;
-    attachTooltip(b, size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`);
-    b.style.cssText = btn(false);
-    b.onclick = () => chrome.onBrushSize(size);
-    return { size, b };
+  const newWrap = document.createElement("div");
+  newWrap.style.cssText = "position: relative; display: inline-flex;";
+  const newBtn = document.createElement("button");
+  newBtn.id = "session-new-btn";
+  newBtn.textContent = "new ▾";
+  attachTooltip(newBtn, "start a new canvas — rebuilds the map");
+  newBtn.style.cssText = btn(false);
+  const newMenu = document.createElement("div");
+  newMenu.id = "session-new-menu";
+  newMenu.style.cssText =
+    "display: none; position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 8;" +
+    " min-width: 160px; padding: 4px; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame);";
+  const starterOpts = STARTERS.map(({ kind, name }) => {
+    const opt = document.createElement("button");
+    opt.textContent = name;
+    opt.style.cssText = btn(kind === initial) + " display: block; width: 100%; text-align: left; margin: 2px 0;";
+    opt.onclick = (ev) => {
+      ev.stopPropagation();
+      newMenu.style.display = "none";
+      if (!window.confirm("rebuild this canvas? unsaved work will be lost")) return;
+      chrome.onStarter(kind);
+    };
+    newMenu.appendChild(opt);
+    return { kind, b: opt };
   });
-  bar.appendChild(group(label("brush"), ...brushBtns.map((s) => s.b)));
+  newBtn.onclick = (ev) => {
+    ev.stopPropagation();
+    newMenu.style.display = newMenu.style.display === "none" ? "block" : "none";
+  };
+  document.addEventListener("click", (ev) => {
+    if (!newWrap.contains(ev.target as Node)) newMenu.style.display = "none";
+  });
+  newWrap.append(newBtn, newMenu);
 
-  // ── side-panel toggles (map-first): roll / living-web / drawer stay CLOSED
-  // by default so the construct stays visible on a laptop. Open them from
-  // here — same btn() chrome as pressures/ambient. ─────────────────────────
-  bar.appendChild(sep());
-  const panelRollBtn = document.createElement("button");
-  panelRollBtn.id = "panel-roll-btn";
-  panelRollBtn.textContent = "roll";
-  attachTooltip(panelRollBtn, "roll new kinds onto the palette");
-  panelRollBtn.style.cssText = btn(false);
-  bar.appendChild(panelRollBtn);
-  const panelWebBtn = document.createElement("button");
-  panelWebBtn.id = "panel-web-btn";
-  panelWebBtn.textContent = "web";
-  attachTooltip(panelWebBtn, "census · food web · richness");
-  panelWebBtn.style.cssText = btn(false);
-  bar.appendChild(panelWebBtn);
-  const panelLedgerBtn = document.createElement("button");
-  panelLedgerBtn.id = "panel-ledger-btn";
-  panelLedgerBtn.textContent = "ledger";
-  attachTooltip(panelLedgerBtn, "full census ledger (G)");
-  panelLedgerBtn.style.cssText = btn(false);
-  bar.appendChild(panelLedgerBtn);
-  const panelWorkingBtn = document.createElement("button");
-  panelWorkingBtn.id = "panel-working-btn";
-  panelWorkingBtn.textContent = "working";
-  attachTooltip(
-    panelWorkingBtn,
-    "draw the pollination economy into the world (W) — hunger, pollen aboard, readiness to spread, host nectar",
-  );
-  panelWorkingBtn.style.cssText = btn(true);
-  bar.appendChild(panelWorkingBtn);
-  const panelDrawerBtn = document.createElement("button");
-  panelDrawerBtn.id = "panel-drawer-btn";
-  panelDrawerBtn.textContent = "drawer";
-  attachTooltip(panelDrawerBtn, "every kind introduced here");
-  panelDrawerBtn.style.cssText = btn(false);
-  bar.appendChild(panelDrawerBtn);
+  chrome.setStarter = (k) => {
+    for (const { kind, b } of starterOpts) {
+      b.style.cssText = btn(kind === k) + " display: block; width: 100%; text-align: left; margin: 2px 0;";
+    }
+  };
+  chrome.onStarter = () => {};
 
-  // ── the pressures tray's toggle: a "pressures ⚘" button beside brush,
-  // same btn() chrome as every other bar control. Flips the pressures tray
-  // (an in-flow child of the bottom-center `stack`, built near the end of
-  // this function, once stat() exists) open/closed — the marquee of the
-  // evolutionary layer, one click away (Task 5, slice 4). ─────────────────
-  bar.appendChild(sep());
-  const pressuresBtn = document.createElement("button");
-  pressuresBtn.id = "pressures-btn";
-  pressuresBtn.textContent = "pressures ⚘";
-  attachTooltip(pressuresBtn, "island-wide evolutionary levers");
-  pressuresBtn.style.cssText = btn(false);
-  pressuresBtn.onclick = () => chrome.openPressures();
-  bar.appendChild(pressuresBtn);
-
-  // ── the ambient bench toggle: an "ambient" button beside pressures, same
-  // btn() chrome as every other bar control. Flips the ambient tray (built near
-  // the end of this function) open/closed — the Simulator's opt-in ambient roles,
-  // one click away (slice 5b). No glyph: the old "ambient ✿" reused ✿, which is
-  // ALSO the pollinator role's own badge, so one mark meant both "open this panel"
-  // and "this kind pollinates" (qa consistency #1). ────────────────────────────
-  const ambientBtn = document.createElement("button");
-  ambientBtn.id = "ambient-btn";
-  ambientBtn.textContent = "ambient";
-  attachTooltip(ambientBtn, "opt-in ambient roles · pollinator, grazer, shuttle, fish");
-  ambientBtn.style.cssText = btn(false);
-  ambientBtn.onclick = () => chrome.openAmbient();
-  bar.appendChild(ambientBtn);
-
-  // ── save/load a construct to a named slot (Task 9): a "save · load"
-  // cluster beside pressures, same btn()/group() chrome as every other bar
-  // control. Save prompts for a name (mirrors nameWorld's window.prompt,
-  // main.ts); load opens the slot panel below (mirrors the isle picker's
-  // own toggle-able modal, picker.ts). loadSlotBtn's active face tracks the
-  // panel's open state, the same convention pressuresBtn already uses. ────
-  bar.appendChild(sep());
   const saveSlotBtn = document.createElement("button");
   saveSlotBtn.id = "save-slot-btn";
   saveSlotBtn.textContent = "save";
@@ -3297,7 +3226,7 @@ function buildChrome(initial: StarterKind): Chrome {
   attachTooltip(loadSlotBtn, "load a saved construct");
   loadSlotBtn.style.cssText = btn(false);
   loadSlotBtn.onclick = () => chrome.onLoadSlot();
-  bar.appendChild(group(label("slot"), saveSlotBtn, loadSlotBtn));
+  bar.appendChild(group(label("session"), newWrap, saveSlotBtn, loadSlotBtn));
 
   chrome.onSaveSlot = () => {};
   chrome.onLoadSlot = () => {};
@@ -3324,28 +3253,22 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.setTick = (tick) => {
     tickValue.textContent = String(tick);
   };
+  // Brush size picker moves to the Build rail (Task 5); keep the Chrome hooks.
   chrome.onBrushSize = () => {};
-  chrome.setBrushSize = (size) => {
-    for (const { size: s, b } of brushBtns) b.style.cssText = btn(s === size);
-  };
+  chrome.setBrushSize = () => {};
 
-  // ── the palette: a select tool + two rows (plants tinted by hue, critters
-  // by name), docked just above the starter/time bar (both live in `stack`
-  // now) so the two read as one strip of chrome. A third quiet row carries
-  // the "won't root here" note. ────────────────────────────────────────────
+  // ── the palette: parked on #lab-build-host (hidden) until Task 5 Build rail
+  // re-homes tools / materials. Detached from the bottom Run strip so the bar
+  // stays one slim row — mouse tools are unreachable until Task 5; keyboard
+  // and chrome.onTool / onSelect keep working. ─────────────────────────────
   const palette = document.createElement("div");
   palette.id = "lab-palette"; // a stable hook, same convention as #lab-readout/#lab-census
-  // Capped + scrolling, mirroring every OTHER panel's own vh-relative cap
-  // (rollPane 48vh, drawerPanel/readout 42vh, evoTray 46vh) — without one, a
-  // wrapped plant/critter row on a narrow window grows the palette, which
-  // grows `stack` (its bottom-anchored, column-reverse parent), which shoves
-  // the whole stack — the palette AND the pressures tray appended above it —
-  // up over the header/side panels rather than staying put and scrolling.
+  // Hidden intermediate: Task 5 will show + position this under the Build rail.
   palette.style.cssText =
-    "max-width: 88vw; max-height: 18vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;" +
+    "display: none; max-width: 88vw; max-height: 18vh; overflow-y: auto; flex-direction: column; gap: 4px;" +
     " padding: 7px 10px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
     " user-select: none;";
-  stack.appendChild(palette);
+  buildHost.appendChild(palette);
 
   const toolRow = document.createElement("div");
   toolRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
@@ -3483,14 +3406,12 @@ function buildChrome(initial: StarterKind): Chrome {
 
   const syncDockChrome = (id: TabId | null): void => {
     dockHost.style.display = id ? "flex" : "none";
-    panelWebBtn.style.cssText = btn(id === "web");
-    panelLedgerBtn.style.cssText = btn(id === "ledger");
-    pressuresBtn.style.cssText = btn(id === "pressures");
+    // Panel toggle buttons left the Run strip (Task 4); active-state returns
+    // with Read dock / Build rail icons in Tasks 5–6.
     // Dock and drawer share the right edge — never both open.
     if (id !== null && drawerOpen) {
       drawerOpen = false;
       drawerPanel.style.display = "none";
-      panelDrawerBtn.style.cssText = btn(false);
     }
     if (id === "ledger") chrome.onLedgerShow();
     else if (isChartsOpen()) closeCharts();
@@ -4275,10 +4196,10 @@ function buildChrome(initial: StarterKind): Chrome {
     dock.setTab(nextTabState(dock.activeTab(), "ledger"));
   };
   chrome.onWorking = () => {};
-  chrome.setWorking = (on) => {
-    panelWorkingBtn.style.cssText = btn(on);
+  chrome.setWorking = () => {
+    // working toggle left the Run strip (Task 4); W key still flips state via
+    // onWorking. Active face returns with Read dock chrome in Task 6.
   };
-  panelWorkingBtn.onclick = () => chrome.onWorking();
   chrome.onSelectWebNode = () => {};
   let webViewMode: "graph" | "table" = "graph";
 
@@ -4505,13 +4426,12 @@ function buildChrome(initial: StarterKind): Chrome {
 
   // Map-first side panels: roll / drawer stay independent; web/ledger/pressures
   // share the dock's one open-state (Task 6). Dock and drawer are mutually
-  // exclusive on the right edge.
+  // exclusive on the right edge. Bar toggles removed in Task 4 — open* stays
+  // for keyboard / dock / Task 5 rail.
   let rollOpen = false;
   const syncSidePanels = (): void => {
     rollPane.style.display = rollOpen ? "block" : "none";
     drawerPanel.style.display = drawerOpen ? "block" : "none";
-    panelRollBtn.style.cssText = btn(rollOpen);
-    panelDrawerBtn.style.cssText = btn(drawerOpen);
   };
   chrome.openRoll = (open?: boolean) => {
     rollOpen = open ?? !rollOpen;
@@ -4530,10 +4450,6 @@ function buildChrome(initial: StarterKind): Chrome {
     syncSidePanels();
     placeChips();
   };
-  panelRollBtn.onclick = () => chrome.openRoll();
-  panelWebBtn.onclick = () => chrome.openWeb();
-  panelLedgerBtn.onclick = () => chrome.openLedger();
-  panelDrawerBtn.onclick = () => chrome.openDrawer();
   syncSidePanels(); // start closed
 
   // ── the slot panel (Task 9): a centered modal, the same footprint
@@ -4635,21 +4551,19 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   // ── the ambient bench: opt-in experimental roles for placed critter KINDS
-  // (pollinator / shuttle / … ), OFF by default. Same in-flow-child-of-`stack`
-  // pattern as the pressures tray above (NOT a position:fixed overlay — see that
-  // tray's own hard-won comment trail), same btn()/group()/label() chrome. Each
-  // row is one critter kind + a button per role; clicking flips that kind live
-  // through kernel.setCritterRole (the exact path grazerShare already uses).
-  // Bench-only: nothing graduates to real worlds in v1. ────────────────────────
+  // (pollinator / shuttle / … ), OFF by default. Detached from the bottom Run
+  // strip (Task 4) — Task 6 re-homes under the Read dock. Hidden intermediate:
+  // ?ambient=1 / openAmbient still toggles display; no bar button. ──────────
   const ambientTray = document.createElement("div");
   ambientTray.id = "lab-ambient-tray";
   ambientTray.style.cssText =
-    // 260px matches evoTray — proven clearance from leftStack's right edge, so
-    // kind names never clip behind the roll pane at ~1100px (P1).
-    "display: none; max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
+    // Parked off the bottom stack; fixed so a forced-open tray doesn't reflow
+    // the page. 260px matches the old evoTray clearance from leftStack.
+    "display: none; position: fixed; left: 18px; bottom: 70px; z-index: 6;" +
+    " max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
     " font-family: var(--serif); user-select: none;";
-  stack.appendChild(ambientTray); // appended after evoTray — column-reverse stacks it above the bar
+  document.body.appendChild(ambientTray);
 
   const ambientHead = document.createElement("div");
   ambientHead.style.cssText = "text-align: center;";
@@ -4704,7 +4618,6 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.openAmbient = (open) => {
     ambientOpen = open ?? !ambientOpen;
     ambientTray.style.display = ambientOpen ? "block" : "none";
-    ambientBtn.style.cssText = btn(ambientOpen);
   };
   chrome.onAmbientRole = () => {}; // real handler wired by startWorldLab's body
 
