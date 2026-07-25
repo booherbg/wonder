@@ -13,6 +13,7 @@ import { SwarmLayer, dominantColor, moteWorldPosition, tint } from "../game/swar
 import { Dragonflies, FishSchool, FrogPatch, drawClouds, drawForegroundMotes } from "./ambient";
 import { CALM, FlightField, blitInsect, getInsectSprites, insectPose } from "./insectSprites";
 import { drawBeast } from "./beastSprite";
+import { WorkingReading, drawWorking } from "./working";
 import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from "./depth";
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
@@ -55,6 +56,9 @@ export interface Scene {
   sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
   overlay?: boolean; // the ecology overlay (V): critter drives + chain hotspots, drawn spatially
   swarms?: SwarmLayer | null; // the insect swarms homing on the island's flowering plants
+  /** the working view (W, bench-only): the pollination economy drawn into
+   *  the world — hunger, pollen aboard, readiness to spread, host nectar */
+  working?: WorkingReading[] | null;
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -860,6 +864,10 @@ export class Renderer {
     // hues as the pool adapts. Above the scene with the other aerial life,
     // under the foreground fluff and lens.
     this.drawSwarms(scene, camX, camY, darkness, timeMs);
+    // the working view rides directly on top of the clouds it measures
+    if (scene.working && scene.working.length > 0) {
+      drawWorking(ctx, scene.working, camX, camY, this.viewWidth, this.viewHeight, SCALE * this.zoomLevel);
+    }
 
     // depth pass: the nearest air — drifting fluff with true parallax — and
     // then the lens itself, its edges easing dark

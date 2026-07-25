@@ -79,6 +79,8 @@ import {
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
 import { canvasBoxFor, edgeInset } from "./simLayout";
+import { workingReadings } from "../render/working";
+import { metabolicEfficiency } from "../life/idmap";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import {
@@ -225,7 +227,7 @@ function seedFromUrl(): number {
 // Renderer wants — the same shape main.ts assembles for renderer.draw, minus
 // everything that belongs to a played island (no player, no home, no beast,
 // no weather). darkness stays 0: the bench is a workbench, always lit.
-function sceneFor(kernel: SimKernel, swarms: SwarmLayer): Scene {
+function sceneFor(kernel: SimKernel, swarms: SwarmLayer, working = false): Scene {
   return {
     player: null,
     flora: kernel.flora,
@@ -234,6 +236,17 @@ function sceneFor(kernel: SimKernel, swarms: SwarmLayer): Scene {
     critterSpecies: kernel.critterSpecies,
     darkness: 0,
     swarms,
+    // Bench-only. main.ts never sets this, so the island renders as before.
+    working: working
+      ? workingReadings(
+          swarms.swarms,
+          (id) => swarms.flowerFor(id),
+          (ent) => {
+            const f = ent.home ? swarms.flowerFor(ent.home.species) : null;
+            return f ? metabolicEfficiency(ent.sw.sensor, f.map, f.accent) : 0;
+          },
+        )
+      : null,
   };
 }
 
@@ -1908,6 +1921,10 @@ export function startWorldLab(): void {
   // ── the codex chrome: eyebrow, back button, starter selector, palette ───
   ui = buildChrome(starter);
   ui.openLedger = () => toggleLabLedger();
+  ui.onWorking = () => {
+    workingOn = !workingOn;
+    ui!.setWorking(workingOn);
+  };
   ui.onStarter = (k) => {
     starter = k;
     build(); // rebuilds the palette + resets selection; setStarter just re-lights the buttons
@@ -2348,6 +2365,10 @@ export function startWorldLab(): void {
     } else if (e.key === "ArrowDown") {
       camY = clampY(camY + PAN_STEP);
       e.preventDefault();
+    } else if (e.key === "w" || e.key === "W") {
+      workingOn = !workingOn;
+      ui?.setWorking(workingOn);
+      ui?.flashNote(workingOn ? "working view on" : "working view off");
     } else if (e.key === "g" || e.key === "G") {
       e.preventDefault();
       toggleLabLedger();
@@ -2494,6 +2515,9 @@ export function startWorldLab(): void {
   // It used to ride the plain select click, so with a swarm inspected every
   // click on a flower silently re-homed the cloud instead of inspecting it —
   // one click meaning two things, and the reason a flower seemed unselectable.
+  // the working view (W): the pollination economy drawn into the world.
+  // On by default — the bench exists to be understood, not admired.
+  let workingOn = true;
   let retargetArmed = false;
   function setRetargetArmed(on: boolean): void {
     retargetArmed = on;
@@ -2711,7 +2735,7 @@ export function startWorldLab(): void {
     // without this gate a paused bench kept flying motes out to blooms and back
     // — the view asserting that foraging was happening while the sim was frozen.
     if (playing) swarmLayer.animate(dt / 1000);
-    renderer.draw(camX, camY, sceneFor(kernel, swarmLayer), now);
+    renderer.draw(camX, camY, sceneFor(kernel, swarmLayer, workingOn), now);
     ui!.setTick(kernel.tick);
     requestAnimationFrame(frame);
   }
@@ -2810,6 +2834,9 @@ interface Chrome {
   /** Light the ledger button while the ledger is open — it is a toggle, but
    *  nothing said so, so the only way to close it was to remember the key. */
   setLedgerOpen: (on: boolean) => void;
+  /** the working view toggle (W) */
+  onWorking: () => void;
+  setWorking: (on: boolean) => void;
   // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
   // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
   // child-of-`stack` tray shape as the pressures tray above — NOT a
@@ -3094,6 +3121,12 @@ function buildChrome(initial: StarterKind): Chrome {
   panelLedgerBtn.title = "full census ledger (G)";
   panelLedgerBtn.style.cssText = btn(false);
   bar.appendChild(panelLedgerBtn);
+  const panelWorkingBtn = document.createElement("button");
+  panelWorkingBtn.id = "panel-working-btn";
+  panelWorkingBtn.textContent = "working";
+  panelWorkingBtn.title = "draw the pollination economy into the world (W) — hunger, pollen aboard, readiness to spread, host nectar";
+  panelWorkingBtn.style.cssText = btn(true);
+  bar.appendChild(panelWorkingBtn);
   const panelDrawerBtn = document.createElement("button");
   panelDrawerBtn.id = "panel-drawer-btn";
   panelDrawerBtn.textContent = "drawer";
@@ -4052,6 +4085,11 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.setLedgerOpen = (on) => {
     panelLedgerBtn.style.cssText = btn(on);
   };
+  chrome.onWorking = () => {};
+  chrome.setWorking = (on) => {
+    panelWorkingBtn.style.cssText = btn(on);
+  };
+  panelWorkingBtn.onclick = () => chrome.onWorking();
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
