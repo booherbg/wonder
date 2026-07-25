@@ -76,6 +76,7 @@ import {
   wheelZoomFactor,
   zoomAboutPoint,
   FIT_MARGIN,
+  ZOOM_MUL_MAX,
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
 import { canvasBoxFor } from "./simLayout";
@@ -1734,10 +1735,11 @@ export function startWorldLab(): void {
   // Renderer's focus lens instead of a hand-rolled scale. Reads viewWidth/
   // viewHeight at zoom 1 first (the lens's own unscaled unit), so the fit
   // math never has to know SCALE or TILE_SIZE's relationship directly.
-  // `fitZoom` is the baseline; `zoomMul` is the user's wheel nudge on top
-  // (1 = fitted; scroll in/out from there without losing the fit math).
+  // `fitZoom` is the baseline (whole construct in view at mul 1); `zoomMul` is
+  // the user's nudge on top. The bench defaults to ZOOM_MUL_MAX (all the way
+  // in); "fit" resets mul to 1 without losing the fit math.
   let fitZoom = 1;
-  let zoomMul = 1;
+  let zoomMul = ZOOM_MUL_MAX;
   function applyCameraZoom(): void {
     renderer.setZoom(Math.max(0.05, fitZoom * zoomMul));
     clampCamera();
@@ -1759,14 +1761,25 @@ export function startWorldLab(): void {
     clampCamera();
     ui?.setZoomPct(Math.round(zoomMul * 100));
   }
-  function fitCameraToConstruct(): void {
+  function recomputeFitZoom(): void {
     renderer.setZoom(1);
     const baseW = renderer.viewWidth;
     const baseH = renderer.viewHeight;
     const worldW = map.width * TILE_SIZE;
     const worldH = map.height * TILE_SIZE;
     fitZoom = fitZoomFor(worldW, worldH, baseW, baseH, FIT_MARGIN);
+  }
+  /** Whole construct in view (zoom readout 100%). */
+  function fitCameraToConstruct(): void {
+    recomputeFitZoom();
     zoomMul = 1;
+    applyCameraZoom();
+    centreCamera();
+  }
+  /** Default entry view — as far in as the camera allows. */
+  function zoomFullyIntoConstruct(): void {
+    recomputeFitZoom();
+    zoomMul = ZOOM_MUL_MAX;
     applyCameraZoom();
     centreCamera();
   }
@@ -1816,7 +1829,7 @@ export function startWorldLab(): void {
     swarmLayer = benchSwarmLayer(map, kernel, seed);
     if (!renderer) renderer = new Renderer(canvas, map);
     else renderer.setMap(map);
-    fitCameraToConstruct();
+    zoomFullyIntoConstruct();
 
     selected = null;
     // Clean slate (iteration 6a): Live drawer starts empty — starters still
@@ -2422,7 +2435,7 @@ export function startWorldLab(): void {
     rollCursor = 0;
     webCursor = 0;
     renderer.setMap(map);
-    fitCameraToConstruct();
+    zoomFullyIntoConstruct();
     ui!.setStarter(starter);
     refreshPalette();
     refreshTimeState();
@@ -2576,7 +2589,11 @@ export function startWorldLab(): void {
     lastBoxW = box.width;
     lastBoxH = box.height;
     renderer.resize(box.width, box.height);
-    fitCameraToConstruct();
+    // Recompute the fit baseline for the new canvas size; keep the user's
+    // zoomMul (defaults to max-in on first layout via build()).
+    recomputeFitZoom();
+    applyCameraZoom();
+    clampCamera();
   }
   window.addEventListener("resize", relayout);
   relayout();
