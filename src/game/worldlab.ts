@@ -2493,6 +2493,10 @@ export function startWorldLab(): void {
     } else if (e.key === "0") {
       fitCameraToConstruct();
       e.preventDefault();
+    } else if (e.key >= "1" && e.key <= "4") {
+      // brush 1–4 — the sizes the Build rail shows, and what Help promises
+      ui?.onBrushSize(Number(e.key) as BrushSize);
+      e.preventDefault();
     } else if (e.key === "ArrowRight" && e.shiftKey) {
       // shift+→ steps N — → alone is claimed by stepping (below), so this
       // bench's camera pans on ←/↑/↓ only; the fit-to-window camera already

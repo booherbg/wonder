@@ -1,5 +1,13 @@
 # World-Lab Overlay HUD Implementation Plan
 
+> **Status: SHIPPED 2026-07-25.** All ten tasks landed and pushed. Deviation from
+> Task 0: the work went straight onto `master` (commits `5781fd8` → `b10e0d0`)
+> rather than a feature branch. Follow-ons after the plan closed: `a55a3cf`
+> (`?` opens Help on the bench) and `8c00af6` (bench enters at max zoom).
+> Verified after the fact: `tsc` clean, 688 tests green, `vite build` green,
+> and desktop / fit+dock / narrow screenshots checked against the spec's
+> acceptance list.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the World-Lab construct full-bleed with SimCity-style overlay chrome grouped as Build · Run · Read, so panels no longer shrink the world.
@@ -44,7 +52,7 @@
 - Modify: `.gitignore`
 - Modify: `docs/superpowers/specs/2026-07-25-worldlab-overlay-hud-design.md` (status line only)
 
-- [ ] **Step 1: Cut the branch**
+- [x] **Step 1: Cut the branch**
 
 ```bash
 git checkout master
@@ -52,7 +60,7 @@ git pull --ff-only
 git checkout -b worldlab-overlay-hud
 ```
 
-- [ ] **Step 2: Ignore brainstorm/session junk**
+- [x] **Step 2: Ignore brainstorm/session junk**
 
 Append to `.gitignore`:
 
@@ -60,7 +68,7 @@ Append to `.gitignore`:
 .superpowers/
 ```
 
-- [ ] **Step 3: Mark the spec approved**
+- [x] **Step 3: Mark the spec approved**
 
 In the design doc header, set:
 
@@ -68,7 +76,7 @@ In the design doc header, set:
 **Status:** approved
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .gitignore docs/superpowers/specs/2026-07-25-worldlab-overlay-hud-design.md
@@ -92,7 +100,7 @@ EOF
 - Consumes: existing `canvasBoxFor`, `NARROW`
 - Produces: World-Lab `relayout()` always uses zero chrome insets (full viewport box). `canvasBoxFor` remains for tests / potential future use; comments describe overlay policy.
 
-- [ ] **Step 1: Rewrite the failing/updated tests**
+- [x] **Step 1: Rewrite the failing/updated tests**
 
 Replace the “growing bottom tray shrinks the construct” narrative in `tests/sim-layout.test.ts` with overlay-first expectations. Keep `canvasBoxFor` arithmetic tests (it still computes reserved boxes), but add / change the policy tests World-Lab cares about:
 
@@ -112,16 +120,16 @@ test("canvasBoxFor still shrinks when insets are supplied (helper remains pure)"
 
 Remove or rewrite the old comment block that says the fix is “reserve by measurement / shrink the construct.”
 
-- [ ] **Step 2: Run tests — helper tests should still pass; note any that encode the old World-Lab policy**
+- [x] **Step 2: Run tests — helper tests should still pass; note any that encode the old World-Lab policy**
 
 Run: `npx vitest run tests/sim-layout.test.ts`
 Expected: PASS after Step 3 if you update comments/tests together; if you only change tests that assert World-Lab policy before wiring, keep arithmetic tests green.
 
-- [ ] **Step 3: Update `simLayout.ts` header comment**
+- [x] **Step 3: Update `simLayout.ts` header comment**
 
 Replace the “reserve by measurement / construct shrinks” story with: helper can compute reserved boxes; **World-Lab Overlay HUD uses zero insets so chrome overlays a full-bleed construct.**
 
-- [ ] **Step 4: Change `relayout()` to full-bleed**
+- [x] **Step 4: Change `relayout()` to full-bleed**
 
 In `worldlab.ts`, replace inset measurement with:
 
@@ -157,14 +165,14 @@ import { NARROW, canvasBoxFor } from "./simLayout";
 
 Keep `NARROW` imported — later tasks still use it for mobile chrome.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `npx vitest run tests/sim-layout.test.ts && npm run check`
 Expected: PASS / no type errors.
 
 Manual: open `?sim=1` — construct should fill the window behind the existing (still heavy) chrome.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/game/simLayout.ts tests/sim-layout.test.ts src/game/worldlab.ts
@@ -183,7 +191,7 @@ EOF
 - Modify: `src/game/worldlab.ts` (`buildChrome` eyebrow ~3044–3063)
 - Modify: `src/render/help.ts` only if World-Lab keys are missing from Help
 
-- [ ] **Step 1: Replace eyebrow HTML**
+- [x] **Step 1: Replace eyebrow HTML**
 
 ```ts
 eyebrow.innerHTML =
@@ -195,15 +203,15 @@ eyebrow.style.cssText =
 
 Delete `#lab-key-help`, `syncNarrowChrome`, and its resize listener.
 
-- [ ] **Step 2: Confirm Help covers lab keys**
+- [x] **Step 2: Confirm Help covers lab keys**
 
 If Help has no World-Lab section, add a short lab-only blurb listing: tools, brush 1–4, wheel pan, ⌃/⌘ zoom, −/+ / 0 fit, space play, Esc, roll/web/drawer keys, G ledger, W working. Do **not** put that text back on the eyebrow.
 
-- [ ] **Step 3: Manual check**
+- [x] **Step 3: Manual check**
 
 Open lab — top-left is a small badge only; `?` still opens Help with shortcuts.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/worldlab.ts src/render/help.ts
@@ -230,7 +238,7 @@ EOF
   - `export type OverlayEdge = "left" | "right" | "bottom" | "modal"`
   - `export function primaryLeftOverlay(open: { flyout: boolean; roll: boolean; drawer: boolean }): "flyout" | "roll" | "drawer" | null` — at most one left overlay (flyout loses to roll/drawer if both requested: prefer explicit panel)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 ```ts
 import { expect, test } from "vitest";
@@ -262,11 +270,11 @@ test("left edge allows only one primary overlay — roll beats flyout", () => {
 });
 ```
 
-- [ ] **Step 2: Run — expect FAIL (module missing)**
+- [x] **Step 2: Run — expect FAIL (module missing)**
 
 Run: `npx vitest run tests/sim-chrome-layout.test.ts`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 import { NARROW } from "./simLayout";
@@ -299,11 +307,11 @@ export function primaryLeftOverlay(open: {
 
 If `LabTool` already exists and is exported, import it; do not duplicate conflicting unions.
 
-- [ ] **Step 4: Run — expect PASS**
+- [x] **Step 4: Run — expect PASS**
 
 Run: `npx vitest run tests/sim-chrome-layout.test.ts`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/simChromeLayout.ts tests/sim-chrome-layout.test.ts
@@ -323,7 +331,7 @@ EOF
 
 **Goal of this task:** Bottom bar becomes **one non-wrapping row**: time · fidelity · **new ▾** · save · load · tick. Remove from the bar: construct button group, brush, roll/web/ledger/working/drawer/pressures/ambient. Keep callbacks working via temporary wiring to left-rail placeholders **or** keyboard / dock only until Task 5–6 finish — but the **visible bar** must match the spec.
 
-- [ ] **Step 1: Stop growing the bottom stack**
+- [x] **Step 1: Stop growing the bottom stack**
 
 - Change `#lab-bottom-stack` to a single-row host: no `max-height: 34vh` scroll pile; no `column-reverse` multi-child stack.
 - **Detach** `#lab-palette` from the stack (move to a document fragment / left host created empty for Task 5). For this task, hide the old palette with `display: none` if not yet re-homed — acceptable intermediate: tools unreachable from mouse until Task 5, keyboard still works.
@@ -346,7 +354,7 @@ stack.style.cssText =
   " display: flex; align-items: center; justify-content: center;";
 ```
 
-- [ ] **Step 2: Replace construct group with Session `new ▾`**
+- [x] **Step 2: Replace construct group with Session `new ▾`**
 
 Remove `label("construct")` + three always-visible starter buttons.
 
@@ -363,18 +371,18 @@ attachTooltip(newBtn, "start a new canvas — rebuilds the map");
 
 Place Session group after fidelity: `group(label("session"), newBtn, saveSlotBtn, loadSlotBtn)` then tick.
 
-- [ ] **Step 3: Delete panel toggle buttons from the bar**
+- [x] **Step 3: Delete panel toggle buttons from the bar**
 
 Remove creation/append of `panelRollBtn`, `panelWebBtn`, `panelLedgerBtn`, `panelWorkingBtn`, `panelDrawerBtn`, `pressuresBtn`, `ambientBtn`, and the brush group from `bar`. Keep `chrome.openRoll` / `openWeb` / etc. functions; rebind their triggers in Tasks 5–6. Keyboard handlers that call those functions must keep working.
 
 If something still references removed button ids for `style.cssText` active state, gate those updates on `document.getElementById(...)` or move active-state onto rail icons in Task 5.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npm run check && npx vitest run tests/sim-dock.test.ts tests/sim-layout.test.ts`
 Manual: bottom bar is one slim row; world stays full-bleed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/worldlab.ts
@@ -393,7 +401,7 @@ EOF
 - Modify: `src/game/worldlab.ts` (`buildChrome` tools/palette/brush/roll/drawer hosts)
 - Uses: `materialsForTool`, `primaryLeftOverlay` from `simChromeLayout.ts`
 
-- [ ] **Step 1: Create `#lab-build-rail`**
+- [x] **Step 1: Create `#lab-build-rail`**
 
 Fixed left column ~44px wide, top below badge, bottom above Run strip:
 
@@ -408,7 +416,7 @@ Move tool buttons (select/place/paint/erase/cloud) onto the rail as compact icon
 
 Add rail buttons for **roll** and **drawer** that call `chrome.openRoll` / `chrome.openDrawer`.
 
-- [ ] **Step 2: Materials flyout**
+- [x] **Step 2: Materials flyout**
 
 Create `#lab-materials-flyout` positioned to the right of the rail. Show:
 
@@ -420,20 +428,20 @@ Wire tool changes and `onSelect` so choosing a tile/plant still goes through exi
 
 Use `primaryLeftOverlay` so opening roll/drawer hides the materials flyout.
 
-- [ ] **Step 3: Reposition roll + drawer as left overlays**
+- [x] **Step 3: Reposition roll + drawer as left overlays**
 
 - `#lab-roll` and `#lab-drawer`: `left: 62px` (rail + gap), not competing for the right edge with the dock.
 - Remove mutual exclusion between drawer and dock (both edges may open). Delete the `if (next && dock.activeTab()) dock.setTab(null)` guard in `openDrawer`.
 - Active state: rail roll/drawer buttons reflect open (replace old `panelRollBtn` styling).
 
-- [ ] **Step 4: Delete old `#lab-palette` bottom host** once rows live in the flyout.
+- [x] **Step 4: Delete old `#lab-palette` bottom host** once rows live in the flyout.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Manual: paint → tile flyout; place → life flyout; roll/drawer from rail; brush on rail; keyboard tools still work.
 Run: `npm run check && npx vitest run tests/sim-chrome-layout.test.ts tests/sim-brush.test.ts tests/sim-select.test.ts`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/game/worldlab.ts
@@ -452,28 +460,28 @@ EOF
 - Modify: `src/game/simDock.ts`
 - Modify: `src/game/worldlab.ts` (pressures body, ambient tray host, working toggle)
 
-- [ ] **Step 1: Add a working-view control on the dock**
+- [x] **Step 1: Add a working-view control on the dock**
 
 In `buildDock`, add a header control (button or checkbox) labeled `working` that calls a new optional `dock.onWorking?.(next: boolean)` / `setWorking(active: boolean)`. Wire World-Lab’s existing working flag / `W` key to the same path. Remove any leftover bottom `panel-working-btn` references.
 
-- [ ] **Step 2: Move ambient UI into pressures body**
+- [x] **Step 2: Move ambient UI into pressures body**
 
 - Append the existing ambient controls into `dock.body("pressures")` below the pressure sliders (sub-heading `ambient`).
 - Delete `#lab-ambient-tray` as a bottom-stack child and `openAmbient` as a separate bottom toggle.
 - Keep `chrome.openAmbient(true)` for `?` dev aids by selecting pressures tab + scrolling/ensuring ambient section visible — or map `openAmbient` → `dock.setTab("pressures")`.
 
-- [ ] **Step 3: Ensure Read entry points**
+- [x] **Step 3: Ensure Read entry points**
 
 - Web / ledger / pressures open **only** via dock tabs + existing keys (`G` ledger, etc.).
 - No bottom duplicates.
 - Chip stack / inspect may remain; do not shrink canvas.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `npx vitest run tests/sim-dock.test.ts tests/sim-ambient.test.ts tests/sim-pressures.test.ts && npm run check`
 Manual: dock tabs work; ambient visible under pressures; W toggles working; no bottom panel buttons.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/simDock.ts src/game/worldlab.ts
@@ -491,7 +499,7 @@ EOF
 **Files:**
 - Modify: `src/game/worldlab.ts`
 
-- [ ] **Step 1: Track dirty**
+- [x] **Step 1: Track dirty**
 
 ```ts
 let sessionDirty = false;
@@ -505,7 +513,7 @@ function clearDirty(): void {
 
 Call `markDirty()` from paint/place/erase success paths, roll pick / introduce, ambient/pressure changes if they mutate the bench. Call `clearDirty()` after successful save, after load, and after confirmed starter rebuild.
 
-- [ ] **Step 2: Gate starter rebuild**
+- [x] **Step 2: Gate starter rebuild**
 
 ```ts
 function requestNewCanvas(kind: StarterKind): void {
@@ -517,9 +525,9 @@ function requestNewCanvas(kind: StarterKind): void {
 
 Wire `new ▾` menu items through `requestNewCanvas`.
 
-- [ ] **Step 3: Verify manually** — paint something, hit new, cancel keeps map; confirm rebuilds.
+- [x] **Step 3: Verify manually** — paint something, hit new, cancel keeps map; confirm rebuilds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/worldlab.ts
@@ -538,7 +546,7 @@ EOF
 - Modify: `src/game/worldlab.ts`
 - Uses: `isNarrowViewport`
 
-- [ ] **Step 1: Apply narrow layout class/flag on resize**
+- [x] **Step 1: Apply narrow layout class/flag on resize**
 
 When `isNarrowViewport(innerWidth)`:
 
@@ -550,14 +558,14 @@ When `isNarrowViewport(innerWidth)`:
 
 When not narrow, hide mobile dock and restore desktop rail + Run strip.
 
-- [ ] **Step 2: Keep zoom/back** — optional: hide zoom % text on narrow; pinch/wheel zoom remains.
+- [x] **Step 2: Keep zoom/back** — optional: hide zoom % text on narrow; pinch/wheel zoom remains.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Manual: DevTools &lt;900px width — tools reachable at bottom; opening sheets does not resize canvas (Task 1 invariant).
 Run: `npx vitest run tests/sim-chrome-layout.test.ts && npm run check`
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/game/worldlab.ts
@@ -576,19 +584,19 @@ EOF
 - Modify: `src/game/worldlab.ts` (Esc handler ~2490–2513)
 - Modify: design acceptance checklist mentally / QA notes if repo uses them
 
-- [ ] **Step 1: Esc closes overlays in order**
+- [x] **Step 1: Esc closes overlays in order**
 
 Materials flyout → left library (roll/drawer) → right dock → inspect → leave bench (existing). Ensure each step updates button active styles.
 
-- [ ] **Step 2: Same-toggle closes**
+- [x] **Step 2: Same-toggle closes**
 
 Rail roll/drawer and dock tabs already toggle; materials flyout closes when tool has no materials or when Esc.
 
-- [ ] **Step 3: Acceptance checklist (spec §Acceptance)**
+- [x] **Step 3: Acceptance checklist (spec §Acceptance)**
 
 Walk all 10 acceptance items on desktop and one narrow width. Fix any regressions found in this task (small CSS/z-index/pointer-events only — no scope creep).
 
-- [ ] **Step 4: Full gate**
+- [x] **Step 4: Full gate**
 
 ```bash
 npm run check && npx vitest run && npm run build
@@ -596,7 +604,7 @@ npm run check && npx vitest run && npm run build
 
 Expected: clean types; all tests green; build ok.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/worldlab.ts src/game/simDock.ts src/game/simLayout.ts src/game/simChromeLayout.ts tests/

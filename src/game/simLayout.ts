@@ -58,21 +58,7 @@ export function canvasBoxFor(
   };
 }
 
-/** How much of each edge a fixed panel occupies, or 0 when it is hidden. */
-export function edgeInset(el: HTMLElement | null, edge: keyof Insets): number {
-  if (!el) return 0;
-  const style = getComputedStyle(el);
-  if (style.display === "none" || style.visibility === "hidden") return 0;
-  const r = el.getBoundingClientRect();
-  if (r.width === 0 || r.height === 0) return 0;
-  switch (edge) {
-    case "left":
-      return Math.max(0, r.right);
-    case "right":
-      return Math.max(0, window.innerWidth - r.left);
-    case "top":
-      return Math.max(0, r.bottom);
-    case "bottom":
-      return Math.max(0, window.innerHeight - r.top);
-  }
-}
+// `edgeInset` — which measured chrome heights into the construct's box — died
+// with the reserved-space frame. The Overlay HUD passes zero insets, so nothing
+// measures chrome any more. `canvasBoxFor` keeps its inset arithmetic for the
+// day a surface wants a reserved frame again.
