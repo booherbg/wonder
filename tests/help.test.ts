@@ -2,13 +2,35 @@ import { expect, test } from "vitest";
 import { BEDROLL_COST, FIRE_COST } from "../src/game/materials";
 import { HELP_WELCOME, helpSections } from "../src/render/help";
 
-test("the guide keeps its three small chapters, in the quiet voice", () => {
+test("the guide keeps its small chapters, in the quiet voice", () => {
   const sections = helpSections();
-  expect(sections.map((s) => s.title)).toEqual(["the keys", "your camp", "the living web", "things to seek"]);
+  expect(sections.map((s) => s.title)).toEqual([
+    "the keys",
+    "your camp",
+    "the living web",
+    "things to seek",
+    "the world-lab",
+  ]);
   for (const s of sections) {
     expect(s.title).toBe(s.title.toLowerCase());
     expect(s.entries.length).toBeGreaterThan(0);
   }
+});
+
+test("the world-lab chapter lists the bench shortcuts", () => {
+  const lab = helpSections().find((s) => s.title === "the world-lab")!;
+  const blob = lab.entries.map((e) => `${e.key ?? ""} ${e.text}`).join(" ").toLowerCase();
+  expect(blob).toContain("brush");
+  expect(blob).toContain("wheel");
+  expect(blob).toContain("zoom");
+  expect(blob).toContain("fit");
+  expect(blob).toContain("space");
+  expect(blob).toContain("esc");
+  expect(blob).toContain("roll");
+  expect(blob).toContain("web");
+  expect(blob).toContain("drawer");
+  expect(blob).toContain("ledger");
+  expect(blob).toContain("working");
 });
 
 test("every verb the game answers to has a line", () => {

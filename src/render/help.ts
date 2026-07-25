@@ -136,6 +136,20 @@ export function helpSections(): HelpSection[] {
         { text: "the rest is not written here." },
       ],
     },
+    {
+      title: "the world-lab",
+      entries: [
+        {
+          text:
+            "on the bench: select · place · paint · erase · cloud, brush 1–4, " +
+            "wheel pans, ⌃/⌘+wheel zooms, −/+ / 0 fit, space play or drag-pan, Esc home.",
+        },
+        {
+          text:
+            "dock tabs open roll, web, and the drawer; G toggles the ledger, W the working view.",
+        },
+      ],
+    },
   ];
 }
 

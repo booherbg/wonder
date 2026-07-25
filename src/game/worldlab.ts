@@ -78,7 +78,7 @@ import {
   FIT_MARGIN,
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
-import { NARROW, canvasBoxFor } from "./simLayout";
+import { canvasBoxFor } from "./simLayout";
 import { layoutWeb, webExtent } from "./simWebGraph";
 import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
@@ -3014,23 +3014,11 @@ function buildChrome(initial: StarterKind): Chrome {
   const eyebrow = document.createElement("div");
   eyebrow.id = "lab-eyebrow";
   eyebrow.innerHTML =
-    `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
-    `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
-    `<div id="lab-key-help" style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, calc(100vw - 220px));">` +
-    `select · place · paint · erase · cloud · brush 1–4 · wheel pans · ⌃/⌘+wheel zooms · −/+ / 0 fit · space+drag pan · ←↑↓ nudge · roll / web / drawer · G ledger · space play · Esc home` +
-    `<div style="margin-top: 3px; font: 10px var(--mono); letter-spacing: 0.04em; color: rgba(228,236,242,0.42);">` +
-    `spread paths: natural reseed · critter pollinator (ambient) · insect cloud</div>` +
-    `</div>`;
-  eyebrow.style.cssText = "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;";
+    `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · world-lab</span>`;
+  eyebrow.style.cssText =
+    "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;" +
+    " padding: 4px 8px; background: rgba(20,32,28,0.82); border-radius: 4px;";
   document.body.appendChild(eyebrow);
-  const keyHelp = document.getElementById("lab-key-help");
-  const syncNarrowChrome = (): void => {
-    // Phone: drop the key legend so it can't collide with back/zoom (spec §6
-    // defers a real mobile layout; this is the breakage guard).
-    if (keyHelp) keyHelp.style.display = window.innerWidth < NARROW ? "none" : "block";
-  };
-  syncNarrowChrome();
-  window.addEventListener("resize", syncNarrowChrome);
 
   // the way back, always visible in the header: the bench is a door, not a
   // trap — dropping the ?sim flag lands on the island saved on the way in
