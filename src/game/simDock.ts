@@ -5,6 +5,8 @@
 // What this replaces: four independently-fixed overlay panels (ledger, web,
 // pressures, inspect) each with their own open flag and no shared close rule.
 
+import { attachTooltip } from "../render/tooltip";
+
 export type TabId = "subject" | "exchange" | "web" | "ledger" | "pressures";
 
 export const TAB_IDS: TabId[] = ["subject", "exchange", "web", "ledger", "pressures"];
@@ -15,6 +17,14 @@ const TAB_LABEL: Record<TabId, string> = {
   web: "web",
   ledger: "ledger",
   pressures: "pressures",
+};
+
+const TAB_HELP: Record<TabId, string> = {
+  subject: "selected plant, critter, or cloud",
+  exchange: "nectar economy · pollen · spread readiness",
+  web: "food web · chains",
+  ledger: "census · population / tick",
+  pressures: "island-wide evolutionary levers",
 };
 
 const MONO = "font: 11px var(--mono); letter-spacing: 0.06em;";
@@ -66,6 +76,7 @@ export function buildDock(host: HTMLElement): Dock {
     btn.setAttribute("aria-selected", "false");
     btn.textContent = TAB_LABEL[id];
     btn.style.cssText = tabBtnStyle(false);
+    attachTooltip(btn, TAB_HELP[id]);
     btn.onclick = () => {
       dock.setTab(nextTabState(active, id));
     };

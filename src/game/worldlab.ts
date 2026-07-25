@@ -129,6 +129,7 @@ import { agoPhrase } from "../render/picker";
 import { closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import { buildLabChartsView } from "./simCharts";
 import { Dock, TabId, buildDock, nextTabState } from "./simDock";
+import { attachTooltip } from "../render/tooltip";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -3038,18 +3039,18 @@ function buildChrome(initial: StarterKind): Chrome {
     "position: fixed; right: 18px; top: 58px; z-index: 6; display: flex; align-items: center; gap: 4px; user-select: none;";
   const zoomOutBtn = document.createElement("button");
   zoomOutBtn.textContent = "−";
-  zoomOutBtn.title = "zoom out (−)";
+  attachTooltip(zoomOutBtn, "zoom out (−)");
   zoomOutBtn.style.cssText = btn(false) + " min-width: 28px; padding-inline: 8px;";
   const zoomPctEl = document.createElement("span");
   zoomPctEl.textContent = "100%";
   zoomPctEl.style.cssText = `${MONO} min-width: 44px; text-align: center; color: rgba(228,236,242,0.72);`;
   const zoomInBtn = document.createElement("button");
   zoomInBtn.textContent = "+";
-  zoomInBtn.title = "zoom in (+)";
+  attachTooltip(zoomInBtn, "zoom in (+)");
   zoomInBtn.style.cssText = btn(false) + " min-width: 28px; padding-inline: 8px;";
   const zoomFitBtn = document.createElement("button");
   zoomFitBtn.textContent = "fit";
-  zoomFitBtn.title = "fit construct (0)";
+  attachTooltip(zoomFitBtn, "fit construct (0)");
   zoomFitBtn.style.cssText = btn(false);
   zoomHud.append(zoomOutBtn, zoomPctEl, zoomInBtn, zoomFitBtn);
   document.body.appendChild(zoomHud);
@@ -3123,6 +3124,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const starterBtns = STARTERS.map(({ kind, name }) => {
     const b = document.createElement("button");
     b.textContent = name;
+    attachTooltip(b, `build the ${name} construct`);
     b.style.cssText = btn(kind === initial);
     b.onclick = () => chrome.onStarter(kind);
     return { kind, b };
@@ -3142,7 +3144,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const playBtn = document.createElement("button");
   playBtn.id = "play-btn";
   playBtn.textContent = "play";
-  playBtn.title = "run the sim (space) — pauses stop the motes too";
+  attachTooltip(playBtn, "run the sim (space) — pauses stop the motes too");
   playBtn.style.cssText = btn(false);
   playBtn.onclick = () => chrome.onPlay();
   bar.appendChild(playBtn);
@@ -3150,7 +3152,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const stepBtn = document.createElement("button");
   stepBtn.id = "step-btn";
   stepBtn.textContent = "step";
-  stepBtn.title = "advance exactly one heartbeat";
+  attachTooltip(stepBtn, "advance exactly one heartbeat");
   stepBtn.style.cssText = btn(false);
   stepBtn.onclick = () => chrome.onStep();
   bar.appendChild(stepBtn);
@@ -3158,6 +3160,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const stepNBtn = document.createElement("button");
   stepNBtn.id = "stepn-btn";
   stepNBtn.textContent = "step n";
+  attachTooltip(stepNBtn, "advance n heartbeats");
   stepNBtn.style.cssText = btn(false);
   stepNBtn.onclick = () => chrome.onStepN();
 
@@ -3167,6 +3170,7 @@ function buildChrome(initial: StarterKind): Chrome {
   stepNInput.min = "1";
   stepNInput.max = "5000";
   stepNInput.value = "20";
+  attachTooltip(stepNInput, "how many heartbeats step n advances");
   stepNInput.style.cssText =
     `${MONO} width: 52px; color: var(--ink-bright); background: rgba(23,42,54,0.72);` +
     " border: 1px solid rgba(127,224,196,0.28); border-radius: 4px; padding: 5px 6px;";
@@ -3179,18 +3183,20 @@ function buildChrome(initial: StarterKind): Chrome {
   const speedBtn = document.createElement("button");
   speedBtn.id = "speed-btn";
   speedBtn.textContent = "×1";
+  attachTooltip(speedBtn, "sim speed · cycles ×1 → ×2 → ×4");
   speedBtn.style.cssText = btn(false);
   speedBtn.onclick = () => chrome.onSpeed();
   bar.appendChild(speedBtn);
 
   bar.appendChild(sep());
-  const fidelityDefs: { f: Fidelity; name: string }[] = [
-    { f: "plants", name: "plants" },
-    { f: "full", name: "full" },
+  const fidelityDefs: { f: Fidelity; name: string; help: string }[] = [
+    { f: "plants", name: "plants", help: "advance plants only · skip critters and clouds" },
+    { f: "full", name: "full", help: "advance plants, critters, and insect clouds" },
   ];
-  const fidelityBtns = fidelityDefs.map(({ f, name }) => {
+  const fidelityBtns = fidelityDefs.map(({ f, name, help }) => {
     const b = document.createElement("button");
     b.textContent = name;
+    attachTooltip(b, help);
     b.style.cssText = btn(false);
     b.onclick = () => chrome.onFidelity(f);
     return { f, b };
@@ -3204,9 +3210,8 @@ function buildChrome(initial: StarterKind): Chrome {
   const brushBtns = BRUSH_SIZES.map((size) => {
     // stamp footprint: how many tiles one click lays
     const b = document.createElement("button");
-    b.title = `stamp a ${size}x${size} block of tiles per click`;
     b.textContent = `${size}×`;
-    b.title = size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`;
+    attachTooltip(b, size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`);
     b.style.cssText = btn(false);
     b.onclick = () => chrome.onBrushSize(size);
     return { size, b };
@@ -3220,31 +3225,34 @@ function buildChrome(initial: StarterKind): Chrome {
   const panelRollBtn = document.createElement("button");
   panelRollBtn.id = "panel-roll-btn";
   panelRollBtn.textContent = "roll";
-  panelRollBtn.title = "roll new kinds onto the palette";
+  attachTooltip(panelRollBtn, "roll new kinds onto the palette");
   panelRollBtn.style.cssText = btn(false);
   bar.appendChild(panelRollBtn);
   const panelWebBtn = document.createElement("button");
   panelWebBtn.id = "panel-web-btn";
   panelWebBtn.textContent = "web";
-  panelWebBtn.title = "census · food web · richness";
+  attachTooltip(panelWebBtn, "census · food web · richness");
   panelWebBtn.style.cssText = btn(false);
   bar.appendChild(panelWebBtn);
   const panelLedgerBtn = document.createElement("button");
   panelLedgerBtn.id = "panel-ledger-btn";
   panelLedgerBtn.textContent = "ledger";
-  panelLedgerBtn.title = "full census ledger (G)";
+  attachTooltip(panelLedgerBtn, "full census ledger (G)");
   panelLedgerBtn.style.cssText = btn(false);
   bar.appendChild(panelLedgerBtn);
   const panelWorkingBtn = document.createElement("button");
   panelWorkingBtn.id = "panel-working-btn";
   panelWorkingBtn.textContent = "working";
-  panelWorkingBtn.title = "draw the pollination economy into the world (W) — hunger, pollen aboard, readiness to spread, host nectar";
+  attachTooltip(
+    panelWorkingBtn,
+    "draw the pollination economy into the world (W) — hunger, pollen aboard, readiness to spread, host nectar",
+  );
   panelWorkingBtn.style.cssText = btn(true);
   bar.appendChild(panelWorkingBtn);
   const panelDrawerBtn = document.createElement("button");
   panelDrawerBtn.id = "panel-drawer-btn";
   panelDrawerBtn.textContent = "drawer";
-  panelDrawerBtn.title = "every kind introduced here";
+  attachTooltip(panelDrawerBtn, "every kind introduced here");
   panelDrawerBtn.style.cssText = btn(false);
   bar.appendChild(panelDrawerBtn);
 
@@ -3257,6 +3265,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const pressuresBtn = document.createElement("button");
   pressuresBtn.id = "pressures-btn";
   pressuresBtn.textContent = "pressures ⚘";
+  attachTooltip(pressuresBtn, "island-wide evolutionary levers");
   pressuresBtn.style.cssText = btn(false);
   pressuresBtn.onclick = () => chrome.openPressures();
   bar.appendChild(pressuresBtn);
@@ -3270,6 +3279,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const ambientBtn = document.createElement("button");
   ambientBtn.id = "ambient-btn";
   ambientBtn.textContent = "ambient";
+  attachTooltip(ambientBtn, "opt-in ambient roles · pollinator, grazer, shuttle, fish");
   ambientBtn.style.cssText = btn(false);
   ambientBtn.onclick = () => chrome.openAmbient();
   bar.appendChild(ambientBtn);
@@ -3284,11 +3294,13 @@ function buildChrome(initial: StarterKind): Chrome {
   const saveSlotBtn = document.createElement("button");
   saveSlotBtn.id = "save-slot-btn";
   saveSlotBtn.textContent = "save";
+  attachTooltip(saveSlotBtn, "save this construct to a named slot");
   saveSlotBtn.style.cssText = btn(false);
   saveSlotBtn.onclick = () => chrome.onSaveSlot();
   const loadSlotBtn = document.createElement("button");
   loadSlotBtn.id = "load-slot-btn";
   loadSlotBtn.textContent = "load";
+  attachTooltip(loadSlotBtn, "load a saved construct");
   loadSlotBtn.style.cssText = btn(false);
   loadSlotBtn.onclick = () => chrome.onLoadSlot();
   bar.appendChild(group(label("slot"), saveSlotBtn, loadSlotBtn));
@@ -3362,7 +3374,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const toolBtns = TOOLS.map(({ id, name, title }) => {
     const b = document.createElement("button");
     b.textContent = name;
-    b.title = title;
+    attachTooltip(b, title);
     b.style.cssText = btn(id === "select");
     b.onclick = () => chrome.onTool(id);
     return { id, b };
@@ -3370,7 +3382,7 @@ function buildChrome(initial: StarterKind): Chrome {
   toolRow.append(label("tool"), ...toolBtns.map((t) => t.b));
   const cloudBtn = document.createElement("button");
   cloudBtn.textContent = "cloud";
-  cloudBtn.title = "place a naïve insect cloud — opens its details; play/step to watch it forage";
+  attachTooltip(cloudBtn, "place a naïve insect cloud — opens its details; play/step to watch it forage");
   cloudBtn.style.cssText = btn(false);
   cloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
   toolRow.appendChild(cloudBtn);
@@ -3389,6 +3401,7 @@ function buildChrome(initial: StarterKind): Chrome {
     const color = OVERVIEW_COLORS[tile];
     const b = document.createElement("button");
     b.textContent = name;
+    attachTooltip(b, `paint ${name}`);
     b.style.cssText = tileBtn(false, color);
     b.onclick = () => chrome.onSelect({ kind: "tile", tile });
     biomeRow.appendChild(b);
@@ -3402,7 +3415,7 @@ function buildChrome(initial: StarterKind): Chrome {
       const b = document.createElement("button");
       b.textContent = sp.name.toLowerCase();
       const need = BIOME_TILES.find((t) => t.tile === sp.habitat)?.name ?? "its habitat";
-      b.title = `roots on ${need} · brush stamps a patch · drag to sow a path`;
+      attachTooltip(b, `roots on ${need} · brush stamps a patch · drag to sow a path`);
       const tint = hsl(sp.archetype.hue, 0.62, 0.5);
       b.style.cssText = plantBtn(false, tint);
       b.onclick = () => chrome.onSelect({ kind: "plant", id: sp.id });
@@ -3414,7 +3427,7 @@ function buildChrome(initial: StarterKind): Chrome {
       const badge = roleBadge(c.role); // "" for a plain disperser; a glyph for a bench role
       b.textContent = badge ? `${c.name.toLowerCase()} ${badge}` : c.name.toLowerCase();
       const roleHelp = AMBIENT_ROLES.find((r) => r.id === c.role)?.help; // P7: the chip explains its role
-      if (roleHelp) b.title = roleHelp;
+      attachTooltip(b, roleHelp ?? "stamp this critter · drag to sow a path");
       b.style.cssText = btn(false);
       b.onclick = () => chrome.onSelect({ kind: "critter", id: c.id });
       critterRow.appendChild(b);
@@ -3666,7 +3679,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const webLedgerBtn = document.createElement("button");
   webLedgerBtn.id = "web-ledger-btn";
   webLedgerBtn.textContent = "open ledger";
-  webLedgerBtn.title = "full census ledger (G)";
+  attachTooltip(webLedgerBtn, "full census ledger (G)");
   webLedgerBtn.style.cssText = btn(false) + " display: block; width: 100%; margin-top: 10px;";
   webLedgerBtn.onclick = () => chrome.openLedger();
   dock.body("web").appendChild(webLedgerBtn);
@@ -4129,7 +4142,7 @@ function buildChrome(initial: StarterKind): Chrome {
       row.style.cssText = "margin-top: 10px;";
       const inviteBtn = document.createElement("button");
       inviteBtn.textContent = "invite a cloud";
-      inviteBtn.title = "snap an insect cloud onto this bloom";
+      attachTooltip(inviteBtn, "snap an insect cloud onto this bloom");
       inviteBtn.style.cssText = btn(false);
       inviteBtn.onclick = () => chrome.onInviteCloud();
       row.appendChild(inviteBtn);
@@ -4431,7 +4444,7 @@ function buildChrome(initial: StarterKind): Chrome {
     group.style.cssText = "width: 100px; flex: 0 0 auto; text-align: center;";
     // the meaning used to live only in simPressures.ts's comments, where no
     // player could read it; it belongs on the control itself
-    group.title = `${p.label} — ${p.help}`;
+    attachTooltip(group, p.help);
     const rowLabel = document.createElement("div");
     rowLabel.style.cssText = `${MONO} text-transform: uppercase; color: rgba(228,236,242,0.65);`;
     rowLabel.textContent = p.label;
@@ -4442,7 +4455,6 @@ function buildChrome(initial: StarterKind): Chrome {
     input.max = String(p.max);
     input.step = String(p.step);
     input.style.cssText = "width: 100%; margin-top: 4px; accent-color: rgb(var(--lumen));";
-    input.title = p.help;
     input.oninput = () => chrome.onPressure(p.id, Number(input.value));
     const valueRow = document.createElement("div");
     valueRow.style.cssText = "font: 13px var(--mono); color: rgb(var(--lumen)); margin-top: 3px;";
@@ -4585,7 +4597,7 @@ function buildChrome(initial: StarterKind): Chrome {
       when.textContent = row.when;
       const forget = document.createElement("button");
       forget.textContent = "forget";
-      forget.title = "delete this saved construct";
+      attachTooltip(forget, "delete this saved construct");
       forget.style.cssText =
         "position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0;" +
         " transition: opacity 0.15s; font: 10px var(--mono); color: rgba(var(--rose), 0.85); cursor: pointer;" +
@@ -4667,7 +4679,7 @@ function buildChrome(initial: StarterKind): Chrome {
         // the button (unless the kind is already a fish) rather than let a flip
         // strand the critter. See ambientRoleEnabled for the rule.
         const gated = !ambientRoleEnabled(role.id, hasShallow, k.role);
-        b.title = gated ? "needs shallow water on this construct" : role.help;
+        attachTooltip(b, gated ? "needs shallow water on this construct" : role.help);
         b.style.cssText = btn(k.role === role.id); // the active role reads lit
         if (gated) {
           b.disabled = true;
