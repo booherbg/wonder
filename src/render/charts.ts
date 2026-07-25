@@ -133,6 +133,10 @@ function statTiles(v: ChartsView): string {
 // identity is never colour-alone; a recessive grid. Scaled to the KINDS' own
 // peak, not the all-plants total — so who rises, peaks, and fades actually reads.
 function populationChart(v: ChartsView): string {
+  // Empty ledger: one line, not a blank multi-hundred-pixel chart.
+  if (v.series.length === 0) {
+    return `<div class="ch-empty" style="font: italic 13px Georgia, serif; color: rgba(228,236,242,0.55); padding: 8px 0;">no history yet · press play</div>`;
+  }
   const W = 700;
   const H = 236;
   const padL = 46;

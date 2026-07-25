@@ -128,6 +128,7 @@ import {
 import { agoPhrase } from "../render/picker";
 import { closeCharts, isChartsOpen, openCharts } from "../render/charts";
 import { buildLabChartsView } from "./simCharts";
+import { Dock, TabId, buildDock, nextTabState } from "./simDock";
 
 // The biome brush's palette: real tiles you can paint, each swatched with its
 // own OVERVIEW_COLORS entry (the island-at-a-glance color, indexed by the enum
@@ -1620,12 +1621,7 @@ export function startWorldLab(): void {
   }
 
   function toggleLabLedger(): void {
-    if (isChartsOpen()) {
-      closeCharts();
-      ui?.setLedgerOpen(false);
-    }
-    else openLabLedger();
-    ui?.setLedgerOpen(isChartsOpen());
+    ui?.dock.setTab(nextTabState(ui.dock.activeTab(), "ledger"));
   }
 
   // The pressures panel's one lever (Task 5, slice 4 — "crank a pressure,
@@ -1972,6 +1968,7 @@ export function startWorldLab(): void {
 
   // ── the codex chrome: eyebrow, back button, starter selector, palette ───
   ui = buildChrome(starter);
+  ui.onLedgerShow = () => openLabLedger();
   ui.openLedger = () => toggleLabLedger();
   ui.onWorking = () => {
     workingOn = !workingOn;
@@ -2480,7 +2477,7 @@ export function startWorldLab(): void {
       e.preventDefault();
       toggleLabLedger();
     } else if (e.key === "Escape") {
-      // Esc closes the ledger first, then the readout, then the bench — same
+      // Esc closes the dock first, then the readout, then the bench — same
       // stacking as main island (charts before inspect before leave). An armed
       // retarget is the innermost state of all, so it cancels before any of it.
       if (retargetArmed) {
@@ -2488,9 +2485,9 @@ export function startWorldLab(): void {
         ui?.flashNote("retarget cancelled");
         return;
       }
-      if (isChartsOpen()) {
-        closeCharts();
-        ui?.setLedgerOpen(false);
+      if (ui?.dock.activeTab()) {
+        if (ui.dock.activeTab() === "ledger") closeCharts();
+        ui.dock.setTab(null);
         return;
       }
       if (inspected) {
@@ -2526,7 +2523,10 @@ export function startWorldLab(): void {
     const box = canvasBoxFor(window.innerWidth, window.innerHeight, {
       top: edgeInset(document.getElementById("lab-eyebrow"), "top"),
       left: edgeInset(document.getElementById("lab-left-stack"), "left"),
-      right: edgeInset(document.getElementById("lab-right-stack"), "right"),
+      right: Math.max(
+        edgeInset(document.getElementById("lab-right-stack"), "right"),
+        edgeInset(document.getElementById("lab-dock"), "right"),
+      ),
       bottom: edgeInset(document.getElementById("lab-bottom-stack"), "bottom"),
     });
     canvas.style.position = "fixed";
@@ -2544,7 +2544,7 @@ export function startWorldLab(): void {
   // than guessing at fixed offsets (the guess is what broke before).
   if (typeof ResizeObserver !== "undefined") {
     const ro = new ResizeObserver(() => relayout());
-    for (const id of ["lab-eyebrow", "lab-left-stack", "lab-right-stack", "lab-bottom-stack"]) {
+    for (const id of ["lab-eyebrow", "lab-left-stack", "lab-right-stack", "lab-bottom-stack", "lab-dock"]) {
       const el = document.getElementById(id);
       if (el) ro.observe(el);
     }
@@ -2940,9 +2940,10 @@ interface Chrome {
   openWeb: (open?: boolean) => void;
   openDrawer: (open?: boolean) => void;
   openLedger: () => void;
-  /** Light the ledger button while the ledger is open — it is a toggle, but
-   *  nothing said so, so the only way to close it was to remember the key. */
-  setLedgerOpen: (on: boolean) => void;
+  /** The five-tab dock — one open-state for subject/exchange/web/ledger/pressures. */
+  dock: Dock;
+  /** Called when the ledger tab opens, so startWorldLab can fill `#charts`. */
+  onLedgerShow: () => void;
   /** the working view toggle (W) */
   onWorking: () => void;
   setWorking: (on: boolean) => void;
@@ -3446,23 +3447,39 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.onSelect = () => {};
 
-  // ── the right column: the drawer (species roster, Task 6) and the select
-  // tool's readout plate. The readout used to independently `position:
-  // fixed` at right:18px, vertically centred — the drawer has nowhere
-  // principled to go alongside it without risking the SAME collision
-  // leftStack already fixed on the left column (a panel whose height can
-  // reach into its neighbour's box). `rightStack` mirrors that fix: one
-  // fixed anchor, plain flow children stacked top-down, so the readout's top
-  // edge is always "the drawer's bottom + gap" — never a guess that can
-  // overlap it, regardless of which panel is showing or how tall either
-  // grows. Capped so, even both fully expanded, the column never reaches
-  // the bottom starter/time/palette stack. ────────────────────────────────
+  // ── the right column: the drawer stays here; subject/exchange/web/ledger/
+  // pressures live in ONE dock (Task 6) so open-state is shared and visible.
+  // `rightStack` still holds the drawer + the "here" chip. ─────────────────
   const rightStack = document.createElement("div");
   rightStack.id = "lab-right-stack";
   rightStack.style.cssText =
     "position: fixed; right: 18px; top: 92px; z-index: 6; display: flex; flex-direction: column;" +
     " align-items: flex-end; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
   document.body.appendChild(rightStack);
+
+  // The five-tab dock: reserves the right edge when a tab is open (measured by
+  // relayout), collapses to nothing when closed. Replaces four independent
+  // fixed overlays that could not express a shared open/closed state.
+  const dockHost = document.createElement("div");
+  dockHost.id = "lab-dock";
+  dockHost.style.cssText =
+    "position: fixed; right: 18px; top: 92px; z-index: 7; width: 360px; max-height: calc(100vh - 160px);" +
+    " display: none; flex-direction: column; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame); overflow: hidden; pointer-events: auto;";
+  document.body.appendChild(dockHost);
+  const dock = buildDock(dockHost);
+  chrome.dock = dock;
+  chrome.onLedgerShow = () => {};
+
+  const syncDockChrome = (id: TabId | null): void => {
+    dockHost.style.display = id ? "flex" : "none";
+    panelWebBtn.style.cssText = btn(id === "web");
+    panelLedgerBtn.style.cssText = btn(id === "ledger");
+    pressuresBtn.style.cssText = btn(id === "pressures");
+    if (id === "ledger") chrome.onLedgerShow();
+    else if (isChartsOpen()) closeCharts();
+  };
+  dock.onTab(syncDockChrome);
 
   // the drawer: every introduced kind (starter/rolled/captured daughter),
   // live status — in play / variations / a three-way alive-extinct-cleared
@@ -3572,17 +3589,17 @@ function buildChrome(initial: StarterKind): Chrome {
     }
   };
 
-  // ── the readout plate: a bench-owned codex plate for the select tool's
-  // pick — raw internals, not the player-facing openInspect card. Docked
-  // below the drawer in `rightStack` now (was independently fixed, vertically
-  // centred — see rightStack's own comment above). ─────────────────────────
+  // ── selected-entity chip: a thin name plate on the right; full subject /
+  // exchange readouts live in the dock tabs (Task 6). ───────────────────────
   const readout = document.createElement("div");
   readout.id = "lab-readout";
   readout.style.cssText =
-    "display: none; width: 264px; max-height: 42vh; overflow-y: auto; padding: 16px 18px;" +
+    "display: none; width: 264px; padding: 8px 14px; box-sizing: border-box;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
     " font-family: var(--serif); flex: 0 0 auto; pointer-events: auto;";
   rightStack.appendChild(readout);
+  const subjectBody = dock.body("subject");
+  const exchangeBody = dock.body("exchange");
 
   // What is under the last click, and which of the stack is showing — so the
   // disambiguation is visible rather than guessed at.
@@ -3610,17 +3627,7 @@ function buildChrome(initial: StarterKind): Chrome {
     hereEl.innerHTML = `here ${stack}<br /><span style="opacity: 0.6;">click again to cycle</span>`;
   };
 
-  // ── the left column: the roll pane and the living-web census used to be
-  // two independently `position: fixed` panels sharing the left:18px column
-  // — the roll pane pinned under the eyebrow, the census vertically
-  // centred. Once the roll grid filled out (its normal 2-row state), the
-  // roll pane's height reached down into the census's vertically-centred
-  // box, and painted over its title (it's appended to body later, so it
-  // wins the paint order). `leftStack` fixes that structurally, the same
-  // way the bottom starter/time `stack` above avoids ITS own panel
-  // collision: a single fixed anchor, plain flow children laid top-down, so
-  // the census's top edge is always "roll pane's bottom + gap" — never a
-  // guess that can land inside the roll pane's box. ───────────────────────
+  // ── the left column: the roll pane. Web/census moved into the dock (Task 6).
   const leftStack = document.createElement("div");
   leftStack.id = "lab-left-stack";
   leftStack.style.cssText =
@@ -3629,26 +3636,16 @@ function buildChrome(initial: StarterKind): Chrome {
   // Children re-enable pointer-events so the empty stack doesn't block the map.
   document.body.appendChild(leftStack);
 
-  // the census (population, the live proof) beside the food web's static
-  // chain-potential, so watching a chain close is just watching a feeder's
-  // row climb out of zero. Docked below the roll pane in `leftStack` now
-  // (was vertically centred, independently fixed — see above).
-  const web = document.createElement("div");
-  web.id = "lab-census";
-  web.style.cssText =
-    "display: none; width: 240px; max-height: 52vh; overflow-y: auto; padding: 16px 18px; background: var(--panel);" +
-    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
-    " pointer-events: auto; flex: 0 0 auto;";
-  leftStack.appendChild(web);
+  // Web / census — re-hosted in the dock's web tab (was a leftStack overlay).
   const webContent = document.createElement("div");
-  web.appendChild(webContent);
+  dock.body("web").appendChild(webContent);
   const webLedgerBtn = document.createElement("button");
   webLedgerBtn.id = "web-ledger-btn";
   webLedgerBtn.textContent = "open ledger";
   webLedgerBtn.title = "full census ledger (G)";
   webLedgerBtn.style.cssText = btn(false) + " display: block; width: 100%; margin-top: 10px;";
   webLedgerBtn.onclick = () => chrome.openLedger();
-  web.appendChild(webLedgerBtn);
+  dock.body("web").appendChild(webLedgerBtn);
 
   // shared plate-string helpers, mirroring simulator.ts's own title/head/
   // stat token usage so the two benches' plates read as one family
@@ -3722,7 +3719,7 @@ function buildChrome(initial: StarterKind): Chrome {
     "display: none; width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
     " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;" +
     " max-height: 42vh; overflow-y: auto; pointer-events: auto;";
-  leftStack.insertBefore(rollPane, web); // above the census — leftStack's first child
+  leftStack.appendChild(rollPane); // roll is the left rail's only panel now (web → dock)
 
   const rollHead = document.createElement("div");
   rollHead.innerHTML =
@@ -3989,12 +3986,26 @@ function buildChrome(initial: StarterKind): Chrome {
     }
   };
 
+  const openSubjectTab = (): void => {
+    const cur = dock.activeTab();
+    if (cur !== "subject" && cur !== "exchange") dock.setTab("subject");
+  };
+  const showChip = (name: string, sub: string): void => {
+    readout.innerHTML =
+      `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 15px; color: var(--ink-bright);">${esc(name)}</div>` +
+      `<div style="font: 10px var(--mono); color: rgba(228,236,242,0.5); margin-top: 1px;">${esc(sub)}</div>`;
+    readout.style.display = "block";
+  };
+
   chrome.showCritterInspect = (v) => {
     // the subtitle speaks the tray's short label ("fish"), never the raw kebab-case
     // role id ("aquatic-grazer") — the same vocabulary the button and badge use (qa
     // consistency #3). Falls back to the raw id for an unlisted role (reads fine).
     const roleName = AMBIENT_ROLES.find((r) => r.id === v.role)?.label ?? v.role;
-    readout.innerHTML =
+    showChip(v.name.toLowerCase(), `${roleName} · size ${v.size.toFixed(2)}`);
+    exchangeBody.innerHTML =
+      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45);">exchange is for an insect cloud and its host</div>`;
+    subjectBody.innerHTML =
       head(v.name.toLowerCase(), `${roleName} · size ${v.size.toFixed(2)}`) +
       title("palate") +
       stat("form", PlantForm[v.palate.form].toLowerCase()) +
@@ -4013,10 +4024,16 @@ function buildChrome(initial: StarterKind): Chrome {
       drive("hunger", v.drives.hunger, v.dominant === "hunger") +
       drive("comfort", v.drives.comfort, v.dominant === "comfort") +
       drive("curiosity", v.drives.curiosity, v.dominant === "curiosity");
-    readout.style.display = "block";
+    openSubjectTab();
   };
   chrome.showPlantInspect = (v, opts) => {
-    readout.innerHTML =
+    showChip(
+      v.name.toLowerCase(),
+      `${v.habitat} · ${v.substrateFeeder ? "substrate feeder" : "not a substrate feeder"}`,
+    );
+    exchangeBody.innerHTML =
+      `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45);">exchange is for an insect cloud and its host</div>`;
+    subjectBody.innerHTML =
       head(
         v.name.toLowerCase(),
         `${v.habitat} · ${v.substrateFeeder ? "a substrate feeder" : "not a substrate feeder"}`,
@@ -4080,7 +4097,7 @@ function buildChrome(initial: StarterKind): Chrome {
       introBtn.onclick = () => chrome.onIntroduceClone();
       btnRow.append(rerollBtn, resetBtn, introBtn);
       cloneBlock.appendChild(btnRow);
-      readout.appendChild(cloneBlock);
+      subjectBody.appendChild(cloneBlock);
     }
     if (opts?.canInvite) {
       const row = document.createElement("div");
@@ -4091,9 +4108,9 @@ function buildChrome(initial: StarterKind): Chrome {
       inviteBtn.style.cssText = btn(false);
       inviteBtn.onclick = () => chrome.onInviteCloud();
       row.appendChild(inviteBtn);
-      readout.appendChild(row);
+      subjectBody.appendChild(row);
     }
-    readout.style.display = "block";
+    openSubjectTab();
   };
   chrome.onCloneAmount = () => {};
   chrome.onCloneReroll = () => {};
@@ -4114,7 +4131,8 @@ function buildChrome(initial: StarterKind): Chrome {
           )
           .join("")
       : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no spreads yet · needs match ≥ 0.30</div>`;
-    readout.innerHTML =
+    showChip(v.name.toLowerCase(), hasHost ? `works ${v.hostName.toLowerCase()}` : "waiting for a bloom");
+    subjectBody.innerHTML =
       head(v.name.toLowerCase(), `insect cloud · ${hasHost ? `works ${esc(v.hostName.toLowerCase())}` : "waiting for a bloom"}`) +
       title("vitals") +
       stat("population", `${Math.round(v.population)} / ${Math.round(v.cap)}`, "mint") +
@@ -4123,13 +4141,6 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("resemblance", pct(v.resemblance)) +
       (hasHost ? stat("host nectar", pct(v.nectar), v.nectar < 0.2 ? "ink" : "mint") : "") +
       stat("mode", v.pinned ? "pinned to host" : "free-roam") +
-      title("the exchange") +
-      stat("next spread", v.etaWord, v.canSpread ? "mint" : "ink") +
-      stat("spreads so far", String(v.spreads)) +
-      stat("energy in / out", `${v.intake.toFixed(2)} / ${v.burn.toFixed(2)}`, v.net >= 0 ? "mint" : "ink") +
-      stat("net", `${v.net >= 0 ? "+" : ""}${v.net.toFixed(2)} / tick`, v.net >= 0 ? "mint" : "ink") +
-      stat("nectar", v.nectarSustainable ? "regen keeps up" : "drawn faster than it refills", v.nectarSustainable ? "mint" : "ink") +
-      stat("refill", Number.isFinite(v.refillTicks) ? `${Math.round(v.refillTicks)} ticks` : "never") +
       title("maps · the insect genome") +
       `<div style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;">` +
       `<div style="text-align:center;"><img src="${v.sensorPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">insect</div></div>` +
@@ -4159,8 +4170,18 @@ function buildChrome(initial: StarterKind): Chrome {
       ? "pinned · holds this bloom"
       : "free-roam · takes fuller blooms";
     controls.append(hint);
-    readout.appendChild(controls);
-    readout.style.display = "block";
+    subjectBody.appendChild(controls);
+
+    exchangeBody.innerHTML =
+      head(v.name.toLowerCase(), hasHost ? `× ${esc(v.hostName.toLowerCase())}` : "no host yet") +
+      title("the exchange") +
+      stat("next spread", v.etaWord, v.canSpread ? "mint" : "ink") +
+      stat("spreads so far", String(v.spreads)) +
+      stat("energy in / out", `${v.intake.toFixed(2)} / ${v.burn.toFixed(2)}`, v.net >= 0 ? "mint" : "ink") +
+      stat("net", `${v.net >= 0 ? "+" : ""}${v.net.toFixed(2)} / tick`, v.net >= 0 ? "mint" : "ink") +
+      stat("nectar", v.nectarSustainable ? "regen keeps up" : "drawn faster than it refills", v.nectarSustainable ? "mint" : "ink") +
+      stat("refill", Number.isFinite(v.refillTicks) ? `${Math.round(v.refillTicks)} ticks` : "never");
+    openSubjectTab();
   };
   chrome.onInviteCloud = () => {};
   chrome.onToggleSwarmPin = () => {};
@@ -4174,6 +4195,10 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.hideInspect = () => {
     readout.style.display = "none";
+    subjectBody.innerHTML = "";
+    exchangeBody.innerHTML = "";
+    const t = dock.activeTab();
+    if (t === "subject" || t === "exchange") dock.setTab(null);
   };
 
   // The richness meter: hoisted to the TOP of the panel (above "census"), so
@@ -4201,9 +4226,8 @@ function buildChrome(initial: StarterKind): Chrome {
     `counts dispersers only</div>` +
     `</div>`;
 
-  chrome.openLedger = () => {};
-  chrome.setLedgerOpen = (on) => {
-    panelLedgerBtn.style.cssText = btn(on);
+  chrome.openLedger = () => {
+    dock.setTab(nextTabState(dock.activeTab(), "ledger"));
   };
   chrome.onWorking = () => {};
   chrome.setWorking = (on) => {
@@ -4212,6 +4236,23 @@ function buildChrome(initial: StarterKind): Chrome {
   panelWorkingBtn.onclick = () => chrome.onWorking();
   chrome.onSelectWebNode = () => {};
   let webViewMode: "graph" | "table" = "graph";
+
+  // Reparent the island ledger into the dock so #charts CSS still applies,
+  // but as an in-flow panel rather than a centred fixed overlay.
+  const chartsEl = document.getElementById("charts");
+  if (chartsEl) {
+    dock.body("ledger").appendChild(chartsEl);
+    chartsEl.style.position = "static";
+    chartsEl.style.transform = "none";
+    chartsEl.style.left = "auto";
+    chartsEl.style.top = "auto";
+    chartsEl.style.width = "100%";
+    chartsEl.style.maxHeight = "none";
+    chartsEl.style.boxShadow = "none";
+    chartsEl.style.background = "transparent";
+    chartsEl.style.padding = "0";
+    chartsEl.style.borderRadius = "0";
+  }
 
   const foodWebGraphHtml = (v: CensusWebView): string => {
     if (v.links.length === 0) {
@@ -4335,61 +4376,19 @@ function buildChrome(initial: StarterKind): Chrome {
     }
   };
 
-  // ── the evolution tray (Task 5, slice 4 — LAYOUT FIXED in review): the
-  // marquee of the evolutionary layer made literal — five LIVE sliders, each
-  // an onInput straight onto the running kernel (worldlab.ts's setPressure,
-  // wired through onPressure below). The original pass docked this bottom-
-  // RIGHT as an independent `position: fixed` overlay; at the brief's own
-  // shot viewport that collided with the drawer's own right-docked column
-  // (both right-corner fixed panels, no mutual awareness) and clipped its
-  // rows. Fixed by making the tray a child of the bottom-CENTER `stack`
-  // instead — the SAME self-healing column-reverse mechanism the starter/
-  // time bar and palette already share (see `stack`'s own comment, above):
-  // appended LAST, so it stacks ABOVE the palette rather than below it,
-  // growing the stack's total height without moving the bar's own
-  // bottom-anchored position.
-  //
-  // Centering alone isn't quite enough, though: `stack`'s own box sizes to
-  // its WIDEST child (here, the palette, which on a big roster can already
-  // run wide — a separate, pre-existing "the palette can underlap the side
-  // columns" behavior this task doesn't touch), and `align-items: center`
-  // only centers each child WITHIN that box, not within the narrower gap
-  // between leftStack's right edge (~386px: 18px + the roll pane's own
-  // 336px content + its 32px of padding) and rightStack's left edge
-  // (~346px in from the right: 18px + the drawer's 296px content + its
-  // 32px of padding) — a gap that narrows on a smaller window. So the tray
-  // caps its OWN max-width well under that gap (independent of whatever the
-  // palette does) and lays its five sliders in a compact, narrow-columned
-  // row that wraps (flex-wrap) onto as many lines as it needs — 2 per row
-  // at this cap, so 3 rows for five sliders — bounded so the tray's total
-  // rendered width can never reach into either side column's footprint, at
-  // the brief's own 1400px shot OR the narrower 1100px one, rather than a
-  // viewport-width guess that only holds at one specific size.
-  // Toggled by the pressuresBtn beside brush, above; hidden by default. ────
-  const evoTray = document.createElement("div");
-  evoTray.id = "lab-evo-tray";
-  evoTray.style.cssText =
-    "display: none; max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
-    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
-    " font-family: var(--serif); user-select: none;";
-  stack.appendChild(evoTray); // appended LAST — column-reverse stacks it above bar + palette
-
+  // ── pressures — re-hosted in the dock (was an in-flow child of the bottom
+  // stack that grew upward over the construct). ────────────────────────────
   const evoHead = document.createElement("div");
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide · not per plant below</div>`;
-  evoTray.appendChild(evoHead);
+  dock.body("pressures").appendChild(evoHead);
 
-  // The five sliders sit in a ROW (not a stacked column) — a compact strip
-  // above the bottom bar rather than a tall panel. Each group is narrow
-  // enough (with the tray's own 260px cap above) that either two fit per
-  // row at that cap, or all five fit in one row on a wide enough window
-  // (flex-wrap handles both), the same convention the bottom bar's own
-  // clusters already use.
+  // The five sliders sit in a wrapping row — compact enough for the 360px dock.
   const evoRow = document.createElement("div");
   evoRow.style.cssText = "display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px;";
-  evoTray.appendChild(evoRow);
+  dock.body("pressures").appendChild(evoRow);
 
   // A raw slider value's own legible face: the four FloraTuning-backed
   // pressures (fine steps, 0.01) read as a two-decimal fraction; the coarse
@@ -4453,24 +4452,21 @@ function buildChrome(initial: StarterKind): Chrome {
     chrome.setPressure(p.id, boot);
   }
 
-  let pressuresOpen = false;
   chrome.openPressures = (open) => {
-    pressuresOpen = open ?? !pressuresOpen;
-    evoTray.style.display = pressuresOpen ? "block" : "none";
-    pressuresBtn.style.cssText = btn(pressuresOpen);
+    if (open === true) dock.setTab("pressures");
+    else if (open === false) {
+      if (dock.activeTab() === "pressures") dock.setTab(null);
+    } else dock.setTab(nextTabState(dock.activeTab(), "pressures"));
   };
 
-  // Map-first side panels: closed by default so the construct stays visible.
-  // The bar's roll / web / drawer buttons toggle them; ?roll= still opens roll.
+  // Map-first side panels: roll / drawer stay independent; web/ledger/pressures
+  // share the dock's one open-state (Task 6).
   let rollOpen = false;
-  let webOpen = false;
   let drawerOpen = false;
   const syncSidePanels = (): void => {
     rollPane.style.display = rollOpen ? "block" : "none";
-    web.style.display = webOpen ? "block" : "none";
     drawerPanel.style.display = drawerOpen ? "block" : "none";
     panelRollBtn.style.cssText = btn(rollOpen);
-    panelWebBtn.style.cssText = btn(webOpen);
     panelDrawerBtn.style.cssText = btn(drawerOpen);
   };
   chrome.openRoll = (open?: boolean) => {
@@ -4478,8 +4474,10 @@ function buildChrome(initial: StarterKind): Chrome {
     syncSidePanels();
   };
   chrome.openWeb = (open?: boolean) => {
-    webOpen = open ?? !webOpen;
-    syncSidePanels();
+    if (open === true) dock.setTab("web");
+    else if (open === false) {
+      if (dock.activeTab() === "web") dock.setTab(null);
+    } else dock.setTab(nextTabState(dock.activeTab(), "web"));
   };
   chrome.openDrawer = (open?: boolean) => {
     drawerOpen = open ?? !drawerOpen;
