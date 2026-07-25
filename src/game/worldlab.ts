@@ -78,6 +78,7 @@ import {
   FIT_MARGIN,
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
+import { canvasBoxFor, edgeInset } from "./simLayout";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import {
@@ -2380,10 +2381,43 @@ export function startWorldLab(): void {
       cameraPanning = false;
     }
   });
-  window.addEventListener("resize", () => {
-    renderer.resize();
+  // ── the frame: reserve the chrome's space, give the construct the rest ────
+  // The canvas used to be the full viewport, so every panel sat ON TOP of the
+  // construct, and the bottom cluster grew upward across it as trays opened.
+  // Now the chrome is MEASURED each layout pass and the canvas is positioned
+  // into what's left, so a growing tray shrinks the construct rather than
+  // covering it — and collapsing one hands the space straight back.
+  let lastBoxW = 0;
+  let lastBoxH = 0;
+  function relayout(): void {
+    const box = canvasBoxFor(window.innerWidth, window.innerHeight, {
+      top: edgeInset(document.getElementById("lab-eyebrow"), "top"),
+      left: edgeInset(document.getElementById("lab-left-stack"), "left"),
+      right: edgeInset(document.getElementById("lab-right-stack"), "right"),
+      bottom: edgeInset(document.getElementById("lab-bottom-stack"), "bottom"),
+    });
+    canvas.style.position = "fixed";
+    canvas.style.left = `${box.left}px`;
+    canvas.style.top = `${box.top}px`;
+    canvas.style.width = `${box.width}px`;
+    canvas.style.height = `${box.height}px`;
+    if (box.width === lastBoxW && box.height === lastBoxH) return;
+    lastBoxW = box.width;
+    lastBoxH = box.height;
+    renderer.resize(box.width, box.height);
     fitCameraToConstruct();
-  });
+  }
+  // Panels change height as trays open and content loads; observe them rather
+  // than guessing at fixed offsets (the guess is what broke before).
+  if (typeof ResizeObserver !== "undefined") {
+    const ro = new ResizeObserver(() => relayout());
+    for (const id of ["lab-eyebrow", "lab-left-stack", "lab-right-stack", "lab-bottom-stack"]) {
+      const el = document.getElementById(id);
+      if (el) ro.observe(el);
+    }
+  }
+  window.addEventListener("resize", relayout);
+  relayout();
 
   // Wheel pans by default; ⌃/⌘+wheel or pinch zooms with a soft step.
   // preventDefault so the page doesn't scroll under the canvas.
@@ -2834,6 +2868,7 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   const eyebrow = document.createElement("div");
+  eyebrow.id = "lab-eyebrow";
   eyebrow.innerHTML =
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
@@ -2882,6 +2917,7 @@ function buildChrome(initial: StarterKind): Chrome {
   // then let the two panels collide). The flexbox does the stacking math
   // instead, so either panel can grow without colliding with the other.
   const stack = document.createElement("div");
+  stack.id = "lab-bottom-stack";
   // Capped to the viewport with its OWN scroll. Each child self-caps (palette
   // 40vh, evoTray/ambientTray 46vh), but nothing bounded the stack's TOTAL
   // height — bar + palette + a third open tray could exceed 100vh, and since the
@@ -2893,7 +2929,13 @@ function buildChrome(initial: StarterKind): Chrome {
   stack.style.cssText =
     "position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 6;" +
     " display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; max-width: 92vw;" +
-    " max-height: calc(100vh - 36px); overflow-y: auto;";
+    // Capped to a THIRD of the window, not nearly all of it. The old
+    // calc(100vh - 36px) let the bottom pile grow to 864px on a 900px window
+    // as trays opened — it did not merely cover the construct, it left no room
+    // to reserve, so the frame could not give the construct anything. A hard
+    // cap plus its own scroll bounds the damage; the trays move into the right
+    // dock next, which removes the pile entirely.
+    " max-height: 34vh; overflow-y: auto;";
   document.body.appendChild(stack);
 
   const bar = document.createElement("div");

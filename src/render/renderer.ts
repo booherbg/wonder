@@ -110,9 +110,14 @@ export class Renderer {
     this.map = map;
   }
 
-  resize(): void {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+  /**
+   * Size the drawing surface. The island fills the window (no arguments —
+   * unchanged); the World-Lab passes the box its chrome has left over, so the
+   * construct sits beside the panels rather than underneath them.
+   */
+  resize(width?: number, height?: number): void {
+    this.canvas.width = Math.max(1, Math.round(width ?? window.innerWidth));
+    this.canvas.height = Math.max(1, Math.round(height ?? window.innerHeight));
   }
 
   // The focus lens (Z): main's frame loop eases this toward its target, and
