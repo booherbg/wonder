@@ -1609,14 +1609,20 @@ default false) with a guard test pinning the island's unchanged behaviour.
 
 ### Still open
 
-- **Task 6 (rest)** — the five-tab dock. The panels no longer overlap the
-  construct, but they are still four independent fixed overlays; the bottom
-  pile is capped at 34vh as a holding measure rather than emptied into a dock.
-- **Tasks 7–9** — telemetry, the working view, Subject/Exchange tabs. Now
-  unblocked by `90f758c`.
-- **Tasks 10–11** — the web graph + table.
-- **Tasks 12–13** — tooltips, the voice pass.
-- **Task 14** — acceptance walk.
+_(none — Tasks 6–14 landed on `sim-rework` through 2026-07-25.)_
+
+### Progress — 2026-07-25
+
+| commit | what landed |
+|---|---|
+| `39af701` | Task 10 — web graph layout |
+| `7542c8f` | Task 11 — Web tab graph + table |
+| `3997dff` | Task 6 — five-tab dock |
+| `1e39327` | Task 6 fix — dock/drawer mutual exclusion + chip offset |
+| `8330fe0` | Task 12 — edge-aware tooltips |
+| (earlier) | Tasks 7–9, 13 already on branch |
+
+**Final gate:** `npm run check` clean · **681** tests · `npm run build` ok. `worldlab.ts` still ~4706 lines (known gap vs spec §4's 900).
 
 ### Notes for whoever continues
 
