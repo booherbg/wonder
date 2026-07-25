@@ -32,6 +32,9 @@ export type PressureId =
 export interface Pressure {
   id: PressureId;
   label: string;
+  /** One line, shown as a tooltip. These meanings used to live only in the
+   *  comments of this file, where no player could read them. */
+  help: string;
   min: number;
   max: number;
   step: number;
@@ -48,19 +51,19 @@ export interface Pressure {
 // The pressures, in panel order. Ranges bracket DEFAULT_TUNING so the
 // default sits mid-slider and cranking a knob is a visible change.
 export const PRESSURES: Pressure[] = [
-  { id: "mutationAmount", label: "drift", min: 0, max: 0.3, step: 0.01, tuningKey: "mutationAmount" },
-  { id: "splitDistance", label: "speciation", min: 0.08, max: 0.6, step: 0.01, tuningKey: "splitDistance", reversed: true },
-  { id: "grazerShare", label: "grazer share", min: 0, max: 1, step: 0.05 },
-  { id: "reproChance", label: "reseed rate", min: 0, max: 0.4, step: 0.01, tuningKey: "reproChance" },
-  { id: "maxPerTile", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
-  { id: "reseedRadius", label: "spread distance", min: 1, max: 8, step: 1, tuningKey: "reseedRadius" },
-  { id: "pollinationRadius", label: "cross distance", min: 0, max: 6, step: 1, tuningKey: "pollinationRadius" },
-  { id: "pollinatorReach", label: "pollinator reach", min: 1, max: 10, step: 1 },
-  { id: "pollinatorDensity", label: "pollinator density", min: 1, max: 4, step: 1 },
-  { id: "lifespan", label: "plant lifespan", min: 100, max: 2000, step: 50, tuningKey: "lifespan" },
-  { id: "nectarRegen", label: "nectar regen", min: 0.01, max: 0.2, step: 0.01 },
-  { id: "nectarDraw", label: "nectar draw", min: 0.05, max: 0.5, step: 0.01 },
-  { id: "emptyThreshold", label: "empty threshold", min: 0, max: 0.5, step: 0.01 },
+  { id: "mutationAmount", help: "genome drift per generation · left = clones, right = wild", label: "drift", min: 0, max: 0.3, step: 0.01, tuningKey: "mutationAmount" },
+  { id: "splitDistance", help: "how readily a drifted lineage becomes its own kind · right = splits sooner", label: "speciation", min: 0.08, max: 0.6, step: 0.01, tuningKey: "splitDistance", reversed: true },
+  { id: "grazerShare", help: "share of critter kinds that graze rather than disperse · right = more grazing, less spreading", label: "grazer share", min: 0, max: 1, step: 0.05 },
+  { id: "reproChance", help: "chance a mature plant reseeds when examined · right = faster spread", label: "reseed rate", min: 0, max: 0.4, step: 0.01, tuningKey: "reproChance" },
+  { id: "maxPerTile", help: "plants allowed to stack on one tile · the richness ceiling", label: "per-tile cap", min: 1, max: 12, step: 1, tuningKey: "maxPerTile" },
+  { id: "reseedRadius", help: "how far a natural reseed lands, in tiles", label: "spread distance", min: 1, max: 8, step: 1, tuningKey: "reseedRadius" },
+  { id: "pollinationRadius", help: "how far a plant looks for a same-species partner to cross with", label: "cross distance", min: 0, max: 6, step: 1, tuningKey: "pollinationRadius" },
+  { id: "pollinatorReach", help: "how far an assisted pollination spreads seed, in tiles", label: "pollinator reach", min: 1, max: 10, step: 1 },
+  { id: "pollinatorDensity", help: "how many of one kind an assisted spread will stack per tile", label: "pollinator density", min: 1, max: 4, step: 1 },
+  { id: "lifespan", help: "ticks before a plant may die of age", label: "plant lifespan", min: 100, max: 2000, step: 50, tuningKey: "lifespan" },
+  { id: "nectarRegen", help: "nectar a flower makes per tick · below the draw, blooms run dry", label: "nectar regen", min: 0.01, max: 0.2, step: 0.01 },
+  { id: "nectarDraw", help: "most nectar an insect takes in one visit", label: "nectar draw", min: 0.05, max: 0.5, step: 0.01 },
+  { id: "emptyThreshold", help: "free-roaming clouds skip blooms below this nectar", label: "empty threshold", min: 0, max: 0.5, step: 0.01 },
 ];
 
 // Clamp a raw slider value to the named pressure's own [min, max] — the panel

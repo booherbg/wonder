@@ -80,6 +80,7 @@ import {
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
 import { canvasBoxFor, edgeInset } from "./simLayout";
 import { workingReadings } from "../render/working";
+import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
 import { metabolicEfficiency } from "../life/idmap";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
@@ -336,6 +337,15 @@ interface SwarmInspectView {
   behaviorLine: string;
   sensorPatch: string;
   flowerPatch: string;
+  // the economics — what this pairing actually does, in numbers
+  etaWord: string; // "≈ 14 ticks" / "never · match 0.10 < 0.30"
+  canSpread: boolean;
+  intake: number; // energy per heartbeat at this nectar and match
+  burn: number; // LIVING_COST × population
+  net: number;
+  nectarSustainable: boolean;
+  refillTicks: number;
+  spreads: number; // successful spreads so far
   pollinationLog: { name: string; count: number; lastTick: number; patch: string }[];
 }
 
@@ -363,6 +373,15 @@ function mapPatchDataUrl(map: Uint8Array, accent?: Uint8Array, ring?: Set<number
 
 function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpecies[]): SwarmInspectView {
   const info = layer.inspect(ent, species);
+  const odds = spreadOdds(info.matchEfficiency, info.population, info.cap);
+  const budget = energyBudget(info.population, info.cap, info.matchEfficiency, info.nectar);
+  // NectarStepConfig's fields are optional; fall back to the pressures' defaults
+  const economy = nectarEconomy(
+    info.nectar,
+    layer.nectarTuning.regen ?? DEFAULT_PRESSURE_NECTAR_REGEN,
+    layer.nectarTuning.draw ?? DEFAULT_PRESSURE_NECTAR_DRAW,
+    1,
+  );
   const ring = new Set<number>();
   for (let i = 0; i < info.sensor.length; i++) {
     if (info.accent[i] && info.sensor[i] === info.flowerMap[i]) ring.add(i);
@@ -378,6 +397,14 @@ function swarmInspectView(layer: SwarmLayer, ent: WorldSwarm, species: PlantSpec
     nectar: info.nectar,
     pinned: info.pinned,
     behaviorLine: behaviourLine(info.behavior),
+    etaWord: spreadEtaWord(odds, info.matchEfficiency),
+    canSpread: odds.canSpread,
+    intake: budget.intake,
+    burn: budget.burn,
+    net: budget.net,
+    nectarSustainable: economy.sustainable,
+    refillTicks: economy.refillTicks,
+    spreads: ent.pollinated,
     sensorPatch: mapPatchDataUrl(info.sensor, info.accent, ring),
     flowerPatch: mapPatchDataUrl(info.flowerMap, info.accent),
     pollinationLog: info.pollinationLog.map((row) => ({
@@ -3032,6 +3059,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const playBtn = document.createElement("button");
   playBtn.id = "play-btn";
   playBtn.textContent = "play";
+  playBtn.title = "run the sim (space) — pauses stop the motes too";
   playBtn.style.cssText = btn(false);
   playBtn.onclick = () => chrome.onPlay();
   bar.appendChild(playBtn);
@@ -3039,6 +3067,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const stepBtn = document.createElement("button");
   stepBtn.id = "step-btn";
   stepBtn.textContent = "step";
+  stepBtn.title = "advance exactly one heartbeat";
   stepBtn.style.cssText = btn(false);
   stepBtn.onclick = () => chrome.onStep();
   bar.appendChild(stepBtn);
@@ -3090,7 +3119,9 @@ function buildChrome(initial: StarterKind): Chrome {
   // own single placement). Same active/inactive btn() chrome as fidelity. ──
   bar.appendChild(sep());
   const brushBtns = BRUSH_SIZES.map((size) => {
+    // stamp footprint: how many tiles one click lays
     const b = document.createElement("button");
+    b.title = `stamp a ${size}x${size} block of tiles per click`;
     b.textContent = `${size}×`;
     b.title = size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`;
     b.style.cssText = btn(false);
@@ -4010,6 +4041,13 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("resemblance", pct(v.resemblance)) +
       (hasHost ? stat("host nectar", pct(v.nectar), v.nectar < 0.2 ? "ink" : "mint") : "") +
       stat("mode", v.pinned ? "pinned to host" : "free-roam") +
+      title("the exchange") +
+      stat("next spread", v.etaWord, v.canSpread ? "mint" : "ink") +
+      stat("spreads so far", String(v.spreads)) +
+      stat("energy in / out", `${v.intake.toFixed(2)} / ${v.burn.toFixed(2)}`, v.net >= 0 ? "mint" : "ink") +
+      stat("net", `${v.net >= 0 ? "+" : ""}${v.net.toFixed(2)} / tick`, v.net >= 0 ? "mint" : "ink") +
+      stat("nectar", v.nectarSustainable ? "regen keeps up" : "drawn faster than it refills", v.nectarSustainable ? "mint" : "ink") +
+      stat("refill", Number.isFinite(v.refillTicks) ? `${Math.round(v.refillTicks)} ticks` : "never") +
       title("maps · the insect genome") +
       `<div style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;">` +
       `<div style="text-align:center;"><img src="${v.sensorPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">insect</div></div>` +
@@ -4185,6 +4223,9 @@ function buildChrome(initial: StarterKind): Chrome {
   const pressureRows = PRESSURES.map((p) => {
     const group = document.createElement("div");
     group.style.cssText = "width: 100px; flex: 0 0 auto; text-align: center;";
+    // the meaning used to live only in simPressures.ts's comments, where no
+    // player could read it; it belongs on the control itself
+    group.title = `${p.label} — ${p.help}`;
     const rowLabel = document.createElement("div");
     rowLabel.style.cssText = `${MONO} text-transform: uppercase; color: rgba(228,236,242,0.65);`;
     rowLabel.textContent = p.label;
@@ -4195,6 +4236,7 @@ function buildChrome(initial: StarterKind): Chrome {
     input.max = String(p.max);
     input.step = String(p.step);
     input.style.cssText = "width: 100%; margin-top: 4px; accent-color: rgb(var(--lumen));";
+    input.title = p.help;
     input.oninput = () => chrome.onPressure(p.id, Number(input.value));
     const valueRow = document.createElement("div");
     valueRow.style.cssText = "font: 13px var(--mono); color: rgb(var(--lumen)); margin-top: 3px;";
