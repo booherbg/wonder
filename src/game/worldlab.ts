@@ -3471,11 +3471,20 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.dock = dock;
   chrome.onLedgerShow = () => {};
 
+  // Declared early so syncDockChrome can close the drawer when a dock tab opens.
+  let drawerOpen = false;
+
   const syncDockChrome = (id: TabId | null): void => {
     dockHost.style.display = id ? "flex" : "none";
     panelWebBtn.style.cssText = btn(id === "web");
     panelLedgerBtn.style.cssText = btn(id === "ledger");
     pressuresBtn.style.cssText = btn(id === "pressures");
+    // Dock and drawer share the right edge — never both open.
+    if (id !== null && drawerOpen) {
+      drawerOpen = false;
+      drawerPanel.style.display = "none";
+      panelDrawerBtn.style.cssText = btn(false);
+    }
     if (id === "ledger") chrome.onLedgerShow();
     else if (isChartsOpen()) closeCharts();
   };
@@ -3589,15 +3598,30 @@ function buildChrome(initial: StarterKind): Chrome {
     }
   };
 
-  // ── selected-entity chip: a thin name plate on the right; full subject /
-  // exchange readouts live in the dock tabs (Task 6). ───────────────────────
+  // ── selected-entity chip + here stack: fixed to the right, but shift left
+  // when the dock is open so they never sit under it (Task 6 review). ───────
+  const chipStack = document.createElement("div");
+  chipStack.id = "lab-chip-stack";
+  chipStack.style.cssText =
+    "position: fixed; right: 18px; top: 92px; z-index: 8; display: flex; flex-direction: column;" +
+    " align-items: flex-end; gap: 10px; pointer-events: none;";
+  document.body.appendChild(chipStack);
+  const placeChips = (dockOpen: boolean): void => {
+    chipStack.style.right = dockOpen ? "390px" : "18px";
+  };
+  const prevSyncDock = syncDockChrome;
+  dock.onTab((id) => {
+    prevSyncDock(id);
+    placeChips(id !== null);
+  });
+
   const readout = document.createElement("div");
   readout.id = "lab-readout";
   readout.style.cssText =
     "display: none; width: 264px; padding: 8px 14px; box-sizing: border-box;" +
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
     " font-family: var(--serif); flex: 0 0 auto; pointer-events: auto;";
-  rightStack.appendChild(readout);
+  chipStack.appendChild(readout);
   const subjectBody = dock.body("subject");
   const exchangeBody = dock.body("exchange");
 
@@ -3610,7 +3634,7 @@ function buildChrome(initial: StarterKind): Chrome {
     " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
     " font: 10px/1.5 var(--mono); letter-spacing: 0.06em; color: rgba(228,236,242,0.55);" +
     " flex: 0 0 auto; pointer-events: auto;";
-  rightStack.appendChild(hereEl);
+  chipStack.appendChild(hereEl);
   chrome.setHere = (kinds, index) => {
     if (kinds.length < 2) {
       hereEl.style.display = "none";
@@ -3987,8 +4011,9 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   const openSubjectTab = (): void => {
-    const cur = dock.activeTab();
-    if (cur !== "subject" && cur !== "exchange") dock.setTab("subject");
+    // Always land on subject when inspecting a plant/critter — do not leave
+    // a stale exchange tab active from a prior swarm pick.
+    dock.setTab("subject");
   };
   const showChip = (name: string, sub: string): void => {
     readout.innerHTML =
@@ -4181,7 +4206,9 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("net", `${v.net >= 0 ? "+" : ""}${v.net.toFixed(2)} / tick`, v.net >= 0 ? "mint" : "ink") +
       stat("nectar", v.nectarSustainable ? "regen keeps up" : "drawn faster than it refills", v.nectarSustainable ? "mint" : "ink") +
       stat("refill", Number.isFinite(v.refillTicks) ? `${Math.round(v.refillTicks)} ticks` : "never");
-    openSubjectTab();
+    // Swarm fills both tabs; open subject unless the player is already on exchange.
+    const cur = dock.activeTab();
+    if (cur !== "exchange") dock.setTab("subject");
   };
   chrome.onInviteCloud = () => {};
   chrome.onToggleSwarmPin = () => {};
@@ -4460,9 +4487,9 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   // Map-first side panels: roll / drawer stay independent; web/ledger/pressures
-  // share the dock's one open-state (Task 6).
+  // share the dock's one open-state (Task 6). Dock and drawer are mutually
+  // exclusive on the right edge.
   let rollOpen = false;
-  let drawerOpen = false;
   const syncSidePanels = (): void => {
     rollPane.style.display = rollOpen ? "block" : "none";
     drawerPanel.style.display = drawerOpen ? "block" : "none";
@@ -4480,7 +4507,9 @@ function buildChrome(initial: StarterKind): Chrome {
     } else dock.setTab(nextTabState(dock.activeTab(), "web"));
   };
   chrome.openDrawer = (open?: boolean) => {
-    drawerOpen = open ?? !drawerOpen;
+    const next = open ?? !drawerOpen;
+    if (next && dock.activeTab() !== null) dock.setTab(null);
+    drawerOpen = next;
     syncSidePanels();
   };
   panelRollBtn.onclick = () => chrome.openRoll();
