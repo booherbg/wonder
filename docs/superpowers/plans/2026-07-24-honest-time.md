@@ -36,37 +36,37 @@
 
 **Files:** `src/life/census.ts`, `src/game/main.ts`, tests
 
-- [ ] **1.1** Failing tests: DEFAULT_INTERVAL 10, DEFAULT_CAP 50000; chart-window samplesForWindow(5000,10,…) = 500
-- [ ] **1.2** Update constants; SWARM_SAMPLE_INTERVAL=10; SWARM_HISTORY_CAP=50000
-- [ ] **1.3** Tests green; commit
+- [x] **1.1** Failing tests: DEFAULT_INTERVAL 10, DEFAULT_CAP 50000; chart-window samplesForWindow(5000,10,…) = 500
+- [x] **1.2** Update constants; SWARM_SAMPLE_INTERVAL=10; SWARM_HISTORY_CAP=50000
+- [x] **1.3** Tests green; commit
 
 ### Task 2: Load swarm-warm census.sample
 
 **Files:** `src/game/main.ts`, test if extractable else assert via warm helper
 
-- [ ] **2.1** In swarm warm loop after `sampleSwarms()`, call `census.sample(flora.tick, flora.speciesCounts)`
-- [ ] **2.2** Commit (manual/note: warm with swarms lengthens plant series during swarm phase)
+- [x] **2.1** In swarm warm loop after `sampleSwarms()`, call `census.sample(flora.tick, flora.speciesCounts)`
+- [x] **2.2** Commit (manual/note: warm with swarms lengthens plant series during swarm phase)
 
 ### Task 3: Live richness
 
 **Files:** `src/game/main.ts`, `src/game/simCharts.ts`, tests
 
-- [ ] **3.1** Failing test: buildLabChartsView / richness with defs but 0 live → low word/score
-- [ ] **3.2** Filter live plants/critters before chainStats in buildChartsView + buildLabChartsView (+ chainScoreNow if display)
-- [ ] **3.3** Tests green; commit
+- [x] **3.1** Failing test: buildLabChartsView / richness with defs but 0 live → low word/score
+- [x] **3.2** Filter live plants/critters before chainStats in buildChartsView + buildLabChartsView (+ chainScoreNow if display)
+- [x] **3.3** Tests green; commit
 
 ### Task 4: SVG downsample
 
 **Files:** `src/render/charts.ts`, `tests/chart-window.test.ts` or charts test
 
-- [ ] **4.1** After viewForWindow, downsample counts/matches to ~plotW (e.g. 500) via `downsample` before path; axis still uses full window length for tickAtIndex
-- [ ] **4.2** Test: long series → path point count bounded
-- [ ] **4.3** Commit
+- [x] **4.1** After viewForWindow, downsample counts/matches to ~plotW (e.g. 500) via `downsample` before path; axis still uses full window length for tickAtIndex
+- [x] **4.2** Test: long series → path point count bounded
+- [x] **4.3** Commit
 
 ### Task 5: Verify
 
-- [ ] **5.1** Full vitest + tsc
-- [ ] **5.2** Manual: short play curve; life=0 richness; All stays snappy
+- [x] **5.1** Full vitest + tsc
+- [x] **5.2** Manual: short play curve; life=0 richness; All stays snappy
 
 ---
 
