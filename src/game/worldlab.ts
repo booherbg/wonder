@@ -1728,6 +1728,19 @@ export function startWorldLab(): void {
     camX = clampX(camX);
     camY = clampY(camY);
   }
+  /** A resize changes what fits. `clampCameraAxis` deliberately keeps the slack
+   *  on a letterboxed axis (so a wide monitor can still pan), which means an
+   *  old offset survives the resize and strands the construct in a corner.
+   *  Re-centre only the axes that now fit; a zoomed-in view keeps its place. */
+  function recentreLetterboxedAxes(): void {
+    if (map.width * TILE_SIZE <= renderer.viewWidth) {
+      camX = (map.width * TILE_SIZE - renderer.viewWidth) / 2;
+    }
+    if (map.height * TILE_SIZE <= renderer.viewHeight) {
+      camY = (map.height * TILE_SIZE - renderer.viewHeight) / 2;
+    }
+    clampCamera();
+  }
 
   // Zoom out (or in) until the WHOLE construct fits the window, then centre
   // on it — the swarm bench's fit-to-field (simulator.ts's `scale = Math.min
@@ -2597,7 +2610,7 @@ export function startWorldLab(): void {
     // zoomMul (defaults to max-in on first layout via build()).
     recomputeFitZoom();
     applyCameraZoom();
-    clampCamera();
+    recentreLetterboxedAxes();
   }
   window.addEventListener("resize", relayout);
   relayout();
@@ -3153,6 +3166,9 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   // Assigned after roll/drawer exist; setTool may call it once chrome is live.
   let syncLeftChrome: () => void = () => {};
+  // Assigned with the narrow-mode chrome; the dock's own tab listener fires
+  // through it so desktop and narrow paint the dock the same single way.
+  let paintDockChrome: () => void = () => {};
   let currentTool: BuildTool = "select";
   let rollOpen = false;
   let drawerOpen = false;
@@ -3429,6 +3445,19 @@ function buildChrome(initial: StarterKind): Chrome {
   plantRow.appendChild(label("plant"));
   critterRow.appendChild(label("critter"));
   biomeRow.appendChild(label("biome"));
+  // A fresh canvas has no kinds until you roll, so place → materials opened on
+  // two bare headers with nothing to click. The roll pane and drawer both say
+  // what to do when empty; materials should too.
+  const emptyHint = (): HTMLElement => {
+    const e = document.createElement("span");
+    e.textContent = "nothing rolled yet — open roll";
+    e.style.cssText = "font: italic 11px var(--serif); color: rgba(228,236,242,0.45);";
+    return e;
+  };
+  const plantEmpty = emptyHint();
+  const critterEmpty = emptyHint();
+  plantRow.appendChild(plantEmpty);
+  critterRow.appendChild(critterEmpty);
 
   // Flash notes sit beside the rail (not inside the materials flyout) so they
   // remain visible on select/erase and while roll/drawer own the left edge.
@@ -3459,6 +3488,8 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.setPalette = (plants, critters) => {
     for (const { b } of plantBtns) b.remove();
     for (const { b } of critterBtns) b.remove();
+    plantEmpty.style.display = plants.length ? "none" : "";
+    critterEmpty.style.display = critters.length ? "none" : "";
     plantBtns = plants.map((sp) => {
       const b = document.createElement("button");
       b.textContent = sp.name.toLowerCase();
@@ -3524,7 +3555,7 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onLedgerShow = () => {};
 
   const syncDockChrome = (id: TabId | null): void => {
-    dockHost.style.display = id ? "flex" : "none";
+    paintDockChrome();
     // Dock (right) and drawer (left) may both be open — no mutual exclusion.
     if (id === "ledger") chrome.onLedgerShow();
     else if (isChartsOpen()) closeCharts();
@@ -4695,7 +4726,9 @@ function buildChrome(initial: StarterKind): Chrome {
   attachTooltip(moreBtn, "fidelity · session · brush");
   moreBtn.style.cssText = mobileBtn(false);
   moreBtn.onclick = () => {
-    moreOpen = !moreOpen;
+    const next = !moreOpen;
+    if (next) claimNarrowSheet("more");
+    moreOpen = next;
     libMenuOpen = false;
     syncNarrowSheets();
   };
@@ -4718,7 +4751,10 @@ function buildChrome(initial: StarterKind): Chrome {
   readBtn.style.cssText = mobileBtn(false);
   readBtn.onclick = () => {
     if (dock.activeTab() !== null) dock.setTab(null);
-    else dock.setTab("subject");
+    else {
+      claimNarrowSheet("read");
+      dock.setTab("subject");
+    }
   };
   const libBtn = document.createElement("button");
   libBtn.id = "lab-lib-btn";
@@ -4734,7 +4770,9 @@ function buildChrome(initial: StarterKind): Chrome {
       syncNarrowSheets();
       return;
     }
-    libMenuOpen = !libMenuOpen;
+    const next = !libMenuOpen;
+    if (next) claimNarrowSheet("lib");
+    libMenuOpen = next;
     moreOpen = false;
     syncNarrowSheets();
   };
@@ -4793,6 +4831,24 @@ function buildChrome(initial: StarterKind): Chrome {
   libSheet.append(libRollBtn, libDrawerBtn);
   document.body.appendChild(libSheet);
 
+  // Narrow: the bottom edge holds ONE sheet. Desktop can keep both edges open
+  // because they sit on opposite sides; on a phone every sheet lands on the
+  // same edge, so opening a second one buried the first (materials rendered
+  // under the Read sheet, and ⋯ pushed the tool row off-screen).
+  function claimNarrowSheet(which: "read" | "more" | "lib" | "materials"): void {
+    if (!narrowMode) return;
+    if (which !== "read" && dock.activeTab() !== null) dock.setTab(null);
+    if (which !== "more") moreOpen = false;
+    if (which !== "lib") {
+      libMenuOpen = false;
+      rollOpen = false;
+      drawerOpen = false;
+    }
+    // Materials has no flag of its own — it is open whenever the tool is
+    // paint or place, so closing it means stepping off that tool.
+    if (which !== "materials" && materialsForTool(currentTool)) chrome.onTool("select");
+  }
+
   const syncNarrowSheets = (): void => {
     moreSheet.style.display = narrowMode && moreOpen ? "flex" : "none";
     libSheet.style.display = narrowMode && libMenuOpen ? "flex" : "none";
@@ -4849,25 +4905,37 @@ function buildChrome(initial: StarterKind): Chrome {
     // Overlays: materials bottom sheet; roll/drawer/dock full-height sheets.
     leftStack.style.cssText = narrow ? LEFT_STACK_NARROW : LEFT_STACK_DESKTOP;
     syncLeftChrome();
-    const tab = dock.activeTab();
-    dockHost.style.cssText =
-      (tab ? "display: flex; " : "display: none; ") + (narrow ? DOCK_NARROW : DOCK_DESKTOP);
-    // Desktop caps the scroll body; narrow full-height sheets should fill the host.
-    const dockBodies = dockHost.children[1] as HTMLElement | undefined;
-    if (dockBodies) {
-      dockBodies.style.maxHeight = narrow ? "none" : "calc(100vh - 220px)";
-    }
+    paintDockChrome();
     placeChips();
     syncNarrowSheets();
     hint.style.left = narrow ? "12px" : "62px";
     hint.style.bottom = narrow ? DOCK_CLEARANCE : "66px";
   }
 
+  // On desktop the Read dock stays on screen as a tab rail even with every
+  // body closed. Deleting the bottom web/ledger/pressures buttons (spec
+  // §Read) left `G` as the only way in — a keyboard-only door for five tabs,
+  // and Pressures (which now owns Ambient) had no mouse route at all. Narrow
+  // still hides the sheet outright; the mobile `read` button opens it there.
+  paintDockChrome = (): void => {
+    const open = dock.activeTab() !== null;
+    const show = open || !narrowMode;
+    dockHost.style.cssText =
+      (show ? "display: flex; " : "display: none; ") +
+      (narrowMode ? DOCK_NARROW : DOCK_DESKTOP) +
+      // Collapsed, the rail shrinks to its tabs instead of holding a 360px
+      // slab of empty panel against the right edge.
+      (!narrowMode && !open ? " width: auto; max-height: none;" : "");
+    dock.setCollapsed(!open);
+    // Desktop caps the scroll body; narrow full-height sheets fill the host.
+    const dockBodies = dockHost.children[1] as HTMLElement | undefined;
+    if (dockBodies) dockBodies.style.maxHeight = narrowMode ? "none" : "calc(100vh - 220px)";
+  };
+
   // Replace the dock tab listener so open-state also paints narrow sheet geometry
   // and the mobile read/lib button faces.
   dock.onTab((id) => {
-    dockHost.style.cssText =
-      (id ? "display: flex; " : "display: none; ") + (narrowMode ? DOCK_NARROW : DOCK_DESKTOP);
+    paintDockChrome();
     if (id === "ledger") chrome.onLedgerShow();
     else if (isChartsOpen()) closeCharts();
     placeChips();
@@ -4876,6 +4944,7 @@ function buildChrome(initial: StarterKind): Chrome {
 
   chrome.openRoll = (open?: boolean) => {
     const next = open ?? !rollOpen;
+    if (next) claimNarrowSheet("lib"); // before the assignment — claim clears it
     rollOpen = next;
     if (next) {
       drawerOpen = false;
@@ -4887,6 +4956,7 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.openDrawer = (open?: boolean) => {
     const next = open ?? !drawerOpen;
+    if (next) claimNarrowSheet("lib"); // before the assignment — claim clears it
     drawerOpen = next;
     if (next) {
       rollOpen = false;
@@ -4904,6 +4974,7 @@ function buildChrome(initial: StarterKind): Chrome {
     prevSetTool(t);
     for (const { id, b } of mobileToolBtns) b.style.cssText = mobileBtn(id === t);
     if (materialsForTool(t)) {
+      claimNarrowSheet("materials");
       moreOpen = false;
       libMenuOpen = false;
       syncNarrowSheets();

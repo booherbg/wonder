@@ -50,3 +50,32 @@ describe("buildDock working control", () => {
     );
   });
 });
+
+describe("buildDock collapse — the desktop Read rail", () => {
+  it("keeps the tab strip clickable when every body is hidden", () => {
+    const host = document.createElement("div");
+    const dock = buildDock(host);
+    dock.setCollapsed(true);
+
+    // The strip survives so Read still has a door; only the bodies go away.
+    const strip = host.querySelector('[role="tablist"]') as HTMLElement;
+    expect(strip.style.display).not.toBe("none");
+    const tab = host.querySelector("#dock-tab-pressures") as HTMLButtonElement;
+    expect(tab).not.toBeNull();
+
+    const bodies = host.children[1] as HTMLElement;
+    expect(bodies.style.display).toBe("none");
+
+    // Clicking a tab in the collapsed rail opens it.
+    tab.click();
+    expect(dock.activeTab()).toBe("pressures");
+  });
+
+  it("restores the bodies when uncollapsed", () => {
+    const host = document.createElement("div");
+    const dock = buildDock(host);
+    dock.setCollapsed(true);
+    dock.setCollapsed(false);
+    expect((host.children[1] as HTMLElement).style.display).not.toBe("none");
+  });
+});

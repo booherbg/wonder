@@ -60,6 +60,9 @@ export interface Dock {
   body(id: TabId): HTMLElement;
   onTab(fn: (id: TabId | null) => void): void;
   activeTab(): TabId | null;
+  /** Show the tab strip alone, bodies hidden — the desktop Read rail, so the
+   *  dock has a door you can click when every tab is closed. */
+  setCollapsed(collapsed: boolean): void;
   /** Paint the working-view header control (also driven by W). */
   setWorking(active: boolean): void;
   /** Fired with the next desired state when the header control is clicked. */
@@ -161,6 +164,10 @@ export function buildDock(host: HTMLElement): Dock {
     },
     activeTab() {
       return active;
+    },
+    setCollapsed(collapsed) {
+      bodiesHost.style.display = collapsed ? "none" : "";
+      strip.style.borderBottom = collapsed ? "none" : "1px solid rgba(127,224,196,0.14)";
     },
     setWorking(activeWorking) {
       workingOn = activeWorking;
