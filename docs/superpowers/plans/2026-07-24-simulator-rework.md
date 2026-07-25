@@ -26,7 +26,7 @@ Copied verbatim from the spec §5. Every task's requirements implicitly include 
 - **Peaceful.** Nothing dies violently; `step()` never births or removes a critter.
 - **Commit trailer on every commit:**
   `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
-- **Hygiene:** commit files BY NAME (never `git add -A`). `npm run check` + `npx vitest run` + `npm run build` green before any task is called done. Baseline: **601 tests**.
+- **Hygiene:** commit files BY NAME (never `git add -A`). `npm run check` + `npx vitest run` + `npm run build` green before any task is called done. Baseline: **617 tests** in 111 files (verified on master 2026-07-24; an earlier note of 601 was a misread of a truncated run). Per-task counts below are stated as deltas, not absolutes, so a rebase cannot invalidate them.
 - **Voice register** (spec §3.7): lowercase, state the fact, name the quantity, no metaphor in functional copy. Exempt: murmurs, generated species/island names, the field guide's intro prose.
 
 ---
@@ -45,7 +45,7 @@ git rev-parse --short HEAD    # record this as BASE for the final review package
 - [ ] **Step 2: Confirm the baseline is green**
 
 Run: `npm run check && npx vitest run 2>&1 | tail -4`
-Expected: no type errors; `Tests  601 passed (601)`
+Expected: no type errors; `Tests  617 passed (617)`
 
 ---
 
@@ -492,7 +492,7 @@ Expected: first click selects the swarm, second selects the flower beneath it; t
 - [ ] **Step 7: Run the full suite**
 
 Run: `npm run check && npx vitest run 2>&1 | tail -4`
-Expected: no type errors; 610 passed.
+Expected: no type errors; +9 tests from this task.
 
 - [ ] **Step 8: Commit**
 
@@ -638,7 +638,7 @@ Expected: motes stop where they are; the world still renders and still pans. Dra
 - [ ] **Step 4: Run the full suite**
 
 Run: `npm run check && npx vitest run 2>&1 | tail -4`
-Expected: no type errors; 610 passed.
+Expected: no type errors; +9 tests from this task.
 
 - [ ] **Step 5: Commit**
 
@@ -889,7 +889,7 @@ Expected: it opens with the button lit, and the same click closes it. No panel o
 - [ ] **Step 7: Run the full suite**
 
 Run: `npm run check && npx vitest run 2>&1 | tail -4`
-Expected: no type errors; 615 passed.
+Expected: no type errors; +3 tests from this task.
 
 - [ ] **Step 8: Commit**
 
@@ -1263,7 +1263,7 @@ Expected: each cloud carries a ring that fills; gold pips appear on the return l
 - [ ] **Step 8: Run the full suite**
 
 Run: `npm run check && npx vitest run 2>&1 | tail -4`
-Expected: no type errors; 631 passed.
+Expected: no type errors; +5 tests from this task.
 
 - [ ] **Step 9: Commit**
 
@@ -1554,7 +1554,7 @@ From spec §8, in the browser at `?sim=1&demo=1`:
 6. A selected swarm shows hunger, match, nectar economy and a numeric ETA; the same spread is visible in the world.
 7. The web reads as a graph, table one click away.
 8. No lab or menu string reads as atmosphere where a number would do.
-9. All three commands green; test count above 601.
+9. All three commands green; test count above 617.
 
 - [ ] **Step 2: Confirm the island is untouched**
 

@@ -3,7 +3,7 @@
 
 export const ZOOM_MUL_MIN = 0.4;
 export const ZOOM_MUL_MAX = 4;
-export const ZOOM_WHEEL_IN = 1.05;
+export const ZOOM_WHEEL_IN = 1.12; // ~21 wheel events across the 0.4–4× range (1.05 took ~47)
 export const ZOOM_WHEEL_OUT = 1 / ZOOM_WHEEL_IN;
 export const FIT_MARGIN = 0.92;
 
@@ -70,4 +70,31 @@ export function wheelPanDelta(
 
 export function wheelZoomFactor(deltaY: number): number {
   return deltaY > 0 ? ZOOM_WHEEL_OUT : ZOOM_WHEEL_IN;
+}
+
+/**
+ * Zoom while holding one point fixed on screen — the behaviour every map and
+ * canvas tool has, and the one the bench lacked: zoom was applied about the
+ * camera origin, so the thing you were pointing at slid away as you zoomed.
+ *
+ * `fx`/`fy` are the anchor as a 0..1 fraction of the canvas (0.5, 0.5 = centre);
+ * `ratio` is newZoom / oldZoom. The world point under the anchor is invariant:
+ * world = cam + f · view, and the view shrinks by `ratio`, so
+ * cam' = world − f · (view / ratio).
+ */
+export function zoomAboutPoint(
+  camX: number,
+  camY: number,
+  viewW: number,
+  viewH: number,
+  fx: number,
+  fy: number,
+  ratio: number,
+): { camX: number; camY: number } {
+  const worldX = camX + fx * viewW;
+  const worldY = camY + fy * viewH;
+  return {
+    camX: worldX - fx * (viewW / ratio),
+    camY: worldY - fy * (viewH / ratio),
+  };
 }

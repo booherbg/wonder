@@ -6,6 +6,7 @@ import {
   wheelCameraMode,
   wheelPanDelta,
   wheelZoomFactor,
+  zoomAboutPoint,
   zoomPercent,
   ZOOM_MUL_MAX,
   ZOOM_MUL_MIN,
@@ -60,4 +61,46 @@ test("nextZoomMul clamps within sensible bounds", () => {
 test("zoomPercent reads relative to fit baseline", () => {
   expect(zoomPercent(1)).toBe(100);
   expect(zoomPercent(1.5)).toBe(150);
+});
+
+// ── zoom about the pointer ──────────────────────────────────────────────────
+// The bench used to zoom about the camera origin, so whatever you were looking
+// at slid away as you zoomed. The invariant: the world point under the pointer
+// does not move. world = cam + f * view, and view' = view / ratio, so
+// cam' = world - f * view'.
+
+test("zoomAboutPoint holds the world point under the pointer fixed, zooming in", () => {
+  const camX = 100, camY = 200, viewW = 400, viewH = 300;
+  const fx = 0.25, fy = 0.75, ratio = 2;
+  const worldX = camX + fx * viewW; // 200
+  const worldY = camY + fy * viewH; // 425
+  const out = zoomAboutPoint(camX, camY, viewW, viewH, fx, fy, ratio);
+  expect(out.camX + fx * (viewW / ratio)).toBeCloseTo(worldX, 6);
+  expect(out.camY + fy * (viewH / ratio)).toBeCloseTo(worldY, 6);
+});
+
+test("zoomAboutPoint holds the world point fixed, zooming out", () => {
+  const out = zoomAboutPoint(100, 200, 400, 300, 0.5, 0.5, 0.5);
+  expect(out.camX + 0.5 * (400 / 0.5)).toBeCloseTo(300, 6);
+  expect(out.camY + 0.5 * (300 / 0.5)).toBeCloseTo(350, 6);
+});
+
+test("zoomAboutPoint is identity at ratio 1", () => {
+  const out = zoomAboutPoint(100, 200, 400, 300, 0.3, 0.7, 1);
+  expect(out.camX).toBeCloseTo(100, 6);
+  expect(out.camY).toBeCloseTo(200, 6);
+});
+
+test("zoomAboutPoint anchored at the centre keeps the centre fixed", () => {
+  const out = zoomAboutPoint(0, 0, 400, 300, 0.5, 0.5, 2);
+  expect(out.camX + 0.5 * 200).toBeCloseTo(200, 6);
+  expect(out.camY + 0.5 * 150).toBeCloseTo(150, 6);
+});
+
+test("the wheel zoom step crosses the whole range in about twenty events", () => {
+  // ZOOM_MUL_MIN 0.4 → ZOOM_MUL_MAX 4 is a 10x span. At 1.05 that was ~48
+  // events end to end, which is why zooming felt like grinding.
+  const events = Math.log(ZOOM_MUL_MAX / ZOOM_MUL_MIN) / Math.log(ZOOM_WHEEL_IN);
+  expect(events).toBeGreaterThan(15);
+  expect(events).toBeLessThan(25);
 });

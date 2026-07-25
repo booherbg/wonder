@@ -74,6 +74,7 @@ import {
   wheelCameraMode,
   wheelPanDelta,
   wheelZoomFactor,
+  zoomAboutPoint,
   FIT_MARGIN,
 } from "./simCamera";
 import { habitatsOf, placeablePlants } from "./simRoster";
@@ -1654,6 +1655,22 @@ export function startWorldLab(): void {
     clampCamera();
     ui?.setZoomPct(Math.round(zoomMul * 100));
   }
+  // Zoom holding (fx, fy) — a 0..1 fraction of the canvas — fixed on screen.
+  // The view size must be read BEFORE setZoom, since that is what the anchor
+  // maths is relative to.
+  function applyCameraZoomAbout(fx: number, fy: number, prevMul: number): void {
+    const beforeW = renderer.viewWidth;
+    const beforeH = renderer.viewHeight;
+    renderer.setZoom(Math.max(0.05, fitZoom * zoomMul));
+    const ratio = zoomMul / prevMul;
+    if (ratio !== 1) {
+      const next = zoomAboutPoint(camX, camY, beforeW, beforeH, fx, fy, ratio);
+      camX = next.camX;
+      camY = next.camY;
+    }
+    clampCamera();
+    ui?.setZoomPct(Math.round(zoomMul * 100));
+  }
   function fitCameraToConstruct(): void {
     renderer.setZoom(1);
     const baseW = renderer.viewWidth;
@@ -1665,9 +1682,12 @@ export function startWorldLab(): void {
     applyCameraZoom();
     centreCamera();
   }
+  // Keyboard +/− zoom about the middle of the view: there is no pointer to
+  // anchor to, and the centre is what the eye is on.
   function nudgeZoom(direction: "in" | "out"): void {
+    const prevMul = zoomMul;
     zoomMul = nextZoomMul(zoomMul, direction);
-    applyCameraZoom();
+    applyCameraZoomAbout(0.5, 0.5, prevMul);
   }
 
   // (Re)builds the construct + kernel from the current starter/seed. Reused
@@ -2369,8 +2389,9 @@ export function startWorldLab(): void {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       if (wheelCameraMode(e) === "zoom") {
+        const prevMul = zoomMul;
         zoomMul = nextZoomMul(zoomMul, wheelZoomFactor(e.deltaY) >= 1 ? "in" : "out");
-        applyCameraZoom();
+        applyCameraZoomAbout(e.offsetX / rect.width, e.offsetY / rect.height, prevMul);
         return;
       }
       const { dx, dy } = wheelPanDelta(
