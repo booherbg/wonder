@@ -977,6 +977,7 @@ export function startWorldLab(): void {
       critters += r.critters;
       clouds += swarmLayer.removeCloudsInTiles([{ x, y }]);
     }
+    if (plants || critters || clouds) markDirty();
     return { plants, critters, clouds };
   }
 
@@ -993,10 +994,12 @@ export function startWorldLab(): void {
     const cells = stampCells(tx, ty, brushSize, map);
     let centreOk = false;
     let centreRefused = false;
+    let anyPlaced = false;
     for (const { x, y } of cells) {
       const { x: px, y: py } = worldPxCenter(x, y);
       if (selected.kind === "plant") {
         const p = kernel.placePlant(selected.id, px, py);
+        if (p) anyPlaced = true;
         if (x === tx && y === ty) {
           if (p) centreOk = true;
           else centreRefused = true;
@@ -1010,9 +1013,11 @@ export function startWorldLab(): void {
           continue;
         }
         kernel.placeCritter(selected.id, px, py);
+        anyPlaced = true;
         if (x === tx && y === ty) centreOk = true;
       }
     }
+    if (anyPlaced) markDirty();
     if (centreRefused && ui && !opts?.quiet) {
       if (selected.kind === "critter") {
         ui.flashNote("fish → shallow water only");
@@ -1169,6 +1174,7 @@ export function startWorldLab(): void {
     tool = "place";
     refreshPalette(); // the drawer just grew — plant/critterKinds re-source from it
     refreshDrawer();
+    markDirty();
     if (ui) {
       ui.setSelected(selected);
       ui.setTool(tool);
@@ -1238,6 +1244,7 @@ export function startWorldLab(): void {
       const fp = worldPxCenter(feederTile.x, feederTile.y);
       kernel.placePlant(feedId, fp.x, fp.y);
     });
+    markDirty();
     refreshPalette();
     refreshDrawer();
     refreshCensusStrip();
@@ -1656,6 +1663,7 @@ export function startWorldLab(): void {
   // call site, etc.) — a harmless no-op when a dev aid calls this ahead of
   // buildChrome().
   function setPressure(id: PressureId, value: number): void {
+    markDirty();
     pressureValues[id] = value;
     const pressure = PRESSURES.find((p) => p.id === id);
     if (pressure?.tuningKey) {
@@ -2163,6 +2171,7 @@ export function startWorldLab(): void {
     tool = "place";
     cloneBaseline = null;
     clonePreview = null;
+    markDirty();
     refreshPalette();
     refreshDrawer();
     refreshCensusStrip();
@@ -2179,6 +2188,12 @@ export function startWorldLab(): void {
   ui.setZoomPct(Math.round(zoomMul * 100));
   ui.onAmbientRole = (id, role) => {
     const was = kernel.critterSpecies[id].role;
+    if (was === role) {
+      const roleName = AMBIENT_ROLES.find((r) => r.id === role)?.label ?? role;
+      ui?.flashNote(`${roleName} — unchanged`);
+      return;
+    }
+    markDirty();
     kernel.setCritterRole(id, role); // the same live role-flip grazerShare uses
     refreshPalette(); // repaints the chip badge AND the tray (refreshPalette feeds setAmbient)
     refreshDrawer();
@@ -2187,7 +2202,7 @@ export function startWorldLab(): void {
     // (qa consistency #3 / coherence Important #2). Raw id only for a role the tray
     // doesn't list.
     const roleName = AMBIENT_ROLES.find((r) => r.id === role)?.label ?? role;
-    ui?.flashNote(was === role ? `${roleName} — unchanged` : `role → ${roleName}`);
+    ui?.flashNote(`role → ${roleName}`);
   };
   // a dev-aid so the tray can be screenshot open without a mouse click
   if (new URLSearchParams(location.search).has("ambient")) {
@@ -2333,6 +2348,7 @@ export function startWorldLab(): void {
     saveSimSlot(localStorage, { id, name, savedAt }, blob);
     currentSlotId = id;
     currentSlotName = name;
+    clearDirty();
     ui!.flashNote(`saved · ${name}`);
   };
   ui.onLoadSlot = () => openSlotPicker();
@@ -2413,6 +2429,7 @@ export function startWorldLab(): void {
         ? `loaded · ${name}`
         : `loaded · ${name} — insect clouds aren't saved; place them again`,
     );
+    clearDirty();
   }
 
   // The slot panel's own dev aid (Task 9, mirrors ?evo=1 above): opens the
@@ -2633,7 +2650,10 @@ export function startWorldLab(): void {
   }
 
   function endStroke(): void {
-    if (painting && strokeChanged) repaintRefresh(); // once per stroke, not per cell
+    if (painting && strokeChanged) {
+      repaintRefresh(); // once per stroke, not per cell
+      markDirty();
+    }
     painting = false;
     placing = false;
     strokeChanged = false;
@@ -2684,6 +2704,7 @@ export function startWorldLab(): void {
       lastStrokeKey = ty * map.width + tx;
       const { x: px, y: py } = worldPxCenter(tx, ty);
       const placed = swarmLayer.placeCloud(kernel.flora, px, py);
+      markDirty();
       enterSelectInspectSwarm(
         placed,
         placed.home
@@ -2786,6 +2807,7 @@ export function startWorldLab(): void {
     if (placing && selected?.kind === "cloud") {
       const { x: px, y: py } = worldPxCenter(tx, ty);
       swarmLayer.placeCloud(kernel.flora, px, py);
+      markDirty();
       return;
     }
     if (placing && selected && selected.kind !== "tile") {
@@ -2852,6 +2874,16 @@ export function startWorldLab(): void {
 // ── the DOM chrome: a codex-styled eyebrow + back button + starter selector
 // + palette, consuming only :root tokens (no hardcoded chrome hexes) —
 // mirrors simulator.ts's buildChrome so the two benches read as one family.
+
+// Session dirty tracking (Task 7): gate "new ▾" rebuild behind confirm when
+// the bench has unsaved mutations since last save/load/starter rebuild.
+let sessionDirty = false;
+function markDirty(): void {
+  sessionDirty = true;
+}
+function clearDirty(): void {
+  sessionDirty = false;
+}
 
 interface Chrome {
   onStarter: (k: StarterKind) => void;
@@ -3212,12 +3244,16 @@ function buildChrome(initial: StarterKind): Chrome {
     opt.onclick = (ev) => {
       ev.stopPropagation();
       newMenu.style.display = "none";
-      if (!window.confirm("rebuild this canvas? unsaved work will be lost")) return;
-      chrome.onStarter(kind);
+      requestNewCanvas(kind);
     };
     newMenu.appendChild(opt);
     return { kind, b: opt };
   });
+  function requestNewCanvas(kind: StarterKind): void {
+    if (sessionDirty && !window.confirm("rebuild this canvas? unsaved work will be lost")) return;
+    chrome.onStarter(kind);
+    clearDirty();
+  }
   newBtn.onclick = (ev) => {
     ev.stopPropagation();
     newMenu.style.display = newMenu.style.display === "none" ? "block" : "none";
