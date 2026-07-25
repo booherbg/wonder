@@ -84,7 +84,8 @@ import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
 import { metabolicEfficiency } from "../life/idmap";
 import { habitatsOf, placeablePlants } from "./simRoster";
-import { BrushSize, paintBiome, stampCells } from "./simBrush";
+import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
+import { materialsForTool, primaryLeftOverlay, type BuildTool } from "./simChromeLayout";
 import {
   PRESSURES,
   Pressure,
@@ -3059,12 +3060,32 @@ function buildChrome(initial: StarterKind): Chrome {
     " display: flex; align-items: center; justify-content: center;";
   document.body.appendChild(stack);
 
-  // Left host for Task 5 Build rail — parks the detached palette off the
-  // bottom strip until tools/materials flyouts land there.
-  const buildHost = document.createElement("div");
-  buildHost.id = "lab-build-host";
-  buildHost.style.cssText = "display: none;";
-  document.body.appendChild(buildHost);
+  // Build left rail: tools · brush · library (roll / drawer). Materials fly
+  // out to the right of the rail when paint/place is active.
+  const rail = document.createElement("div");
+  rail.id = "lab-build-rail";
+  rail.style.cssText =
+    "position: fixed; left: 10px; top: 48px; bottom: 66px; width: 44px; z-index: 6;" +
+    " display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0;" +
+    " background: rgba(20,32,28,0.88); border-radius: 8px; user-select: none;";
+  document.body.appendChild(rail);
+  const railBtn = (active: boolean): string =>
+    `${MONO} font-size: 8px; letter-spacing: 0.04em; text-transform: uppercase;` +
+    ` color: ${active ? "rgb(var(--abyss))" : "rgba(228,236,242,0.72)"};` +
+    ` background: ${active ? "rgb(var(--lumen))" : "rgba(23,42,54,0.72)"};` +
+    ` border: 1px solid ${active ? "rgb(var(--lumen))" : "rgba(127,224,196,0.28)"};` +
+    ` border-radius: 4px; padding: 5px 2px; width: 36px; cursor: pointer; text-align: center;` +
+    " box-sizing: border-box;";
+  const railSep = (): HTMLElement => {
+    const el = document.createElement("div");
+    el.style.cssText = "width: 24px; height: 1px; background: rgba(127,224,196,0.22); margin: 2px 0;";
+    return el;
+  };
+  // Assigned after roll/drawer exist; setTool may call it once chrome is live.
+  let syncLeftChrome: () => void = () => {};
+  let currentTool: BuildTool = "select";
+  let rollOpen = false;
+  let drawerOpen = false;
 
   const bar = document.createElement("div");
   bar.style.cssText =
@@ -3253,59 +3274,88 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.setTick = (tick) => {
     tickValue.textContent = String(tick);
   };
-  // Brush size picker moves to the Build rail (Task 5); keep the Chrome hooks.
+  // ── Build rail: tools · brush · roll / drawer ───────────────────────────
+  const TOOLS: { id: LabTool; name: string; title: string }[] = [
+    { id: "select", name: "sel", title: "click to read a genome up close" },
+    { id: "place", name: "plc", title: "stamp the selected plant or critter" },
+    { id: "paint", name: "pnt", title: "paint biomes with the brush" },
+    { id: "erase", name: "ers", title: "clear plants, critters, and insect clouds under the brush" },
+  ];
+  const toolBtns = TOOLS.map(({ id, name, title }) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    attachTooltip(b, title);
+    b.style.cssText = railBtn(id === "select");
+    b.onclick = () => chrome.onTool(id);
+    return { id, b };
+  });
+  for (const { b } of toolBtns) rail.appendChild(b);
+  const cloudBtn = document.createElement("button");
+  cloudBtn.textContent = "cld";
+  attachTooltip(cloudBtn, "place a naïve insect cloud — opens its details; play/step to watch it forage");
+  cloudBtn.style.cssText = railBtn(false);
+  cloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
+  rail.appendChild(cloudBtn);
+
+  rail.appendChild(railSep());
+  const brushBtns = BRUSH_SIZES.map((size) => {
+    const b = document.createElement("button");
+    b.textContent = String(size);
+    attachTooltip(b, size === 1 ? "place one" : `stamp a ${size}×${size} patch · drag to sow a path`);
+    b.style.cssText = railBtn(false);
+    b.onclick = () => chrome.onBrushSize(size);
+    return { size, b };
+  });
+  for (const { b } of brushBtns) rail.appendChild(b);
   chrome.onBrushSize = () => {};
-  chrome.setBrushSize = () => {};
+  chrome.setBrushSize = (size) => {
+    for (const { size: s, b } of brushBtns) b.style.cssText = railBtn(s === size);
+  };
 
-  // ── the palette: parked on #lab-build-host (hidden) until Task 5 Build rail
-  // re-homes tools / materials. Detached from the bottom Run strip so the bar
-  // stays one slim row — mouse tools are unreachable until Task 5; keyboard
-  // and chrome.onTool / onSelect keep working. ─────────────────────────────
-  const palette = document.createElement("div");
-  palette.id = "lab-palette"; // a stable hook, same convention as #lab-readout/#lab-census
-  // Hidden intermediate: Task 5 will show + position this under the Build rail.
-  palette.style.cssText =
-    "display: none; max-width: 88vw; max-height: 18vh; overflow-y: auto; flex-direction: column; gap: 4px;" +
-    " padding: 7px 10px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
+  rail.appendChild(railSep());
+  const railRollBtn = document.createElement("button");
+  railRollBtn.id = "panel-roll-btn";
+  railRollBtn.textContent = "roll";
+  attachTooltip(railRollBtn, "roll new kinds onto the palette");
+  railRollBtn.style.cssText = railBtn(false);
+  railRollBtn.onclick = () => chrome.openRoll();
+  rail.appendChild(railRollBtn);
+  const railDrawerBtn = document.createElement("button");
+  railDrawerBtn.id = "panel-drawer-btn";
+  railDrawerBtn.textContent = "drw";
+  attachTooltip(railDrawerBtn, "every kind introduced here");
+  railDrawerBtn.style.cssText = railBtn(false);
+  railDrawerBtn.onclick = () => chrome.openDrawer();
+  rail.appendChild(railDrawerBtn);
+
+  // ── Materials flyout (tiles for paint, life for place) ───────────────────
+  const flyout = document.createElement("div");
+  flyout.id = "lab-materials-flyout";
+  flyout.style.cssText =
+    "display: none; position: fixed; left: 62px; top: 48px; z-index: 7; flex-direction: column; gap: 4px;" +
+    " max-width: min(72vw, 520px); max-height: calc(100vh - 130px); overflow-y: auto;" +
+    " padding: 8px 10px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
     " user-select: none;";
-  buildHost.appendChild(palette);
+  document.body.appendChild(flyout);
 
-  const toolRow = document.createElement("div");
-  toolRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const plantRow = document.createElement("div");
   plantRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const critterRow = document.createElement("div");
   critterRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
   const biomeRow = document.createElement("div");
   biomeRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
-  const hint = document.createElement("div");
-  hint.style.cssText = `${MONO} color: rgb(var(--rose)); min-height: 13px; opacity: 0; transition: opacity 0.15s;`;
-  palette.append(toolRow, plantRow, critterRow, biomeRow, hint);
-
-  const TOOLS: { id: LabTool; name: string; title: string }[] = [
-    { id: "select", name: "select", title: "click to read a genome up close" },
-    { id: "place", name: "place", title: "stamp the selected plant or critter" },
-    { id: "paint", name: "paint", title: "paint biomes with the brush" },
-    { id: "erase", name: "erase", title: "clear plants, critters, and insect clouds under the brush" },
-  ];
-  const toolBtns = TOOLS.map(({ id, name, title }) => {
-    const b = document.createElement("button");
-    b.textContent = name;
-    attachTooltip(b, title);
-    b.style.cssText = btn(id === "select");
-    b.onclick = () => chrome.onTool(id);
-    return { id, b };
-  });
-  toolRow.append(label("tool"), ...toolBtns.map((t) => t.b));
-  const cloudBtn = document.createElement("button");
-  cloudBtn.textContent = "cloud";
-  attachTooltip(cloudBtn, "place a naïve insect cloud — opens its details; play/step to watch it forage");
-  cloudBtn.style.cssText = btn(false);
-  cloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
-  toolRow.appendChild(cloudBtn);
+  flyout.append(plantRow, critterRow, biomeRow);
   plantRow.appendChild(label("plant"));
   critterRow.appendChild(label("critter"));
   biomeRow.appendChild(label("biome"));
+
+  // Flash notes sit beside the rail (not inside the materials flyout) so they
+  // remain visible on select/erase and while roll/drawer own the left edge.
+  const hint = document.createElement("div");
+  hint.style.cssText =
+    `${MONO} position: fixed; left: 62px; bottom: 66px; z-index: 7; color: rgb(var(--rose));` +
+    " min-height: 13px; opacity: 0; transition: opacity 0.15s; pointer-events: none; user-select: none;";
+  document.body.appendChild(hint);
 
   let plantBtns: { id: number; b: HTMLButtonElement; tint: string }[] = [];
   let critterBtns: { id: number; b: HTMLButtonElement }[] = [];
@@ -3352,7 +3402,9 @@ function buildChrome(initial: StarterKind): Chrome {
     });
   };
   chrome.setTool = (t) => {
-    for (const { id, b } of toolBtns) b.style.cssText = btn(id === t);
+    currentTool = t;
+    for (const { id, b } of toolBtns) b.style.cssText = railBtn(id === t);
+    syncLeftChrome();
   };
   chrome.onTool = () => {};
   chrome.setSelected = (sel) => {
@@ -3365,7 +3417,7 @@ function buildChrome(initial: StarterKind): Chrome {
     for (const { tile, b, color } of tileBtns) {
       b.style.cssText = tileBtn(sel !== null && sel.kind === "tile" && sel.tile === tile, color);
     }
-    cloudBtn.style.cssText = btn(sel !== null && sel.kind === "cloud");
+    cloudBtn.style.cssText = railBtn(sel !== null && sel.kind === "cloud");
   };
   chrome.flashNote = (msg) => {
     hint.textContent = msg;
@@ -3377,19 +3429,8 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.onSelect = () => {};
 
-  // ── the right column: the drawer stays here; subject/exchange/web/ledger/
-  // pressures live in ONE dock (Task 6) so open-state is shared and visible.
-  // `rightStack` still holds the drawer + the "here" chip. ─────────────────
-  const rightStack = document.createElement("div");
-  rightStack.id = "lab-right-stack";
-  rightStack.style.cssText =
-    "position: fixed; right: 18px; top: 92px; z-index: 6; display: flex; flex-direction: column;" +
-    " align-items: flex-end; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
-  document.body.appendChild(rightStack);
-
-  // The five-tab dock: reserves the right edge when a tab is open (measured by
-  // relayout), collapses to nothing when closed. Replaces four independent
-  // fixed overlays that could not express a shared open/closed state.
+  // ── the right edge is the Read dock only. Drawer moves to the left rail
+  // as Library (Build). Chips stay on the right via #lab-chip-stack. ────────
   const dockHost = document.createElement("div");
   dockHost.id = "lab-dock";
   dockHost.style.cssText =
@@ -3401,18 +3442,9 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.dock = dock;
   chrome.onLedgerShow = () => {};
 
-  // Declared early so syncDockChrome can close the drawer when a dock tab opens.
-  let drawerOpen = false;
-
   const syncDockChrome = (id: TabId | null): void => {
     dockHost.style.display = id ? "flex" : "none";
-    // Panel toggle buttons left the Run strip (Task 4); active-state returns
-    // with Read dock / Build rail icons in Tasks 5–6.
-    // Dock and drawer share the right edge — never both open.
-    if (id !== null && drawerOpen) {
-      drawerOpen = false;
-      drawerPanel.style.display = "none";
-    }
+    // Dock (right) and drawer (left) may both be open — no mutual exclusion.
     if (id === "ledger") chrome.onLedgerShow();
     else if (isChartsOpen()) closeCharts();
   };
@@ -3420,15 +3452,15 @@ function buildChrome(initial: StarterKind): Chrome {
 
   // the drawer: every introduced kind (starter/rolled/captured daughter),
   // live status — in play / variations / a three-way alive-extinct-cleared
-  // badge — and a delete/bring-back button. Docked above the readout.
-  // Hidden by default (map-first); open from the bar's "drawer" toggle.
+  // badge — and a delete/bring-back button. Left overlay beside the Build rail.
+  // Hidden by default (map-first); open from the rail's "drawer" toggle.
   const drawerPanel = document.createElement("div");
   drawerPanel.id = "lab-drawer";
   drawerPanel.style.cssText =
     "display: none; width: 296px; max-height: 42vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
     " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
     " user-select: none; flex: 0 0 auto; pointer-events: auto;";
-  rightStack.appendChild(drawerPanel);
+  // Appended to leftStack below once that host exists.
 
   const drawerHead = document.createElement("div");
   drawerHead.innerHTML =
@@ -3535,12 +3567,10 @@ function buildChrome(initial: StarterKind): Chrome {
     " align-items: flex-end; gap: 10px; pointer-events: none;";
   document.body.appendChild(chipStack);
   const placeChips = (): void => {
-    // Dodge whichever right-edge panel is open (dock or drawer). Chips are
-    // never measured into the canvas inset when the dock is open — they sit
-    // beside it — so they must not land on top of either panel.
+    // Dodge the right-edge dock when open. Drawer lives on the left now, so
+    // chips no longer shift for it.
     const dockOpen = dock.activeTab() !== null;
-    const drawerShowing = drawerOpen && drawerPanel.style.display !== "none";
-    chipStack.style.right = dockOpen ? "390px" : drawerShowing ? "330px" : "18px";
+    chipStack.style.right = dockOpen ? "390px" : "18px";
   };
   const prevSyncDock = syncDockChrome;
   dock.onTab((id) => {
@@ -3584,11 +3614,11 @@ function buildChrome(initial: StarterKind): Chrome {
     hereEl.innerHTML = `here ${stack}<br /><span style="opacity: 0.6;">click again to cycle</span>`;
   };
 
-  // ── the left column: the roll pane. Web/census moved into the dock (Task 6).
+  // ── the left column: roll + drawer overlays, just right of the Build rail.
   const leftStack = document.createElement("div");
   leftStack.id = "lab-left-stack";
   leftStack.style.cssText =
-    "position: fixed; left: 18px; top: 92px; z-index: 7; display: flex; flex-direction: column;" +
+    "position: fixed; left: 62px; top: 92px; z-index: 7; display: flex; flex-direction: column;" +
     " align-items: flex-start; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
   // Children re-enable pointer-events so the empty stack doesn't block the map.
   document.body.appendChild(leftStack);
@@ -3676,7 +3706,8 @@ function buildChrome(initial: StarterKind): Chrome {
     "display: none; width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
     " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;" +
     " max-height: 42vh; overflow-y: auto; pointer-events: auto;";
-  leftStack.appendChild(rollPane); // roll is the left rail's only panel now (web → dock)
+  leftStack.appendChild(rollPane);
+  leftStack.appendChild(drawerPanel);
 
   const rollHead = document.createElement("div");
   rollHead.innerHTML =
@@ -4424,18 +4455,34 @@ function buildChrome(initial: StarterKind): Chrome {
     } else dock.setTab(nextTabState(dock.activeTab(), "pressures"));
   };
 
-  // Map-first side panels: roll / drawer stay independent; web/ledger/pressures
-  // share the dock's one open-state (Task 6). Dock and drawer are mutually
-  // exclusive on the right edge. Bar toggles removed in Task 4 — open* stays
-  // for keyboard / dock / Task 5 rail.
-  let rollOpen = false;
-  const syncSidePanels = (): void => {
-    rollPane.style.display = rollOpen ? "block" : "none";
-    drawerPanel.style.display = drawerOpen ? "block" : "none";
+  // Map-first side panels: roll / drawer share the left edge (one primary via
+  // primaryLeftOverlay); dock stays on the right and may open at the same time.
+  // Rail buttons reflect open state.
+  syncLeftChrome = (): void => {
+    const kind = materialsForTool(currentTool);
+    const primary = primaryLeftOverlay({
+      flyout: kind !== null,
+      roll: rollOpen,
+      drawer: drawerOpen,
+    });
+    rollPane.style.display = primary === "roll" ? "block" : "none";
+    drawerPanel.style.display = primary === "drawer" ? "block" : "none";
+    if (primary === "flyout" && kind !== null) {
+      flyout.style.display = "flex";
+      plantRow.style.display = kind === "life" ? "flex" : "none";
+      critterRow.style.display = kind === "life" ? "flex" : "none";
+      biomeRow.style.display = kind === "tiles" ? "flex" : "none";
+    } else {
+      flyout.style.display = "none";
+    }
+    railRollBtn.style.cssText = railBtn(rollOpen);
+    railDrawerBtn.style.cssText = railBtn(drawerOpen);
   };
   chrome.openRoll = (open?: boolean) => {
-    rollOpen = open ?? !rollOpen;
-    syncSidePanels();
+    const next = open ?? !rollOpen;
+    rollOpen = next;
+    if (next) drawerOpen = false;
+    syncLeftChrome();
   };
   chrome.openWeb = (open?: boolean) => {
     if (open === true) dock.setTab("web");
@@ -4445,12 +4492,12 @@ function buildChrome(initial: StarterKind): Chrome {
   };
   chrome.openDrawer = (open?: boolean) => {
     const next = open ?? !drawerOpen;
-    if (next && dock.activeTab() !== null) dock.setTab(null);
     drawerOpen = next;
-    syncSidePanels();
+    if (next) rollOpen = false;
+    syncLeftChrome();
     placeChips();
   };
-  syncSidePanels(); // start closed
+  syncLeftChrome(); // start closed
 
   // ── the slot panel (Task 9): a centered modal, the same footprint
   // convention as the real-world #picker (index.html) — position: fixed,
