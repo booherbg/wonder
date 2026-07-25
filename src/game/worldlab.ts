@@ -77,6 +77,7 @@ import {
   zoomAboutPoint,
   FIT_MARGIN,
 } from "./simCamera";
+import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
 import {
@@ -160,8 +161,8 @@ type LabTool = "select" | "place" | "paint" | "erase";
 // changing, a fair "gone quiet" reading, not a bug to guard against.
 type Inspected = { kind: "critter"; ref: Critter } | { kind: "plant"; ref: Plant } | { kind: "swarm"; ref: WorldSwarm } | null;
 
-const PICK_RADIUS_PX = 1.5 * TILE_SIZE; // the select tool's hit-test reach
-const SWARM_PICK_RADIUS_PX = 3.5 * TILE_SIZE; // clouds drift; give the click more reach than plants
+// Pick radii now live in simSelect.ts beside the ranking that uses them
+// (RADIUS_FOR.plant / .critter / .swarm).
 
 // The roll pane's batch size (the spec's 9–12) and thumbnail zoom — a grid
 // cell stays legible at 16×~28px source art scaled up, same spirit as
@@ -201,22 +202,9 @@ function drawThumb(src: HTMLCanvasElement, zoom: number): HTMLCanvasElement {
   return c;
 }
 
-// The select tool's critter half of the hit-test: nearest critter within
-// reach, else null. No fauna.ts helper does this (flora.ts's own
-// `nearestPlant`, reused below, is the plant half) — a small, local, pure
-// spatial search, not a reimplementation of anything the readout itself owns.
-function pickCritterNear(critters: readonly Critter[], wx: number, wy: number, radiusPx: number): Critter | null {
-  let best: Critter | null = null;
-  let bestD = radiusPx * radiusPx;
-  for (const c of critters) {
-    const d = (c.x - wx) ** 2 + (c.y - wy) ** 2;
-    if (d <= bestD) {
-      bestD = d;
-      best = c;
-    }
-  }
-  return best;
-}
+// (The old pickCritterNear lived here — a per-class nearest search that only
+// existed to feed the class-priority hit test. simSelect.rankCandidates ranks
+// all three classes together now, so it has no callers.)
 
 // The way back: drop ?sim and the island resumes — it was saved on the way
 // in, and its seed rides the URL, so the bench is never a one-way door.
@@ -1993,6 +1981,11 @@ export function startWorldLab(): void {
     if (ui) ui.flashNote(inspected.ref.pinned ? "pinned to host" : "free-roam — follows fuller blooms");
     refreshInspect();
   };
+  ui.onRetarget = () => {
+    if (inspected?.kind !== "swarm") return;
+    setRetargetArmed(!retargetArmed);
+    if (retargetArmed) ui?.flashNote("retarget · click a bloom in range");
+  };
   ui.onCloneAmount = (amount) => {
     cloneAmount = amount;
     if (!cloneBaseline) return;
@@ -2350,7 +2343,13 @@ export function startWorldLab(): void {
       toggleLabLedger();
     } else if (e.key === "Escape") {
       // Esc closes the ledger first, then the readout, then the bench — same
-      // stacking as main island (charts before inspect before leave).
+      // stacking as main island (charts before inspect before leave). An armed
+      // retarget is the innermost state of all, so it cancels before any of it.
+      if (retargetArmed) {
+        setRetargetArmed(false);
+        ui?.flashNote("retarget cancelled");
+        return;
+      }
       if (isChartsOpen()) {
         closeCharts();
         return;
@@ -2443,6 +2442,20 @@ export function startWorldLab(): void {
   let placing = false;
   let strokeChanged = false;
   let lastStrokeKey = -1;
+  // click-to-cycle: a repeat click on the same tile advances through the stack
+  // under the pointer rather than re-picking the same thing forever.
+  let pickKey: string | null = null;
+  let pickIndex = 0;
+  // Retarget: armed from the swarm readout, spent on the next click on a bloom.
+  // It used to ride the plain select click, so with a swarm inspected every
+  // click on a flower silently re-homed the cloud instead of inspecting it —
+  // one click meaning two things, and the reason a flower seemed unselectable.
+  let retargetArmed = false;
+  function setRetargetArmed(on: boolean): void {
+    retargetArmed = on;
+    ui?.setRetargetArmed(on);
+    canvas.style.cursor = on ? "crosshair" : "";
+  }
 
   function endStroke(): void {
     if (painting && strokeChanged) repaintRefresh(); // once per stroke, not per cell
@@ -2474,11 +2487,20 @@ export function startWorldLab(): void {
       return;
     }
     const hit = pointerTile(e);
-    if (!hit) return;
+    if (!hit) {
+      // Off the construct there is nothing to place or pick, so a drag there
+      // is unambiguously a camera drag — whatever tool is held.
+      e.preventDefault();
+      cameraPanning = true;
+      panLastX = e.clientX;
+      panLastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const { tx, ty, wx, wy } = hit;
     // Place-cloud mode: clicking an existing cloud inspects it (don't stack another).
     if (tool === "place" && selected?.kind === "cloud") {
-      const existing = swarmLayer.pick(wx, wy, SWARM_PICK_RADIUS_PX);
+      const existing = swarmLayer.pick(wx, wy, RADIUS_FOR.swarm);
       if (existing) {
         enterSelectInspectSwarm(existing);
         return;
@@ -2496,18 +2518,44 @@ export function startWorldLab(): void {
       return;
     }
     if (tool === "select" || !selected) {
-      const p = nearestPlant(kernel.flora.plantsNear(wx, wy, PICK_RADIUS_PX), wx, wy);
-      if (inspected?.kind === "swarm" && p && isBloom(p) && canFlower(kernel.plantSpecies[p.species].archetype.form)) {
-        if (swarmLayer.retarget(inspected.ref, p)) {
-          if (ui) ui.flashNote(`retargeted ${inspected.ref.name.toLowerCase()} → ${kernel.plantSpecies[p.species].name.toLowerCase()}`);
+      if (retargetArmed && inspected?.kind === "swarm") {
+        const bloom = nearestPlant(kernel.flora.plantsNear(wx, wy, RADIUS_FOR.plant), wx, wy);
+        if (
+          bloom &&
+          isBloom(bloom) &&
+          canFlower(kernel.plantSpecies[bloom.species].archetype.form) &&
+          swarmLayer.retarget(inspected.ref, bloom)
+        ) {
+          ui?.flashNote(`retargeted · ${kernel.plantSpecies[bloom.species].name.toLowerCase()}`);
+          setRetargetArmed(false);
           refreshInspect();
           return;
         }
+        ui?.flashNote("retarget → click a bloom in range");
+        return;
       }
-      const sw = swarmLayer.pick(wx, wy, SWARM_PICK_RADIUS_PX);
-      const c = sw ? null : pickCritterNear(kernel.critters, wx, wy, PICK_RADIUS_PX);
-      const plantPick = c || sw ? null : p;
-      inspected = sw ? { kind: "swarm", ref: sw } : c ? { kind: "critter", ref: c } : plantPick ? { kind: "plant", ref: plantPick } : null;
+      // Rank everything in reach by distance in units of its own radius, then
+      // cycle on a repeat click at the same tile — so the flower under a cloud
+      // takes exactly two clicks instead of being unreachable.
+      const here = rankCandidates({
+        wx,
+        wy,
+        swarms: swarmLayer.swarms,
+        critters: kernel.critters,
+        plants: kernel.flora.plantsNear(wx, wy, RADIUS_FOR.plant),
+      });
+      const key = `${tx},${ty}`;
+      pickIndex = cycleIndex(pickKey, key, pickIndex, here.length);
+      pickKey = key;
+      const chosen: Candidate | undefined = here[pickIndex];
+      inspected = !chosen
+        ? null
+        : chosen.kind === "swarm"
+          ? { kind: "swarm", ref: chosen.ref as WorldSwarm }
+          : chosen.kind === "critter"
+            ? { kind: "critter", ref: chosen.ref as Critter }
+            : { kind: "plant", ref: chosen.ref as Plant };
+      ui?.setHere(here.map((c) => c.kind), pickIndex);
       refreshInspect();
       return;
     }
@@ -2615,7 +2663,10 @@ export function startWorldLab(): void {
         refreshInspect();
       }
     }
-    swarmLayer.animate(dt / 1000);
+    // Paused means still. The forage animation is paced off the wall clock, so
+    // without this gate a paused bench kept flying motes out to blooms and back
+    // — the view asserting that foraging was happening while the sim was frozen.
+    if (playing) swarmLayer.animate(dt / 1000);
     renderer.draw(camX, camY, sceneFor(kernel, swarmLayer), now);
     ui!.setTick(kernel.tick);
     requestAnimationFrame(frame);
@@ -2635,6 +2686,11 @@ interface Chrome {
   setSelected: (s: Selected) => void;
   setTool: (t: LabTool) => void;
   onTool: (t: LabTool) => void;
+  /** What sits under the last click, and which of them is selected. */
+  setHere: (kinds: PickKind[], index: number) => void;
+  /** Retarget: armed from the swarm readout, spent on the next bloom clicked. */
+  onRetarget: () => void;
+  setRetargetArmed: (on: boolean) => void;
   onBrushSize: (s: BrushSize) => void;
   setBrushSize: (s: BrushSize) => void;
   flashNote: (msg: string) => void;
@@ -3327,6 +3383,32 @@ function buildChrome(initial: StarterKind): Chrome {
     " font-family: var(--serif); flex: 0 0 auto; pointer-events: auto;";
   rightStack.appendChild(readout);
 
+  // What is under the last click, and which of the stack is showing — so the
+  // disambiguation is visible rather than guessed at.
+  const hereEl = document.createElement("div");
+  hereEl.id = "lab-here";
+  hereEl.style.cssText =
+    "display: none; width: 264px; padding: 7px 18px; box-sizing: border-box;" +
+    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
+    " font: 10px/1.5 var(--mono); letter-spacing: 0.06em; color: rgba(228,236,242,0.55);" +
+    " flex: 0 0 auto; pointer-events: auto;";
+  rightStack.appendChild(hereEl);
+  chrome.setHere = (kinds, index) => {
+    if (kinds.length < 2) {
+      hereEl.style.display = "none";
+      return;
+    }
+    hereEl.style.display = "block";
+    const stack = kinds
+      .map((k, i) =>
+        i === index
+          ? `<span style="color: rgb(var(--lumen));">${k}</span>`
+          : `<span>${k}</span>`,
+      )
+      .join(" · ");
+    hereEl.innerHTML = `here ${stack}<br /><span style="opacity: 0.6;">click again to cycle</span>`;
+  };
+
   // ── the left column: the roll pane and the living-web census used to be
   // two independently `position: fixed` panels sharing the left:18px column
   // — the roll pane pinned under the eyebrow, the census vertically
@@ -3816,6 +3898,9 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.onCloneReroll = () => {};
   chrome.onCloneReset = () => {};
   chrome.onIntroduceClone = () => {};
+  // Mirrors startWorldLab's armed flag, so a readout re-render (which happens
+  // every tick while playing) redraws the button in the right state.
+  let retargetArmedNow = false;
   chrome.showSwarmInspect = (v, ent) => {
     const hasHost = v.hostName !== "no host yet" && v.hostName !== "lost host";
     const logRows = v.pollinationLog.length
@@ -3854,17 +3939,31 @@ function buildChrome(initial: StarterKind): Chrome {
     pinBtn.style.cssText = btn(ent.pinned);
     pinBtn.onclick = () => chrome.onToggleSwarmPin();
     controls.appendChild(pinBtn);
+    const retargetBtn = document.createElement("button");
+    retargetBtn.id = "lab-retarget-btn";
+    retargetBtn.textContent = retargetArmedNow ? "click a bloom · esc" : "retarget";
+    retargetBtn.style.cssText = btn(retargetArmedNow);
+    retargetBtn.onclick = () => chrome.onRetarget();
+    controls.appendChild(retargetBtn);
     const hint = document.createElement("div");
     hint.style.cssText = "font: 10px var(--mono); color: rgba(228,236,242,0.45); flex: 1 1 100%;";
     hint.textContent = ent.pinned
-      ? "pinned — stays on this bloom · free-roam to forage · click another bloom to retarget"
-      : "free-roam — picks fuller blooms on play/step · click a bloom to pin it there";
+      ? "pinned · holds this bloom · free-roam to forage"
+      : "free-roam · picks fuller blooms on play/step";
     controls.append(hint);
     readout.appendChild(controls);
     readout.style.display = "block";
   };
   chrome.onInviteCloud = () => {};
   chrome.onToggleSwarmPin = () => {};
+  chrome.onRetarget = () => {};
+  chrome.setRetargetArmed = (on) => {
+    retargetArmedNow = on;
+    const b = document.getElementById("lab-retarget-btn") as HTMLButtonElement | null;
+    if (!b) return;
+    b.textContent = on ? "click a bloom · esc" : "retarget";
+    b.style.cssText = btn(on);
+  };
   chrome.hideInspect = () => {
     readout.style.display = "none";
   };
