@@ -142,11 +142,13 @@ export function helpSections(): HelpSection[] {
         {
           text:
             "on the bench: select · place · paint · erase · cloud, brush 1–4, " +
-            "wheel pans, ⌃/⌘+wheel zooms, −/+ / 0 fit, space play or drag-pan, Esc home.",
+            "wheel pans, ⌃/⌘+wheel zooms, −/+ / 0 fit, space play or drag-pan, " +
+            "Esc closes overlays then leaves.",
         },
         {
           text:
-            "dock tabs open roll, web, and the drawer; G toggles the ledger, W the working view.",
+            "Build rail: roll + drawer. Read dock: subject · exchange · web · ledger · pressures. " +
+            "G opens the ledger tab, W the working view.",
         },
       ],
     },

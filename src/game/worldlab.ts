@@ -2514,19 +2514,15 @@ export function startWorldLab(): void {
       e.preventDefault();
       toggleLabLedger();
     } else if (e.key === "Escape") {
-      // Esc closes the dock first, then the readout, then the bench — same
-      // stacking as main island (charts before inspect before leave). An armed
-      // retarget is the innermost state of all, so it cancels before any of it.
+      // Esc stacking (Overlay HUD): retarget → chrome overlays (materials →
+      // library → dock, plus mobile ⋯/lib sheets) → inspect → leave bench.
+      // Same-toggle still closes rail/dock; materials close by leaving paint/place.
       if (retargetArmed) {
         setRetargetArmed(false);
         ui?.flashNote("retarget cancelled");
         return;
       }
-      if (ui?.dock.activeTab()) {
-        if (ui.dock.activeTab() === "ledger") closeCharts();
-        ui.dock.setTab(null);
-        return;
-      }
+      if (ui?.dismissEsc()) return;
       if (inspected) {
         inspected = null;
         refreshInspect();
@@ -2977,6 +2973,12 @@ interface Chrome {
   openWeb: (open?: boolean) => void;
   openDrawer: (open?: boolean) => void;
   openLedger: () => void;
+  /**
+   * Esc stacking for chrome overlays (innermost first): slot picker → new ▾ →
+   * mobile ⋯/lib sheets → materials flyout → roll/drawer → right dock.
+   * Returns true when Esc was consumed so the outer handler skips inspect/leave.
+   */
+  dismissEsc: () => boolean;
   /** The five-tab dock — one open-state for subject/exchange/web/ledger/pressures. */
   dock: Dock;
   /** Called when the ledger tab opens, so startWorldLab can fill `#charts`. */
@@ -4818,6 +4820,11 @@ function buildChrome(initial: StarterKind): Chrome {
     const tab = dock.activeTab();
     dockHost.style.cssText =
       (tab ? "display: flex; " : "display: none; ") + (narrow ? DOCK_NARROW : DOCK_DESKTOP);
+    // Desktop caps the scroll body; narrow full-height sheets should fill the host.
+    const dockBodies = dockHost.children[1] as HTMLElement | undefined;
+    if (dockBodies) {
+      dockBodies.style.maxHeight = narrow ? "none" : "calc(100vh - 220px)";
+    }
     placeChips();
     syncNarrowSheets();
     hint.style.left = narrow ? "12px" : "62px";
@@ -5061,6 +5068,52 @@ function buildChrome(initial: StarterKind): Chrome {
     });
   };
   chrome.onAmbientRole = () => {}; // real handler wired by startWorldLab's body
+
+  // Esc order: ephemeral menus/sheets → materials → library → dock. Each branch
+  // refreshes active button faces via syncLeftChrome / syncNarrowSheets / setTab.
+  chrome.dismissEsc = (): boolean => {
+    if (slotPanelOpen) {
+      chrome.openSlotPanel(false);
+      return true;
+    }
+    if (newMenu.style.display !== "none") {
+      newMenu.style.display = "none";
+      return true;
+    }
+    if (moreOpen) {
+      moreOpen = false;
+      syncNarrowSheets();
+      return true;
+    }
+    if (libMenuOpen) {
+      libMenuOpen = false;
+      syncNarrowSheets();
+      return true;
+    }
+    const kind = materialsForTool(currentTool);
+    const primary = primaryLeftOverlay({
+      flyout: kind !== null,
+      roll: rollOpen,
+      drawer: drawerOpen,
+    });
+    if (primary === "flyout") {
+      // Closing materials = leave paint/place (tool with no materials flyout).
+      chrome.onTool("select");
+      return true;
+    }
+    if (rollOpen || drawerOpen) {
+      rollOpen = false;
+      drawerOpen = false;
+      syncLeftChrome();
+      syncNarrowSheets();
+      return true;
+    }
+    if (dock.activeTab()) {
+      dock.setTab(null);
+      return true;
+    }
+    return false;
+  };
 
   return chrome;
 }
