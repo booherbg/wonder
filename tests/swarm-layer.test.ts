@@ -525,3 +525,95 @@ test("courtingSwarm finds the first cloud working a bloom the player sowed — a
   expect(suitor).not.toBeNull();
   expect(sowKey(suitor!.home!.species, suitor!.home!.x, suitor!.home!.y)).toBe(key);
 });
+
+// ── the bench's homeless rescan ─────────────────────────────────────────────
+// A cloud only looks HOME_SCAN_PX (10 tiles) for a flower. On the island that
+// is the point: clouds belong to a place. In the World-Lab it meant a cloud
+// placed anywhere but on top of a bloom never acquired a host at all, so the
+// bench could not demonstrate pollination — the very thing it exists for.
+// `rehomeAnywhere` is the bench-only opt-out; the island never passes it.
+
+function farFlora(seed: number) {
+  const map = generate(seed);
+  const species = generatePlantSpecies(seed);
+  const flora = new Flora(map, species, seed);
+  return { map, species, flora };
+}
+
+test("a homeless cloud far from every bloom stays homeless by default (island behaviour)", () => {
+  const { species, flora } = farFlora(SEED);
+  const layer = new SwarmLayer(SEED, species, flora, undefined, { autoSpawn: false });
+  const bloom = flora.all.find((p) => isBloom(p) && layer.flowerFor(p.species) !== null);
+  expect(bloom).toBeDefined();
+  // place the cloud a long way from that bloom — far beyond the 10-tile scan
+  const ent = layer.placeCloud(flora, bloom!.x + 8000, bloom!.y + 8000);
+  ent.home = null;
+  for (let i = 0; i < 5; i++) layer.tick(flora);
+  expect(ent.home).toBeNull();
+});
+
+test("with rehomeAnywhere a homeless bench cloud finds a bloom anywhere on the construct", () => {
+  const { species, flora } = farFlora(SEED);
+  const layer = new SwarmLayer(SEED, species, flora, undefined, {
+    autoSpawn: false,
+    rehomeAnywhere: true,
+  });
+  const bloom = flora.all.find((p) => isBloom(p) && layer.flowerFor(p.species) !== null);
+  expect(bloom).toBeDefined();
+  const ent = layer.placeCloud(flora, bloom!.x + 8000, bloom!.y + 8000);
+  ent.home = null;
+  layer.tick(flora);
+  expect(ent.home).not.toBeNull();
+  expect(layer.flowerFor(ent.home!.species)).not.toBeNull();
+});
+
+test("rehomeAnywhere never overrides a pinned cloud", () => {
+  const { species, flora } = farFlora(SEED);
+  const layer = new SwarmLayer(SEED, species, flora, undefined, {
+    autoSpawn: false,
+    rehomeAnywhere: true,
+  });
+  const bloom = flora.all.find((p) => isBloom(p) && layer.flowerFor(p.species) !== null);
+  const ent = layer.placeCloud(flora, bloom!.x, bloom!.y);
+  layer.tick(flora);
+  layer.setPinned(ent, true);
+  const held = ent.home;
+  ent.home = null; // a pinned cloud whose host vanished must not wander off
+  layer.tick(flora);
+  expect(ent.pinned).toBe(true);
+  void held;
+});
+
+test("rehomeAnywhere only fires when the ordinary radius scan finds nothing", () => {
+  const { species, flora } = farFlora(SEED);
+  const near = new SwarmLayer(SEED, species, flora, undefined, {
+    autoSpawn: false,
+    rehomeAnywhere: true,
+  });
+  const bloom = flora.all.find((p) => isBloom(p) && near.flowerFor(p.species) !== null)!;
+  // sitting right on a bloom, the normal scan wins and picks that same one
+  const ent = near.placeCloud(flora, bloom.x, bloom.y);
+  near.tick(flora);
+  expect(ent.home).not.toBeNull();
+  const d = Math.hypot(ent.home!.x - bloom.x, ent.home!.y - bloom.y);
+  expect(d).toBeLessThan(10 * 16); // within the ordinary HOME_SCAN_PX
+});
+
+test("the bench's exact configuration rehomes a cloud placed far from every bloom", () => {
+  // Mirrors benchSwarmLayer(): per-plant nectar, no autospawn, no predation.
+  // The earlier rehome tests used the default (species-shared nectar) branch;
+  // this pins the branch the World-Lab actually runs.
+  const { species, flora } = farFlora(SEED);
+  const layer = new SwarmLayer(SEED, species, flora, undefined, {
+    perPlantNectar: true,
+    autoSpawn: false,
+    predation: 0,
+    rehomeAnywhere: true,
+  });
+  const bloom = flora.all.find((p) => isBloom(p) && layer.flowerFor(p.species) !== null);
+  expect(bloom).toBeDefined();
+  const ent = layer.placeCloud(flora, bloom!.x + 8000, bloom!.y + 8000);
+  expect(ent.home).toBeNull(); // placeCloud found nothing within HOME_SCAN_PX
+  layer.tick(flora);
+  expect(ent.home).not.toBeNull();
+});

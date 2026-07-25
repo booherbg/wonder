@@ -829,6 +829,11 @@ export function startWorldLab(): void {
       perPlantNectar: true,
       autoSpawn: false,
       predation: 0,
+      // Without this the bench cannot show pollination at all: a cloud only
+      // scans 10 tiles for a flower, and a placed cloud is almost never that
+      // close to one, so it sits "waiting for a bloom" forever. The island
+      // keeps the local scan (a cloud belongs to a place); the bench does not.
+      rehomeAnywhere: true,
     });
     layer.pollinateAssist = pollinateAssist;
     applyNectarBenchTuning(layer);

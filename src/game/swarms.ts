@@ -123,6 +123,18 @@ export interface SwarmLayerOptions {
   predation?: number;
   /** Free-roam skips blooms below this nectar (per-plant mode). */
   emptyNectarThreshold?: number;
+  /**
+   * Bench-only: a HOMELESS cloud may take the nearest bloom anywhere on the
+   * construct, rather than only within HOME_SCAN_PX.
+   *
+   * On the island the 10-tile scan is the point — a cloud belongs to a place,
+   * and one that drifts away from every flower ought to struggle. On the bench
+   * it meant a cloud placed anywhere but directly on top of a bloom never
+   * acquired a host at all, so the construct could not demonstrate pollination:
+   * the one thing the bench exists to show. Defaults false, so the island's
+   * behaviour is untouched.
+   */
+  rehomeAnywhere?: boolean;
 }
 
 export interface PollinationLogEntry {
@@ -468,6 +480,7 @@ export class SwarmLayer {
   pollinateAssist: PollinateAssist = DEFAULT_POLLINATE_ASSIST;
   private readonly events: SwarmEvent[] = []; // notable moments awaiting a witness
   private readonly plantNectar = new Map<number, number>(); // per-plant nectar when perPlantNectar
+  private rehomeAnywhere = false; // bench-only: a homeless cloud may cross the whole construct
   emptyThreshold: number;
   nectarTuning: NectarStepConfig = { regen: NECTAR_REGEN, draw: NECTAR_DRAW };
   private rng: Rng;
@@ -489,6 +502,7 @@ export class SwarmLayer {
     this.flowers = buildFlowerMaps(seed, species);
     this.rng = makeRng((seed ^ SWARM_SALT) >>> 0);
     if (options.predation !== undefined) this.predation = options.predation;
+    this.rehomeAnywhere = options.rehomeAnywhere ?? false;
     if (options.autoSpawn !== false) this.spawn(flora, focus);
   }
 
@@ -675,6 +689,24 @@ export class SwarmLayer {
   // Pick the bloom this swarm feeds this heartbeat — pin holds the plant
   // (even when nectar is spent); free-roam skips spent blooms and prefers
   // fuller nectar nearby.
+  /**
+   * The nearest workable bloom on the WHOLE construct — the bench's fallback
+   * when a homeless cloud has nothing inside HOME_SCAN_PX. Deterministic (a
+   * plain nearest scan, no rng), and only reachable when `rehomeAnywhere` is on.
+   */
+  private nearestBloomAnywhere(flora: Flora, wx: number, wy: number): Plant | null {
+    let best: Plant | null = null;
+    let bd = Infinity;
+    for (const p of this.bloomCandidates(flora)) {
+      const d = (p.x - wx) ** 2 + (p.y - wy) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    return best;
+  }
+
   private chooseFeedPlant(ent: WorldSwarm, flora: Flora): Plant | null {
     if (ent.pinned) {
       const pinned = this.plantAtHome(ent, flora);
@@ -694,7 +726,7 @@ export class SwarmLayer {
           best = p;
         }
       }
-      return best;
+      return best ?? this.homelessFallback(ent, flora);
     }
     let best: Plant | null = null;
     let bestScore = -Infinity;
@@ -709,7 +741,18 @@ export class SwarmLayer {
         best = p;
       }
     }
-    return best;
+    return best ?? this.homelessFallback(ent, flora);
+  }
+
+  /**
+   * Bench-only: a cloud with no host and nothing in radius takes the nearest
+   * bloom on the construct. Gated on `rehomeAnywhere` AND on actually being
+   * homeless, so a cloud that merely wandered off its known host still uses
+   * the ordinary local scan and can still go hungry.
+   */
+  private homelessFallback(ent: WorldSwarm, flora: Flora): Plant | null {
+    if (!this.rehomeAnywhere || ent.pinned || ent.home !== null) return null;
+    return this.nearestBloomAnywhere(flora, ent.x, ent.y);
   }
 
   private nearestBloomTo(wx: number, wy: number, flora: Flora): Plant | null {
