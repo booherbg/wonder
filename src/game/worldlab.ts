@@ -133,6 +133,7 @@ import {
 } from "./simSave";
 import { agoPhrase } from "../render/picker";
 import { closeCharts, isChartsOpen, openCharts } from "../render/charts";
+import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { buildLabChartsView } from "./simCharts";
 import { Dock, TabId, buildDock, nextTabState } from "./simDock";
 import { attachTooltip } from "../render/tooltip";
@@ -2513,10 +2514,20 @@ export function startWorldLab(): void {
     } else if (e.key === "g" || e.key === "G") {
       e.preventDefault();
       toggleLabLedger();
+    } else if (e.key === "?") {
+      // field guide — same card the island opens; ?sim skips main.ts so wire here
+      if (isHelpOpen()) closeHelp();
+      else openHelp();
+      e.preventDefault();
     } else if (e.key === "Escape") {
-      // Esc stacking (Overlay HUD): retarget → chrome overlays (materials →
-      // library → dock, plus mobile ⋯/lib sheets) → inspect → leave bench.
-      // Same-toggle still closes rail/dock; materials close by leaving paint/place.
+      // Esc stacking (Overlay HUD): Help first (island), then retarget → chrome
+      // overlays (materials → library → dock, plus mobile ⋯/lib sheets) →
+      // inspect → leave bench. Same-toggle still closes rail/dock; materials
+      // close by leaving paint/place.
+      if (isHelpOpen()) {
+        closeHelp();
+        return;
+      }
       if (retargetArmed) {
         setRetargetArmed(false);
         ui?.flashNote("retarget cancelled");
