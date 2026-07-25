@@ -80,6 +80,8 @@ export interface FloraTuning {
   mutationAmount: number; // drift per generation
   pollinationRadius: number; // tiles within which same-species neighbors cross
   comfortFraction: number; // above this share of maxPlants, crowding thins the island
+  /** Forge life 0–100: scatter budget = (scatterLife/100)*maxPlants. Omit → comfortFraction. */
+  scatterLife?: number;
   splitDistance: number; // drift beyond this can found a new species
   splitKinDistance: number; // how close kin genomes must be to the founder
   splitKinRadius: number; // tiles searched for that founding cluster
@@ -730,7 +732,11 @@ export class Flora {
         }
       }
     }
-    const budget = this.tuning.comfortFraction * this.tuning.maxPlants;
+    const budget =
+      this.tuning.scatterLife === undefined
+        ? this.tuning.comfortFraction * this.tuning.maxPlants
+        : (Math.max(0, Math.min(100, this.tuning.scatterLife)) / 100) * this.tuning.maxPlants;
+    if (budget <= 0) return;
     const scale = Math.min(1, budget / Math.max(1, estimate));
     for (let ty = 0; ty < height; ty++) {
       for (let tx = 0; tx < width; tx++) {

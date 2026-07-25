@@ -6,6 +6,8 @@ export interface GenArgs {
   shape?: IslandShape;
   relief?: IslandRelief;
   warm: number;
+  /** First-morning life density 0–100 (% of maxPlants scatter budget). Default 80. */
+  life: number;
 }
 
 export interface ForgeState {
@@ -15,17 +17,19 @@ export interface ForgeState {
   width: number;
   height: number;
   warm: number;
+  life: number;
   cfg: Partial<WorldConfig>;
 }
 
 // Bounds for each clamped field: [min, max]. Most keys are WorldConfig
-// fields; "warm" is the one GenArgs-only exception (ForgeState.warm, not
-// part of WorldConfig) — it shares this table so forge.ts's slider and
-// forgeArgs()'s clamp read the same bound instead of duplicating it.
+  // fields; "warm" and "life" are GenArgs-only (ForgeState, not WorldConfig) —
+  // they share this table so forge.ts's sliders and forgeArgs()'s clamp read
+  // the same bounds instead of duplicating them.
 export const FORGE_BOUNDS: Record<string, [number, number]> = {
   width: [96, 400],
   height: [96, 400],
   warm: [0, 50000],
+  life: [0, 100],
   elevationScale: [8, 400],
   elevationOctaves: [1, 8],
   moistureScale: [8, 400],
@@ -69,6 +73,7 @@ export const FORGE_BOUNDS: Record<string, [number, number]> = {
 export const RANDOMIZE_RANGES: Partial<Record<string, [number, number]>> = {
   forestMoisture: [0.22, 0.85],
   falloffSharpness: [1, 12],
+  life: [50, 100], // random sails stay lively; manual default remains 80
 };
 
 // Integer WorldConfig/ForgeState fields — generate() indexes arrays and runs
@@ -77,7 +82,7 @@ export const RANDOMIZE_RANGES: Partial<Record<string, [number, number]>> = {
 // Shared with forge.ts, which also uses this set to decide a field's <input
 // step="1"> in the UI.
 export const INTEGER_FIELDS = new Set<string>([
-  "width", "height",
+  "width", "height", "warm", "life",
   "elevationOctaves", "moistureOctaves",
   "riverCount", "riverMaxSteps", "fallMaxCount", "fallMinSpacing",
   "minWalkableRegion", "maxGenerationAttempts",
@@ -101,6 +106,7 @@ export function defaultForgeState(seed: number): ForgeState {
     width: DEFAULT_CONFIG.width,
     height: DEFAULT_CONFIG.height,
     warm: 0,
+    life: 80,
     cfg: {},
   };
 }
@@ -119,6 +125,7 @@ export function forgeArgs(state: ForgeState): { seed: number; gen: GenArgs } {
       shape: state.shape === "roll" ? undefined : state.shape,
       relief: state.relief === "roll" ? undefined : state.relief,
       warm: clampBound("warm", state.warm),
+      life: clampBound("life", state.life),
     },
   };
 }

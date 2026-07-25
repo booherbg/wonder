@@ -8,8 +8,21 @@ test("default state maps to DEFAULT_CONFIG with rolled shape/relief and no warmt
   expect(gen.shape).toBeUndefined();   // "roll" → let generate roll it
   expect(gen.relief).toBeUndefined();
   expect(gen.warm).toBe(0);
+  expect(gen.life).toBe(80); // today's scatter density
   expect(gen.config.width).toBe(DEFAULT_CONFIG.width);
   expect(gen.config.elevationScale).toBe(DEFAULT_CONFIG.elevationScale);
+});
+
+test("life is clamped to 0..100 and rounded", () => {
+  const hi = defaultForgeState(1);
+  hi.life = 999;
+  expect(forgeArgs(hi).gen.life).toBe(100);
+  const lo = defaultForgeState(1);
+  lo.life = -3;
+  expect(forgeArgs(lo).gen.life).toBe(0);
+  const mid = defaultForgeState(1);
+  mid.life = 42.6;
+  expect(forgeArgs(mid).gen.life).toBe(43);
 });
 
 test("explicit shape/relief pass through; overrides merge onto the default config", () => {

@@ -913,6 +913,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
     chains: CHAINS, // the A/B toggle threads into both new Flora sites below
+    ...(gen ? { scatterLife: gen.life } : {}),
     ...(new URL(location.href).searchParams.has("split")
       ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
       : {}),

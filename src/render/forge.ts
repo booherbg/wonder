@@ -371,6 +371,34 @@ function render(): void {
     r.appendChild(group);
   }
 
+  // life — first-morning scatter density (% of maxPlants budget)
+  {
+    const r = row(head);
+    label(r, "life");
+    const group = document.createElement("div");
+    group.className = "forge-inline";
+    const range = document.createElement("input");
+    range.type = "range";
+    range.className = "forge-range";
+    const lifeBounds = FORGE_BOUNDS.life;
+    range.min = String(lifeBounds[0]);
+    range.max = String(lifeBounds[1]);
+    range.step = "1";
+    range.value = String(state.life);
+    const readout = document.createElement("span");
+    readout.className = "forge-readout";
+    readout.textContent = `${state.life}%`;
+    range.addEventListener("input", () => {
+      readout.textContent = `${range.value}%`;
+    });
+    range.addEventListener("change", () => {
+      const n = Number(range.value);
+      if (Number.isFinite(n)) state.life = n;
+    });
+    group.append(range, readout);
+    r.appendChild(group);
+  }
+
   // ── the fine-grain fold ──────────────────────────────────────────────
   const details = document.createElement("details");
   details.className = "forge-fine";
@@ -405,13 +433,14 @@ function render(): void {
     state.relief = "roll";
     state.cfg = {}; // drop any previously-rolled band/guard overrides — back to DEFAULT_CONFIG for those
     for (const [field, bounds] of Object.entries(FORGE_BOUNDS)) {
-      if (field === "warm") continue; // handled below — it's ForgeState.warm, not a cfg field
+      if (field === "warm" || field === "life") continue; // ForgeState-only — handled below
       if (RANDOMIZE_SKIP.has(field)) continue; // left unset ⇒ forgeArgs() uses the viable DEFAULT_CONFIG value
       const v = randomInRange(field, RANDOMIZE_RANGES[field] ?? bounds);
       if (field === "width" || field === "height") (state as any)[field] = v;
       else (state.cfg as any)[field] = v;
     }
     state.warm = randomInRange("warm", RANDOMIZE_RANGES.warm ?? FORGE_BOUNDS.warm);
+    state.life = randomInRange("life", RANDOMIZE_RANGES.life ?? FORGE_BOUNDS.life);
     render(); // knobs moved out from under the panel — rebuild it in place
     schedulePreview();
   });
