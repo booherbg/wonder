@@ -18,19 +18,19 @@ export interface MenuAction {
 export const SIMULATOR_KEY = "↗"; // the launch token main.ts dispatches on
 export function menuLaunchers(pouchCount: number): MenuAction[] {
   const out: MenuAction[] = [
-    { key: "B", label: "the backpack — your seeds & tools" },
-    { key: "G", label: "the island's ledger — census & food web" },
-    { key: "O", label: "the island's map — the whole isle drawn" },
-    { key: "C", label: "the living web — this island's chains" },
-    { key: "L", label: "the isles you've known" },
-    { key: "J", label: "the field journal" },
-    { key: "M", label: "the murmurs" },
-    { key: "?", label: "the field guide" },
-    { key: SIMULATOR_KEY, label: "the simulator — a bench for the living map" },
-    { key: "P", label: "save a postcard" },
+    { key: "B", label: "backpack · seeds + tools" },
+    { key: "G", label: "ledger · census + web" },
+    { key: "O", label: "map" },
+    { key: "C", label: "web · chains" },
+    { key: "L", label: "isles" },
+    { key: "J", label: "journal" },
+    { key: "M", label: "murmurs" },
+    { key: "?", label: "field guide" },
+    { key: SIMULATOR_KEY, label: "simulator" },
+    { key: "P", label: "postcard" },
     { key: "N", label: "name this world" },
   ];
-  if (pouchCount > 0) out.push({ key: "Q", label: "toss a seed to the wind" });
+  if (pouchCount > 0) out.push({ key: "Q", label: "toss the loaded seed" });
   return out;
 }
 
@@ -127,7 +127,7 @@ export function openMenu(model: MenuModel, handlers: MenuHandlers): void {
   el.appendChild(title);
   const epigraph = document.createElement("div");
   epigraph.className = "anth-epigraph";
-  epigraph.textContent = "everything that isn't an immediate step — your pack, the isles, the guide.";
+  epigraph.textContent = "";
   el.appendChild(epigraph);
 
   if (model.camp) {

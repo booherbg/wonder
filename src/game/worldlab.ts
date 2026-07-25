@@ -974,7 +974,7 @@ export function startWorldLab(): void {
     }
     if (centreRefused && ui && !opts?.quiet) {
       if (selected.kind === "critter") {
-        ui.flashNote("a fish needs shallow water");
+        ui.flashNote("fish → shallow water only");
       } else {
         const { x: px, y: py } = worldPxCenter(tx, ty);
         ui.flashNote(plantRefuseNote(selected.id, px, py));
@@ -1134,7 +1134,7 @@ export function startWorldLab(): void {
     }
     focus = null; // the pick is made; the iterate strip's job here is done
     if (ui) {
-      ui.flashNote(`picked ${member.name.toLowerCase()} — now on the palette`);
+      ui.flashNote(`palette + ${member.name.toLowerCase()}`);
       ui.setFocus(null);
     }
   }
@@ -1200,7 +1200,7 @@ export function startWorldLab(): void {
     refreshPalette();
     refreshDrawer();
     refreshCensusStrip();
-    if (ui) ui.flashNote(`rolled a web — ${web.chains.length} chains introduced + seeded`);
+    if (ui) ui.flashNote(`web rolled · ${web.chains.length} chains`);
   }
 
   // ── the iterate strip: focus a batch candidate (before it's picked) and
@@ -1314,7 +1314,7 @@ export function startWorldLab(): void {
     const events = kernel.flora.takeEvents();
     const fresh = captureDaughters(kernel.plantSpecies, drawer);
     if (fresh.length) drawer.push(...fresh);
-    for (const ev of events) ui.flashNote(`✧ a daughter arose: ${ev.name.toLowerCase()}`);
+    for (const ev of events) ui.flashNote(`speciated · ${ev.name.toLowerCase()}`);
     const rows = drawer.map((e) => {
       const count =
         e.kind === "plant" ? kernel.speciesCounts().get(e.speciesId) ?? 0 : kernel.critterCountOf(e.speciesId);
@@ -1358,7 +1358,7 @@ export function startWorldLab(): void {
     // must re-score the living-web strip too, not just the drawer (else it
     // reads stale while paused). refreshCensusStrip refreshes the drawer too.
     refreshCensusStrip();
-    if (ui) ui.flashNote(`archived ${e.name.toLowerCase()} — restore it any time`);
+    if (ui) ui.flashNote(`archived · ${e.name.toLowerCase()}`);
   }
 
   // Bring back: the drawer's own tombstone swap, then a few fresh instances
@@ -1398,7 +1398,7 @@ export function startWorldLab(): void {
     // the population-dependent richness reading (FIX 4); re-score the strip,
     // not just the drawer, so the living-web numbers don't lag while paused.
     refreshCensusStrip();
-    if (ui) ui.flashNote(`restored ${e.name.toLowerCase()} to live`);
+    if (ui) ui.flashNote(`restored · ${e.name.toLowerCase()}`);
   }
 
   // Curate — pin/unpin: a pure flag toggle on the drawer entry (pinEntry/
@@ -1412,7 +1412,7 @@ export function startWorldLab(): void {
     if (i < 0) return;
     drawer[i] = pinEntry(drawer[i]);
     refreshDrawer();
-    if (ui) ui.flashNote("pinned ⭑ — place pinned kinds from the roll pane, top-left");
+    if (ui) ui.flashNote("pinned · place from the roll pane");
   }
   function unpinDrawerEntry(key: string): void {
     const i = drawer.findIndex((e) => e.key === key);
@@ -2027,12 +2027,12 @@ export function startWorldLab(): void {
         );
       }
       refreshInspect();
-    } else if (ui) ui.flashNote("needs a flowering plant in bloom");
+    } else if (ui) ui.flashNote("no bloom in range");
   };
   ui.onToggleSwarmPin = () => {
     if (inspected?.kind !== "swarm") return;
     swarmLayer.setPinned(inspected.ref, !inspected.ref.pinned);
-    if (ui) ui.flashNote(inspected.ref.pinned ? "pinned to host" : "free-roam — follows fuller blooms");
+    if (ui) ui.flashNote(inspected.ref.pinned ? "pinned · holds host" : "free-roam");
     refreshInspect();
   };
   ui.onRetarget = () => {
@@ -2077,7 +2077,7 @@ export function startWorldLab(): void {
     if (ui) {
       ui.setSelected(selected);
       ui.setTool(tool);
-      ui.flashNote(`introduced ${kernel.plantSpecies[id].name.toLowerCase()} — cousin on the palette`);
+      ui.flashNote(`introduced · ${kernel.plantSpecies[id].name.toLowerCase()} (cousin)`);
     }
   };
   ui.onPressure = (id, value) => setPressure(id, value);
@@ -3397,7 +3397,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const drawerHead = document.createElement("div");
   drawerHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the drawer</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.45); margin-top: -2px;">live kinds you introduced — archive holds cleared ones</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.45); margin-top: -2px;">kinds introduced here · archive holds cleared</div>`;
   drawerPanel.appendChild(drawerHead);
 
   let drawerTab: "live" | "archive" = "live";
@@ -4031,7 +4031,7 @@ function buildChrome(initial: StarterKind): Chrome {
               `<span>${esc(row.name.toLowerCase())} · ${row.count} spread${row.count === 1 ? "" : "s"} · tick ${row.lastTick}</span></div>`,
           )
           .join("")
-      : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no assisted spreads yet — play/step while match is high</div>`;
+      : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45);">no spreads yet · needs match ≥ 0.30</div>`;
     readout.innerHTML =
       head(v.name.toLowerCase(), `insect cloud · ${hasHost ? `works ${esc(v.hostName.toLowerCase())}` : "waiting for a bloom"}`) +
       title("vitals") +
@@ -4053,7 +4053,7 @@ function buildChrome(initial: StarterKind): Chrome {
       `<div style="text-align:center;"><img src="${v.sensorPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">insect</div></div>` +
       (hasHost
         ? `<div style="text-align:center;"><img src="${v.flowerPatch}" style="width:56px;height:56px;image-rendering:pixelated;border-radius:2px;display:block;margin:0 auto 2px;"><div style="font:9px var(--mono);color:rgba(228,236,242,0.5);">flower</div></div>`
-        : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45); max-width: 120px;">place a flowering plant, then play — it homes on its own</div>`) +
+        : `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.45); max-width: 120px;">no host · place a bloom, then play</div>`) +
       `</div>` +
       `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.5); margin-bottom: 6px;">${esc(v.behaviorLine)}</div>` +
       title("pollination log") +
@@ -4074,8 +4074,8 @@ function buildChrome(initial: StarterKind): Chrome {
     const hint = document.createElement("div");
     hint.style.cssText = "font: 10px var(--mono); color: rgba(228,236,242,0.45); flex: 1 1 100%;";
     hint.textContent = ent.pinned
-      ? "pinned · holds this bloom · free-roam to forage"
-      : "free-roam · picks fuller blooms on play/step";
+      ? "pinned · holds this bloom"
+      : "free-roam · takes fuller blooms";
     controls.append(hint);
     readout.appendChild(controls);
     readout.style.display = "block";
@@ -4116,7 +4116,7 @@ function buildChrome(initial: StarterKind): Chrome {
     // note so an ambient pollinator/shuttle flip that leaves the number still
     // reads as expected, not as a broken meter.
     `<div style="margin-top: 6px; font: italic 10.5px var(--serif); color: rgba(228,236,242,0.45);">` +
-    `counts dispersers — ambient roles don't move this number</div>` +
+    `counts dispersers only</div>` +
     `</div>`;
 
   chrome.openLedger = () => {};
@@ -4131,15 +4131,15 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
-      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">nothing counted yet — place a kind, or step time</div>`;
+      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">nothing yet · place a kind or step</div>`;
     const swarmRows = v.swarms.length
       ? v.swarms
           .map((s) => swarmRow(s.name, s.matchSpark, s.match, s.energySpark, s.energy))
           .join("")
-      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet — invite a swarm and step</div>`;
+      : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet</div>`;
     webContent.innerHTML =
       `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
-      `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census · food web — live as you step</div>` +
+      `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census + chains · live as you step</div>` +
       richnessMeterBlock(v) +
       title("census") +
       stat("live", String(v.summary.live), "mint") +
@@ -4198,7 +4198,7 @@ function buildChrome(initial: StarterKind): Chrome {
   evoHead.style.cssText = "text-align: center;";
   evoHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the pressures</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide — not per plant · reseed 0 = insects-only · nectar + lifespan below</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">island-wide · not per plant below</div>`;
   evoTray.appendChild(evoHead);
 
   // The five sliders sit in a ROW (not a stacked column) — a compact strip
@@ -4430,7 +4430,7 @@ function buildChrome(initial: StarterKind): Chrome {
   ambientHead.style.cssText = "text-align: center;";
   ambientHead.innerHTML =
     `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the ambient bench</div>` +
-    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">give a placed kind an experimental role — bench only, nothing graduates</div>`;
+    `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">experimental roles · bench only</div>`;
   ambientTray.appendChild(ambientHead);
 
   const ambientRows = document.createElement("div");

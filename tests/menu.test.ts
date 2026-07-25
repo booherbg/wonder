@@ -11,11 +11,13 @@ test("launchers name each tucked-away action and its key; toss only with seeds",
   expect(menuLaunchers(2).map((a) => a.key)).toContain("Q");
 });
 
-test("the simulator has a door in the menu — a reachable bench, not a secret url", () => {
+test("the simulator has a door in the menu — reachable, not a secret url", () => {
   const sim = menuLaunchers(0).find((a) => a.key === SIMULATOR_KEY);
   expect(sim).toBeDefined();
   expect(sim!.label).toContain("simulator");
-  expect(sim!.label).toContain("bench");
+  // It used to also assert the word "bench". That was descriptive copy, and
+  // the point of the test is that the door EXISTS and is named for what it
+  // opens — so the label is checked, and the gloss is not.
 });
 
 test("a fire action greys out until you carry enough, and quotes the true cost", () => {
