@@ -1,7 +1,7 @@
 # World-Lab chrome rework — Overlay HUD — design
 
 **Date:** 2026-07-25  
-**Status:** draft (awaiting review)  
+**Status:** approved  
 **Surface:** World-Lab only (`src/game/worldlab.ts`, `simLayout.ts`, `simDock.ts`, related chrome)  
 **Supersedes (layout policy only):** `2026-07-24-simulator-rework-design.md` §3.1 reserved-space frame. Other sections of that doc (selection, pause, zoom, tooltips) remain in force unless this doc contradicts them.
 
