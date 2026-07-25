@@ -4,6 +4,9 @@
 //
 // What this replaces: four independently-fixed overlay panels (ledger, web,
 // pressures, inspect) each with their own open flag and no shared close rule.
+//
+// Task 6: a dock-header `working` toggle (pollination economy view) so Read
+// owns observe chrome; ambient lives under pressures in worldlab, not here.
 
 import { attachTooltip } from "../render/tooltip";
 
@@ -37,6 +40,16 @@ function tabBtnStyle(active: boolean): string {
   );
 }
 
+function workingBtnStyle(active: boolean): string {
+  return (
+    `${MONO} text-transform: uppercase; cursor: pointer; border: 1px solid` +
+    ` ${active ? "rgb(var(--lumen))" : "rgba(127,224,196,0.28)"}; border-radius: 4px;` +
+    ` padding: 5px 9px; margin-left: auto;` +
+    ` color: ${active ? "rgb(var(--abyss))" : "rgba(228,236,242,0.72)"};` +
+    ` background: ${active ? "rgb(var(--lumen))" : "rgba(23,42,54,0.72)"};`
+  );
+}
+
 /** Clicking the open tab closes the dock; clicking another switches to it. */
 export function nextTabState(current: TabId | null, clicked: TabId): TabId | null {
   return current === clicked ? null : clicked;
@@ -47,6 +60,10 @@ export interface Dock {
   body(id: TabId): HTMLElement;
   onTab(fn: (id: TabId | null) => void): void;
   activeTab(): TabId | null;
+  /** Paint the working-view header control (also driven by W). */
+  setWorking(active: boolean): void;
+  /** Fired with the next desired state when the header control is clicked. */
+  onWorking(fn: (next: boolean) => void): void;
 }
 
 export function buildDock(host: HTMLElement): Dock {
@@ -58,7 +75,7 @@ export function buildDock(host: HTMLElement): Dock {
   strip.setAttribute("role", "tablist");
   strip.style.cssText =
     "display: flex; flex-wrap: wrap; gap: 2px; padding: 8px 8px 0; flex: 0 0 auto;" +
-    " border-bottom: 1px solid rgba(127,224,196,0.14);";
+    " border-bottom: 1px solid rgba(127,224,196,0.14); align-items: center;";
 
   const bodiesHost = document.createElement("div");
   // Flow layout (not absolute inset): the host only had max-height, so a
@@ -70,6 +87,8 @@ export function buildDock(host: HTMLElement): Dock {
   const bodies = new Map<TabId, HTMLElement>();
   let active: TabId | null = null;
   let listener: ((id: TabId | null) => void) | null = null;
+  let workingOn = false;
+  let workingListener: ((next: boolean) => void) | null = null;
 
   for (const id of TAB_IDS) {
     const btn = document.createElement("button");
@@ -96,6 +115,21 @@ export function buildDock(host: HTMLElement): Dock {
     bodies.set(id, body);
   }
 
+  const workingBtn = document.createElement("button");
+  workingBtn.type = "button";
+  workingBtn.id = "dock-working-btn";
+  workingBtn.textContent = "working";
+  workingBtn.setAttribute("aria-pressed", "false");
+  workingBtn.style.cssText = workingBtnStyle(false);
+  attachTooltip(
+    workingBtn,
+    "draw the pollination economy into the world (W) — hunger, pollen aboard, readiness to spread, host nectar",
+  );
+  workingBtn.onclick = () => {
+    workingListener?.(!workingOn);
+  };
+  strip.appendChild(workingBtn);
+
   host.append(strip, bodiesHost);
 
   const paint = (): void => {
@@ -106,6 +140,11 @@ export function buildDock(host: HTMLElement): Dock {
       btn.style.cssText = tabBtnStyle(on);
       bodies.get(id)!.style.display = on ? "block" : "none";
     }
+  };
+
+  const paintWorking = (): void => {
+    workingBtn.setAttribute("aria-pressed", workingOn ? "true" : "false");
+    workingBtn.style.cssText = workingBtnStyle(workingOn);
   };
 
   const dock: Dock = {
@@ -123,8 +162,16 @@ export function buildDock(host: HTMLElement): Dock {
     activeTab() {
       return active;
     },
+    setWorking(activeWorking) {
+      workingOn = activeWorking;
+      paintWorking();
+    },
+    onWorking(fn) {
+      workingListener = fn;
+    },
   };
 
   paint();
+  paintWorking();
   return dock;
 }

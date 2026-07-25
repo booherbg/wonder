@@ -2948,9 +2948,8 @@ interface Chrome {
   onWorking: () => void;
   setWorking: (on: boolean) => void;
   // the ambient bench (Simulator slice 5b): opt-in experimental roles for placed
-  // critter KINDS, toggled live through kernel.setCritterRole. Same in-flow
-  // child-of-`stack` tray shape as the pressures tray above — NOT a
-  // position:fixed overlay. Bench-only; nothing graduates to real worlds.
+  // critter KINDS, under Pressures in the Read dock. openAmbient opens that tab
+  // (dev aid / ?ambient=1); there is no separate bottom toggle.
   onAmbientRole: (id: number, role: CritterRole) => void;
   // hasShallow gates the fish (aquatic-grazer) button: on a waterless construct
   // (no Tile.ShallowWater) a flipped fish would freeze forever, so the tray
@@ -4226,11 +4225,15 @@ function buildChrome(initial: StarterKind): Chrome {
   chrome.openLedger = () => {
     dock.setTab(nextTabState(dock.activeTab(), "ledger"));
   };
+  // Working view lives on the dock header (Task 6) — not a bottom-bar peer.
+  // Click → onWorking (startWorldLab flips the flag); setWorking paints the face.
+  // W key flips the flag then setWorking, same as before.
   chrome.onWorking = () => {};
-  chrome.setWorking = () => {
-    // working toggle left the Run strip (Task 4); W key still flips state via
-    // onWorking. Active face returns with Read dock chrome in Task 6.
+  chrome.setWorking = (on) => {
+    dock.setWorking(on);
   };
+  dock.onWorking(() => chrome.onWorking());
+  dock.setWorking(true); // bench default: working view on
   chrome.onSelectWebNode = () => {};
   let webViewMode: "graph" | "table" = "graph";
 
@@ -4598,30 +4601,25 @@ function buildChrome(initial: StarterKind): Chrome {
   };
 
   // ── the ambient bench: opt-in experimental roles for placed critter KINDS
-  // (pollinator / shuttle / … ), OFF by default. Detached from the bottom Run
-  // strip (Task 4) — Task 6 re-homes under the Read dock. Hidden intermediate:
-  // ?ambient=1 / openAmbient still toggles display; no bar button. ──────────
-  const ambientTray = document.createElement("div");
-  ambientTray.id = "lab-ambient-tray";
-  ambientTray.style.cssText =
-    // Parked off the bottom stack; fixed so a forced-open tray doesn't reflow
-    // the page. 260px matches the old evoTray clearance from leftStack.
-    "display: none; position: fixed; left: 18px; bottom: 70px; z-index: 6;" +
-    " max-width: 260px; max-height: 46vh; overflow-y: auto; padding: 12px 16px;" +
-    " background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink);" +
-    " font-family: var(--serif); user-select: none;";
-  document.body.appendChild(ambientTray);
+  // (pollinator / shuttle / … ), OFF by default. Lives under Pressures in the
+  // Read dock (Task 6) — no bottom-stack tray, no separate ambient toggle.
+  // ?ambient=1 / openAmbient open the pressures tab and scroll ambient into view.
+  const ambientSection = document.createElement("div");
+  ambientSection.id = "lab-ambient-tray";
+  ambientSection.style.cssText =
+    "margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(127,224,196,0.14);";
+  dock.body("pressures").appendChild(ambientSection);
 
   const ambientHead = document.createElement("div");
   ambientHead.style.cssText = "text-align: center;";
   ambientHead.innerHTML =
-    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the ambient bench</div>` +
+    `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 15px; color: var(--ink-bright);">ambient</div>` +
     `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">experimental roles · bench only</div>`;
-  ambientTray.appendChild(ambientHead);
+  ambientSection.appendChild(ambientHead);
 
   const ambientRows = document.createElement("div");
   ambientRows.style.cssText = "display: flex; flex-direction: column; gap: 8px; margin-top: 10px;";
-  ambientTray.appendChild(ambientRows);
+  ambientSection.appendChild(ambientRows);
 
   chrome.setAmbient = (kinds, hasShallow) => {
     ambientRows.replaceChildren();
@@ -4661,10 +4659,18 @@ function buildChrome(initial: StarterKind): Chrome {
     }
   };
 
-  let ambientOpen = false;
   chrome.openAmbient = (open) => {
-    ambientOpen = open ?? !ambientOpen;
-    ambientTray.style.display = ambientOpen ? "block" : "none";
+    // Dev aid / Help path: open pressures so ambient is reachable. Closing
+    // (open === false) only collapses if pressures is the active tab.
+    if (open === false) {
+      if (dock.activeTab() === "pressures") dock.setTab(null);
+      return;
+    }
+    dock.setTab("pressures");
+    // Next frame: pressures body is display:block; scroll ambient into view.
+    requestAnimationFrame(() => {
+      ambientSection.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
   };
   chrome.onAmbientRole = () => {}; // real handler wired by startWorldLab's body
 
