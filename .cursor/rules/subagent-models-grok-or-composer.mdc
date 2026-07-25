@@ -1,0 +1,20 @@
+---
+description: Subagents are allowed, but must use Grok or Composer — never Opus/Claude premium models unless the user explicitly names them
+alwaysApply: true
+---
+
+# Subagent Model Restriction
+
+Subagents are fine. Expensive Claude/Opus models are not — they burn Cursor API usage.
+
+## Hard rules
+
+- When using the `Task` tool / spawning subagents, **always** set `model` to one of:
+  - `cursor-grok-4.5-high` (Grok) — prefer for exploration, reasoning, general work
+  - `composer-2.5-fast` (Composer) — prefer for fast mechanical coding / edits
+- **Do not** use Opus, Claude, Sonnet, GPT, or Gemini models for subagents unless the user explicitly names that model.
+- If unsure which of the two to pick, default to `cursor-grok-4.5-high`.
+
+## Exception
+
+Only switch to another model when the user explicitly requests it (e.g. "use Opus for this", "spin up a Claude reviewer").
