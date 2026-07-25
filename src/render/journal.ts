@@ -359,14 +359,14 @@ export function openJournal(scene: JournalScene): void {
   el.appendChild(title);
   const epigraph = document.createElement("div");
   epigraph.className = "anth-epigraph";
-  epigraph.textContent = "a memoir, not a checklist — there is nothing to finish.";
+  epigraph.textContent = "writes itself as you look · nothing to finish";
   el.appendChild(epigraph);
 
   renderIsland(el, scene);
 
   sectionTitle(el, "creatures you've met");
   if (scene.critters.length === 0) {
-    empty(el, "none yet — lean close (E) while a small friend keeps you company.");
+    empty(el, "none yet · E near a critter");
   }
   for (const [island, list] of byIsland(scene.critters)) {
     islandHeader(el, island);
@@ -376,7 +376,7 @@ export function openJournal(scene: JournalScene): void {
 
   sectionTitle(el, "the insect clouds");
   if (scene.swarms.length === 0) {
-    empty(el, "none yet — lean close (E) when a cloud of colour works the blooms.");
+    empty(el, "none yet · E near a swarm");
   }
   for (const [island, list] of byIsland(scene.swarms)) {
     islandHeader(el, island);
@@ -386,7 +386,7 @@ export function openJournal(scene: JournalScene): void {
 
   sectionTitle(el, "growing things");
   if (scene.entries.length === 0) {
-    empty(el, "no sketches yet — lean close to something (E) and it will draw itself.");
+    empty(el, "no sketches yet · E");
   }
   for (const [island, list] of byIsland(scene.entries)) {
     islandHeader(el, island);

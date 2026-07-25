@@ -78,7 +78,7 @@ import {
   FIT_MARGIN,
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
-import { canvasBoxFor, edgeInset } from "./simLayout";
+import { NARROW, canvasBoxFor, edgeInset } from "./simLayout";
 import { layoutWeb, webExtent } from "./simWebGraph";
 import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
@@ -479,18 +479,6 @@ function censusWebView(
   critterCountOf: (id: number) => number,
   swarmSeries: { name: string; matchSpark: string; match: number; energySpark: string; energy: number }[],
 ): CensusWebView {
-  const species = census
-    .list()
-    .slice()
-    .sort((a, b) => b.peak - a.peak)
-    .map((tr) => ({
-      name: plantSpecies[tr.id]?.name ?? `species #${tr.id}`,
-      spark: sparkline(tr.counts),
-      count: tr.counts[tr.counts.length - 1] ?? 0,
-    }));
-  // FIX 4: score only species with a LIVE population — richness is "how wild
-  // is what you've actually MADE", not every introduced definition (incl.
-  // unplaced starters, which used to score an empty construct as "living").
   const livePlants = plantSpecies.filter((sp) => (speciesCounts.get(sp.id) ?? 0) > 0);
   const liveCritters = critterSpecies.filter((sp) => critterCountOf(sp.id) > 0);
   const r = richnessMeter(livePlants, liveCritters);
@@ -505,8 +493,33 @@ function censusWebView(
     feederHue: l.feeder.archetype.hue,
     closes: l.closes,
   }));
+  let species = census
+    .list()
+    .slice()
+    .sort((a, b) => b.peak - a.peak)
+    .map((tr) => ({
+      name: plantSpecies[tr.id]?.name ?? `species #${tr.id}`,
+      spark: sparkline(tr.counts),
+      count: tr.counts[tr.counts.length - 1] ?? 0,
+    }));
+  // Before the first census sample (or between samples), show live counts so
+  // the strip agrees with the food-web that already reads speciesCounts.
+  if (species.length === 0 && livePlants.length > 0) {
+    species = livePlants
+      .map((sp) => ({
+        name: sp.name,
+        spark: "·",
+        count: speciesCounts.get(sp.id) ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+  const sum = census.summary();
   return {
-    summary: census.summary(),
+    summary: {
+      live: Math.max(sum.live, livePlants.length),
+      arose: sum.arose,
+      lost: sum.lost,
+    },
     species,
     swarms: swarmSeries,
     chains: { chains: r.chains, closable: r.closable, redundancy: r.redundancy },
@@ -2521,13 +2534,21 @@ export function startWorldLab(): void {
   let lastBoxW = 0;
   let lastBoxH = 0;
   function relayout(): void {
+    const narrow = window.innerWidth < NARROW;
+    // Below 900px the side rails become overlay drawers (spec §3.1 / §6): they
+    // may cover the construct rather than starve it of every reserved pixel.
+    const leftInset = narrow ? 0 : edgeInset(document.getElementById("lab-left-stack"), "left");
+    const rightInset = narrow
+      ? 0
+      : Math.max(
+          edgeInset(document.getElementById("lab-right-stack"), "right"),
+          edgeInset(document.getElementById("lab-dock"), "right"),
+          edgeInset(document.getElementById("lab-chip-stack"), "right"),
+        );
     const box = canvasBoxFor(window.innerWidth, window.innerHeight, {
       top: edgeInset(document.getElementById("lab-eyebrow"), "top"),
-      left: edgeInset(document.getElementById("lab-left-stack"), "left"),
-      right: Math.max(
-        edgeInset(document.getElementById("lab-right-stack"), "right"),
-        edgeInset(document.getElementById("lab-dock"), "right"),
-      ),
+      left: leftInset,
+      right: rightInset,
       bottom: edgeInset(document.getElementById("lab-bottom-stack"), "bottom"),
     });
     canvas.style.position = "fixed";
@@ -2545,7 +2566,14 @@ export function startWorldLab(): void {
   // than guessing at fixed offsets (the guess is what broke before).
   if (typeof ResizeObserver !== "undefined") {
     const ro = new ResizeObserver(() => relayout());
-    for (const id of ["lab-eyebrow", "lab-left-stack", "lab-right-stack", "lab-bottom-stack", "lab-dock"]) {
+    for (const id of [
+      "lab-eyebrow",
+      "lab-left-stack",
+      "lab-right-stack",
+      "lab-bottom-stack",
+      "lab-dock",
+      "lab-chip-stack",
+    ]) {
       const el = document.getElementById(id);
       if (el) ro.observe(el);
     }
@@ -2688,8 +2716,8 @@ export function startWorldLab(): void {
       enterSelectInspectSwarm(
         placed,
         placed.home
-          ? `${placed.name.toLowerCase()} · free-roam — press play/step to watch it forage`
-          : `${placed.name.toLowerCase()} · no blooms nearby yet — place a flowering plant, then play`,
+          ? `${placed.name.toLowerCase()} · free-roam · play/step to forage`
+          : `${placed.name.toLowerCase()} · no blooms nearby · place a flower, then play`,
       );
       return;
     }
@@ -3018,13 +3046,21 @@ function buildChrome(initial: StarterKind): Chrome {
   eyebrow.innerHTML =
     `<span style="font: 10px var(--mono); letter-spacing: 0.24em; text-transform: uppercase; color: rgb(var(--lumen));">Wonder · the Simulator</span>` +
     `<div style="font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 20px; color: var(--ink-bright); margin-top: 2px;">the world-lab</div>` +
-    `<div style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, 46vw);">` +
+    `<div id="lab-key-help" style="font: italic 11px var(--serif); color: rgba(228,236,242,0.55); margin-top: 2px; max-width: min(520px, calc(100vw - 220px));">` +
     `select · place · paint · erase · cloud · brush 1–4 · wheel pans · ⌃/⌘+wheel zooms · −/+ / 0 fit · space+drag pan · ←↑↓ nudge · roll / web / drawer · G ledger · space play · Esc home` +
     `<div style="margin-top: 3px; font: 10px var(--mono); letter-spacing: 0.04em; color: rgba(228,236,242,0.42);">` +
     `spread paths: natural reseed · critter pollinator (ambient) · insect cloud</div>` +
     `</div>`;
   eyebrow.style.cssText = "position: fixed; left: 18px; top: 14px; z-index: 5; pointer-events: none; user-select: none;";
   document.body.appendChild(eyebrow);
+  const keyHelp = document.getElementById("lab-key-help");
+  const syncNarrowChrome = (): void => {
+    // Phone: drop the key legend so it can't collide with back/zoom (spec §6
+    // defers a real mobile layout; this is the breakage guard).
+    if (keyHelp) keyHelp.style.display = window.innerWidth < NARROW ? "none" : "block";
+  };
+  syncNarrowChrome();
+  window.addEventListener("resize", syncNarrowChrome);
 
   // the way back, always visible in the header: the bench is a door, not a
   // trap — dropping the ?sim flag lands on the island saved on the way in
@@ -3619,13 +3655,18 @@ function buildChrome(initial: StarterKind): Chrome {
     "position: fixed; right: 18px; top: 92px; z-index: 8; display: flex; flex-direction: column;" +
     " align-items: flex-end; gap: 10px; pointer-events: none;";
   document.body.appendChild(chipStack);
-  const placeChips = (dockOpen: boolean): void => {
-    chipStack.style.right = dockOpen ? "390px" : "18px";
+  const placeChips = (): void => {
+    // Dodge whichever right-edge panel is open (dock or drawer). Chips are
+    // never measured into the canvas inset when the dock is open — they sit
+    // beside it — so they must not land on top of either panel.
+    const dockOpen = dock.activeTab() !== null;
+    const drawerShowing = drawerOpen && drawerPanel.style.display !== "none";
+    chipStack.style.right = dockOpen ? "390px" : drawerShowing ? "330px" : "18px";
   };
   const prevSyncDock = syncDockChrome;
   dock.onTab((id) => {
     prevSyncDock(id);
-    placeChips(id !== null);
+    placeChips();
   });
 
   const readout = document.createElement("div");
@@ -3668,7 +3709,7 @@ function buildChrome(initial: StarterKind): Chrome {
   const leftStack = document.createElement("div");
   leftStack.id = "lab-left-stack";
   leftStack.style.cssText =
-    "position: fixed; left: 18px; top: 92px; z-index: 6; display: flex; flex-direction: column;" +
+    "position: fixed; left: 18px; top: 92px; z-index: 7; display: flex; flex-direction: column;" +
     " align-items: flex-start; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
   // Children re-enable pointer-events so the empty stack doesn't block the map.
   document.body.appendChild(leftStack);
@@ -3777,6 +3818,7 @@ function buildChrome(initial: StarterKind): Chrome {
     b.id = `roll-kind-${k}`; // a stable hook, same convention as #play-btn/#step-btn
     b.textContent = name;
     b.style.cssText = btn(false);
+    attachTooltip(b, `roll ${name} kinds`);
     b.onclick = () => chrome.onRollKind(k);
     return { k, b };
   });
@@ -3786,11 +3828,13 @@ function buildChrome(initial: StarterKind): Chrome {
   rollBtn.id = "roll-btn";
   rollBtn.textContent = "roll";
   rollBtn.style.cssText = btn(false);
+  attachTooltip(rollBtn, "draw a fresh batch");
   rollBtn.onclick = () => chrome.onRoll();
   const reRollBtn = document.createElement("button");
   reRollBtn.id = "reroll-btn";
   reRollBtn.textContent = "re-roll";
   reRollBtn.style.cssText = btn(false);
+  attachTooltip(reRollBtn, "replace this batch");
   reRollBtn.onclick = () => chrome.onReRoll();
   rollControls.appendChild(group(rollBtn, reRollBtn));
 
@@ -3805,11 +3849,13 @@ function buildChrome(initial: StarterKind): Chrome {
   rollWebBtn.id = "roll-web-btn";
   rollWebBtn.textContent = "roll a web";
   rollWebBtn.style.cssText = btn(false);
+  attachTooltip(rollWebBtn, "introduce one closable source → disperser → feeder chain");
   rollWebBtn.onclick = () => chrome.onRollWeb();
   const seedRicherBtn = document.createElement("button");
   seedRicherBtn.id = "seed-richer-btn";
   seedRicherBtn.textContent = "seed it richer";
   seedRicherBtn.style.cssText = btn(false);
+  attachTooltip(seedRicherBtn, "introduce a denser matched web");
   seedRicherBtn.onclick = () => chrome.onSeedRicher();
   // curate: re-seed every pinned drawer kind from its stored def (Task 6) —
   // lives beside roll-a-web's own control row since both are "add instances
@@ -3820,6 +3866,7 @@ function buildChrome(initial: StarterKind): Chrome {
   reseedPinnedBtn.id = "reseed-pinned-btn";
   reseedPinnedBtn.textContent = "place pinned";
   reseedPinnedBtn.style.cssText = btn(false);
+  attachTooltip(reseedPinnedBtn, "place fresh instances of every pinned drawer kind");
   reseedPinnedBtn.onclick = () => chrome.onReseedPinned();
   webControls.appendChild(group(rollWebBtn, seedRicherBtn, reseedPinnedBtn));
 
@@ -4058,7 +4105,7 @@ function buildChrome(initial: StarterKind): Chrome {
       stat("target", `${Math.round(v.targetX)}, ${Math.round(v.targetY)}`) +
       stat("meal", v.mealName) +
       italic(`${v.moodLine} · ${v.roleLine}`) +
-      title("drives · the legible why") +
+      title("drives") +
       drive("hunger", v.drives.hunger, v.dominant === "hunger") +
       drive("comfort", v.drives.comfort, v.dominant === "comfort") +
       drive("curiosity", v.drives.curiosity, v.dominant === "curiosity");
@@ -4523,6 +4570,7 @@ function buildChrome(initial: StarterKind): Chrome {
     if (next && dock.activeTab() !== null) dock.setTab(null);
     drawerOpen = next;
     syncSidePanels();
+    placeChips();
   };
   panelRollBtn.onclick = () => chrome.openRoll();
   panelWebBtn.onclick = () => chrome.openWeb();

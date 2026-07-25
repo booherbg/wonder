@@ -61,7 +61,10 @@ export function buildDock(host: HTMLElement): Dock {
     " border-bottom: 1px solid rgba(127,224,196,0.14);";
 
   const bodiesHost = document.createElement("div");
-  bodiesHost.style.cssText = "flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;";
+  // Flow layout (not absolute inset): the host only had max-height, so a
+  // flex:1 absolute body collapsed to 0px and ate all clicks on tab content.
+  bodiesHost.style.cssText =
+    "flex: 1 1 auto; min-height: 0; max-height: calc(100vh - 220px); overflow-y: auto;";
 
   const buttons = new Map<TabId, HTMLButtonElement>();
   const bodies = new Map<TabId, HTMLElement>();
@@ -87,7 +90,7 @@ export function buildDock(host: HTMLElement): Dock {
     body.id = `dock-body-${id}`;
     body.setAttribute("role", "tabpanel");
     body.style.cssText =
-      "display: none; position: absolute; inset: 0; overflow-y: auto; padding: 14px 16px;" +
+      "display: none; padding: 14px 16px;" +
       " color: var(--ink); font-family: var(--serif);";
     bodiesHost.appendChild(body);
     bodies.set(id, body);

@@ -2435,7 +2435,7 @@ function offerMurmurMoments(dt: number): void {
     // waits, and is only marked spoken once it has actually shown — a
     // first-meeting line burned behind a card would be gone forever.
     if (swarmCueDue(swarmMetHere, aPanelIsOpen(), swarmLayer.near(player.x, player.y, SWARM_REACH).length)) {
-      flashHud("a cloud of colour works the blooms nearby — lean close (E) or click it", 5200);
+      flashHud("swarm nearby · E", 5200);
       swarmMetHere = true; // marked only now the cue is truly on screen
       markSwarmMet(currentSeed);
       // a first meeting, once per island ever — it may speak through the

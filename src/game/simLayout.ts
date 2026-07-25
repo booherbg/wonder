@@ -28,6 +28,9 @@ export interface Box {
   height: number;
 }
 
+/** Below this width, side rails overlay instead of reserving canvas. Spec §3.1. */
+export const NARROW = 900;
+
 /** Never shrink the construct below this; past it, chrome overlaps again
  *  rather than squeezing the world to nothing on a small window. */
 export const MIN_CANVAS = { width: 320, height: 240 };

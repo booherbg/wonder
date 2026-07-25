@@ -205,12 +205,12 @@ export function openWeb(view: WebView): void {
   el.innerHTML = "";
   const title = document.createElement("div");
   title.className = "anth-title";
-  title.textContent = `the living web of ${view.island}`;
+  title.textContent = `web · ${view.island}`;
   el.appendChild(title);
   const epigraph = document.createElement("div");
   epigraph.className = "anth-epigraph";
   epigraph.textContent =
-    "clouds of insects work the island's blooms — drinking nectar, carrying pollen, spreading the very flowers that feed them. beneath, an older weave still turns: a critter's leavings wake another plant, and round it goes.";
+    "swarms work blooms · nectar for pollen · underneath, leavings wake feeders";
   el.appendChild(epigraph);
 
   noteSection(
@@ -230,7 +230,7 @@ export function openWeb(view: WebView): void {
     const empty = document.createElement("div");
     empty.className = "web-line web-empty";
     empty.textContent =
-      "no swarms working the blooms yet — the island's flowers wait for a cloud to find them.";
+      "no swarms on blooms yet";
     el.appendChild(empty);
   }
   for (const link of view.pollen) {
@@ -253,8 +253,8 @@ export function openWeb(view: WebView): void {
     const loop = document.createElement("div");
     loop.className = "web-loop";
     loop.textContent = link.matched
-      ? "↺ and the flower's nectar feeds the swarm — a fair trade"
-      : "the nectar feeds it a little while it comes to fit the flower";
+      ? "↺ nectar → swarm"
+      : "nectar while match climbs";
     row.appendChild(loop);
     el.appendChild(row);
   }

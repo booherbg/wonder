@@ -101,7 +101,7 @@ function render(): void {
           <span class="bp-act ghost"><b>q</b> toss one</span>
         </div>
       </div>`
-    : `<div class="bp-plate"><div class="bp-plate-lore">your pouch is empty. gather a seed from a plant to fill it.</div></div>`;
+    : `<div class="bp-plate"><div class="bp-plate-lore">pouch empty · gather a seed (space)</div></div>`;
 
   el.innerHTML = `
     <div class="bp-head"><span class="bp-title">backpack</span><span class="bp-sub">the seed bank · your tools · what you carry</span></div>

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { GUTTER, MIN_CANVAS, canvasBoxFor } from "../src/game/simLayout";
+import { GUTTER, MIN_CANVAS, NARROW, canvasBoxFor } from "../src/game/simLayout";
 
 // The bench's chrome used to cover the construct: the canvas was always the
 // full viewport, so every panel sat on top of the world it was operating on.
@@ -60,4 +60,8 @@ test("negative insets are treated as absent, never as bonus space", () => {
   expect(b.height).toBe(600);
   expect(b.left).toBe(0);
   expect(b.top).toBe(0);
+});
+
+test("NARROW marks the overlay-rail breakpoint from the layout spec", () => {
+  expect(NARROW).toBe(900);
 });

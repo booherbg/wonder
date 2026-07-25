@@ -378,19 +378,19 @@ function renderChartsPanel(full: ChartsView): void {
   const el = panel();
   el.innerHTML = `
     <div class="ch-head">
-      <span class="ch-title">the island's ledger</span>
+      <span class="ch-title">ledger · census + web</span>
       <span class="ch-sub">${escapeText(v.name)}${NB}·${NB}${escapeText(v.timeLabel)}</span>
     </div>
     ${windowRow(chartWindow)}
     ${statTiles(v)}
-    <div class="ch-section">population over island-time</div>
+    <div class="ch-section">population / tick</div>
     ${populationChart(v)}
     ${seriesLegend(v.series)}
-    <div class="ch-section">the pollinators aloft</div>
+    <div class="ch-section">pollinators</div>
     ${swarmChart(v)}
-    <div class="ch-section">the biomes underfoot</div>
+    <div class="ch-section">biomes</div>
     ${biomeBar(v)}
-    <div class="ch-section">the food web</div>
+    <div class="ch-section">food web</div>
     ${foodWeb(v)}
     <div class="ch-hint">G or Esc to close</div>
   `;
