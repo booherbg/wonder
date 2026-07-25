@@ -85,7 +85,12 @@ import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTel
 import { metabolicEfficiency } from "../life/idmap";
 import { habitatsOf, placeablePlants } from "./simRoster";
 import { BRUSH_SIZES, BrushSize, paintBiome, stampCells } from "./simBrush";
-import { materialsForTool, primaryLeftOverlay, type BuildTool } from "./simChromeLayout";
+import {
+  materialsForTool,
+  primaryLeftOverlay,
+  isNarrowViewport,
+  type BuildTool,
+} from "./simChromeLayout";
 import {
   PRESSURES,
   Pressure,
@@ -3219,11 +3224,15 @@ function buildChrome(initial: StarterKind): Chrome {
     b.onclick = () => chrome.onFidelity(f);
     return { f, b };
   });
-  bar.appendChild(group(label("fidelity"), ...fidelityBtns.map((f) => f.b)));
+  // Held in a host so narrow mode can park fidelity + session under ⋯.
+  const fidelityGroup = group(label("fidelity"), ...fidelityBtns.map((f) => f.b));
+  const fidelitySep = sep();
+  bar.append(fidelitySep, fidelityGroup);
 
   // ── Session: new ▾ · save · load (replaces always-visible construct starters;
   // brush / panel toggles leave the bar — Tasks 5–6 re-home them). ──────────
-  bar.appendChild(sep());
+  const sessionSep = sep();
+  bar.appendChild(sessionSep);
   const newWrap = document.createElement("div");
   newWrap.style.cssText = "position: relative; display: inline-flex;";
   const newBtn = document.createElement("button");
@@ -3282,17 +3291,20 @@ function buildChrome(initial: StarterKind): Chrome {
   attachTooltip(loadSlotBtn, "load a saved construct");
   loadSlotBtn.style.cssText = btn(false);
   loadSlotBtn.onclick = () => chrome.onLoadSlot();
-  bar.appendChild(group(label("session"), newWrap, saveSlotBtn, loadSlotBtn));
+  const sessionGroup = group(label("session"), newWrap, saveSlotBtn, loadSlotBtn);
+  bar.appendChild(sessionGroup);
 
   chrome.onSaveSlot = () => {};
   chrome.onLoadSlot = () => {};
 
-  bar.appendChild(sep());
+  const tickSep = sep();
+  bar.appendChild(tickSep);
   const tickValue = document.createElement("span");
   tickValue.id = "tick-readout"; // a stable hook: the codex plate has no other bare-number field
   tickValue.style.cssText = `${MONO} color: var(--ink-bright); min-width: 34px; text-align: right;`;
   tickValue.textContent = "0";
-  bar.appendChild(group(label("tick"), tickValue));
+  const tickGroup = group(label("tick"), tickValue);
+  bar.appendChild(tickGroup);
 
   chrome.onPlay = () => {};
   chrome.onStep = () => {};
@@ -3603,9 +3615,21 @@ function buildChrome(initial: StarterKind): Chrome {
   document.body.appendChild(chipStack);
   const placeChips = (): void => {
     // Dodge the right-edge dock when open. Drawer lives on the left now, so
-    // chips no longer shift for it.
+    // chips no longer shift for it. On narrow, the dock is a full-height sheet —
+    // park chips on the opposite edge so they stay tappable.
     const dockOpen = dock.activeTab() !== null;
-    chipStack.style.right = dockOpen ? "390px" : "18px";
+    if (isNarrowViewport(window.innerWidth)) {
+      if (dockOpen) {
+        chipStack.style.right = "auto";
+        chipStack.style.left = "12px";
+      } else {
+        chipStack.style.left = "auto";
+        chipStack.style.right = "12px";
+      }
+    } else {
+      chipStack.style.left = "auto";
+      chipStack.style.right = dockOpen ? "390px" : "18px";
+    }
   };
   const prevSyncDock = syncDockChrome;
   dock.onTab((id) => {
@@ -4497,6 +4521,56 @@ function buildChrome(initial: StarterKind): Chrome {
   // Map-first side panels: roll / drawer share the left edge (one primary via
   // primaryLeftOverlay); dock stays on the right and may open at the same time.
   // Rail buttons reflect open state.
+  // Narrow mode flag + overlay style tokens (DOM dock built after panels exist).
+  let narrowMode = false;
+  let moreOpen = false;
+  let libMenuOpen = false;
+  const DOCK_CLEARANCE = "calc(58px + env(safe-area-inset-bottom, 0px))";
+  const SHEET_WIDTH = "min(100vw, 420px)";
+
+  // Style tokens for desktop vs narrow overlays (applied in applyViewportChrome /
+  // syncLeftChrome — never fed into canvas insets).
+  const FLYOUT_DESKTOP =
+    "position: fixed; left: 62px; top: 48px; z-index: 7; flex-direction: column; gap: 4px;" +
+    " max-width: min(72vw, 520px); max-height: calc(100vh - 130px); overflow-y: auto;" +
+    " padding: 8px 10px; background: var(--panel); border-radius: var(--radius); box-shadow: var(--frame);" +
+    " user-select: none;";
+  const FLYOUT_NARROW =
+    "position: fixed; left: 0; right: 0; z-index: 9; flex-direction: column; gap: 4px;" +
+    ` bottom: ${DOCK_CLEARANCE}; max-height: 45vh; overflow-y: auto; width: 100%; box-sizing: border-box;` +
+    " padding: 10px 12px; background: var(--panel); border-radius: 12px 12px 0 0; box-shadow: var(--frame);" +
+    " user-select: none;";
+  const LEFT_STACK_DESKTOP =
+    "position: fixed; left: 62px; top: 92px; z-index: 7; display: flex; flex-direction: column;" +
+    " align-items: flex-start; gap: 10px; max-height: calc(100vh - 160px); pointer-events: none;";
+  const LEFT_STACK_NARROW =
+    "position: fixed; left: 0; top: 0; z-index: 9; display: flex; flex-direction: column;" +
+    ` align-items: stretch; gap: 0; width: ${SHEET_WIDTH}; height: calc(100% - ${DOCK_CLEARANCE});` +
+    " max-height: none; pointer-events: none; background: transparent;";
+  const PANEL_DESKTOP =
+    "width: 296px; max-height: 42vh; overflow-y: auto; padding: 14px 16px; background: var(--panel);" +
+    " border-radius: var(--radius); box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
+    " user-select: none; flex: 0 0 auto; pointer-events: auto;";
+  const PANEL_NARROW =
+    `width: 100%; height: 100%; max-height: none; overflow-y: auto; padding: 14px 16px; background: var(--panel);` +
+    " border-radius: 0; box-shadow: var(--frame); color: var(--ink); font-family: var(--serif);" +
+    " user-select: none; flex: 1 1 auto; pointer-events: auto; box-sizing: border-box;";
+  const ROLL_DESKTOP =
+    "width: 336px; padding: 14px 16px; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame); color: var(--ink); font-family: var(--serif); user-select: none; flex: 0 0 auto;" +
+    " max-height: 42vh; overflow-y: auto; pointer-events: auto;";
+  const ROLL_NARROW = PANEL_NARROW;
+  const DOCK_DESKTOP =
+    "position: fixed; right: 18px; top: 92px; z-index: 7; width: 360px; max-height: calc(100vh - 160px);" +
+    " flex-direction: column; background: var(--panel); border-radius: var(--radius);" +
+    " box-shadow: var(--frame); overflow: hidden; pointer-events: auto;";
+  const DOCK_NARROW =
+    `position: fixed; right: 0; top: 0; z-index: 9; width: ${SHEET_WIDTH};` +
+    ` height: calc(100% - ${DOCK_CLEARANCE}); max-height: none;` +
+    " flex-direction: column; background: var(--panel); border-radius: 0;" +
+    " box-shadow: var(--frame); overflow: hidden; pointer-events: auto;";
+
+
   syncLeftChrome = (): void => {
     const kind = materialsForTool(currentTool);
     const primary = primaryLeftOverlay({
@@ -4504,15 +4578,20 @@ function buildChrome(initial: StarterKind): Chrome {
       roll: rollOpen,
       drawer: drawerOpen,
     });
-    rollPane.style.display = primary === "roll" ? "block" : "none";
-    drawerPanel.style.display = primary === "drawer" ? "block" : "none";
+    const rollStyle = narrowMode ? ROLL_NARROW : ROLL_DESKTOP;
+    const drawerStyle = narrowMode ? PANEL_NARROW : PANEL_DESKTOP;
+    rollPane.style.cssText =
+      (primary === "roll" ? "display: block; " : "display: none; ") + rollStyle;
+    drawerPanel.style.cssText =
+      (primary === "drawer" ? "display: block; " : "display: none; ") + drawerStyle;
+    const flyBase = narrowMode ? FLYOUT_NARROW : FLYOUT_DESKTOP;
     if (primary === "flyout" && kind !== null) {
-      flyout.style.display = "flex";
+      flyout.style.cssText = "display: flex; " + flyBase;
       plantRow.style.display = kind === "life" ? "flex" : "none";
       critterRow.style.display = kind === "life" ? "flex" : "none";
       biomeRow.style.display = kind === "tiles" ? "flex" : "none";
     } else {
-      flyout.style.display = "none";
+      flyout.style.cssText = "display: none; " + flyBase;
     }
     railRollBtn.style.cssText = railBtn(rollOpen);
     railDrawerBtn.style.cssText = railBtn(drawerOpen);
@@ -4537,6 +4616,279 @@ function buildChrome(initial: StarterKind): Chrome {
     placeChips();
   };
   syncLeftChrome(); // start closed
+
+  // ── Narrow / mobile chrome (<900): bottom tool dock + overlay sheets ─────
+  // Desktop keeps the left rail + Run strip. Narrow hides those and shows
+  // #lab-mobile-dock (tools · compact time · read · lib · ⋯). Materials,
+  // roll/drawer, and the Read dock become sheets; fidelity + session live
+  // under the ⋯ sheet. Canvas stays full-bleed either way (Task 1).
+  const mobileDock = document.createElement("div");
+  mobileDock.id = "lab-mobile-dock";
+  mobileDock.style.cssText =
+    "display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;" +
+    " flex-direction: column; gap: 4px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));" +
+    " background: rgba(20,32,28,0.94); border-top: 1px solid rgba(127,224,196,0.22);" +
+    " box-sizing: border-box; user-select: none;";
+  document.body.appendChild(mobileDock);
+
+  const mobileToolRow = document.createElement("div");
+  mobileToolRow.style.cssText = "display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap;";
+  const mobileBtn = (active: boolean): string =>
+    `${MONO} font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase;` +
+    ` color: ${active ? "rgb(var(--abyss))" : "rgba(228,236,242,0.72)"};` +
+    ` background: ${active ? "rgb(var(--lumen))" : "rgba(23,42,54,0.72)"};` +
+    ` border: 1px solid ${active ? "rgb(var(--lumen))" : "rgba(127,224,196,0.28)"};` +
+    ` border-radius: 4px; padding: 7px 8px; cursor: pointer; min-width: 36px;`;
+
+  const MOBILE_TOOLS: { id: LabTool; name: string }[] = [
+    { id: "select", name: "sel" },
+    { id: "paint", name: "pnt" },
+    { id: "place", name: "plc" },
+    { id: "erase", name: "ers" },
+  ];
+  const mobileToolBtns = MOBILE_TOOLS.map(({ id, name }) => {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.style.cssText = mobileBtn(id === "select");
+    b.onclick = () => chrome.onTool(id);
+    return { id, b };
+  });
+  for (const { b } of mobileToolBtns) mobileToolRow.appendChild(b);
+
+  const moreBtn = document.createElement("button");
+  moreBtn.id = "lab-more-btn";
+  moreBtn.textContent = "⋯";
+  attachTooltip(moreBtn, "fidelity · session · brush");
+  moreBtn.style.cssText = mobileBtn(false);
+  moreBtn.onclick = () => {
+    moreOpen = !moreOpen;
+    libMenuOpen = false;
+    syncNarrowSheets();
+  };
+  mobileToolRow.appendChild(moreBtn);
+
+  const mobileTimeRow = document.createElement("div");
+  mobileTimeRow.style.cssText = "display: flex; align-items: center; gap: 4px; justify-content: center; flex-wrap: wrap;";
+  const mobilePlayBtn = document.createElement("button");
+  mobilePlayBtn.textContent = "play";
+  mobilePlayBtn.style.cssText = mobileBtn(false);
+  mobilePlayBtn.onclick = () => chrome.onPlay();
+  const mobileStepBtn = document.createElement("button");
+  mobileStepBtn.textContent = "step";
+  mobileStepBtn.style.cssText = mobileBtn(false);
+  mobileStepBtn.onclick = () => chrome.onStep();
+  const readBtn = document.createElement("button");
+  readBtn.id = "lab-read-btn";
+  readBtn.textContent = "read";
+  attachTooltip(readBtn, "open the observe dock");
+  readBtn.style.cssText = mobileBtn(false);
+  readBtn.onclick = () => {
+    if (dock.activeTab() !== null) dock.setTab(null);
+    else dock.setTab("subject");
+  };
+  const libBtn = document.createElement("button");
+  libBtn.id = "lab-lib-btn";
+  libBtn.textContent = "lib";
+  attachTooltip(libBtn, "roll · drawer");
+  libBtn.style.cssText = mobileBtn(false);
+  libBtn.onclick = () => {
+    if (rollOpen || drawerOpen) {
+      rollOpen = false;
+      drawerOpen = false;
+      libMenuOpen = false;
+      syncLeftChrome();
+      syncNarrowSheets();
+      return;
+    }
+    libMenuOpen = !libMenuOpen;
+    moreOpen = false;
+    syncNarrowSheets();
+  };
+  mobileTimeRow.append(mobilePlayBtn, mobileStepBtn, readBtn, libBtn);
+  mobileDock.append(mobileToolRow, mobileTimeRow);
+
+  // ⋯ sheet: fidelity + session (+ brush / cloud for thumb reach)
+  const moreSheet = document.createElement("div");
+  moreSheet.id = "lab-more-sheet";
+  moreSheet.style.cssText =
+    "display: none; position: fixed; left: 0; right: 0; z-index: 9; flex-direction: column; gap: 10px;" +
+    ` bottom: ${DOCK_CLEARANCE}; max-height: 45vh; overflow-y: auto; padding: 12px 14px;` +
+    " background: var(--panel); border-radius: 12px 12px 0 0; box-shadow: var(--frame); user-select: none;";
+  document.body.appendChild(moreSheet);
+  const moreBrushRow = document.createElement("div");
+  moreBrushRow.style.cssText = "display: flex; align-items: center; gap: 6px; flex-wrap: wrap;";
+  moreBrushRow.appendChild(label("brush"));
+  const moreBrushBtns = BRUSH_SIZES.map((size) => {
+    const b = document.createElement("button");
+    b.textContent = String(size);
+    b.style.cssText = btn(false);
+    b.onclick = () => chrome.onBrushSize(size);
+    moreBrushRow.appendChild(b);
+    return { size, b };
+  });
+  const moreCloudBtn = document.createElement("button");
+  moreCloudBtn.textContent = "cloud";
+  attachTooltip(moreCloudBtn, "place a naïve insect cloud");
+  moreCloudBtn.style.cssText = btn(false);
+  moreCloudBtn.onclick = () => chrome.onSelect({ kind: "cloud" });
+  const moreCloudRow = group(label("place"), moreCloudBtn);
+
+  // Lib chooser: roll / drawer → full-height sheets
+  const libSheet = document.createElement("div");
+  libSheet.id = "lab-lib-sheet";
+  libSheet.style.cssText =
+    "display: none; position: fixed; left: 0; right: 0; z-index: 9; flex-direction: row; gap: 8px;" +
+    ` bottom: ${DOCK_CLEARANCE}; justify-content: center; padding: 10px 14px;` +
+    " background: var(--panel); border-radius: 12px 12px 0 0; box-shadow: var(--frame); user-select: none;";
+  const libRollBtn = document.createElement("button");
+  libRollBtn.textContent = "roll";
+  libRollBtn.style.cssText = btn(false);
+  libRollBtn.onclick = () => {
+    libMenuOpen = false;
+    chrome.openRoll(true);
+    syncNarrowSheets();
+  };
+  const libDrawerBtn = document.createElement("button");
+  libDrawerBtn.textContent = "drawer";
+  libDrawerBtn.style.cssText = btn(false);
+  libDrawerBtn.onclick = () => {
+    libMenuOpen = false;
+    chrome.openDrawer(true);
+    syncNarrowSheets();
+  };
+  libSheet.append(libRollBtn, libDrawerBtn);
+  document.body.appendChild(libSheet);
+
+  const syncNarrowSheets = (): void => {
+    moreSheet.style.display = narrowMode && moreOpen ? "flex" : "none";
+    libSheet.style.display = narrowMode && libMenuOpen ? "flex" : "none";
+    moreBtn.style.cssText = mobileBtn(moreOpen);
+    libBtn.style.cssText = mobileBtn(libMenuOpen || rollOpen || drawerOpen);
+    if (narrowMode && dock.activeTab() !== null) {
+      readBtn.style.cssText = mobileBtn(true);
+    } else if (narrowMode) {
+      readBtn.style.cssText = mobileBtn(false);
+    }
+  };
+
+  function parkRunExtras(narrow: boolean): void {
+    if (narrow) {
+      // Order in ⋯: fidelity · session · brush · cloud
+      moreSheet.replaceChildren(fidelityGroup, sessionGroup, moreBrushRow, moreCloudRow);
+      fidelityGroup.style.cssText =
+        "display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-wrap: wrap;";
+      sessionGroup.style.cssText =
+        "display: flex; align-items: center; gap: 6px; white-space: nowrap; flex-wrap: wrap;";
+    } else {
+      // Restore desktop Run strip order: … fidelitySep fidelity sessionSep session tickSep tick
+      bar.insertBefore(fidelitySep, tickSep);
+      bar.insertBefore(fidelityGroup, tickSep);
+      bar.insertBefore(sessionSep, tickSep);
+      bar.insertBefore(sessionGroup, tickSep);
+      fidelityGroup.style.cssText = "display: flex; align-items: center; gap: 6px; white-space: nowrap;";
+      sessionGroup.style.cssText = "display: flex; align-items: center; gap: 6px; white-space: nowrap;";
+      moreSheet.replaceChildren();
+    }
+  }
+
+  function applyViewportChrome(): void {
+    const narrow = isNarrowViewport(window.innerWidth);
+    const wasNarrow = narrowMode;
+    narrowMode = narrow;
+    if (narrow) {
+      rail.style.display = "none";
+      stack.style.display = "none";
+      mobileDock.style.display = "flex";
+      zoomPctEl.style.display = "none";
+      if (!wasNarrow) parkRunExtras(true);
+      fidelitySep.remove();
+      sessionSep.remove();
+    } else {
+      rail.style.display = "flex";
+      stack.style.display = "flex";
+      mobileDock.style.display = "none";
+      zoomPctEl.style.display = "";
+      moreOpen = false;
+      libMenuOpen = false;
+      if (wasNarrow) parkRunExtras(false);
+    }
+    // Overlays: materials bottom sheet; roll/drawer/dock full-height sheets.
+    leftStack.style.cssText = narrow ? LEFT_STACK_NARROW : LEFT_STACK_DESKTOP;
+    syncLeftChrome();
+    const tab = dock.activeTab();
+    dockHost.style.cssText =
+      (tab ? "display: flex; " : "display: none; ") + (narrow ? DOCK_NARROW : DOCK_DESKTOP);
+    placeChips();
+    syncNarrowSheets();
+    hint.style.left = narrow ? "12px" : "62px";
+    hint.style.bottom = narrow ? DOCK_CLEARANCE : "66px";
+  }
+
+  // Replace the dock tab listener so open-state also paints narrow sheet geometry
+  // and the mobile read/lib button faces.
+  dock.onTab((id) => {
+    dockHost.style.cssText =
+      (id ? "display: flex; " : "display: none; ") + (narrowMode ? DOCK_NARROW : DOCK_DESKTOP);
+    if (id === "ledger") chrome.onLedgerShow();
+    else if (isChartsOpen()) closeCharts();
+    placeChips();
+    syncNarrowSheets();
+  });
+
+  chrome.openRoll = (open?: boolean) => {
+    const next = open ?? !rollOpen;
+    rollOpen = next;
+    if (next) {
+      drawerOpen = false;
+      moreOpen = false;
+      libMenuOpen = false;
+    }
+    syncLeftChrome();
+    syncNarrowSheets();
+  };
+  chrome.openDrawer = (open?: boolean) => {
+    const next = open ?? !drawerOpen;
+    drawerOpen = next;
+    if (next) {
+      rollOpen = false;
+      moreOpen = false;
+      libMenuOpen = false;
+    }
+    syncLeftChrome();
+    placeChips();
+    syncNarrowSheets();
+  };
+
+  // Keep mobile dock controls in sync with the desktop setters.
+  const prevSetTool = chrome.setTool;
+  chrome.setTool = (t) => {
+    prevSetTool(t);
+    for (const { id, b } of mobileToolBtns) b.style.cssText = mobileBtn(id === t);
+    if (materialsForTool(t)) {
+      moreOpen = false;
+      libMenuOpen = false;
+      syncNarrowSheets();
+    }
+  };
+  const prevSetBrush = chrome.setBrushSize;
+  chrome.setBrushSize = (size) => {
+    prevSetBrush(size);
+    for (const { size: s, b } of moreBrushBtns) b.style.cssText = btn(s === size);
+  };
+  const prevSetTime = chrome.setTimeState;
+  chrome.setTimeState = (s) => {
+    prevSetTime(s);
+    mobilePlayBtn.textContent = s.playing ? "pause" : "play";
+  };
+  const prevSetSelected = chrome.setSelected;
+  chrome.setSelected = (sel) => {
+    prevSetSelected(sel);
+    moreCloudBtn.style.cssText = btn(sel !== null && sel.kind === "cloud");
+  };
+
+  window.addEventListener("resize", applyViewportChrome);
+  applyViewportChrome();
+
 
   // ── the slot panel (Task 9): a centered modal, the same footprint
   // convention as the real-world #picker (index.html) — position: fixed,
