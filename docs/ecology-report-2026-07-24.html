@@ -1,0 +1,1924 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wonder — Ecology Report · 2026-07-24</title>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#111823; --panel2:#0d141d; --line:#1e2a38;
+  --ink:#d7e2ee; --dim:#8ba0b6; --faint:#5c7086;
+  --mint:#7fe0c4; --gold:#e3c07b; --rose:#e08a9e; --violet:#b491e0;
+  --sky:#5d8fcc; --sand:#e3d29c; --grass:#68a557; --ember:#e07a52;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --navh:112px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.62 var(--mono); -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 140px}
+
+/* masthead */
+header.mast{
+  border-bottom:1px solid var(--line); padding:54px 0 32px;
+  background:linear-gradient(180deg,#0d141d 0%,var(--bg) 100%);
+}
+header.mast .wrap{padding-bottom:0}
+.mast h1{font:400 40px/1.1 var(--serif); margin:0 0 10px; letter-spacing:.01em}
+.mast h1 span{color:var(--mint)}
+.mast .sub{color:var(--dim); font-size:14px; max-width:74ch}
+.stamp{margin-top:20px; display:flex; flex-wrap:wrap; gap:8px}
+.stamp b{
+  font-weight:400; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--faint); background:var(--panel); border:1px solid var(--line);
+  padding:5px 10px; border-radius:3px;
+}
+.stamp b i{font-style:normal;color:var(--mint)}
+
+/* nav */
+nav.toc{
+  position:sticky; top:0; z-index:40; background:rgba(10,14,20,.96);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--line); margin-bottom:40px;
+}
+.navwrap{max-width:1180px;margin:0 auto;padding:0 28px}
+.parts{display:flex;gap:0;border-bottom:1px solid #16202c}
+.parts a{
+  display:block;padding:11px 18px 10px;font-size:11.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--faint);text-decoration:none;
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.parts a:hover{color:var(--dim)}
+.parts a.on{color:var(--mint);border-bottom-color:var(--mint)}
+.parts a b{color:#2a3644;font-weight:400;margin-right:7px}
+.secs{display:none;flex-wrap:wrap;gap:3px 17px;padding:9px 0 10px}
+.secs.on{display:flex}
+.secs a{color:var(--faint);text-decoration:none;font-size:12px;letter-spacing:.03em}
+.secs a:hover{color:var(--mint)}
+.secs a b{color:#2a3644;font-weight:400;margin-right:5px}
+
+/* part divider */
+.partmark{
+  margin:0 0 48px; padding:34px 0 0; border-top:1px solid var(--line);
+  scroll-margin-top:calc(var(--navh) + 8px);
+}
+.partmark .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mint);margin-bottom:9px}
+.partmark h2{
+  font:400 33px/1.15 var(--serif); border:0; padding:0; margin:0 0 10px; color:var(--ink);
+}
+.partmark p{color:var(--dim);font-size:13.5px;max-width:82ch;margin:0}
+
+/* sections */
+section{margin:0 0 68px; scroll-margin-top:calc(var(--navh) + 8px)}
+h2{font:400 27px/1.2 var(--serif); margin:0 0 6px; color:var(--ink);
+   border-left:3px solid var(--mint); padding-left:14px}
+h2.b{border-left-color:var(--gold)}
+h2 small{display:block;font:400 12px/1.5 var(--mono);color:var(--faint);
+   letter-spacing:.05em;text-transform:uppercase;margin-top:5px}
+h3{font:400 17px/1.3 var(--serif);color:var(--gold);margin:34px 0 10px}
+h4{font:600 12px/1.4 var(--mono);color:var(--dim);letter-spacing:.09em;
+   text-transform:uppercase;margin:24px 0 8px}
+p{margin:0 0 13px;max-width:88ch}
+ul,ol{max-width:88ch;padding-left:20px;margin:0 0 13px}
+li{margin:0 0 5px}
+a{color:var(--mint)}
+blockquote{
+  margin:16px 0;padding:2px 0 2px 18px;border-left:2px solid var(--line);
+  color:var(--dim);max-width:86ch;font-style:italic;
+}
+code{font-family:var(--mono); font-size:.92em; color:var(--gold);
+  background:#161f2b; border:1px solid var(--line); padding:.5px 5px; border-radius:3px}
+.src{color:var(--faint);font-size:11.5px}
+.src::before{content:"↳ ";}
+
+/* tables */
+table{border-collapse:collapse;width:100%;margin:14px 0 20px;font-size:13px}
+th{text-align:left; font-weight:400; font-size:11px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--faint); border-bottom:1px solid var(--line);
+  padding:8px 10px; vertical-align:bottom}
+td{border-bottom:1px solid #16202c;padding:7px 10px;vertical-align:top;color:var(--ink)}
+tbody tr:hover{background:#0f1620}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;color:var(--gold)}
+td.k{color:var(--mint);white-space:nowrap}
+td.d{color:var(--dim)}
+table.tight td,table.tight th{padding:5px 9px}
+table.wrapk td.k{white-space:normal}
+
+/* callouts */
+.note,.warn,.key{
+  border:1px solid var(--line); border-left-width:3px; background:var(--panel2);
+  padding:13px 17px; margin:18px 0; border-radius:0 4px 4px 0; max-width:92ch;
+}
+.note{border-left-color:var(--sky)}
+.warn{border-left-color:var(--ember)}
+.key{border-left-color:var(--gold);background:#141a12}
+.note>b:first-child,.warn>b:first-child,.key>b:first-child{
+  display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;margin-bottom:6px}
+.note>b:first-child{color:var(--sky)}
+.warn>b:first-child{color:var(--ember)}
+.key>b:first-child{color:var(--gold)}
+.note p b,.warn p b,.key p b{color:var(--ink);font-weight:600}
+.note p:last-child,.warn p:last-child,.key p:last-child{margin-bottom:0}
+
+/* figures */
+figure{margin:22px 0;border:1px solid var(--line);background:var(--panel2);border-radius:4px;overflow:hidden}
+figure img{display:block;width:100%;height:auto}
+figcaption{padding:10px 15px;font-size:12px;color:var(--dim);border-top:1px solid var(--line);background:var(--panel)}
+figcaption b{color:var(--mint);font-weight:400}
+.svgfig{padding:20px 15px;background:#0b1119;text-align:center}
+.svgfig svg{max-width:100%;height:auto}
+
+/* grids */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:16px 0}
+.card{border:1px solid var(--line);background:var(--panel2);padding:15px 17px;border-radius:4px}
+.card h5{margin:0 0 8px;font:600 11px/1.3 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--mint)}
+.card p{font-size:13px;color:var(--dim);margin-bottom:0}
+.card.g h5{color:var(--gold)}
+
+/* phase cards */
+.phase{border:1px solid var(--line);border-left:3px solid var(--gold);background:var(--panel2);
+  padding:15px 18px;margin:14px 0;border-radius:0 4px 4px 0;max-width:92ch}
+.phase h5{margin:0 0 4px;font:600 11px/1.3 var(--mono);letter-spacing:.09em;
+  text-transform:uppercase;color:var(--gold)}
+.phase .cap{color:var(--faint);font-size:12px;margin-bottom:9px}
+.phase ul{margin-bottom:9px}
+.phase p:last-child{margin-bottom:0;color:var(--dim);font-size:13px}
+
+/* swatches */
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;
+  margin-right:6px;border:1px solid rgba(255,255,255,.14)}
+
+/* formula */
+.fx{font-family:var(--mono);background:#0b1119;border:1px solid var(--line);
+  border-radius:4px;padding:14px 17px;margin:14px 0;font-size:13px;
+  color:var(--ink);white-space:pre;overflow-x:auto;line-height:1.7;max-width:100%}
+.fx .c{color:var(--faint)}
+.fx .v{color:var(--mint)}
+.fx .num{color:var(--gold)}
+
+.tag{display:inline-block;font-size:10px;letter-spacing:.07em;text-transform:uppercase;
+  padding:2px 7px;border-radius:9px;border:1px solid;margin-right:5px;vertical-align:1px}
+.t-live{color:var(--mint);border-color:#1e5a49;background:#0e2620}
+.t-bench{color:var(--violet);border-color:#3d3060;background:#171226}
+.t-dead{color:var(--faint);border-color:#2a3644;background:#131a24}
+.t-cos{color:var(--dim);border-color:#2a3644;background:#131a24}
+
+/* cross-reference chip */
+.xref{
+  display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+  background:var(--panel2);padding:8px 13px;border-radius:4px;text-decoration:none;
+  font-size:12.5px;color:var(--dim);margin:4px 8px 4px 0;
+}
+.xref:hover{border-color:var(--mint);color:var(--ink)}
+.xref b{color:var(--mint);font-weight:400}
+.xrefs{margin:18px 0 4px;display:flex;flex-wrap:wrap}
+
+hr.rule{border:0;border-top:1px solid var(--line);margin:40px 0}
+footer{border-top:1px solid var(--line);padding:26px 0;color:var(--faint);font-size:12px}
+@media(max-width:720px){:root{--navh:150px} .mast h1{font-size:30px}}
+</style>
+</head>
+<body>
+
+<header class="mast">
+  <div class="wrap">
+    <h1>Wonder — <span>Ecology Report</span></h1>
+    <p class="sub">Two halves of one audit. <b>Part I</b> is the field guide: what every
+    living system actually does, read from source. <b>Part II</b> is the expansion audit:
+    what the ecology structurally cannot express, and what to build to open it.
+    Part II's every claim about current behaviour is sourced in Part I.</p>
+    <div class="stamp">
+      <b>stamped <i>2026-07-24</i></b>
+      <b>commit <i>300ce6a</i></b>
+      <b>branch <i>master</i></b>
+      <b>src <i>26,069 loc / 71 files</i></b>
+      <b>tests <i>111 suites</i></b>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="navwrap">
+    <div class="parts">
+      <a href="#part1" data-part="1" class="on"><b>I</b>Field guide — what is</a>
+      <a href="#part2" data-part="2"><b>II</b>Expansion audit — what could be</a>
+    </div>
+    <div class="secs on" data-secs="1">
+      <a href="#stack"><b>1</b>Layer stack</a>
+      <a href="#clock"><b>2</b>The clock</a>
+      <a href="#plants"><b>3</b>Plants</a>
+      <a href="#genome"><b>4</b>Plant genome</a>
+      <a href="#pollinators"><b>5</b>Who has pollinators</a>
+      <a href="#pollination"><b>6</b>Pollination</a>
+      <a href="#idmap"><b>7</b>Insect genome</a>
+      <a href="#swarms"><b>8</b>Swarm dynamics</a>
+      <a href="#critters"><b>9</b>Critters</a>
+      <a href="#rates"><b>10</b>Propagation rates</a>
+      <a href="#death"><b>11</b>Death</a>
+      <a href="#speciation"><b>12</b>Speciation</a>
+      <a href="#chains"><b>13</b>Byproduct chains</a>
+      <a href="#extras"><b>14</b>Beast · birds · ambient</a>
+      <a href="#levers"><b>15</b>Master lever table</a>
+      <a href="#gaps"><b>16</b>Structural gaps</a>
+    </div>
+    <div class="secs" data-secs="2">
+      <a href="#a0"><b>1</b>Diagnosis</a>
+      <a href="#a1"><b>2</b>Five impossibles</a>
+      <a href="#a2"><b>3</b>Foundations</a>
+      <a href="#a3"><b>4</b>Multiple pixel maps</a>
+      <a href="#a4"><b>5</b>The missing trophic level</a>
+      <a href="#a5"><b>6</b>The Heart</a>
+      <a href="#a6"><b>7</b>What drives adaptation</a>
+      <a href="#a7"><b>8</b>Weird things</a>
+      <a href="#a8"><b>9</b>How they compete</a>
+      <a href="#a9"><b>10</b>Instrumentation</a>
+      <a href="#a10"><b>11</b>Build order</a>
+      <a href="#a11"><b>12</b>Open questions</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ═══════════════════════════════════════════════════ PART I -->
+<div class="partmark" id="part1">
+  <div class="lbl">Part I</div>
+  <h2>The field guide — what the island actually does</h2>
+  <p>Every number below was read from source at commit <code>300ce6a</code>, not from design
+  intent. Where a measured figure is quoted (web density, chain counts, seed tiers) it comes
+  from the 14-seed and 2,500-seed harness runs recorded in
+  <code>docs/superpowers/research/food-web-and-byproducts.md</code>, 2026-07-19.</p>
+</div>
+
+<!-- ══════════════════════════════════════════ 1 -->
+<section id="stack">
+<h2>1 · The layer stack<small>what is actually running</small></h2>
+
+<p>Seven systems run on the island. They are far more independent than they look. The
+critical structural fact: <b>there are two unrelated genome systems</b> — plants use nine
+HSL-ish floats, insects use a 49-cell discrete color grid — and they touch through exactly
+one scalar.</p>
+
+<div class="svgfig">
+<svg viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="11">
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="#7fe0c4" stroke-width="1.2"/>
+    </marker>
+    <marker id="b" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="#5c7086" stroke-width="1.2"/>
+    </marker>
+  </defs>
+  <rect x="20" y="345" width="860" height="52" rx="4" fill="#0f1620" stroke="#1e2a38"/>
+  <text x="34" y="366" fill="#e3d29c">TERRAIN</text>
+  <text x="34" y="384" fill="#5c7086">world/generate.ts · 11 tile types · elevation + moisture fBm · rivers, craters, pockets, falls · FROZEN after gen</text>
+
+  <rect x="20" y="228" width="420" height="100" rx="4" fill="#101c17" stroke="#1e5a49"/>
+  <text x="34" y="249" fill="#7fe0c4">FLORA — life/flora.ts</text>
+  <text x="34" y="267" fill="#8ba0b6">≤10,000 individuals · 9-float genome · habitat-locked</text>
+  <text x="34" y="283" fill="#8ba0b6">reproduces · mutates · crosses · dies · speciates</text>
+  <text x="34" y="299" fill="#8ba0b6">budget 480 examined / tick</text>
+  <text x="34" y="317" fill="#e3c07b">↑ the only fully live evolutionary layer</text>
+
+  <rect x="460" y="228" width="420" height="100" rx="4" fill="#171226" stroke="#3d3060"/>
+  <text x="474" y="249" fill="#b491e0">SWARMS — game/swarms.ts + life/swarm.ts</text>
+  <text x="474" y="267" fill="#8ba0b6">4–24 clouds · 7×7×7 idmap gene pool (10 maps)</text>
+  <text x="474" y="283" fill="#8ba0b6">feeds · evolves · population float · buds cousins</text>
+  <text x="474" y="299" fill="#8ba0b6">predation ∝ conspicuousness</text>
+  <text x="474" y="317" fill="#e3c07b">↑ a second, separate evolutionary layer</text>
+
+  <rect x="20" y="128" width="420" height="78" rx="4" fill="#131a24" stroke="#2a3644"/>
+  <text x="34" y="149" fill="#d7e2ee">CRITTERS — life/fauna.ts</text>
+  <text x="34" y="167" fill="#8ba0b6">5–8 kinds × 4–6 each ≈ 25–45 individuals, FIXED</text>
+  <text x="34" y="183" fill="#8ba0b6">palate · 3 drives · energy ledger · trust</text>
+  <text x="34" y="199" fill="#e07a52">no birth · no death · no evolution</text>
+
+  <rect x="460" y="128" width="200" height="78" rx="4" fill="#131a24" stroke="#2a3644"/>
+  <text x="474" y="149" fill="#d7e2ee">BEAST — life/beast.ts</text>
+  <text x="474" y="167" fill="#8ba0b6">0 or 1 · 70% of islands</text>
+  <text x="474" y="183" fill="#8ba0b6">long-range seed courier</text>
+  <text x="474" y="199" fill="#8ba0b6">cargo 2 · 32-tile carry</text>
+
+  <rect x="680" y="128" width="200" height="78" rx="4" fill="#131a24" stroke="#2a3644"/>
+  <text x="694" y="149" fill="#d7e2ee">BIRDS — life/birds.ts</text>
+  <text x="694" y="167" fill="#8ba0b6">1–2 flocks of 3–6</text>
+  <text x="694" y="183" fill="#8ba0b6">fly/settle/perch/flush</text>
+  <text x="694" y="199" fill="#5c7086">eats nothing</text>
+
+  <rect x="20" y="30" width="860" height="70" rx="4" fill="#0f1620" stroke="#1e2a38"/>
+  <text x="34" y="51" fill="#8ba0b6">AMBIENT — render/ambient.ts</text>
+  <text x="34" y="69" fill="#5c7086">fish (8) · frogs (6) · dragonflies (5) · clouds · parallax motes</text>
+  <text x="34" y="87" fill="#5c7086">viewport-scoped, destroyed off-screen, wall-clock only — PURE DECORATION, no sim state</text>
+
+  <path d="M230,228 L230,206" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a)" fill="none"/>
+  <text x="238" y="220" fill="#7fe0c4">eats / spreads</text>
+  <path d="M440,270 L460,270" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a)" fill="none"/>
+  <path d="M460,290 L440,290" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a)" fill="none"/>
+  <path d="M560,228 L560,206" stroke="#5c7086" stroke-width="1.2" marker-end="url(#b)" fill="none" stroke-dasharray="3 3"/>
+  <text x="568" y="220" fill="#5c7086">carries seed</text>
+  <path d="M430,345 L430,328" stroke="#5c7086" stroke-width="1.2" marker-end="url(#b)" fill="none"/>
+  <text x="440" y="341" fill="#5c7086">habitat gate</text>
+</svg>
+</div>
+
+<div class="key">
+<b>The one bridge between the two genomes</b>
+<p><code>flowerSizeFor(sp)</code> maps a plant species' <code>petals</code> (3–10) to the number
+of "jackpot" accent cells in its 7×7 flower map. That single integer is the <i>entire</i>
+causal channel from plant genetics to insect adaptation. The flower map's actual
+<i>colors</i> are drawn from a hash of the species id — they are not derived from the plant's
+hue at all. A red flower and a blue flower of the same species have identical insect-facing
+signatures.</p>
+<p class="src">game/swarms.ts:439 <code>flowerSizeFor</code> · :453 <code>buildFlowerMaps</code></p>
+</div>
+
+<div class="xrefs">
+  <a class="xref" href="#a3">→ Part II <b>§4 · Multiple pixel maps</b> — generalizing the one bridge into six channels</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 2 -->
+<section id="clock">
+<h2>2 · The clock<small>everything below is denominated in these units</small></h2>
+
+<table>
+<thead><tr><th>Unit</th><th class="n">Value</th><th>Meaning</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td class="k">sim tick</td><td class="n">2,000 ms</td><td>one flora heartbeat + one swarm heartbeat</td><td class="d">main.ts:124 <code>SIM_MS</code></td></tr>
+<tr><td class="k">critter dt</td><td class="n">frame dt</td><td>critters update every rendered frame, not per tick</td><td class="d">main.ts:2653</td></tr>
+<tr><td class="k">island day</td><td class="n">440 s = <b>220 ticks</b></td><td>240 s day + 40 dusk + 120 night + 40 dawn</td><td class="d">daynight.ts:7–11</td></tr>
+<tr><td class="k">plant maturity</td><td class="n">20 ticks = 40 s</td><td>before this it cannot reseed and is eaten whole</td><td class="d">flora.ts:97</td></tr>
+<tr><td class="k">plant lifespan</td><td class="n">900 ticks ≈ 30 min</td><td>≈ 4.1 island days; then 15%/examination death roll</td><td class="d">flora.ts:99</td></tr>
+<tr><td class="k">substrate life</td><td class="n">150 ticks = 5 min</td><td>0.68 island days</td><td class="d">flora.ts:45</td></tr>
+<tr><td class="k">speciation cooldown</td><td class="n">500 ticks ≈ 17 min</td><td>island-wide, one split at a time</td><td class="d">flora.ts:109</td></tr>
+<tr><td class="k">away-aging cap</td><td class="n">7,200 ticks ≈ 4 h</td><td>island time credited while you were gone</td><td class="d">main.ts:827</td></tr>
+<tr><td class="k">title backdrop</td><td class="n">1,200 ticks pre-run</td><td>the menu island is already ~5.5 days old</td><td class="d">main.ts:128</td></tr>
+<tr><td class="k">rain</td><td class="n">30% of cycles, 70 s</td><td>next full cycle = "bloom day"</td><td class="d">daynight.ts:100–118</td></tr>
+<tr><td class="k">aurora</td><td class="n">8.5% of nights</td><td>children born under it inherit +0.08–0.23 glow</td><td class="d">daynight.ts:93</td></tr>
+<tr><td class="k">biolume tide</td><td class="n">35% of nights</td><td>cosmetic</td><td class="d">daynight.ts:87</td></tr>
+</tbody>
+</table>
+
+<div class="xrefs">
+  <a class="xref" href="#a6">→ Part II <b>§7, row six</b> — five periodic signals, none of which touch carrying capacity</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 3 -->
+<section id="plants">
+<h2>3 · Plants — what kinds exist<small>14 forms, 6 habitats, 18–32 species per island</small></h2>
+
+<p>A plant <b>form</b> is structural and never mutates. It gates everything: which habitat can
+host it, which critter can eat it, whether it blooms, whether it can host insects, and how
+likely it is to be a substrate feeder. There are exactly 14.</p>
+
+<table>
+<thead><tr>
+  <th>Form</th><th class="n">Height range</th><th class="n">Glow max</th>
+  <th>Habitats</th><th>Blooms?</th><th class="n">Feeder odds</th>
+</tr></thead>
+<tbody>
+<tr><td class="k"><span class="sw" style="background:#e08a9e"></span>Flower</td><td class="n">0.15–0.55</td><td class="n">0.60</td><td class="d">Grass ×3, Forest, Sand, Shallow, Marsh</td><td style="color:#7fe0c4">always</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#68a557"></span>Shrub</td><td class="n">0.20–0.60</td><td class="n">0.40</td><td class="d">all six</td><td style="color:#7fe0c4">always</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#3e7a40"></span>Tree</td><td class="n">0.55–1.00</td><td class="n">0.30</td><td class="d">Forest only (guaranteed slot 0)</td><td style="color:#5c7086">never</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#b491e0"></span>Fungus</td><td class="n">0.10–0.45</td><td class="n">0.90</td><td class="d">Grass, Forest, Rock ×2, Marsh ×2</td><td style="color:#5c7086">never</td><td class="n" style="color:#7fe0c4">0.70</td></tr>
+<tr><td class="k"><span class="sw" style="background:#4f8f4c"></span>Fern</td><td class="n">0.20–0.60</td><td class="n">0.50</td><td class="d">Forest ×2, Marsh</td><td style="color:#5c7086">never</td><td class="n">0.20</td></tr>
+<tr><td class="k"><span class="sw" style="background:#e07a52"></span>Coral</td><td class="n">0.15–0.60</td><td class="n">0.90</td><td class="d">Shallow ×2</td><td style="color:#5c7086">never</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#e3c07b"></span>Succulent</td><td class="n">0.10–0.45</td><td class="n">0.70</td><td class="d">Sand ×3, Rock</td><td style="color:#e3c07b">conditional</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#324f39"></span>Reed</td><td class="n">0.35–0.80</td><td class="n">0.50</td><td class="d">Shallow, Marsh ×2</td><td style="color:#5c7086">never</td><td class="n">0.20</td></tr>
+<tr><td class="k"><span class="sw" style="background:#77b364"></span>Vine</td><td class="n">0.25–0.70</td><td class="n">0.70</td><td class="d">Forest ×2, Marsh</td><td style="color:#5c7086">never</td><td class="n">0.20</td></tr>
+<tr><td class="k"><span class="sw" style="background:#5c9a4c"></span>Grass</td><td class="n">0.15–0.55</td><td class="n">0.40</td><td class="d">Grass ×2, Sand</td><td style="color:#5c7086">never</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#4d7355"></span>Moss</td><td class="n">0.05–0.25</td><td class="n">0.85</td><td class="d">Forest, Rock ×2</td><td style="color:#5c7086">never</td><td class="n" style="color:#7fe0c4">0.70</td></tr>
+<tr><td class="k"><span class="sw" style="background:#5d8fcc"></span>Bulb</td><td class="n">0.20–0.60</td><td class="n">0.80</td><td class="d">Grass, Marsh</td><td style="color:#5c7086">never</td><td class="n">0.06</td></tr>
+<tr><td class="k"><span class="sw" style="background:#7fe0c4"></span>Sporestalk</td><td class="n">0.30–0.75</td><td class="n">1.00</td><td class="d">Forest, Rock</td><td style="color:#5c7086">never</td><td class="n" style="color:#7fe0c4">0.70</td></tr>
+<tr><td class="k"><span class="sw" style="background:#22467c"></span>Kelp</td><td class="n">0.40–0.95</td><td class="n">0.60</td><td class="d">Shallow</td><td style="color:#5c7086">never</td><td class="n">0.06</td></tr>
+</tbody>
+</table>
+<p class="src">life/genome.ts:3 <code>PlantForm</code> · life/species.ts:19 <code>HABITAT_FORMS</code> · :29 <code>FORM_RANGES</code> · :171 <code>substrateFeederChance</code></p>
+
+<h3>Species generation, per island</h3>
+<ul>
+<li>Six habitats (Grass, Forest, Sand, ShallowWater, Rock, Marsh) each roll <b>3–5 species</b> → <b>18–30 base species</b>.</li>
+<li>Forest slot 0 is forced to <code>Tree</code> — every island has at least one true tree.</li>
+<li>Exactly <b>one sport (✶)</b> per island: height ×1.6, sat = 1, glow 0.85–1.0, petals +3.</li>
+<li>15% of islands roll a crater → <b>2 endemics (⟡)</b> confined to a homeland radius, sat = 1, glow ≥ 0.75.</li>
+<li>Substrate-feeder flags are rolled last off a separate salted stream (<code>seed ^ 0x5b1e</code>).</li>
+<li>Up to <b>12 daughter species (✧)</b> can arise during play — see §12.</li>
+</ul>
+
+<div class="warn">
+<b>Habitats are hard walls</b>
+<p>Deep water, Snow, Scree, Highland and Cliff host <i>zero</i> plant species —
+<code>HABITAT_FORMS</code> lists only six tiles. Roughly a third of a mountainous island's
+surface is sterile by construction. <code>rootableAt</code> refuses every off-habitat
+placement for every sim route; the <i>only</i> waiver in the codebase is the player's own
+sow onto a tilled tile.</p>
+<p class="src">life/flora.ts:326 <code>rootableAt</code> · :338 <code>sowableAt</code></p>
+</div>
+
+<figure>
+  <img src="../shots/audit/02-world.png" alt="Orka Cay, seed 42 — sand/grass boundary with purple succulents, gold grasses, and a scattering of flowers">
+  <figcaption><b>Seed 42 · Orka Cay</b> — the habitat wall in one frame. Purple succulents and
+  gold grass hold the sand; the grass tile boundary is a hard species boundary. Bottom-left
+  reads <code>a sparse web</code> — this island scored below the diversity floor.</figcaption>
+</figure>
+
+<div class="xrefs">
+  <a class="xref" href="#a7">→ Part II <b>§8 · Epiphytes</b> — habitat as a <i>form</i>, not a tile, doubles the niche space</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 4 -->
+<section id="genome">
+<h2>4 · The plant genome<small>9 numeric traits — and only 3 of them do anything</small></h2>
+
+<table>
+<thead><tr><th>Trait</th><th class="n">Bounds</th><th>Wraps?</th><th>Mechanical role</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td class="k">hue</td><td class="n">0 – 1</td><td>yes</td><td>critter <code>appetite</code> hue window · substrate germination match · chain scoring</td><td><span class="tag t-live">load-bearing</span></td></tr>
+<tr><td class="k">glow</td><td class="n">0 – 1</td><td>no</td><td><code>appetite</code> glowTaste term · succulent bloom gate (&gt;0.8) · aurora inheritance</td><td><span class="tag t-live">load-bearing</span></td></tr>
+<tr><td class="k">petals</td><td class="n">3 – 10</td><td>no</td><td>succulent bloom gate (≥8) · <code>flowerSizeFor</code> → insect jackpot size</td><td><span class="tag t-live">load-bearing</span></td></tr>
+<tr><td class="k">hue2</td><td class="n">0 – 1</td><td>yes</td><td>sprite accent color only</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+<tr><td class="k">sat</td><td class="n">0.3 – 1</td><td>no</td><td>sprite saturation only</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+<tr><td class="k">height</td><td class="n">0.05 – 1</td><td>no</td><td>sprite pixel height · species epithet ("tall…")</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+<tr><td class="k">spread</td><td class="n">0.1 – 1</td><td>no</td><td>sprite bushiness only</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+<tr><td class="k">leaves</td><td class="n">0 – 4</td><td>no</td><td>sprite leaf pairs only</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+<tr><td class="k">lean</td><td class="n">-1 – 1</td><td>no</td><td>sprite stem tilt only</td><td><span class="tag t-cos">cosmetic</span></td></tr>
+</tbody>
+</table>
+<p class="src">life/genome.ts:37 <code>GENOME_BOUNDS</code>. Verified by grepping every non-render read of each field.</p>
+
+<div class="key">
+<b>Six of nine drifting traits are decorative</b>
+<p><code>height</code>, <code>spread</code>, <code>leaves</code>, <code>lean</code>,
+<code>hue2</code> and <code>sat</code> are read only by <code>plantSprites.ts</code>,
+<code>speciesName</code>, and <code>phenoKey</code> (the sprite cache key). Nothing in the
+sim consults them. Consequently <b>they drift as pure Brownian noise</b> — they have no
+selective landscape at all, and <code>driftDistance</code> (which averages all nine equally)
+is dominated by them. Speciation is therefore triggered mostly by <i>cosmetic</i> drift.</p>
+</div>
+
+<h4>The three genome operations</h4>
+<div class="fx"><span class="c">// one parent, one generation of drift</span>
+<span class="v">mutate</span>(g, rng, amount=<span class="num">0.05</span>):
+    for each trait t:  g[t] += (rng()*2-1) * amount * span(t)   <span class="c">// uniform, not gaussian</span>
+
+<span class="c">// two same-species parents within pollinationRadius</span>
+<span class="v">cross</span>(a, b, rng, amount=<span class="num">0.04</span>):
+    mid = (a[t] + b[t]) / 2          <span class="c">// hues take the shorter arc</span>
+    out[t] = mid + (rng()*2-1) * amount * span(t)
+
+<span class="c">// normalized genome distance, 0 = identical</span>
+<span class="v">driftDistance</span>(a, b) = sqrt( Σ (Δt / span(t))² / <span class="num">9</span> )   <span class="c">// hue distance doubled after wrap</span></div>
+<p>Live mutation amount is <code>0.06</code> (<code>DEFAULT_TUNING.mutationAmount</code>),
+×1.25 while raining. Crossing uses that same value, not the <code>0.04</code> default.</p>
+
+<div class="xrefs">
+  <a class="xref" href="#a2">→ Part II <b>§3.2 / §3.3</b> — giving <code>spread</code> and <code>height</code> a job</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 5 -->
+<section id="pollinators">
+<h2>5 · Which plants have pollinators<small>the sharpest constraint in the whole system</small></h2>
+
+<p>The short answer: <b>3 of 14 forms</b>, and one of those conditionally.
+<code>canFlower()</code> and <code>isBloom()</code> are the two gates, and every insect
+interaction on the island passes through both.</p>
+
+<div class="fx"><span class="c">// game/swarms.ts:431 — can this SPECIES ever hold a flower map?</span>
+<span class="v">canFlower</span>(form) = form ∈ { Flower, Shrub, Succulent }
+
+<span class="c">// render/ambient.ts:13 — is this INDIVIDUAL in bloom right now?</span>
+<span class="v">isBloom</span>(plant):
+    Flower    → <span class="num">true</span>
+    Shrub     → <span class="num">true</span>
+    Succulent → plant.genome.petals >= <span class="num">8</span>  OR  plant.genome.glow > <span class="num">0.8</span>
+    otherwise → <span class="num">false</span></div>
+
+<table class="tight wrapk">
+<thead><tr><th>Form</th><th>Insect swarms?</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td class="k">Flower</td><td style="color:#7fe0c4">yes, always</td><td class="d">every individual, from birth</td></tr>
+<tr><td class="k">Shrub</td><td style="color:#7fe0c4">yes, always</td><td class="d">"blossom among the berries"</td></tr>
+<tr><td class="k">Succulent</td><td style="color:#e3c07b">only if petals ≥ 8 or glow &gt; 0.8</td><td class="d">the one trait-gated bloom — genuinely emergent, and genuinely rare (petals mean ≈ 6.5)</td></tr>
+<tr><td class="k" style="color:#5c7086">Tree, Fungus, Fern, Coral, Reed, Vine, Grass, Moss, Bulb, Sporestalk, Kelp</td><td style="color:#5c7086">never</td><td class="d">11 forms — no nectar, no insect, no swarm-mediated spread, ever</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<b>Trees are outside the insect economy entirely</b>
+<p>Every island is guaranteed a tree, forests are majority-tree by density
+(<code>0.7 + rng()*0.3</code> vs <code>0.3 + rng()*0.7</code>), and no tree can ever host a
+swarm, be pollinated by one, or benefit from insect spread. Forest canopy is a demographic
+island. The same is true for the entire aquatic flora except shallow-water Flowers and
+Shrubs — <b>Kelp and Coral have no animal interaction of any kind</b> (they are also
+excluded from critter palates at <code>fauna.ts:454</code>).</p>
+</div>
+
+<h4>Which of an island's species can actually host insects</h4>
+<p>Counting from <code>HABITAT_FORMS</code> weights: Flowers appear in 5 of 6 habitat pools,
+Shrubs in all 6, Succulents in 2. A typical 24-species island lands around <b>7–10
+flowering species</b>, of which the swarm layer will only ever work the handful nearest its
+spawn points. Seed 42's ledger (below) shows <b>7 swarms working 3 of the island's flowering
+kinds</b>.</p>
+
+<figure>
+  <img src="../shots/audit/06-web.png" alt="The Living Web panel showing 7 swarms working 3 flowering kinds, with insect sprites and host plant sprites">
+  <figcaption><b>The living web (C)</b> — the pollination ledger. Each row is one flowering
+  species and the cloud(s) working it. <code>458 strong · hugs the bloom</code> is population
+  and resemblance ≥ 0.5. Note the leftmost host has 2,958 individuals against a cloud of 458;
+  the second has 282 against 92. Population is a float, not a count of bodies.</figcaption>
+</figure>
+
+<div class="xrefs">
+  <a class="xref" href="#a3">→ Part II <b>§4 · the scent channel</b> — how the other 11 forms get an animal</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 6 -->
+<section id="pollination">
+<h2>6 · How pollination actually works<small>two different mechanisms share one word</small></h2>
+
+<p>There are two things called pollination and they are unrelated. Only one of them mixes
+genes.</p>
+
+<div class="cols">
+<div class="card">
+  <h5>A · Flora self-cross <span class="tag t-live">genetic</span></h5>
+  <p>Inside <code>simTick</code>. When a mature plant reseeds, it looks for a
+  <b>same-species neighbour within <code>pollinationRadius</code> = 2 tiles</b>. If one
+  exists, the child is <code>cross(parent, partner)</code>; if not, it is
+  <code>mutate(parent)</code>. <b>No animal is involved.</b> Applies to all 14 forms
+  equally — trees, kelp, moss included.</p>
+</div>
+<div class="card">
+  <h5>B · Swarm pollination <span class="tag t-live">not genetic</span></h5>
+  <p>Inside <code>SwarmLayer.tick</code>. A well-matched cloud calls
+  <code>flora.pollinateSpread(host, 6, 2)</code> — which drops a <b>drifted clone</b> of the
+  host up to 6 tiles away. It calls <code>mutate</code>, never <code>cross</code>. No pollen
+  moves between individuals. Mechanically this is <b>accelerated wide dispersal</b>, not
+  pollination.</p>
+</div>
+</div>
+
+<div class="key">
+<b>The insects do not pollinate, in the genetic sense</b>
+<p><code>pollinateSpread</code> (flora.ts:496) is byte-for-byte <code>propagate</code> with a
+wider radius and a per-tile same-species cap. Both call <code>mutate(p.genome, …)</code>.
+Nothing in the swarm layer ever combines two plants' genomes. A flower worked by a devoted
+cloud for a thousand ticks is genetically no more mixed than one nobody visits — it is
+simply <i>more numerous and more spread out</i>.</p>
+</div>
+
+<h4>The swarm pollination probability chain</h4>
+<div class="fx"><span class="c">// per swarm, per sim tick — game/swarms.ts:809-826</span>
+gate 1:  match = <span class="v">metabolicEfficiency</span>(sensor, flowerMap, accent)
+         if match &lt; <span class="num">0.30</span>  →  no pollination at all
+
+gate 2:  fill = population / cap
+         P = <span class="num">0.5</span> × match² × fill
+
+gate 3:  island-wide ceiling of <span class="num">3</span> pollinations per tick
+gate 4:  <span class="v">addPlant</span> must find an open, correct-habitat tile with &lt;2 of this species
+
+<span class="c">// worked example: match 0.6, cloud at 60% fill</span>
+P = 0.5 × 0.36 × 0.6 = <span class="num">0.108</span> per tick  →  ~1 spread every 9 ticks (18 s)
+<span class="c">// a perfect cloud at full fill</span>
+P = 0.5 × 1.0  × 1.0 = <span class="num">0.50</span>  per tick  →  ~1 spread every 4 s, until the ceiling bites</div>
+
+<p>With 8 swarms, the 3-per-tick island ceiling is reached whenever roughly three clouds sit
+above match ≈ 0.7. At 3 spreads/tick that is <b>90 new plants per minute</b> from the insect
+layer alone — comfortably the fastest propagation route in the game when clouds are
+well-adapted.</p>
+
+<h4>Nectar</h4>
+<table class="tight">
+<thead><tr><th>Constant</th><th class="n">Value</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td class="k">NECTAR_REGEN</td><td class="n">0.05</td><td class="d">refilled once <b>per feeding swarm</b>, not once per tick</td></tr>
+<tr><td class="k">NECTAR_DRAW</td><td class="n">0.25</td><td class="d">max drawn per visit</td></tr>
+<tr><td class="k">FEED_VALUE</td><td class="n">4</td><td class="d">energy per unit nectar at perfect efficiency</td></tr>
+<tr><td class="k">boldness</td><td class="n">0.6 + 0.4·nerve</td><td class="d">bold swarms extract more and are more exposed</td></tr>
+</tbody>
+</table>
+
+<div class="warn">
+<b>Nectar in the real game is per-species, not per-plant</b>
+<p><code>perPlantNectar</code> defaults to <code>false</code>; only the World-Lab turns it on.
+On a live island, <i>all</i> plants of a flowering species share one nectar meter. Combined
+with regen firing once per feeding swarm, this means <b>the more swarms work a species, the
+more total nectar that species produces</b> — the resource scales with the demand on it.
+There is no exploitable-commons pressure and no crowding-out between clouds. This is
+probably the single most consequential accidental behaviour in the ecology.</p>
+<p class="src">game/swarms.ts:645 <code>stepEntOnHost</code> · life/swarm.ts:121 <code>stepSwarm</code></p>
+</div>
+
+<div class="xrefs">
+  <a class="xref" href="#a6">→ Part II <b>§7 · access to a service</b> — making flowers compete for pollinator attention</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 7 -->
+<section id="idmap">
+<h2>7 · The insect genome<small>a 7×7 grid of 7 states — the best mechanic in the codebase</small></h2>
+
+<p>Plants and insects meet in a <b>shared tag space</b>: a 49-cell grid where each cell holds
+0 (neutral) or one of 6 colors. A plant presents a <i>flower map</i>; an insect carries a
+<i>sensor map</i> that evolves toward it. Adaptation is literally visible — the insect's drawn
+colors are its genome.</p>
+
+<div class="svgfig">
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="11">
+  <defs><marker id="a2" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L8,3 L0,6" fill="none" stroke="#7fe0c4" stroke-width="1.2"/></marker></defs>
+  <text x="20" y="18" fill="#e3c07b">FLOWER MAP (the plant)</text>
+  <text x="20" y="34" fill="#5c7086">base color fills all 49 · flowerSize accent cells overlaid</text>
+  <g transform="translate(20,46)">
+    <rect width="140" height="140" fill="#2d5f52"/>
+    <g fill="#e08a9e">
+      <rect x="20" y="0" width="20" height="20"/><rect x="60" y="20" width="20" height="20"/>
+      <rect x="100" y="20" width="20" height="20"/><rect x="40" y="40" width="20" height="20"/>
+      <rect x="80" y="60" width="20" height="20"/><rect x="0" y="80" width="20" height="20"/>
+      <rect x="120" y="80" width="20" height="20"/><rect x="60" y="100" width="20" height="20"/>
+      <rect x="20" y="120" width="20" height="20"/>
+    </g>
+    <g stroke="#0b1119" stroke-width="1" fill="none">
+      <path d="M20 0v140M40 0v140M60 0v140M80 0v140M100 0v140M120 0v140M0 20h140M0 40h140M0 60h140M0 80h140M0 100h140M0 120h140"/>
+      <rect width="140" height="140" stroke="#1e2a38"/>
+    </g>
+  </g>
+  <text x="20" y="212" fill="#8ba0b6">base = BASE_HIT 0.2</text>
+  <text x="20" y="228" fill="#e08a9e">accent = FLOWER_HIT 0.9  ← the jackpot</text>
+
+  <path d="M180 116 L232 116" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a2)" fill="none"/>
+  <text x="176" y="106" fill="#7fe0c4">match</text>
+
+  <text x="248" y="18" fill="#b491e0">SENSOR MAP (the insect)</text>
+  <text x="248" y="34" fill="#5c7086">60% neutral at birth — a cheap generalist</text>
+  <g transform="translate(248,46)">
+    <rect width="140" height="140" fill="#0f1620"/>
+    <g fill="#2d5f52">
+      <rect x="0" y="0" width="20" height="20"/><rect x="60" y="0" width="20" height="20"/>
+      <rect x="40" y="60" width="20" height="20"/><rect x="100" y="100" width="20" height="20"/>
+    </g>
+    <g fill="#e08a9e">
+      <rect x="20" y="0" width="20" height="20"/><rect x="60" y="20" width="20" height="20"/>
+      <rect x="40" y="40" width="20" height="20"/><rect x="120" y="80" width="20" height="20"/>
+    </g>
+    <g fill="#e3c07b"><rect x="100" y="40" width="20" height="20"/><rect x="0" y="120" width="20" height="20"/></g>
+    <g stroke="#0b1119" stroke-width="1" fill="none">
+      <path d="M20 0v140M40 0v140M60 0v140M80 0v140M100 0v140M120 0v140M0 20h140M0 40h140M0 60h140M0 80h140M0 100h140M0 120h140"/>
+      <rect width="140" height="140" stroke="#1e2a38"/>
+    </g>
+  </g>
+  <text x="248" y="212" fill="#7fe0c4">4 accent hits = +3.6</text>
+  <text x="248" y="228" fill="#8ba0b6">10 colored cells = −1.0 upkeep · 39 neutral = +0.78</text>
+
+  <text x="430" y="18" fill="#e3c07b">THE ECONOMY (per cell)</text>
+  <g font-size="11.5">
+    <rect x="430" y="34" width="310" height="150" fill="#0f1620" stroke="#1e2a38" rx="3"/>
+    <text x="444" y="56" fill="#8ba0b6">neutral cell</text><text x="700" y="56" fill="#7fe0c4" text-anchor="end">+0.02</text>
+    <text x="444" y="78" fill="#8ba0b6">colored cell — upkeep</text><text x="700" y="78" fill="#e07a52" text-anchor="end">−0.10</text>
+    <text x="444" y="100" fill="#8ba0b6">…matching a base cell</text><text x="700" y="100" fill="#7fe0c4" text-anchor="end">+0.20 (net +0.10)</text>
+    <text x="444" y="122" fill="#8ba0b6">…matching an accent cell</text><text x="700" y="122" fill="#7fe0c4" text-anchor="end">+0.90 (net +0.80)</text>
+    <text x="444" y="144" fill="#8ba0b6">…matching nothing</text><text x="700" y="144" fill="#e07a52" text-anchor="end">−0.10 wasted</text>
+    <line x1="444" y1="156" x2="700" y2="156" stroke="#1e2a38"/>
+    <text x="444" y="174" fill="#e3c07b">efficiency = reward / maxReward</text>
+  </g>
+  <text x="430" y="206" fill="#5c7086">Specialising pays 8× generic matching, but every wrong</text>
+  <text x="430" y="222" fill="#5c7086">colored cell is a standing tax. Neutral is always safe.</text>
+</svg>
+</div>
+<p class="src">life/idmap.ts:24–27 (weights) · :70 <code>matchReward</code> · :88 <code>metabolicEfficiency</code> · :95 <code>resemblance</code></p>
+
+<h4>Selection inside a cloud</h4>
+<div class="fx"><span class="c">// life/swarm.ts:66 — every sim tick, per swarm</span>
+<span class="v">evolveSwarm</span>(swarm, flower, rng):
+    sort the <span class="num">10</span> maps in the pool by matchReward, descending
+    keep the top <span class="num">5</span>
+    refill to 10 by <span class="v">mutateMap</span>(random survivor, <span class="num">3</span> cell flips)
+    sensor = pool[0]                <span class="c">// the representative body drawn on screen</span></div>
+
+<p>Truncation selection at 50%, 3 flips per offspring, every 2 seconds. This is an
+extremely fast optimizer — a naive cloud typically reaches match ≈ 0.5 within a few dozen
+ticks (~2 minutes), which is why <code>WARM_TICKS = 20</code> is enough to make a loading
+island's swarms already colored toward their flowers.</p>
+
+<div class="note">
+<b>The gene pool is bookkeeping, not bodies</b>
+<p>A swarm has 10 <code>IdMap</code>s and one float <code>population</code> (0–96). The 42
+drawn <code>Mote</code>s are pure animation state with no genetics. "Population 458" in the
+ledger is a sum of floats across clouds. Nothing is ever born or dies as a discrete event —
+by design (<i>"peaceful — population rises and falls, nothing dies as an event"</i>).</p>
+</div>
+
+<div class="xrefs">
+  <a class="xref" href="#a3">→ Part II <b>§4</b> — this primitive, run on six channels instead of one</a>
+  <a class="xref" href="#a5">→ Part II <b>§6 · the Heart</b> — an entity whose only genome is one of these</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 8 -->
+<section id="swarms">
+<h2>8 · Swarm dynamics<small>the population equation and its equilibrium</small></h2>
+
+<div class="fx"><span class="c">// life/swarm.ts:86-117 — one tick, in order</span>
+<span class="num">1</span>  regenNectar   flower.nectar = min(1, nectar + <span class="num">0.05</span>)
+<span class="num">2</span>  feedSwarm     drawn  = min(nectar, <span class="num">0.25</span>)
+                gain   = drawn × efficiency × <span class="num">4</span> × (<span class="num">0.6</span> + <span class="num">0.4</span>·nerve)
+                energy = min(1, energy + gain)
+<span class="num">3</span>  evolveSwarm   truncation selection, see §7
+<span class="num">4</span>  updatePopulation
+                energy −= <span class="num">0.02</span>                        <span class="c">// LIVING_COST</span>
+                target  = energy × cap
+                pop    += (target − pop) × <span class="num">0.05</span>         <span class="c">// 5% lerp toward target</span>
+<span class="num">5</span>  applyPredation (only if pressure &gt; 0; live islands use <span class="num">0.6</span>)
+                exposure = <span class="num">0.4</span> + <span class="num">0.6</span>·nerve
+                loss = pop × (1 − resemblance) × pressure × <span class="num">0.02</span> × exposure
+</div>
+
+<h4>Equilibrium arithmetic</h4>
+<p>At steady state a cloud draws only what regenerates: 0.05/tick. So</p>
+<div class="fx">gain    = <span class="num">0.05</span> × eff × <span class="num">4</span> × boldness  =  <span class="num">0.2</span> × eff × boldness
+cost    = <span class="num">0.02</span>
+<span class="v">break-even efficiency</span>  =  <span class="num">0.02</span> / (<span class="num">0.2</span> × boldness)  ≈  <span class="num">0.10</span> … <span class="num">0.17</span></div>
+<p>A cloud below roughly <b>12% metabolic match</b> loses energy every tick and shrinks toward
+zero population; above it, it grows toward <code>energy × 96</code>. Since a random starting
+sensor typically scores 0.05–0.15, <b>a naive cloud is right on the survival knife-edge</b>
+and must adapt within its first few dozen ticks — which it reliably does, because truncation
+selection at 3 flips/offspring is very fast. The tension is real but always resolves the same
+way.</p>
+
+<h4>Predation</h4>
+<p><code>WORLD_PREDATION = 0.6</code> is a constant standing in for "generic insectivores."
+There is no insectivore entity. Loss scales with <code>1 − resemblance</code>, so a cloud that
+looks like its flower is spared. Peak drain at full exposure and zero resemblance is
+<code>pop × 0.6 × 0.02 × 1.0 = 1.2%</code> per tick — meaningful but never wiping.</p>
+
+<h4>Divergence → cousins</h4>
+<ul>
+<li>Attempted every <b>50 ticks</b> (~100 s), at most <b>one bud per attempt</b> island-wide.</li>
+<li>Requires the pool to be genuinely bimodal: ≥2 maps favouring the home flower and ≥2 favouring a <i>different</i> nearby flowering species. No forced splits.</li>
+<li>Child takes 40% of the population, mutated behavior (±0.15), and homes on the other species. Marked ✧.</li>
+<li>Hard ceiling <code>SWARM_COUNT_CAP = 24</code>.</li>
+</ul>
+
+<h4>Behavior genes</h4>
+<table class="tight">
+<thead><tr><th>Gene</th><th>Read by</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td class="k">nerve</td><td class="d">feeding boldness (0.6–1.0×) and predation exposure (0.4–1.0×)</td><td><span class="tag t-live">live tradeoff</span></td></tr>
+<tr><td class="k">range</td><td class="d">nothing — comment says "expressed in the render layer"</td><td><span class="tag t-dead">unwired</span></td></tr>
+<tr><td class="k">cohesion</td><td class="d">nothing — same</td><td><span class="tag t-dead">unwired</span></td></tr>
+</tbody>
+</table>
+<p>All three are inherited and mutated by <code>divergeSwarm</code>; only <code>nerve</code>
+has consequences. The insect's drawn <i>form</i> (17 silhouettes across 5 families) is hashed
+from the behavior triple, so <code>range</code> and <code>cohesion</code> do change how a
+cloud <i>looks</i>.</p>
+
+<div class="xrefs">
+  <a class="xref" href="#a4">→ Part II <b>§5</b> — give <code>WORLD_PREDATION</code> a body and this equilibrium stops resolving the same way</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 9 -->
+<section id="critters">
+<h2>9 · Critters<small>5–8 kinds, ~30 bodies, frozen for the life of the island</small></h2>
+
+<div class="warn">
+<b>Critters have no population dynamics whatsoever</b>
+<p><code>spawnCritters</code> runs once at world load and produces 4–6 individuals per kind.
+Nothing anywhere adds to or removes from that array during play — verified by grep across
+<code>main.ts</code> and <code>fauna.ts</code>. No birth, no death, no starvation
+(<code>HUNGER_CAP = 0.95</code> exists precisely so that hunger can never outrank the drive
+to sleep). Palate, role, morph and den are all fixed at generation. <b>Fauna do not
+evolve.</b> The only evolving layers on the island are plants and insect clouds.</p>
+</div>
+
+<h4>The palate — one function gates every fauna→flora interaction</h4>
+<div class="fx"><span class="c">// life/fauna.ts:194</span>
+<span class="v">appetite</span>(palate, genome):
+    if genome.form ≠ palate.form            → <span class="num">0</span>      <span class="c">// hard form gate</span>
+    hueDist   = wrapped |genome.hue − palate.hueCenter|
+    hueScore  = max(0, 1 − hueDist / palate.hueWidth)
+    glowScore = 1 − |genome.glow − (palate.glowTaste+1)/2|
+    return hueScore × (<span class="num">0.6</span> + <span class="num">0.4</span> × glowScore)
+
+<span class="v">APPETITE_MIN</span> = <span class="num">0.30</span>    <span class="c">// below this a plant is just scenery</span></div>
+
+<p>A palate is cut from one plant species at generation:
+<code>hueCenter = arch.hue ± 0.03</code>, <code>hueWidth = 0.12 + rng·0.14</code>,
+<code>glowTaste = arch.glow·2 − 1 ± 0.25</code>. So a critter is born loving one kind and
+generalises outward by color. Measured across 14 seeds: <b>~1.6 plant species per critter</b>,
+and <b>63% of an island's flora is eaten by nobody</b>.</p>
+
+<h4>Roles</h4>
+<table>
+<thead><tr><th>Role</th><th class="n">Share</th><th>On a completed nibble</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td class="k">disperser</td><td class="n">72%</td><td class="d"><code>flora.propagate</code> — drifted same-species seed within 3 tiles; plant unharmed; <b>+ emits a substrate</b></td><td><span class="tag t-live">live</span></td></tr>
+<tr><td class="k">grazer</td><td class="n">28%</td><td class="d"><code>flora.nibble</code> — young plant removed; mature plant's <code>born</code> reset to now (must re-mature)</td><td><span class="tag t-live">live</span></td></tr>
+<tr><td class="k">pollinator</td><td class="n">—</td><td class="d"><code>pollinateSpread(6, 2)</code></td><td><span class="tag t-bench">World-Lab only</span></td></tr>
+<tr><td class="k">nutrient-shuttle</td><td class="n">—</td><td class="d">lifts / sets down a substrate; count conserved</td><td><span class="tag t-bench">World-Lab only</span></td></tr>
+<tr><td class="k">aquatic-grazer</td><td class="n">—</td><td class="d">grazes, but swims via <code>fishWalkable</code></td><td><span class="tag t-bench">World-Lab only</span></td></tr>
+</tbody>
+</table>
+<p>Every visit grants <code>MEAL_ENERGY = 0.35</code> regardless of role. Only the
+<i>plant's</i> outcome differs.</p>
+
+<h4>Drives — deterministic, no dice in motive</h4>
+<div class="fx">hunger    = <span class="num">0.95</span> × clamp01((<span class="num">0.85</span> − energy) / (<span class="num">0.85</span> − <span class="num">0.35</span>))   <span class="c">// FULL, HUNGRY</span>
+comfort   = max(darkness, clamp01((<span class="num">0.10</span> − energy) / <span class="num">0.05</span>))       <span class="c">// SPENT·2</span>
+curiosity = accumulator, +<span class="num">0.12</span>/s beside a still wanderer, −<span class="num">0.2</span>/s otherwise, cap <span class="num">0.55</span>
+
+<span class="v">dominant</span> = strongest above <span class="num">0.20</span>; ties fall to hunger → comfort → curiosity</div>
+
+<p>Energy drains at <code>1/200</code> per second (empty in ~3.3 min awake), refills
+<code>1/60</code>/s asleep. Because <code>comfort</code> saturates to 1 below
+<code>SPENT = 0.05</code> and hunger caps at 0.95, an exhausted critter always chooses the den
+over food. That is the "nothing starves" invariant, enforced by two constants.</p>
+
+<h4>Bodies</h4>
+<p>8 body plans × legs × 6 tails × 7 crowns × 3 eye counts × 5 coat patterns, all hashed
+deterministically from four numbers (<code>bodyHue, earLen, tailLen, size</code>) via
+<code>morphOf</code>. Sizes are dealt from bands so every island has one tiny scurrier and one
+knee-high ambler. Body plan is rerolled up to 12× to avoid duplicates within an island.
+<b>Entirely cosmetic</b> — nothing below the skin reads morphology.</p>
+
+<h4>Trust and companionship</h4>
+<table class="tight">
+<thead><tr><th>Threshold</th><th class="n">Value</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td class="k">TRUST_STEP</td><td class="n">0.15</td><td class="d">per hand-fed seed; ~6 feeds to full bond</td></tr>
+<tr><td class="k">TRUST_CLOSE</td><td class="n">0.30</td><td class="d">starts pottering near you; den begins leaning toward camp</td></tr>
+<tr><td class="k">COMPANION_TRUST</td><td class="n">0.50</td><td class="d">may be asked to walk with you (one at a time)</td></tr>
+<tr><td class="k">HOME_LEAN</td><td class="n">0.85</td><td class="d">how far a full bond drags the den toward your fire</td></tr>
+</tbody>
+</table>
+<p>Persisted per island under <code>wander.trust</code>, capped at 900 entries.</p>
+
+<div class="xrefs">
+  <a class="xref" href="#a2">→ Part II <b>§3.4 · the learned palate</b> — co-adaptation without birth or death</a>
+  <a class="xref" href="#a11">→ Part II <b>§12, question 1</b> — should critters ever be <i>populations</i>?</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 10 -->
+<section id="rates">
+<h2>10 · Every way a plant comes into existence<small>the propagation table</small></h2>
+
+<table>
+<thead><tr>
+  <th>Route</th><th class="n">Rate</th><th class="n">Radius</th><th>Genome op</th><th>Notes</th>
+</tr></thead>
+<tbody>
+<tr>
+  <td class="k">worldgen scatter</td>
+  <td class="n">budget = life% × 10,000</td><td class="n">—</td>
+  <td class="d">spatial fBm + <code>mutate(0.02)</code></td>
+  <td class="d">default life = 80 → <b>8,000 plants on the first morning</b> — exactly the crowding threshold</td>
+</tr>
+<tr>
+  <td class="k">rare-species backfill</td>
+  <td class="n">to 8 individuals</td><td class="n">habitat-wide</td>
+  <td class="d">spatial genome</td>
+  <td class="d">guarantees no species is undiscoverable</td>
+</tr>
+<tr>
+  <td class="k">self-reseed <span class="tag t-live">main route</span></td>
+  <td class="n">0.06 / examination</td><td class="n">3 tiles</td>
+  <td class="d"><code>cross</code> if a same-species neighbour is within 2 tiles, else <code>mutate</code></td>
+  <td class="d">×2 tended · ×1.6 rain · ×3 fungus on a bloom day. Requires age ≥ 20</td>
+</tr>
+<tr>
+  <td class="k">disperser visit</td>
+  <td class="n">per completed nibble</td><td class="n">3 tiles</td>
+  <td class="d"><code>mutate</code></td>
+  <td class="d">8 placement attempts; also emits a substrate</td>
+</tr>
+<tr>
+  <td class="k">swarm pollination</td>
+  <td class="n">0.5·match²·fill, ≤3/tick</td><td class="n">6 tiles</td>
+  <td class="d"><code>mutate</code></td>
+  <td class="d">extra cap: max 2 of this species on the landing tile</td>
+</tr>
+<tr>
+  <td class="k">substrate germination</td>
+  <td class="n">0.04 / substrate / tick</td><td class="n">0 (in place)</td>
+  <td class="d"><code>mutate(archetype)</code></td>
+  <td class="d">needs hue within 0.12 and matching habitat tile</td>
+</tr>
+<tr>
+  <td class="k">beast drop</td>
+  <td class="n">0.08 pickup, 32-tile carry</td><td class="n">±1 tile</td>
+  <td class="d"><code>mutate</code></td>
+  <td class="d">cargo cap 2; the only true long-distance dispersal</td>
+</tr>
+<tr>
+  <td class="k">garden spread</td>
+  <td class="n">0.06 (same as repro)</td><td class="n">1 tile</td>
+  <td class="d"><code>mutate</code></td>
+  <td class="d">tilled ground only; waives habitat but only onto more tilled ground</td>
+</tr>
+<tr>
+  <td class="k">player sow</td>
+  <td class="n">manual</td><td class="n">at feet</td>
+  <td class="d">carried genome verbatim</td>
+  <td class="d">the <b>only</b> habitat waiver in the game (on tilled soil)</td>
+</tr>
+</tbody>
+</table>
+
+<div class="key">
+<b>The effective per-plant birth rate is much lower than 0.06</b>
+<p><code>simBudget = 480</code> plants are examined per tick, sampled <b>with replacement</b>
+from <code>all</code>. At a typical population of 8,000, any given plant is examined on
+6% of ticks. Effective reproduction ≈ <code>0.06 × 480/8000 = 0.0036</code> per plant per
+tick — one child every ~280 ticks ≈ <b>9.3 minutes of wall clock</b>, or about 1.3 island
+days. The island-wide birth rate is what's actually fixed: at most
+<code>480 × 0.06 ≈ 29 births/tick</code>, independent of population size. <b>This makes flora
+growth linear, not exponential</b>, and it is the real reason the island feels stable.</p>
+</div>
+
+<h4>What weather changes</h4>
+<table class="tight">
+<thead><tr><th>Condition</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td class="k">rain &gt; 0.2</td><td class="d">repro ×1.6 · drift ×1.25</td></tr>
+<tr><td class="k">bloom day (day after rain)</td><td class="d">Fungus repro ×3 (stacks with rain → ×4.8)</td></tr>
+<tr><td class="k">aurora night</td><td class="d">every child born gains <code>+0.08 … 0.23</code> glow, permanently, in the lineage</td></tr>
+<tr><td class="k">pocket biome</td><td class="d">scatter probability ×3–4 + 0.15, sat = 1, height ×1.4–1.7, petals +2–4, glow ≥ 0.7–0.85</td></tr>
+</tbody>
+</table>
+<p>These are the only environment→genome couplings in the game. Note that all of them are
+<b>global or geographic</b>, never differential by fitness.</p>
+
+<figure>
+  <img src="../shots/audit/05-charts.png" alt="The charts dashboard showing species population curves over island time">
+  <figcaption><b>The census dashboard</b> — per-species population traces sampled every 10
+  ticks, capped at 50,000 samples (≈500k ticks of history). The chart shows <i>counts</i>
+  only; no trait distribution is ever plotted, which is why genome drift is invisible in
+  aggregate.</figcaption>
+</figure>
+
+<div class="xrefs">
+  <a class="xref" href="#a9">→ Part II <b>§10 · instrumentation</b> — the chart that would make drift visible</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 11 -->
+<section id="death">
+<h2>11 · Every way a plant leaves<small>the three brakes</small></h2>
+
+<table>
+<thead><tr><th>Route</th><th class="n">Rate</th><th>Gate</th></tr></thead>
+<tbody>
+<tr>
+  <td class="k">crowding thin</td>
+  <td class="n">P = (N/10000 − 0.8) × 0.6</td>
+  <td class="d">species count &gt; 12 · not tended · <b>target chosen uniformly at random</b></td>
+</tr>
+<tr>
+  <td class="k">old age</td>
+  <td class="n">0.15 per examination</td>
+  <td class="d">age &gt; 900 ticks</td>
+</tr>
+<tr>
+  <td class="k">grazed</td>
+  <td class="n">per grazer nibble</td>
+  <td class="d">age &lt; 20 → removed. age ≥ 20 → <code>born = tick</code> (set back to sprout). Garden plants immune</td>
+</tr>
+</tbody>
+</table>
+
+<div class="key">
+<b>There is no selection anywhere in flora mortality</b>
+<p>The crowding thin picks a plant <i>at random</i> from the sampled 480. Old age is
+genome-blind. Grazing is the only genome-sensitive removal — and it selects <i>against</i>
+being palatable, which is the opposite of what dispersal selects for. Net: a plant's
+genome has essentially <b>no effect on its expected number of descendants</b>. What the game
+calls evolution is, mechanically, a random walk with a speciation tripwire.</p>
+</div>
+
+<p>At default settings the island opens at 8,000 plants (life = 80%) against a comfort
+threshold of 8,000 — so <b>crowding thinning is active from tick 1</b>, at P ≈ 0 and rising.
+At the 10,000 cap it reaches <code>P = 0.12</code> per examination, removing ~58 plants/tick
+against ~29 births/tick. The system is strongly buffered around 8,000–9,000.</p>
+
+<div class="xrefs">
+  <a class="xref" href="#a2">→ Part II <b>§3.1 · selective mortality</b> — the ~15 lines that turn this into evolution</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 12 -->
+<section id="speciation">
+<h2>12 · Speciation<small>the founder-cluster rule</small></h2>
+
+<p>Checked on every <i>newborn</i> plant. All five gates must pass:</p>
+<div class="fx"><span class="num">1</span>  tick − lastSplitTick  ≥  <span class="num">500</span>        <span class="c">// island-wide cooldown, ~17 min</span>
+<span class="num">2</span>  driftDistance(child, species.archetype)  ≥  <span class="num">0.30</span>
+<span class="num">3</span>  daughters so far  &lt;  <span class="num">12</span>
+<span class="num">4</span>  kin within <span class="num">4</span> tiles, same species, driftDistance(kin, child) ≤ <span class="num">0.14</span>
+<span class="num">5</span>  kin count (incl. the child)  ≥  <span class="num">6</span>
+
+<span class="c">// on success: the whole kin cluster crosses over to the new species id</span></div>
+
+<p>The daughter inherits the parent's habitat and density, takes a fresh coined word, keeps
+the family epithet, and wears ✧. Its archetype is the child's genome. It is appended to the
+shared species list, so the swarm layer will lazily build it a flower map if it can bloom
+(<code>flowerFor</code>) — meaning <b>a daughter species can acquire its own pollinator
+cloud</b>.</p>
+
+<div class="note">
+<b>Why splits are rare, and cosmetic when they happen</b>
+<p><code>driftDistance</code> averages all nine traits equally, and six of them are
+decorative (§4). A cluster therefore crosses the 0.30 threshold mostly through drift in
+<code>lean</code>, <code>leaves</code>, <code>spread</code> and <code>hue2</code> — traits with
+no ecological meaning. Combined with the 500-tick cooldown and the 12-daughter cap, an island
+produces at most 12 splits ever, most of them ecologically identical to their parent.
+<code>?split=1</code> loosens this to cooldown 30 / distance 0.18 / cluster 4 for testing.</p>
+</div>
+
+<div class="xrefs">
+  <a class="xref" href="#a5">→ Part II <b>§6 · the Heart</b> — a source term, so kinds can <i>arise</i> and not only split</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 13 -->
+<section id="chains">
+<h2>13 · Byproduct chains<small>the one multi-organism dependency in the game</small></h2>
+
+<div class="svgfig">
+<svg viewBox="0 0 880 170" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="11">
+  <defs><marker id="a3" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L8,3 L0,6" fill="none" stroke="#7fe0c4" stroke-width="1.2"/></marker></defs>
+  <rect x="10" y="46" width="150" height="66" rx="4" fill="#131a24" stroke="#2a3644"/>
+  <text x="26" y="70" fill="#d7e2ee">DISPERSER</text>
+  <text x="26" y="88" fill="#5c7086">appetite &gt; 0.3</text>
+  <text x="26" y="104" fill="#5c7086">eats plant P</text>
+  <path d="M162 79 L212 79" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a3)" fill="none"/>
+  <text x="166" y="70" fill="#7fe0c4">nibble</text>
+  <rect x="214" y="46" width="170" height="66" rx="4" fill="#101c17" stroke="#1e5a49"/>
+  <text x="230" y="70" fill="#7fe0c4">SUBSTRATE</text>
+  <text x="230" y="88" fill="#5c7086">tagged {hue, glow, form}</text>
+  <text x="230" y="104" fill="#5c7086">of P · lives 150 ticks</text>
+  <path d="M386 79 L436 79" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a3)" fill="none"/>
+  <text x="382" y="70" fill="#7fe0c4">0.04/tick</text>
+  <rect x="438" y="46" width="190" height="66" rx="4" fill="#101c17" stroke="#1e5a49"/>
+  <text x="454" y="70" fill="#7fe0c4">FEEDER PLANT S</text>
+  <text x="454" y="88" fill="#5c7086">substrateFeeder = true</text>
+  <text x="454" y="104" fill="#5c7086">|hue(S) − hue(P)| ≤ 0.12</text>
+  <text x="454" y="120" fill="#5c7086">habitat(S) = the tile</text>
+  <path d="M630 79 L680 79" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a3)" fill="none"/>
+  <text x="628" y="70" fill="#7fe0c4">if eaten</text>
+  <rect x="682" y="46" width="180" height="66" rx="4" fill="#141a12" stroke="#5a4a1e"/>
+  <text x="698" y="70" fill="#e3c07b">LOOP CLOSES</text>
+  <text x="698" y="88" fill="#5c7086">S is itself in some</text>
+  <text x="698" y="104" fill="#5c7086">disperser's palate</text>
+  <path d="M772 46 Q772 16 400 16 Q90 16 88 44" stroke="#e3c07b" stroke-width="1.1" fill="none" stroke-dasharray="4 4" marker-end="url(#a3)"/>
+  <text x="380" y="12" fill="#e3c07b" text-anchor="middle">the chain runs on</text>
+  <text x="10" y="150" fill="#5c7086">Measured over 14 seeds: 8.4 latent links per island · 93% of islands grow ≥1 · 42% of links can close · range 0 (seed 42) → 28 (seed 88)</text>
+</svg>
+</div>
+
+<table class="tight">
+<thead><tr><th>Constant</th><th class="n">Value</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td class="k">SUBSTRATE_LIFETIME</td><td class="n">150 ticks</td><td class="d">unfed byproducts fade — bounds entity count</td></tr>
+<tr><td class="k">SUBSTRATE_HUE_MATCH</td><td class="n">0.12</td><td class="d">the germination window, wrapped around the wheel</td></tr>
+<tr><td class="k">SUBSTRATE_GERMINATE_CHANCE</td><td class="n">0.04 / tick</td><td class="d">~99.8% of a substrate's 150-tick life will produce a sprout <i>if</i> a matching feeder exists</td></tr>
+<tr><td class="k">SUBSTRATE_FEEDER_SCATTER</td><td class="n">1.0</td><td class="d">unused weight knob, reserved</td></tr>
+</tbody>
+</table>
+
+<p>Chain potential is scored at <b>generation time, with no simulation</b>:
+<code>diversityScore = chains + 2·(redundancy − 1)</code>, and new random islands are
+rejection-sampled to a floor of <b>5</b> across <b>8 candidates</b>. Named tiers:
+flat (≤1) · sparse (&lt;5) · living (&lt;15) · rich (&lt;30) · lush (&lt;40) · legendary (≥40).
+Only 0.6% of seeds are legendary; seed <b>2438 "Polpol Skerry"</b> scores 71 chains with 69
+closing.</p>
+
+<div class="note">
+<b>Chains are hue-blind to habitat at scoring time but not at runtime</b>
+<p><code>chainStats</code> (the generation heuristic) ignores habitat; the actual
+<code>stepSubstrates</code> germination additionally requires the feeder's habitat to equal
+the tile the substrate landed on. Real chain formation is therefore <b>strictly rarer than
+the score suggests</b> — a disperser that eats a Grass-habitat plant and walks onto Sand
+leaves a byproduct no Grass feeder can use.</p>
+</div>
+
+<div class="xrefs">
+  <a class="xref" href="#a3">→ Part II <b>§4 · the soil channel</b> — substrates that persist and accumulate as tile history</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 14 -->
+<section id="extras">
+<h2>14 · Beast, birds, ambient life<small>what else moves, and what it does</small></h2>
+
+<div class="cols">
+<div class="card">
+  <h5>The beast <span class="tag t-live">ecological</span></h5>
+  <p>70% of islands. One per island, no den. Palate cut like a critter's. Picks up a burr
+  (P = 0.08 when a favored plant is within 1.5 tiles, cargo cap 2), walks
+  <b>32 tiles</b>, then sows a drifted child at its feet. Speed 26 px/s.
+  <b>The only long-distance gene flow in the game</b> — everything else is ≤6 tiles.
+  Forages purposefully 75% of the time toward distant stands of what it favors.</p>
+</div>
+<div class="card">
+  <h5>Birds <span class="tag t-cos">decorative</span></h5>
+  <p>1–2 flocks of 3–6. Fly → settle → perch → flush when you come within 2.5 tiles. Roost
+  through the night. <b>They eat nothing and affect nothing.</b> A ready-made insectivore
+  chassis sitting unused next to a hard-coded <code>WORLD_PREDATION = 0.6</code> constant.</p>
+</div>
+<div class="card">
+  <h5>Fish · frogs · dragonflies <span class="tag t-cos">decorative</span></h5>
+  <p>Viewport-scoped: spawned when fewer than N are on screen, filtered out the moment they
+  leave. Wall-clock <code>dt</code>, private un-seeded RNGs, no persistence, no sim state.
+  Dragonflies vanish entirely above darkness 0.45. Pure atmosphere.</p>
+</div>
+<div class="card">
+  <h5>Foreground parallax <span class="tag t-cos">decorative</span></h5>
+  <p>Seed-fluff on two virtual planes sliding at 1.35× and 1.75× camera speed, positions
+  hashed from plane cells. Zero allocation, zero state.</p>
+</div>
+</div>
+
+<figure>
+  <img src="../shots/audit/09-night.png" alt="The island at night — glow-trait plants revealing their luminous accents">
+  <figcaption><b>Night</b> — <code>glow &gt; 0.8</code> is the render threshold for luminous
+  accents. Sporestalk (glowMax 1.0), Fungus and Coral (0.9), Moss (0.85) are the forms most
+  likely to light. Darkness holds at <code>MAX_DARKNESS = 0.75</code> for 120 s of every
+  440 s cycle.</figcaption>
+</figure>
+
+<div class="xrefs">
+  <a class="xref" href="#a4">→ Part II <b>§5</b> — the birds already have the chassis for the missing trophic level</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ 15 -->
+<section id="levers">
+<h2>15 · Master lever table<small>everything tunable, with its blast radius</small></h2>
+
+<h3>Flora tuning — <code>life/flora.ts:94</code></h3>
+<table>
+<thead><tr><th>Key</th><th class="n">Default</th><th>Turn it up and…</th><th>Exposed in</th></tr></thead>
+<tbody>
+<tr><td class="k">maxPlants</td><td class="n">10000</td><td class="d">higher ceiling; crowding starts later; render cost scales</td><td class="d">—</td></tr>
+<tr><td class="k">maxPerTile</td><td class="n">4</td><td class="d">denser clumps; more visual stacking; more chain opportunities per tile</td><td class="d">pressures</td></tr>
+<tr><td class="k">simBudget</td><td class="n">480</td><td class="d"><b>the single biggest speed knob</b> — island-wide birth rate is <code>budget × reproChance</code></td><td class="d">—</td></tr>
+<tr><td class="k">matureAge</td><td class="n">20</td><td class="d">longer juvenile window; grazers erase more (young plants are consumed whole)</td><td class="d">—</td></tr>
+<tr><td class="k">lifespan</td><td class="n">900</td><td class="d">older stands; slower turnover; less genomic churn</td><td class="d">pressures</td></tr>
+<tr><td class="k">reproChance</td><td class="n">0.06</td><td class="d">faster fill; interacts multiplicatively with rain/tended/bloom</td><td class="d">pressures</td></tr>
+<tr><td class="k">reseedRadius</td><td class="n">3</td><td class="d">looser stands, faster range expansion, weaker spatial genetic structure</td><td class="d">pressures</td></tr>
+<tr><td class="k">mutationAmount</td><td class="n">0.06</td><td class="d">faster drift → faster (but more arbitrary) speciation</td><td class="d">pressures</td></tr>
+<tr><td class="k">pollinationRadius</td><td class="n">2</td><td class="d">more crosses vs. selfing — the only genetic-mixing lever there is</td><td class="d">pressures</td></tr>
+<tr><td class="k">comfortFraction</td><td class="n">0.8</td><td class="d">raises the density at which thinning begins</td><td class="d">—</td></tr>
+<tr><td class="k">scatterLife</td><td class="n">80 (forge)</td><td class="d">first-morning density as % of maxPlants</td><td class="d">forge</td></tr>
+<tr><td class="k">splitDistance</td><td class="n">0.30</td><td class="d"><i>lower</i> = wilder speciation (slider is reversed in the UI)</td><td class="d">pressures</td></tr>
+<tr><td class="k">splitKinDistance</td><td class="n">0.14</td><td class="d">how tight the founding cluster must be</td><td class="d">—</td></tr>
+<tr><td class="k">splitKinRadius</td><td class="n">4</td><td class="d">tiles searched for founders</td><td class="d">—</td></tr>
+<tr><td class="k">splitClusterMin</td><td class="n">6</td><td class="d">founders required</td><td class="d">via splitDistance</td></tr>
+<tr><td class="k">splitCooldownTicks</td><td class="n">500</td><td class="d">island-wide pause between splits</td><td class="d">via splitDistance</td></tr>
+<tr><td class="k">maxDaughterSpecies</td><td class="n">12</td><td class="d">lifetime cap on new kinds</td><td class="d">—</td></tr>
+<tr><td class="k">chains</td><td class="n">on in main</td><td class="d">substrate emission + germination; off ⇒ byte-identical to pre-chains</td><td class="d">URL flag</td></tr>
+</tbody>
+</table>
+
+<h3>Swarm layer — <code>life/swarm.ts</code>, <code>game/swarms.ts</code></h3>
+<table>
+<thead><tr><th>Key</th><th class="n">Default</th><th>Turn it up and…</th><th>Exposed in</th></tr></thead>
+<tbody>
+<tr><td class="k">NECTAR_REGEN</td><td class="n">0.05</td><td class="d">raises equilibrium efficiency floor; clouds survive on worse matches</td><td class="d">pressures</td></tr>
+<tr><td class="k">NECTAR_DRAW</td><td class="n">0.25</td><td class="d">only matters transiently — steady state is regen-limited</td><td class="d">pressures</td></tr>
+<tr><td class="k">FEED_VALUE</td><td class="n">4</td><td class="d">lowers the break-even match — weaker selection on the sensor map</td><td class="d">—</td></tr>
+<tr><td class="k">LIVING_COST</td><td class="n">0.02</td><td class="d"><b>the selection-strength knob</b> — raises the break-even efficiency directly</td><td class="d">—</td></tr>
+<tr><td class="k">SWARM_CAP</td><td class="n">96</td><td class="d">cloud size ceiling</td><td class="d">—</td></tr>
+<tr><td class="k">SWARM_COUNT_CAP</td><td class="n">24</td><td class="d">total clouds incl. cousins</td><td class="d">—</td></tr>
+<tr><td class="k">PREDATION_RATE</td><td class="n">0.02</td><td class="d">strength of the camouflage payoff</td><td class="d">—</td></tr>
+<tr><td class="k">WORLD_PREDATION</td><td class="n">0.6</td><td class="d">ambient insectivore pressure (no entity behind it)</td><td class="d">sim toggle</td></tr>
+<tr><td class="k">POLLINATE_MATCH_MIN</td><td class="n">0.30</td><td class="d">how adapted a cloud must be before it helps its flower at all</td><td class="d">—</td></tr>
+<tr><td class="k">POLLINATE_CHANCE</td><td class="n">0.5</td><td class="d">scales the whole insect-spread route</td><td class="d">—</td></tr>
+<tr><td class="k">MAX_POLLINATIONS_PER_TICK</td><td class="n">3</td><td class="d">island-wide ceiling — the hard brake on insect-driven booms</td><td class="d">—</td></tr>
+<tr><td class="k">DIVERGE_INTERVAL</td><td class="n">50</td><td class="d">how often a cousin may bud</td><td class="d">—</td></tr>
+<tr><td class="k">MUTATE_FLIPS</td><td class="n">3</td><td class="d">sensor-map mutation rate — adaptation speed</td><td class="d">—</td></tr>
+<tr><td class="k">POOL_SIZE</td><td class="n">10</td><td class="d">standing variation inside a cloud</td><td class="d">—</td></tr>
+<tr><td class="k">pollinateAssist</td><td class="n">radius 6, maxSame 2</td><td class="d">reach and airiness of every insect-driven spread</td><td class="d">pressures</td></tr>
+</tbody>
+</table>
+
+<h3>Fauna — <code>life/fauna.ts</code></h3>
+<table>
+<thead><tr><th>Key</th><th class="n">Default</th><th>Turn it up and…</th><th>Exposed in</th></tr></thead>
+<tbody>
+<tr><td class="k">GRAZER_CHANCE</td><td class="n">0.28</td><td class="d">more friction, fewer substrates, fewer chains (chain volume tracks disperser count)</td><td class="d">pressures</td></tr>
+<tr><td class="k">APPETITE_MIN</td><td class="n">0.30</td><td class="d"><i>lower</i> = broader diets = denser web = more chains</td><td class="d">—</td></tr>
+<tr><td class="k">hueWidth</td><td class="n">0.12 + rng·0.14</td><td class="d">diet breadth per kind — currently ~1.6 species each</td><td class="d">roll pane</td></tr>
+<tr><td class="k">species count</td><td class="n">5–8</td><td class="d">web density</td><td class="d">—</td></tr>
+<tr><td class="k">individuals per kind</td><td class="n">4–6</td><td class="d">nibble throughput — the whole disperser economy scales with it</td><td class="d">—</td></tr>
+<tr><td class="k">CRITTER_SPEED</td><td class="n">40 px/s</td><td class="d">forage range per unit time</td><td class="d">—</td></tr>
+<tr><td class="k">SEEK_RADIUS_PX</td><td class="n">8 tiles</td><td class="d">how far a hungry critter looks</td><td class="d">—</td></tr>
+<tr><td class="k">MEAL_ENERGY</td><td class="n">0.35</td><td class="d">meals per waking period ≈ 3</td><td class="d">—</td></tr>
+<tr><td class="k">ENERGY_DRAIN_PER_S</td><td class="n">1/200</td><td class="d">how often a critter must eat → visit frequency → propagation rate</td><td class="d">—</td></tr>
+</tbody>
+</table>
+
+<h3>Worldgen — <code>world/config.ts</code>, bounds in <code>render/forgeArgs.ts</code></h3>
+<p>26 fields, all exposed in the forge's fine-grain fold: map size (96–400), elevation and
+moisture noise (scale, octaves), the five elevation thresholds (sea/shore/beach/rock/snow),
+the two moisture thresholds (forest/marsh), rivers (count, spring elevation, max steps),
+waterfalls (min drop, max count, spacing), crater chance, and the viability gates (min land
+fraction, min walkable region, max attempts). <code>RANDOMIZE_RANGES</code> narrows two of
+them for the randomize button — <code>forestMoisture</code> below ~0.15 turns all land to
+forest and starves <code>findSpawn</code>; <code>falloffSharpness</code> below 0.5 collapses
+the island.</p>
+
+<figure>
+  <img src="../shots/audit/26-forge.png" alt="The forge panel — island generation parameters with live preview">
+  <figcaption><b>The forge</b> — worldgen params with a live preview. The
+  <code>life</code> slider is the flora scatter budget as a percent of
+  <code>maxPlants</code>; <code>warm</code> fast-forwards up to 50,000 ticks before you
+  arrive (the swarm layer only gets the last 1,000 of them).</figcaption>
+</figure>
+</section>
+
+<!-- ══════════════════════════════════════════ 16 -->
+<section id="gaps">
+<h2>16 · Structural gaps<small>read this before tuning anything — and the hinge into Part II</small></h2>
+
+<p>Ordered by how much they constrain what the ecology can express. Each links to the
+Part II section that proposes a way out.</p>
+
+<table>
+<thead><tr><th class="n">#</th><th>Gap</th><th>Consequence</th><th>Part II</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td class="k">No fitness function</td>
+<td class="d">Reproduction is a flat 0.06 and mortality is uniform-random. Genome does not
+influence descendant count. Traits drift; they never adapt.</td><td><a href="#a2">§3.1</a></td></tr>
+
+<tr><td class="n">2</td><td class="k">Fauna are frozen</td>
+<td class="d">Fixed roster, no birth, no death, no heritable variation. Co-adaptation is
+one-directional.</td><td><a href="#a2">§3.4</a></td></tr>
+
+<tr><td class="n">3</td><td class="k">6 of 9 plant traits are cosmetic</td>
+<td class="d">Nothing reads height, spread, leaves, lean, hue2, sat — yet
+<code>driftDistance</code> weights them equally, so speciation fires on meaningless
+drift.</td><td><a href="#a2">§3.2–3.3</a></td></tr>
+
+<tr><td class="n">4</td><td class="k">No resource can be depleted</td>
+<td class="d">Only tile slots are scarce. Nectar regenerates <i>faster</i> when more swarms
+feed. Nothing to partition ⇒ no niche differentiation possible.</td><td><a href="#a8">§9</a></td></tr>
+
+<tr><td class="n">5</td><td class="k">11 of 14 forms have no animal at all</td>
+<td class="d">Trees, kelp, coral, moss, ferns, reeds, vines, grass, bulbs, sporestalks and
+fungi cannot host insects. Most of the flora is outside every web.</td><td><a href="#a3">§4</a></td></tr>
+
+<tr><td class="n">6</td><td class="k">Insect "pollination" doesn't mix genes</td>
+<td class="d"><code>pollinateSpread</code> calls <code>mutate</code>, not <code>cross</code>.
+The animal-mediated route is dispersal wearing pollination's name.</td><td><a href="#a6">§7</a></td></tr>
+
+<tr><td class="n">7</td><td class="k">Two genome systems, one scalar bridge</td>
+<td class="d">Plant HSL genome ↔ insect idmap connect only through
+<code>petals → flowerSize</code>.</td><td><a href="#a3">§4</a></td></tr>
+
+<tr><td class="n">8</td><td class="k">The top of the food chain is a constant</td>
+<td class="d"><code>WORLD_PREDATION = 0.6</code> stands in for insectivores that don't exist,
+while bird flocks fly around eating nothing.</td><td><a href="#a4">§5</a></td></tr>
+
+<tr><td class="n">9</td><td class="k">Every cycle is cosmetic</td>
+<td class="d">Five periodic signals; none touches carrying capacity — the one theoretically-
+grounded stabilizer available.</td><td><a href="#a6">§7</a></td></tr>
+
+<tr><td class="n">10</td><td class="k">No disturbance regime</td>
+<td class="d">No fire, blight, flood or storm-kill. Succession has no reset and diversity has
+no maintenance mechanism.</td><td><a href="#a7">§8</a></td></tr>
+
+<tr><td class="n">11</td><td class="k">The species list is closed</td>
+<td class="d">Species can only split (max 12), never arise. No source term.</td><td><a href="#a5">§6</a></td></tr>
+
+<tr><td class="n">12</td><td class="k">Charts show counts, never traits</td>
+<td class="d">The genome is the interesting state and it is never plotted.
+<code>parent</code>/<code>bornTick</code> exist and no lineage tree is ever drawn.</td><td><a href="#a9">§10</a></td></tr>
+</tbody>
+</table>
+
+<hr class="rule">
+
+<h3>Reference constants, one screen</h3>
+<div class="fx"><span class="c">TIME</span>            tick 2000ms · day 220 ticks · lifespan 900 · mature 20 · substrate 150 · split cd 500
+<span class="c">FLORA</span>           max 10000 · perTile 4 · budget 480 · repro 0.06 · reseed 3 · mutate 0.06 · cross-r 2 · comfort 0.8
+<span class="c">SPECIATION</span>      dist 0.30 · kin 0.14 · kinR 4 · cluster 6 · cd 500 · maxDaughters 12
+<span class="c">SUBSTRATE</span>       life 150 · hueMatch 0.12 · germ 0.04 · feeder odds 0.70 / 0.20 / 0.06
+<span class="c">CRITTER</span>         kinds 5-8 · each 4-6 · grazer 0.28 · appetiteMin 0.30 · speed 40 · seek 8t · meal 0.35 · drain 1/200
+<span class="c">SWARM</span>           4-8 init · cap 96 · countCap 24 · pool 10 · flips 3 · regen 0.05 · draw 0.25 · feedVal 4 · cost 0.02
+<span class="c">POLLINATE</span>       matchMin 0.30 · chance 0.5 · perTick 3 · radius 6 · maxSame 2 · predation 0.6 · rate 0.02
+<span class="c">IDMAP</span>           7×7=49 cells · 6 colors · upkeep 0.10 · base 0.20 · flower 0.90 · generic 0.02
+<span class="c">BEAST</span>           70% of islands · cargo 2 · pickup 0.08 · carry 32t · speed 26 · forage 0.75
+<span class="c">DIVERSITY</span>       floor 5 · candidates 8 · flat≤1 sparse&lt;5 living&lt;15 rich&lt;30 lush&lt;40 legendary≥40</div>
+</section>
+
+
+<!-- ═══════════════════════════════════════════════════ PART II -->
+<div class="partmark" id="part2">
+  <div class="lbl">Part II</div>
+  <h2>The expansion audit — what the ecology cannot yet express</h2>
+  <p>Every claim about current behaviour below is sourced in Part I. This half is about
+  closing the gap between the machinery Wonder has built and the ecology it can actually
+  show — not by adding systems, but by making the ones that exist consequential.
+  A markdown copy lives at
+  <code>docs/superpowers/specs/2026-07-24-ecology-expansion-audit.md</code> for git review.</p>
+</div>
+
+<!-- ══════════════════════════════════════════ A0 -->
+<section id="a0">
+<h2 class="b">1 · The diagnosis<small>one paragraph</small></h2>
+
+<p>Wonder has built an extraordinary amount of <i>machinery</i> for evolution and almost no
+<i>evolution</i>. Plants carry nine heritable traits, cross, mutate, speciate, and log their
+history — but their reproduction rate is a flat constant, their mortality is uniformly
+random, and six of the nine traits are read by nothing but the sprite renderer. Insects have
+a genuinely excellent adaptive layer (the identity map) that is used for exactly one
+relationship and connects to plant genetics through a single integer. Critters cannot be
+born, cannot die, and cannot change. <b>The word for what the flora does is drift, not
+adaptation</b>: a random walk with a speciation tripwire attached.</p>
+
+<div class="xrefs">
+  <a class="xref" href="#gaps">← Part I <b>§16</b> — the twelve structural gaps this argues from</a>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ A1 -->
+<section id="a1">
+<h2 class="b">2 · Five things that are structurally impossible<small>not rare — impossible, at any seed, at any tuning</small></h2>
+
+<table class="wrapk">
+<thead><tr><th class="n">#</th><th>Impossible</th><th>Because</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td class="k">A trait becoming more common because it works</td>
+<td class="d"><code>simTick</code> reproduces a uniformly-sampled plant at a flat
+<code>reproChance</code>; the crowding thin removes a uniformly-sampled plant. Genome never
+enters either decision. <a href="#death">(Part I §11)</a></td></tr>
+<tr><td class="n">2</td><td class="k">An animal adapting to a plant</td>
+<td class="d">Palate, role, size and morph are frozen at worldgen. There is no fauna
+reproduction of any kind. <a href="#critters">(Part I §9)</a></td></tr>
+<tr><td class="n">3</td><td class="k">Two species partitioning a resource</td>
+<td class="d">The only scarcity is tile slots. No light, water, nutrient, or time axis exists
+to partition.</td></tr>
+<tr><td class="n">4</td><td class="k">Something new entering the world</td>
+<td class="d">The species list can only <i>split</i>, bounded at 12 daughters. No source
+term. <a href="#speciation">(Part I §12)</a></td></tr>
+<tr><td class="n">5</td><td class="k">A disturbance the ecology recovers from</td>
+<td class="d">No fire, blight, flood, storm or die-off. Succession has no reset, so diversity
+has no maintenance mechanism.</td></tr>
+</tbody>
+</table>
+
+<p>Note the shape: (1) and (2) are about <b>selection</b>, (3) about <b>niche</b>, (4) about
+<b>origination</b>, (5) about <b>disturbance</b>. Those four words are the whole ecology. The
+engine currently implements none of them — and implements <i>inheritance</i> beautifully.</p>
+</section>
+
+<!-- ══════════════════════════════════════════ A2 -->
+<section id="a2">
+<h2 class="b">3 · Foundations<small>four small changes that turn drift into evolution</small></h2>
+
+<p>Deliberately tiny — and, I think, the highest value-per-line work available in this
+codebase. None adds an entity, a save field, or a key.</p>
+
+<h3>3.1 · Selective mortality — make the thin <i>choose</i></h3>
+<p><code>flora.ts:534</code> picks a crowding victim at random. Change it to sample k = 3 and
+remove the <i>worst</i> by some local fitness. That single edit is the difference between a
+random walk and evolution, because it is the first time a genome ever affects a plant's
+expected descendants.</p>
+
+<div class="fx"><span class="v">fitness</span>(p) = 1
+  × shadeTerm(p)      <span class="c">// §3.3 — tall wins light, short loses it</span>
+  × kinTerm(p)        <span class="c">// penalty for being surrounded by near-identical kin</span>
+  × visitTerm(p)      <span class="c">// bonus if recently fed on / pollinated</span></div>
+
+<p>Every term is optional and independently shippable. Even <i>one</i> makes the island's
+flora start bending toward something.</p>
+
+<blockquote><b>Design guard.</b> Selection must express as a <i>rate</i>, never an event. A
+plant that loses does not die visibly of losing; it is simply the one the crowd thins. The
+peaceful pillar survives intact — this is the same mechanism that already runs, just with an
+opinion.</blockquote>
+
+<h3>3.2 · Make <code>spread</code> govern dispersal distance</h3>
+<p><code>spread</code> (0.1–1) currently draws bushier sprites. Let it scale
+<code>reseedRadius</code>: a high-spread plant throws children further but with a lower
+per-seed take rate (fewer placement attempts, or a per-tile penalty).</p>
+<p>This is the <b>colonization–competition tradeoff</b>, the single most-studied coexistence
+mechanism in real ecology. Two species can then stably coexist on one habitat: one wins
+locally, one wins the empty ground. Today, two species on one habitat simply race and one
+wins. Cost: about ten lines in <code>propagate</code>.</p>
+
+<h3>3.3 · Make <code>height</code> govern light</h3>
+<p>One float per tile: <code>shade = Σ height over the plants on it</code>. A plant's
+reproduction multiplier reads its own height against the shade above it. Cheapest possible
+niche axis, and it pays enormously:</p>
+<ul>
+<li><code>height</code> becomes load-bearing — a real cost/benefit rather than decoration.</li>
+<li>Forests stratify: canopy, understory, ground layer, with different winners.</li>
+<li>The forms that currently do nothing ecologically get a role — Moss (0.05–0.25) and Fungus
+(0.10–0.45) become <i>specialists of the shaded floor</i> rather than just short things.</li>
+<li>Trees get an ecological function for the first time. <a href="#pollinators">(Part I §5)</a></li>
+<li>It couples straight into fire, gaps, and succession later.</li>
+</ul>
+
+<h3>3.4 · The learned palate — let critters adapt without being born</h3>
+<p>Fauna can't evolve because they can't reproduce, and giving ~30 named, den-having,
+trust-bearing creatures a birth/death cycle is a large and possibly unwanted change. There is
+a cheaper answer that is also better design: <b>let the palate drift toward what the animal
+actually eats.</b></p>
+<p>On each completed nibble, nudge the kind's <code>hueCenter</code> a hair toward the genome
+it just fed on (and <code>glowTaste</code> likewise). Bounded, slow, per-kind.</p>
+<ul>
+<li>It is <i>learning</i>, not genetics — honest to "nothing is born, nothing dies".</li>
+<li>It closes the co-adaptation loop: plants bend toward their dispersers (already true), and
+now dispersers bend toward the plants that persist.</li>
+<li>It is visible: a kind's palate swatch in the codex shifts over island-days, and the
+journal can note "its taste has moved".</li>
+<li>It creates the first <b>runaway</b> in the game — disperser prefers red, spreads red,
+finds more red, prefers red harder. Which is exactly the kind of thing that should then need
+a brake (§7).</li>
+</ul>
+<p>Roughly twenty lines in <code>fauna.ts</code>, one new persisted field.</p>
+</section>
+
+<!-- ══════════════════════════════════════════ A3 -->
+<section id="a3">
+<h2 class="b">4 · Multiple pixel maps<small>generalize the identity map into a tag space</small></h2>
+
+<p>The <code>IdMap</code> is the best mechanic in the codebase
+<a href="#idmap">(Part I §7)</a>: a 7×7 grid of 7 states with a reward economy that produces
+specialists, generalists, and camouflage from one function. It is used for exactly one
+relationship — insect sensor against flower appearance — and it is not even connected to the
+plant's real colour.</p>
+
+<p><b>The move: treat the idmap as a general <i>channel</i> primitive and run several.</b>
+Same grid, same economy, different meaning. The interesting part is not any single channel;
+it is the leakage between them.</p>
+
+<table class="wrapk">
+<thead><tr><th>Channel</th><th>Emitted by</th><th>Read by</th><th>What it buys</th></tr></thead>
+<tbody>
+<tr><td class="k">appearance <span class="tag t-live">shipped</span></td><td class="d">flowering plants</td><td class="d">insect swarms</td><td class="d">pollination, camouflage</td></tr>
+<tr><td class="k">scent</td><td class="d">every plant, every form</td><td class="d">critters, the beast</td><td class="d">the 11 forms with no animal get one; a tree can finally matter</td></tr>
+<tr><td class="k">soil</td><td class="d">a tile, accumulated from what died / was eaten / was dropped there</td><td class="d">germinating plants</td><td class="d">succession, litter, allelopathy, seed banking, fire-followers</td></tr>
+<tr><td class="k">search image</td><td class="d">—</td><td class="d">insectivores</td><td class="d">a real camouflage arms race (§5)</td></tr>
+<tr><td class="k">warning</td><td class="d">plants and insects that are costly to eat</td><td class="d">anything that eats</td><td class="d">aposematism and Batesian mimicry, from a sign flip on <code>matchReward</code></td></tr>
+<tr><td class="k">song</td><td class="d">insect clouds, converging</td><td class="d">clouds; and plants that <i>mimic</i> it</td><td class="d">sensory exploitation — a flower that fakes the chorus gets visits it never earned</td></tr>
+</tbody>
+</table>
+
+<div class="cols">
+<div class="card g">
+  <h5>Trait conduits become physical</h5>
+  <p>The food-web study left this as the open fork. If a substrate carries the eaten plant's
+  signature <i>into the soil map</i>, and germinating plants read the soil map, colour
+  genuinely travels the island. You can watch a hue walk from a meadow to a shore over
+  island-days, carried in bellies. Cause and effect you can trace — the exact thing the
+  Scavenger's Reign study argues makes an ecology feel alive.</p>
+</div>
+<div class="card g">
+  <h5>Place stops being a boolean</h5>
+  <p>Today a tile either is or isn't your habitat. With a soil map, ground has <i>history</i>
+  — it has been a fungus patch, then a burn, then meadow — and germination reads that
+  history. Islands develop a past you can read from the dirt.</p>
+</div>
+<div class="card g">
+  <h5>Mimicry without cruelty</h5>
+  <p>A harmless species that copies a costly one's warning map free-rides. A flower that
+  copies a <i>different</i> flower's appearance map borrows its pollinators. Both are real
+  biology, both are gentle, and both are pure emergence from the existing match function.</p>
+</div>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ A4 -->
+<section id="a4">
+<h2 class="b">5 · The missing trophic level<small>critters that eat swarms</small></h2>
+
+<p>Almost free, because the top of the food chain is currently a constant:
+<code>WORLD_PREDATION = 0.6</code> (<code>game/swarms.ts:61</code>), described in its own
+comment as "standing in for generic insectivores." Meanwhile one to two bird flocks fly
+around the island eating nothing at all. <a href="#extras">(Part I §14)</a></p>
+
+<p><b>Add one role: <code>insectivore</code>.</b> Its palate reads sensor maps instead of
+plant genomes — the same <code>appetite</code> shape on a different tag space.
+<code>applyPredation</code> already takes a <code>pressure</code> scalar; make that scalar
+<i>local and sourced</i> rather than global and constant.</p>
+
+<h4>What it produces, in order of how surprising it is</h4>
+<ol>
+<li><b>Predation becomes geography.</b> Safe bays and dangerous meadows. Swarms are thinned
+where insectivores actually are.</li>
+<li><b>A frustrated optimization.</b> Right now a cloud has one goal: match the flower. Add a
+predator with a search image and the cloud has <i>two goals in tension</i> — match the flower
+to feed, don't match it where you'll be seen. Frustrated optimizations are where persistent
+diversity comes from in real systems, and they never settle. <b>This is the single best
+answer to "how do I get surprised by adaptiveness."</b></li>
+<li><b>Local divergence for free.</b> Clouds in bird country drift away from clouds in safe
+country <i>while working the same flower</i>. Same species, two shapes, one island.
+<code>divergeSwarm</code> already exists to bud the cousin.</li>
+<li><b>The predator adapts back.</b> Give the insectivore a search-image map that drifts
+toward what it has caught, and you have a two-sided arms race in a system where nothing
+dies.</li>
+<li><b>A three-level colour conduit.</b> Flower colour → insect colour → predator search
+image. Change the flowers and the birds' preference follows, two links downstream, over
+island-days.</li>
+</ol>
+
+<div class="note">
+<b>The peaceful contract holds</b>
+<p><code>applyPredation</code> never kills discretely — it lowers a float. An insectivore is
+an animal that makes clouds <i>thinner near it</i>, visible as a cloud that keeps its distance
+and stays drab. No corpse, no chase, no fear. The existing <code>Drives.fear</code> slot stays
+deferred; predation here is a pressure on populations, not an event in a life.</p>
+</div>
+
+<p><b>The chassis is already there.</b> <code>life/birds.ts</code> has flocks that fly,
+settle, perch and flush. Give a flock a sensor map and a feeding radius and the system is
+done.</p>
+
+<p><i>And the symmetric move:</i> a <b>frugivore/nectarivore critter</b> whose palate reads
+the flower's appearance map rather than the plant's genome — so pollinator-plant and
+disperser-plant relationships stop living in separate alphabets.</p>
+</section>
+
+<!-- ══════════════════════════════════════════ A5 -->
+<section id="a5">
+<h2 class="b">6 · The Heart<small>a source term for the world</small></h2>
+
+<p>The species list is closed. Islands can split lineages twelve times and then they are
+done, forever. There is nothing in Wonder that <i>makes new kinds of thing</i>, and that is
+the deepest reason a long session eventually settles.</p>
+
+<div class="svgfig">
+<svg viewBox="0 0 880 260" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="11">
+  <defs><marker id="a4m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L8,3 L0,6" fill="none" stroke="#e3c07b" stroke-width="1.2"/></marker>
+    <marker id="a5m" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto">
+    <path d="M0,0 L8,3 L0,6" fill="none" stroke="#7fe0c4" stroke-width="1.2"/></marker></defs>
+
+  <rect x="12" y="92" width="140" height="76" rx="4" fill="#1a1508" stroke="#5a4a1e"/>
+  <text x="28" y="118" fill="#e3c07b">THE HEART</text>
+  <text x="28" y="136" fill="#8ba0b6">~1 island in six</text>
+  <text x="28" y="152" fill="#8ba0b6">emits ~1 / island-day</text>
+
+  <path d="M154 130 L206 130" stroke="#e3c07b" stroke-width="1.4" marker-end="url(#a4m)" fill="none"/>
+
+  <rect x="208" y="88" width="176" height="84" rx="4" fill="#131a24" stroke="#2a3644"/>
+  <text x="224" y="112" fill="#d7e2ee">MOTE OF THE UNFORMED</text>
+  <text x="224" y="130" fill="#8ba0b6">genome = one random idmap</text>
+  <text x="224" y="146" fill="#8ba0b6">no form · no habitat · no role</text>
+  <text x="224" y="162" fill="#e07a52">economy set to LOSING</text>
+
+  <path d="M386 130 L430 130" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a5m)" fill="none"/>
+  <text x="380" y="120" fill="#7fe0c4">samples</text>
+
+  <rect x="432" y="18" width="200" height="34" rx="3" fill="#101c17" stroke="#1e5a49"/>
+  <text x="446" y="39" fill="#7fe0c4">soil map</text><text x="620" y="39" fill="#5c7086" text-anchor="end">→ a PLANT</text>
+  <rect x="432" y="60" width="200" height="34" rx="3" fill="#101c17" stroke="#1e5a49"/>
+  <text x="446" y="81" fill="#7fe0c4">flower appearance</text><text x="620" y="81" fill="#5c7086" text-anchor="end">→ a SWARM</text>
+  <rect x="432" y="102" width="200" height="34" rx="3" fill="#101c17" stroke="#1e5a49"/>
+  <text x="446" y="123" fill="#7fe0c4">scent</text><text x="620" y="123" fill="#5c7086" text-anchor="end">→ a CRITTER KIND</text>
+  <rect x="432" y="144" width="200" height="34" rx="3" fill="#101c17" stroke="#1e5a49"/>
+  <text x="446" y="165" fill="#7fe0c4">warning</text><text x="620" y="165" fill="#5c7086" text-anchor="end">→ a MIMIC</text>
+  <rect x="432" y="186" width="200" height="34" rx="3" fill="#131a24" stroke="#2a3644"/>
+  <text x="446" y="207" fill="#5c7086">nothing, in time</text><text x="620" y="207" fill="#5c7086" text-anchor="end">→ FADES</text>
+
+  <path d="M634 35 L676 35 L676 100" stroke="#7fe0c4" stroke-width="1.2" fill="none"/>
+  <path d="M634 77 L676 77" stroke="#7fe0c4" stroke-width="1.2" fill="none"/>
+  <path d="M634 119 L676 119" stroke="#7fe0c4" stroke-width="1.2" fill="none"/>
+  <path d="M634 161 L676 161 L676 110" stroke="#7fe0c4" stroke-width="1.2" fill="none"/>
+  <path d="M676 110 L718 110" stroke="#7fe0c4" stroke-width="1.4" marker-end="url(#a5m)" fill="none"/>
+  <rect x="720" y="86" width="150" height="52" rx="4" fill="#141a12" stroke="#5a4a1e"/>
+  <text x="736" y="110" fill="#e3c07b">COMMITS</text>
+  <text x="736" y="128" fill="#8ba0b6">a new named kind</text>
+
+  <path d="M634 203 Q700 240 400 240 Q60 240 60 172" stroke="#5c7086" stroke-width="1.1"
+        stroke-dasharray="4 4" fill="none" marker-end="url(#a4m)"/>
+  <text x="400" y="255" fill="#5c7086" text-anchor="middle">a failed Mote RETURNS — and the Heart remembers, so its future output drifts toward everything that came back</text>
+</svg>
+</div>
+
+<h3>What it is</h3>
+<p>A rare worldgen feature alongside <code>Crater</code> and <code>Pocket</code>: a cave mouth
+in the rock, faintly lit, breathing on a slow cycle. Perhaps one island in six. Visible from
+a distance at night.</p>
+
+<h3>What it emits</h3>
+<p>Every island-day or so, a <b>Mote of the Unformed</b>: an entity whose <i>only</i> genome
+is a random idmap, with no form, habitat, role or species, and an economy deliberately set to
+<b>losing</b> — high upkeep, near-zero income. A Mote is dying from the moment it appears. It
+has a few island-hours to find something to be.</p>
+
+<h3>How it becomes something</h3>
+<p>The Mote wanders and <i>samples</i>. Each tick it scores its map against every channel in
+reach. Reward accumulates per channel. When one channel's accumulated reward crosses a
+threshold, the Mote <b>commits</b> — see the diagram. <b>Commitment is speciation from
+nothing.</b> The new kind enters the ordinary species list, gets a name in the codex voice,
+and lives under all the ordinary caps.</p>
+
+<div class="key">
+<b>Why this is the surprise engine</b>
+<p>Because <i>what a Mote becomes is determined by what the island had room for</i>. Release
+one into a saturated meadow and it starves and returns. Release one into a habitat with an
+unworked flower, and it becomes the pollinator that flower never had. Release one on burnt
+ground and it becomes a fire-follower. <b>You cannot predict the output, and the output is
+always an answer to a question the island was actually asking.</b> That is a fundamentally
+different kind of surprise from "the dice rolled a purple one."</p>
+</div>
+
+<h3>The player verb it creates</h3>
+<p>Motes can be carried. Pick one up in the pouch and it becomes the most interesting item in
+the game, because <b>where you release it decides what it is</b>. Release it in the marsh and
+it becomes a reed; carry it to the shore and it becomes something that lives in the shallows.
+A player who understands the system can <i>aim</i> the world's creativity without ever setting
+a value — exactly the "tilt the dice, never set them" line the ecosystem vision drew for the
+bench, arrived at from the other direction.</p>
+
+<h3>Balance and the peaceful pillar</h3>
+<ul>
+<li>Emission is bounded and slow; commitment requires a genuine reward threshold, so most
+Motes fade.</li>
+<li><b>Make the emission rate read the island's unfilled niche volume</b>: a rich island's
+Heart is quiet, a barren one's is prolific. The source term self-balances, and a flat seed
+(like seed 42) is no longer a dud — it is a place where the Heart is <i>busy</i>.</li>
+<li>Fading is not death: a Mote that fails <b>returns to the Heart</b>, and the Heart
+<i>remembers</i>. Its future output drifts toward everything that has ever come back to it.
+An island's Heart becomes a slowly-accumulating memory of its own failures — and ghost
+lineages can resurface much later.</li>
+</ul>
+</section>
+
+<!-- ══════════════════════════════════════════ A6 -->
+<section id="a6">
+<h2 class="b">7 · What drives adaptation, besides reproduction<small>a taxonomy, all implementable against current code</small></h2>
+
+<table class="wrapk">
+<thead><tr><th>Driver</th><th>Mechanism</th><th>Current status</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td class="k">Differential survival</td><td class="d">selective crowding thin (<a href="#a2">§3.1</a>)</td><td class="d">absent — mortality is uniform-random</td><td class="n">~15 lines</td></tr>
+<tr><td class="k">Resource scarcity</td><td class="d">shade / light per tile (<a href="#a2">§3.3</a>)</td><td class="d">absent — only tile slots are scarce</td><td class="n">1 float / tile</td></tr>
+<tr><td class="k">Escape</td><td class="d">predation with a search image (<a href="#a4">§5</a>); blight that spreads along likeness</td><td class="d">absent; blight specced, unbuilt</td><td class="n">1 role, 1 map</td></tr>
+<tr><td class="k">Access to a service</td><td class="d">pollinator <i>choice</i> — clouds score blooms by match × nectar × display, so flowers compete for attention</td><td class="d">absent — <code>chooseFeedPlant</code> picks nearest / fullest</td><td class="n">~20 lines</td></tr>
+<tr><td class="k">Dispersal reach</td><td class="d"><code>spread</code> → throw distance with a per-seed cost (<a href="#a2">§3.2</a>)</td><td class="d">absent — <code>reseedRadius</code> is a global constant</td><td class="n">~10 lines</td></tr>
+<tr><td class="k">Time / phase</td><td class="d">seasonality; carrying capacity that <i>pulses</i>; night- vs day-blooming as a real temporal niche</td><td class="d">absent — all four cycles are cosmetic or flat multipliers</td><td class="n">moderate</td></tr>
+<tr><td class="k">Kin structure</td><td class="d">inbreeding depression: reproduce worse when local kin are near-identical</td><td class="d">absent — <code>driftDistance</code> exists and is used only for speciation</td><td class="n">~10 lines</td></tr>
+<tr><td class="k">Mutualism debt</td><td class="d">a plant visited recently reproduces better; one long unvisited decays</td><td class="d">absent — visits are pure bonus, never necessary</td><td class="n">~10 lines</td></tr>
+<tr><td class="k">Symbiosis</td><td class="d">two lineages that co-occur and match long enough fuse (<a href="#a7">§8</a>)</td><td class="d">absent</td><td class="n">moderate</td></tr>
+</tbody>
+</table>
+
+<div class="key">
+<b>The cheapest real win on this list is row six</b>
+<p>The prior-art doc's strongest finding is unused: <b>making carrying capacity vary
+periodically <i>enlarges</i> the zone in which species coexist</b> (Swailem &amp; Täuber,
+Phys. Rev. E 107, 2023). Wonder has day/night, tide, rain, bloom-day and aurora — five
+periodic signals <a href="#clock">(Part I §2)</a> — and not one of them touches carrying
+capacity. Wiring rain or season to per-tile nutrient (or even just to <code>maxPlants</code>)
+is a one-line change with a theoretically-grounded stabilizing effect.</p>
+</div>
+
+<p><b>And the rule that keeps all of it peaceful:</b> every driver above expresses as a
+<i>change in rate</i>, never as an event in an individual's life. Nothing starves, nothing is
+hunted, nothing suffers. Populations rise and fall.</p>
+</section>
+
+<!-- ══════════════════════════════════════════ A7 -->
+<section id="a7">
+<h2 class="b">8 · Weird things to put in the world<small>the surprise budget, by delight per unit of work</small></h2>
+
+<div class="cols">
+<div class="card g">
+  <h5>Wind</h5>
+  <p>One vector per island, rolled at worldgen. Biases the tile choice in
+  <code>propagate</code> and <code>pollinateSpread</code>. Windward and leeward floras
+  diverge; seeds pile against ridges; the island develops an <i>orientation</i>. Perhaps ten
+  lines, and it makes every map read differently.</p>
+</div>
+<div class="card g">
+  <h5>The seed bank</h5>
+  <p>A dying plant leaves a dormant substrate carrying its full genome. Disturbance — fire,
+  flood, a player's hoe — germinates it. Nothing is ever truly lost; the island remembers its
+  dead. Tilling old ground and finding a lineage that vanished twenty island-days ago is one
+  of the best possible moments this game could have.</p>
+</div>
+<div class="card g">
+  <h5>Fire</h5>
+  <p>The missing disturbance, and the classic diversity-maintenance mechanism. Lightning on a
+  storm night, on a dry island, burns a swath. It <i>enriches</i> the soil map rather than
+  sterilizing it. High-glow forms burn hot (glow reads as volatile oils — a real and lovely
+  reason the psychedelic lineages are dangerous to stand in). Fire-followers germinate only
+  on burnt soil. Peaceful, because it is weather.</p>
+</div>
+<div class="card g">
+  <h5>Symbiogenesis</h5>
+  <p>Two species that co-occur densely and match hues for long enough <b>fuse</b> into a
+  composite kind inheriting <i>both</i> parents' habitats. Mechanically <code>cross()</code>
+  across a species boundary plus a habitat union. Produces genuinely astonishing organisms —
+  a moss-coral that lives on rock <i>and</i> in the shallows — and it is real biology.
+  Reserve it heavily: once or twice per long-lived island.</p>
+</div>
+<div class="card g">
+  <h5>Epiphytes — habitat as a <i>form</i></h5>
+  <p>Let a species' habitat be "on a Tree" rather than "on Forest floor". This doubles the
+  niche space with no new tile types, and it finally gives trees an ecological role. Vines and
+  mosses want this badly; they already read as things that should grow on something.</p>
+</div>
+<div class="card g">
+  <h5>The midden</h5>
+  <p>Critter dens accumulate substrate over island-days and become nutrient hotspots with
+  their own distinctive flora. Dens stop being a coordinate and become a place you can find by
+  looking at the plants. The vision doc's "little factories" arrives without a crafting
+  system.</p>
+</div>
+<div class="card g">
+  <h5>The intertidal guild</h5>
+  <p>Tide already exists and is cosmetic. Plants that can only reproduce at low tide, or only
+  germinate on ground the tide has just uncovered, create a temporal niche and a reason to be
+  on the shore at a particular hour.</p>
+</div>
+<div class="card g">
+  <h5>Ghost pollinators</h5>
+  <p>When a cloud's host species goes extinct it keeps its sensor map — a specialist with
+  nothing left to specialize on. It either finds a mimic, or fades. Watching a
+  perfectly-adapted thing become obsolete is a kind of story this game has no other way to
+  tell.</p>
+</div>
+<div class="card g">
+  <h5>Chorus and sensory exploitation</h5>
+  <p>Insect clouds converge on a shared signal channel. A flower whose appearance map drifts
+  toward that signal gets visits it never earned. Deception without menace — the "mutualism's
+  white lie" the Scavenger's Reign study already sketched.</p>
+</div>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ A8 -->
+<section id="a8">
+<h2 class="b">9 · How they should compete<small>three channels, and one rule</small></h2>
+
+<p>The rule that makes all three safe is the same: <b>competition lowers a rate; it never
+triggers an event.</b></p>
+
+<table>
+<thead><tr><th class="n">#</th><th>Channel</th><th>What it produces</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td class="k">Space</td><td class="d">Exists already, but is adjudicated by a coin flip. Make the thin selective (<a href="#a2">§3.1</a>). Nothing new is needed; the existing brake simply acquires an opinion.</td></tr>
+<tr><td class="n">2</td><td class="k">Light</td><td class="d">Vertical, one float per tile (<a href="#a2">§3.3</a>). The axis that produces <b>structure</b>: layers, understories, gaps, succession — and the one that makes the most currently-inert forms suddenly make sense.</td></tr>
+<tr><td class="n">3</td><td class="k">Attention</td><td class="d">Pollinator choice (<a href="#a6">§7</a>). The axis that produces <b>display</b>: colour, petal count, scent. The only competition that gets more beautiful the fiercer it gets — the most on-brand of the three.</td></tr>
+</tbody>
+</table>
+
+<p>What to explicitly <b>not</b> add: interference competition (plants attacking plants),
+territoriality, exclusion. Wonder's whole thesis is that a peaceful world can still be
+dynamic. Everything above achieves dynamism through differential <i>rates</i>, which is both
+gentler and — per the prior-art doc — closer to how real ecologies actually hold together.</p>
+</section>
+
+<!-- ══════════════════════════════════════════ A9 -->
+<section id="a9">
+<h2 class="b">10 · Instrumentation<small>you cannot tune what you cannot see</small></h2>
+
+<p>The World-Lab was built to make food chains legible and currently plots only population
+counts. Four readouts, in order of value:</p>
+
+<ol>
+<li><b>Trait distributions over time.</b> A hue histogram per species, sampled on the census
+cadence. The single most revealing chart the game could have — and the sampling
+infrastructure already exists (<code>CensusLog.sample</code> takes a map; it just takes the
+wrong map). Right now genome drift, the thing the entire flora layer is <i>about</i>, is
+invisible in aggregate. <a href="#rates">(Part I §10)</a></li>
+<li><b>A fitness readout</b>, the moment a fitness function exists: per-species mean fitness,
+and a trait-vs-fitness scatter. This is how you'd know whether <a href="#a2">§3.1</a> actually
+did anything.</li>
+<li><b>The lineage tree.</b> <code>PlantSpecies.parent</code> and <code>.bornTick</code> are
+recorded and never drawn. A dendrogram of an island's ✧ daughters is three hours of work and
+it is the island's autobiography.</li>
+<li><b>A niche-space map.</b> Plot every species in (habitat × hue × height) and show the
+<i>empty</i> regions. Both a design instrument and, later, the Heart's targeting display — it
+shows you what the island is about to invent.</li>
+</ol>
+</section>
+
+<!-- ══════════════════════════════════════════ A10 -->
+<section id="a10">
+<h2 class="b">11 · Recommended build order<small>each phase independently shippable</small></h2>
+
+<div class="phase">
+  <h5>Phase 0 — make the existing genome matter</h5>
+  <p class="cap">Small, and where I'd start.</p>
+  <ul>
+    <li>selective crowding thin (<a href="#a2">§3.1</a>)</li>
+    <li><code>height</code> → shade, one float per tile (<a href="#a2">§3.3</a>)</li>
+    <li><code>spread</code> → dispersal distance with a take-rate cost (<a href="#a2">§3.2</a>)</li>
+    <li>learned palate (<a href="#a2">§3.4</a>)</li>
+    <li>trait-distribution charts (<a href="#a9">§10.1</a>) — so you can <i>see</i> whether any of it worked</li>
+  </ul>
+  <p>Four small mechanics and one chart. At the end, Wonder has evolution instead of drift,
+  two genome traits stop being decoration, and the first co-adaptive loop closes. Nothing new
+  is on screen.</p>
+</div>
+
+<div class="phase">
+  <h5>Phase 1 — the soil map</h5>
+  <p class="cap">Generalize <code>IdMap</code> to a second channel (<a href="#a3">§4</a>).</p>
+  <p>Tiles accumulate a signature from what dies and is dropped there; germination reads it.
+  This is the substrate that fire, the seed bank, succession and trait-conduits all stand on.</p>
+</div>
+
+<div class="phase">
+  <h5>Phase 2 — the insectivore</h5>
+  <p class="cap">One role, one search-image map, birds as the chassis (<a href="#a4">§5</a>).</p>
+  <p>Predation becomes local, sourced and adaptive; camouflage becomes a real game with two
+  players; local divergence appears without any new species machinery.</p>
+</div>
+
+<div class="phase">
+  <h5>Phase 3 — the Heart</h5>
+  <p class="cap">The source term (<a href="#a5">§6</a>).</p>
+  <p>Open-ended origination, and the best player verb in the design space.</p>
+</div>
+
+<div class="phase">
+  <h5>Phase 4 — disturbance and strangeness</h5>
+  <p class="cap">Fire, blight (already specced), symbiogenesis, epiphytes, wind, the midden, the intertidal guild.</p>
+  <p>By this point every one of them lands into a system with selection, niche and origination
+  already running, so each addition <i>compounds</i> rather than sitting beside the others.</p>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════ A11 -->
+<section id="a11">
+<h2 class="b">12 · Open questions<small>for Blaine</small></h2>
+
+<ol>
+<li><b>Fauna: learned palate, or real reproduction?</b> <a href="#a2">§3.4</a> gets
+co-adaptation without birth or death, and preserves the named-friend feel of critters. A true
+birth/death cycle would be more powerful and would cost the trust and companion systems their
+stability. My strong lean is learned palate — but it's your call whether critters should ever
+be <i>populations</i>.</li>
+
+<li><b>How many idmap channels before it stops being legible?</b> Three (appearance, scent,
+soil) feels like the ceiling for a player meant to read the system by watching. Warning and
+song are wonderful and might be one layer too many.</li>
+
+<li><b>The Heart: one per island, or one per world?</b> A single Heart shared across all
+islands — its memory accumulating across every island you've ever visited — is a much
+stranger and possibly better idea than one per island.</li>
+
+<li><b>Does the Heart emit into the player's pouch, or only into the world?</b> The
+carry-and-release verb (<a href="#a5">§6</a>) is the most player-facing idea in this document,
+and the one most likely to break the "the world doesn't need you" pillar.</li>
+
+<li><b>Fire.</b> Is a burn compatible with peaceful, or does watching a stand of plants you
+loved go up cross the line? My read: it's compatible, and it's the most important missing
+mechanic. But it's the one I'd most want you to veto if it isn't.</li>
+</ol>
+</section>
+
+<footer>
+  <div>Wonder · ecology report · stamped 2026-07-24 · commit 300ce6a</div>
+  <div style="margin-top:6px">Part I was read from source. Part II argues from Part I. Where a
+  measured figure is quoted (web density, chain counts, seed tiers) it comes from
+  <code>docs/superpowers/research/food-web-and-byproducts.md</code>, 14-seed and 2,500-seed
+  harness runs, 2026-07-19. Part II also has a markdown copy at
+  <code>docs/superpowers/specs/2026-07-24-ecology-expansion-audit.md</code>.</div>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var tabs = [].slice.call(document.querySelectorAll(".parts a"));
+  var lists = [].slice.call(document.querySelectorAll(".secs"));
+  function show(part) {
+    tabs.forEach(function (t) { t.classList.toggle("on", t.dataset.part === part); });
+    lists.forEach(function (l) { l.classList.toggle("on", l.dataset.secs === part); });
+  }
+  // clicking a part tab switches the section list immediately
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () { show(t.dataset.part); });
+  });
+  // scrolling past the Part II marker switches it too
+  var mark = document.getElementById("part2");
+  function spy() {
+    var top = mark.getBoundingClientRect().top;
+    show(top <= 160 ? "2" : "1");
+  }
+  window.addEventListener("scroll", spy, { passive: true });
+  spy();
+})();
+</script>
+</body>
+</html>
