@@ -1,7 +1,7 @@
 # Chart time windows + tick labels — design
 
 **Date:** 2026-07-24  
-**Status:** approved  
+**Status:** approved (shipped); retention cadence superseded by `2026-07-24-honest-time-design.md`  
 **Surfaces:** Main island ledger (`G`); World-Lab ledger (same `#charts` panel)  
 **Out of scope:** Wall-clock axis, drag-zoom, multi-tier downsample, rewriting chart art
 
