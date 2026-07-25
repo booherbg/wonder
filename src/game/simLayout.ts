@@ -1,16 +1,9 @@
 // The bench's frame: where the construct is allowed to live.
 //
-// The old arrangement had no frame at all. Every panel was `position: fixed`
-// and the canvas was always the full viewport, so chrome could only ever sit
-// ON TOP of the construct — and the bottom cluster, being bottom-anchored and
-// column-reverse with a max-height of nearly the whole viewport, grew UPWARD
-// across it as trays opened. Half the screen went to controls covering the
-// thing the controls were operating on.
-//
-// The fix is to reserve space by MEASUREMENT rather than by guesswork: the
-// chrome reports how much room it is taking on each edge, and the canvas gets
-// exactly what is left. Panels can then grow freely — the construct shrinks to
-// accommodate them instead of disappearing under them.
+// `canvasBoxFor` can compute reserved boxes when callers supply chrome insets
+// (pure arithmetic; tested without a DOM). World-Lab Overlay HUD uses zero
+// insets so chrome overlays a full-bleed construct — panels sit on top of the
+// world rather than shrinking it.
 //
 // Pure: `canvasBoxFor` does the arithmetic and is tested without a DOM.
 

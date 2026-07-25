@@ -1,13 +1,19 @@
 import { expect, test } from "vitest";
 import { GUTTER, MIN_CANVAS, NARROW, canvasBoxFor } from "../src/game/simLayout";
 
-// The bench's chrome used to cover the construct: the canvas was always the
-// full viewport, so every panel sat on top of the world it was operating on.
-// canvasBoxFor reserves the measured chrome and hands the construct the rest.
+// canvasBoxFor can compute reserved boxes when insets are supplied.
+// World-Lab Overlay HUD uses zero insets so chrome overlays a full-bleed construct.
 
-test("with no chrome the construct gets the whole viewport", () => {
+test("overlay policy: with zero insets the construct stays full-bleed even if chrome exists elsewhere", () => {
+  // World-Lab will pass zero insets always; chrome may be tall but must not be measured in.
   const b = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 0, left: 0 });
   expect(b).toEqual({ left: 0, top: 0, width: 1200, height: 800 });
+});
+
+test("canvasBoxFor still shrinks when insets are supplied (helper remains pure)", () => {
+  const short = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 80, left: 0 });
+  const tall = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 320, left: 0 });
+  expect(tall.height).toBe(short.height - 240);
 });
 
 test("each occupied edge is reserved, plus a gutter", () => {
@@ -31,13 +37,6 @@ test("collapsing a rail gives the width straight back to the construct", () => {
   const collapsed = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 0, left: 280 });
   expect(collapsed.width).toBeGreaterThan(open.width);
   expect(collapsed.width - open.width).toBe(300 + GUTTER);
-});
-
-test("a growing bottom tray shrinks the construct instead of covering it", () => {
-  const short = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 80, left: 0 });
-  const tall = canvasBoxFor(1200, 800, { top: 0, right: 0, bottom: 320, left: 0 });
-  expect(tall.height).toBe(short.height - 240);
-  expect(tall.height).toBeGreaterThan(0);
 });
 
 test("on a window too small to honour the reservation the construct keeps a floor", () => {

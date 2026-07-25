@@ -78,7 +78,7 @@ import {
   FIT_MARGIN,
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
-import { NARROW, canvasBoxFor, edgeInset } from "./simLayout";
+import { NARROW, canvasBoxFor } from "./simLayout";
 import { layoutWeb, webExtent } from "./simWebGraph";
 import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
@@ -2525,31 +2525,17 @@ export function startWorldLab(): void {
       cameraPanning = false;
     }
   });
-  // ── the frame: reserve the chrome's space, give the construct the rest ────
-  // The canvas used to be the full viewport, so every panel sat ON TOP of the
-  // construct, and the bottom cluster grew upward across it as trays opened.
-  // Now the chrome is MEASURED each layout pass and the canvas is positioned
-  // into what's left, so a growing tray shrinks the construct rather than
-  // covering it — and collapsing one hands the space straight back.
+  // ── full-bleed construct: chrome overlays; zero insets always ────────────
+  // World-Lab Overlay HUD passes zero chrome insets so the canvas fills the
+  // viewport. Panels sit on top of the world rather than shrinking it.
   let lastBoxW = 0;
   let lastBoxH = 0;
   function relayout(): void {
-    const narrow = window.innerWidth < NARROW;
-    // Below 900px the side rails become overlay drawers (spec §3.1 / §6): they
-    // may cover the construct rather than starve it of every reserved pixel.
-    const leftInset = narrow ? 0 : edgeInset(document.getElementById("lab-left-stack"), "left");
-    const rightInset = narrow
-      ? 0
-      : Math.max(
-          edgeInset(document.getElementById("lab-right-stack"), "right"),
-          edgeInset(document.getElementById("lab-dock"), "right"),
-          edgeInset(document.getElementById("lab-chip-stack"), "right"),
-        );
     const box = canvasBoxFor(window.innerWidth, window.innerHeight, {
-      top: edgeInset(document.getElementById("lab-eyebrow"), "top"),
-      left: leftInset,
-      right: rightInset,
-      bottom: edgeInset(document.getElementById("lab-bottom-stack"), "bottom"),
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     });
     canvas.style.position = "fixed";
     canvas.style.left = `${box.left}px`;
@@ -2561,22 +2547,6 @@ export function startWorldLab(): void {
     lastBoxH = box.height;
     renderer.resize(box.width, box.height);
     fitCameraToConstruct();
-  }
-  // Panels change height as trays open and content loads; observe them rather
-  // than guessing at fixed offsets (the guess is what broke before).
-  if (typeof ResizeObserver !== "undefined") {
-    const ro = new ResizeObserver(() => relayout());
-    for (const id of [
-      "lab-eyebrow",
-      "lab-left-stack",
-      "lab-right-stack",
-      "lab-bottom-stack",
-      "lab-dock",
-      "lab-chip-stack",
-    ]) {
-      const el = document.getElementById(id);
-      if (el) ro.observe(el);
-    }
   }
   window.addEventListener("resize", relayout);
   relayout();
