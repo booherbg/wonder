@@ -79,6 +79,7 @@ import {
 } from "./simCamera";
 import { Candidate, PickKind, RADIUS_FOR, cycleIndex, rankCandidates } from "./simSelect";
 import { canvasBoxFor, edgeInset } from "./simLayout";
+import { layoutWeb, webExtent } from "./simWebGraph";
 import { workingReadings } from "../render/working";
 import { energyBudget, nectarEconomy, spreadEtaWord, spreadOdds } from "./simTelemetry";
 import { metabolicEfficiency } from "../life/idmap";
@@ -421,6 +422,18 @@ interface CensusWebView {
   species: { name: string; spark: string; count: number }[];
   swarms: { name: string; matchSpark: string; match: number; energySpark: string; energy: number }[];
   chains: { chains: number; closable: number; redundancy: number };
+  /** Food-web links for the graph / table (source → disperser → feeder). */
+  links: {
+    sourceId: number;
+    sourceName: string;
+    sourceHue: number;
+    disperserId: number;
+    disperserName: string;
+    feederId: number;
+    feederName: string;
+    feederHue: number;
+    closes: boolean;
+  }[];
   richness: string; // richnessWord(score) — flat/sparse/living/rich/lush/legendary
   richnessScore: number; // the same numeric score the word names
 }
@@ -479,11 +492,23 @@ function censusWebView(
   const livePlants = plantSpecies.filter((sp) => (speciesCounts.get(sp.id) ?? 0) > 0);
   const liveCritters = critterSpecies.filter((sp) => critterCountOf(sp.id) > 0);
   const r = richnessMeter(livePlants, liveCritters);
+  const links = chainLinks(livePlants, liveCritters).map((l) => ({
+    sourceId: l.source.id,
+    sourceName: l.source.name,
+    sourceHue: l.source.archetype.hue,
+    disperserId: l.disperser.id,
+    disperserName: l.disperser.name,
+    feederId: l.feeder.id,
+    feederName: l.feeder.name,
+    feederHue: l.feeder.archetype.hue,
+    closes: l.closes,
+  }));
   return {
     summary: census.summary(),
     species,
     swarms: swarmSeries,
     chains: { chains: r.chains, closable: r.closable, redundancy: r.redundancy },
+    links,
     richness: r.word,
     richnessScore: r.score,
   };
@@ -2029,6 +2054,61 @@ export function startWorldLab(): void {
       refreshInspect();
     } else if (ui) ui.flashNote("no bloom in range");
   };
+  // Web-graph node click: inspect the nearest live instance of that species
+  // (camera centre as the "near" anchor — same idea as a world pick).
+  ui.onSelectWebNode = (key) => {
+    const m = /^(plant|critter):(\d+)$/.exec(key);
+    if (!m) return;
+    const kind = m[1] as "plant" | "critter";
+    const id = Number(m[2]);
+    const cx = camX + renderer.viewWidth / 2;
+    const cy = camY + renderer.viewHeight / 2;
+    if (kind === "plant") {
+      let best: Plant | null = null;
+      let bestD = Infinity;
+      for (const p of kernel.flora.all) {
+        if (p.species !== id) continue;
+        const d = (p.x - cx) ** 2 + (p.y - cy) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
+      if (!best) {
+        ui?.flashNote("no live instance");
+        return;
+      }
+      tool = "select";
+      selected = null;
+      inspected = { kind: "plant", ref: best };
+      ui?.setTool("select");
+      ui?.setSelected(null);
+      ui?.setHere(["plant"], 0);
+      refreshInspect();
+      return;
+    }
+    let bestC: Critter | null = null;
+    let bestCd = Infinity;
+    for (const c of kernel.critters) {
+      if (c.species !== id) continue;
+      const d = (c.x - cx) ** 2 + (c.y - cy) ** 2;
+      if (d < bestCd) {
+        bestCd = d;
+        bestC = c;
+      }
+    }
+    if (!bestC) {
+      ui?.flashNote("no live instance");
+      return;
+    }
+    tool = "select";
+    selected = null;
+    inspected = { kind: "critter", ref: bestC };
+    ui?.setTool("select");
+    ui?.setSelected(null);
+    ui?.setHere(["critter"], 0);
+    refreshInspect();
+  };
   ui.onToggleSwarmPin = () => {
     if (inspected?.kind !== "swarm") return;
     swarmLayer.setPinned(inspected.ref, !inspected.ref.pinned);
@@ -2837,6 +2917,8 @@ interface Chrome {
   onToggleSwarmPin: () => void;
   hideInspect: () => void;
   setCensusWeb: (v: CensusWebView) => void;
+  /** Select the nearest live instance of a web-graph node (`plant:3` / `critter:1`). */
+  onSelectWebNode: (key: string) => void;
   // the drawer (species roster): live status + delete/bring-back (Task 6)
   setDrawer: (rows: DrawerRow[]) => void;
   onDeleteEntry: (key: string) => void;
@@ -4128,6 +4210,81 @@ function buildChrome(initial: StarterKind): Chrome {
     panelWorkingBtn.style.cssText = btn(on);
   };
   panelWorkingBtn.onclick = () => chrome.onWorking();
+  chrome.onSelectWebNode = () => {};
+  let webViewMode: "graph" | "table" = "graph";
+
+  const foodWebGraphHtml = (v: CensusWebView): string => {
+    if (v.links.length === 0) {
+      return `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">no chains yet · roll a web or place a disperser</div>`;
+    }
+    const g = layoutWeb(v.links);
+    const { width, height } = webExtent(g);
+    const nodeSvg = g.nodes
+      .map((n) => {
+        const fill =
+          n.kind === "plant"
+            ? `hsl(${Math.round(n.hue * 360)} 55% 42%)`
+            : "rgba(127,224,196,0.22)";
+        const stroke = n.kind === "plant" ? "rgba(244,201,121,0.55)" : "rgba(127,224,196,0.55)";
+        const label = n.name.length > 14 ? n.name.slice(0, 13) + "…" : n.name;
+        return (
+          `<g class="web-node" data-key="${esc(n.key)}" style="cursor:pointer">` +
+          `<rect x="${n.x}" y="${n.y}" width="130" height="44" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="1"/>` +
+          `<text x="${n.x + 8}" y="${n.y + 18}" fill="var(--ink-bright)" font-size="11" font-family="var(--mono)">${esc(label.toLowerCase())}</text>` +
+          `<text x="${n.x + 8}" y="${n.y + 34}" fill="rgba(228,236,242,0.55)" font-size="9" font-family="var(--mono)">${n.kind}</text>` +
+          `</g>`
+        );
+      })
+      .join("");
+    const edgeSvg = g.edges
+      .map((e) => {
+        const a = g.nodes.find((n) => n.key === e.from)!;
+        const b = g.nodes.find((n) => n.key === e.to)!;
+        const x1 = a.x + 130;
+        const y1 = a.y + 22;
+        const x2 = b.x;
+        const y2 = b.y + 22;
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const mark = e.closes ? " ↻" : "";
+        return (
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(127,224,196,0.35)" stroke-width="1.5"/>` +
+          `<text x="${midX}" y="${midY - 4}" text-anchor="middle" fill="rgba(228,236,242,0.5)" font-size="9" font-family="var(--mono)">${esc(e.label)}${mark}</text>`
+        );
+      })
+      .join("");
+    return (
+      `<svg viewBox="0 0 ${width} ${height}" width="100%" style="display:block; max-height: 220px;" role="img" aria-label="food web graph">` +
+      edgeSvg +
+      nodeSvg +
+      `</svg>`
+    );
+  };
+
+  const foodWebTableHtml = (v: CensusWebView): string => {
+    if (v.links.length === 0) {
+      return `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 4px 0;">no chains yet</div>`;
+    }
+    const rows = v.links
+      .map(
+        (l) =>
+          `<tr style="border-top: 1px solid rgba(127,224,196,0.12);">` +
+          `<td style="padding: 4px 2px; color: var(--ink-bright);">${esc(l.sourceName.toLowerCase())}</td>` +
+          `<td style="padding: 4px 2px; color: rgba(228,236,242,0.7);">${esc(l.disperserName.toLowerCase())}</td>` +
+          `<td style="padding: 4px 2px; color: var(--ink-bright);">${esc(l.feederName.toLowerCase())}</td>` +
+          `<td style="padding: 4px 2px; text-align: right; color: ${l.closes ? "rgb(var(--lumen))" : "rgba(228,236,242,0.45)"};">${l.closes ? "↻" : "·"}</td>` +
+          `</tr>`,
+      )
+      .join("");
+    return (
+      `<table style="width:100%; border-collapse: collapse; font: 10.5px var(--mono);">` +
+      `<thead><tr style="color: rgba(228,236,242,0.45); text-transform: uppercase; letter-spacing: 0.06em; font-size: 9px;">` +
+      `<th style="text-align:left; padding: 2px;">source</th><th style="text-align:left; padding: 2px;">eats</th>` +
+      `<th style="text-align:left; padding: 2px;">wakes</th><th style="text-align:right; padding: 2px;">loop</th>` +
+      `</tr></thead><tbody>${rows}</tbody></table>`
+    );
+  };
+
   chrome.setCensusWeb = (v) => {
     const rows = v.species.length
       ? v.species.map((s) => speciesRow(s.name, s.spark, s.count)).join("")
@@ -4137,8 +4294,14 @@ function buildChrome(initial: StarterKind): Chrome {
           .map((s) => swarmRow(s.name, s.matchSpark, s.match, s.energySpark, s.energy))
           .join("")
       : `<div style="font: italic 12px var(--serif); color: rgba(228,236,242,0.45); padding: 2px 0;">no cloud history yet</div>`;
+    const graphOn = webViewMode === "graph";
+    const toggle =
+      `<div style="display:flex; gap:6px; margin: 8px 0 6px;">` +
+      `<button type="button" data-web-mode="graph" style="${btn(graphOn)} padding: 3px 8px; font-size: 10px;">graph</button>` +
+      `<button type="button" data-web-mode="table" style="${btn(!graphOn)} padding: 3px 8px; font-size: 10px;">table</button>` +
+      `</div>`;
     webContent.innerHTML =
-      `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">the living web</div>` +
+      `<div style="font-variant: small-caps; letter-spacing: 0.03em; font-size: 17px; color: var(--ink-bright);">web · chains</div>` +
       `<div style="font: 11px var(--mono); color: rgba(228,236,242,0.5); margin-top: -2px;">census + chains · live as you step</div>` +
       richnessMeterBlock(v) +
       title("census") +
@@ -4152,7 +4315,24 @@ function buildChrome(initial: StarterKind): Chrome {
       title("food web") +
       stat("chains", String(v.chains.chains)) +
       stat("closable", String(v.chains.closable), v.chains.closable > 0 ? "mint" : "ink") +
-      stat("redundancy", v.chains.redundancy.toFixed(1) + "×");
+      stat("redundancy", v.chains.redundancy.toFixed(1) + "×") +
+      toggle +
+      (graphOn ? foodWebGraphHtml(v) : foodWebTableHtml(v));
+
+    for (const b of webContent.querySelectorAll<HTMLButtonElement>("button[data-web-mode]")) {
+      b.onclick = () => {
+        const mode = b.dataset.webMode as "graph" | "table";
+        if (mode === webViewMode) return;
+        webViewMode = mode;
+        chrome.setCensusWeb(v);
+      };
+    }
+    for (const g of webContent.querySelectorAll<SVGGElement>("g.web-node")) {
+      g.onclick = () => {
+        const key = g.dataset.key;
+        if (key) chrome.onSelectWebNode(key);
+      };
+    }
   };
 
   // ── the evolution tray (Task 5, slice 4 — LAYOUT FIXED in review): the
