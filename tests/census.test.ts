@@ -53,11 +53,11 @@ test("summary counts live, arisen, and lost kinds", () => {
   expect(s.lost).toBe(1); // kind 2 is now at zero
 });
 
-test("default census cap holds ~100k ticks at the usual cadence", () => {
-  expect(CENSUS_DEFAULT_CAP).toBe(2500);
+test("default census cap holds ~500k ticks at the usual cadence", () => {
+  expect(CENSUS_DEFAULT_CAP).toBe(50000);
   const log = new CensusLog();
-  expect(log.sampleInterval).toBe(40);
-  expect(log.sampleCap).toBe(2500);
+  expect(log.sampleInterval).toBe(10);
+  expect(log.sampleCap).toBe(50000);
 });
 
 test("lastSampleTick tracks the newest accepted sample", () => {

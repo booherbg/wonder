@@ -19,10 +19,10 @@ test("ledger window tick spans match the buttons", () => {
 });
 
 test("samplesForWindow converts ticks to a right-aligned sample count", () => {
-  expect(samplesForWindow(5_000, 40, 2500)).toBe(125); // 5000/40
-  expect(samplesForWindow(10_000, 40, 100)).toBe(100); // clamps to available
-  expect(samplesForWindow(null, 40, 800)).toBe(800); // All
-  expect(samplesForWindow(5_000, 40, 0)).toBe(0);
+  expect(samplesForWindow(5_000, 10, 50000)).toBe(500); // 5000/10
+  expect(samplesForWindow(10_000, 10, 100)).toBe(100); // clamps to available
+  expect(samplesForWindow(null, 10, 800)).toBe(800); // All
+  expect(samplesForWindow(5_000, 10, 0)).toBe(0);
 });
 
 test("sliceRight keeps the newest samples", () => {
@@ -58,7 +58,7 @@ test("viewForWindow slices series to the recent tick span", async () => {
   const full = {
     name: "t",
     timeLabel: "tick 400",
-    sampleInterval: 40,
+    sampleInterval: 10,
     lastTick: 400,
     totals: { plants: 1, kinds: 1, arose: 0, lost: 0 },
     richness: { score: 0, word: "sparse" },
@@ -70,7 +70,7 @@ test("viewForWindow slices series to the recent tick span", async () => {
         name: "A",
         hue: 0.3,
         sat: 0.5,
-        counts: Array.from({ length: 20 }, (_, i) => i), // 20 samples = 800 ticks
+        counts: Array.from({ length: 20 }, (_, i) => i), // 20 samples = 200 ticks
         peak: 19,
       },
     ],
@@ -81,18 +81,18 @@ test("viewForWindow slices series to the recent tick span", async () => {
     pollinators: { swarms: 0, population: 0, species: 0 },
     swarmSeries: [],
   };
-  // 5k ticks → ceil(5000/40)=125 samples, but only 20 available → unchanged
+  // 5k ticks → ceil(5000/10)=500 samples, but only 20 available → unchanged
   expect(viewForWindow(full, "5k").series[0].counts.length).toBe(20);
-  // narrower: use a custom check via  samples — force by asking All vs a window that fits
+  // narrower: force by asking a window that fits
   const short = viewForWindow(
     {
       ...full,
-      series: [{ ...full.series[0], counts: Array.from({ length: 200 }, (_, i) => i), peak: 199 }],
-      totalCounts: Array.from({ length: 200 }, (_, i) => i),
+      series: [{ ...full.series[0], counts: Array.from({ length: 2000 }, (_, i) => i), peak: 1999 }],
+      totalCounts: Array.from({ length: 2000 }, (_, i) => i),
     },
     "5k",
   );
-  expect(short.series[0].counts.length).toBe(125);
-  expect(short.series[0].counts[0]).toBe(75); // 200-125
-  expect(short.series[0].counts.at(-1)).toBe(199);
+  expect(short.series[0].counts.length).toBe(500);
+  expect(short.series[0].counts[0]).toBe(1500); // 2000-500
+  expect(short.series[0].counts.at(-1)).toBe(1999);
 });

@@ -86,3 +86,36 @@ test("buildLabChartsView maps swarm match history into swarmSeries", () => {
   expect(view.swarmSeries[0].matches).toEqual([30, 45, 60]);
   expect(view.swarmSeries[0].color).toMatch(/^hsl\(/);
 });
+
+test("lab ledger richness is sparse when no plants are alive", () => {
+  const map = singleBiome(SEED, Tile.Grass, 24);
+  const plantSpecies = generatePlantSpecies(SEED);
+  const scratch = new Flora(map, plantSpecies, SEED, {}, { tick: 0, plants: [] });
+  const critterSpecies = generateCritterSpecies(SEED, map, scratch, plantSpecies);
+  const kernel = new SimKernel({ map, plantSpecies, critterSpecies, seed: SEED, censusInterval: 1 });
+  // Full species defs exist, but the construct is empty — must not read RICH.
+  const view = buildLabChartsView({
+    name: "empty",
+    tick: 0,
+    census: kernel.census,
+    plantSpecies,
+    critterSpecies,
+    map,
+    flora: kernel.flora,
+    swarmLayer: { swarms: [] },
+    swarmMatchHistory: new Map(),
+  });
+  expect(view.totals.plants).toBe(0);
+  expect(view.richness.score).toBe(0);
+  expect(["flat", "sparse"]).toContain(view.richness.word);
+});
+
+test("seriesForChartPath bounds long histories for SVG", async () => {
+  const { seriesForChartPath } = await import("../src/render/charts");
+  const long = Array.from({ length: 20000 }, (_, i) => i);
+  const drawn = seriesForChartPath(long, 522);
+  expect(drawn.length).toBeLessThanOrEqual(522);
+  expect(drawn.length).toBeGreaterThan(2);
+  expect(drawn[0]).toBeLessThan(100);
+  expect(drawn.at(-1)!).toBeGreaterThan(19800);
+});

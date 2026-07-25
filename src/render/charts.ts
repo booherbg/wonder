@@ -7,6 +7,7 @@ import {
   tickAtIndex,
   ticksForWindow,
 } from "./chartWindow";
+import { downsample } from "../life/census";
 
 // The island's ledger: the census and food-web data the sim already computes,
 // promoted from tiny debug sparklines into real charts — population over
@@ -48,6 +49,13 @@ export interface ChartsView {
 
 let chartWindow: ChartWindowId = "all";
 let lastChartsView: ChartsView | null = null;
+
+/** Decimate a series for SVG path drawing — keep storage full, draw ~plot-wide. */
+export function seriesForChartPath(counts: readonly number[], plotW: number): number[] {
+  if (counts.length <= 2) return [...counts];
+  const target = Math.max(2, Math.min(counts.length, Math.round(Math.max(2, plotW))));
+  return downsample(counts, target);
+}
 
 /** Slice a full ChartsView to the active time window (right-aligned to now). */
 export function viewForWindow(v: ChartsView, id: ChartWindowId): ChartsView {
@@ -136,7 +144,12 @@ function populationChart(v: ChartsView): string {
   const drawn = v.series.filter((s) => s.counts.length > 0);
   const samples = Math.max(2, ...drawn.map((s) => s.counts.length));
   const maxY = Math.max(1, ...drawn.map((s) => s.peak));
-  const x = (i: number) => padL + (samples <= 1 ? 0 : (i / (samples - 1)) * plotW);
+  const pathSeries = drawn.map((s) => ({
+    ...s,
+    draw: seriesForChartPath(s.counts, plotW),
+  }));
+  const drawSamples = Math.max(2, ...pathSeries.map((s) => s.draw.length));
+  const x = (i: number, n = drawSamples) => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
   const y = (c: number) => padT + plotH - Math.min(1, c / maxY) * plotH;
 
   const gridVals = [0, Math.round(maxY / 2), maxY];
@@ -154,10 +167,10 @@ function populationChart(v: ChartsView): string {
   // dodge the end-labels: greedily push down to a min gap, then lift the whole
   // stack back up if it spilled past the plot floor
   const minGap = 15;
-  const items = drawn
+  const items = pathSeries
     .map((s) => {
-      const li = s.counts.length - 1;
-      return { s, col: lineColor(s.hue, s.sat), endX: x(li), endY: y(s.counts[li]), labelY: 0 };
+      const li = s.draw.length - 1;
+      return { s, col: lineColor(s.hue, s.sat), endX: x(li), endY: y(s.draw[li]), labelY: 0 };
     })
     .sort((a, b) => a.endY - b.endY);
   let prev = padT - minGap;
@@ -170,7 +183,7 @@ function populationChart(v: ChartsView): string {
 
   const lines = items
     .map((it) => {
-      const p = `<path d="${path(it.s.counts)}" class="ch-line" style="stroke:${it.col}" fill="none"/>`;
+      const p = `<path d="${path(it.s.draw)}" class="ch-line" style="stroke:${it.col}" fill="none"/>`;
       const dot = `<circle cx="${it.endX.toFixed(1)}" cy="${it.endY.toFixed(1)}" r="3" fill="${it.col}"/>`;
       const conn =
         Math.abs(it.labelY - it.endY) > 1.5
@@ -248,7 +261,12 @@ function swarmChart(v: ChartsView): string {
   const padB = 24;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-  const x = (i: number) => padL + (samples <= 1 ? 0 : (i / (samples - 1)) * plotW);
+  const pathSeries = drawn.map((s) => ({
+    ...s,
+    draw: seriesForChartPath(s.matches, plotW),
+  }));
+  const drawSamples = Math.max(2, ...pathSeries.map((s) => s.draw.length));
+  const x = (i: number, n = drawSamples) => padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW);
   const y = (m: number) => padT + plotH - Math.min(1, m / 100) * plotH;
 
   const grid = [0, 50, 100]
@@ -262,7 +280,7 @@ function swarmChart(v: ChartsView): string {
 
   // right-aligned: a young cousin's short history starts where its life did
   const path = (matches: number[]) => {
-    const off = samples - matches.length;
+    const off = drawSamples - matches.length;
     return matches
       .map((m, i) => `${i === 0 ? "M" : "L"}${x(off + i).toFixed(1)} ${y(m).toFixed(1)}`)
       .join(" ");
@@ -270,10 +288,10 @@ function swarmChart(v: ChartsView): string {
 
   // dodge the end-labels apart, exactly as the census population chart does
   const minGap = 15;
-  const items = drawn
+  const items = pathSeries
     .map((s) => {
-      const last = s.matches[s.matches.length - 1];
-      return { s, endX: x(samples - 1), endY: y(last), labelY: 0 };
+      const last = s.draw[s.draw.length - 1];
+      return { s, endX: x(drawSamples - 1), endY: y(last), labelY: 0 };
     })
     .sort((a, b) => a.endY - b.endY);
   let prev = padT - minGap;
@@ -286,7 +304,7 @@ function swarmChart(v: ChartsView): string {
 
   const lines = items
     .map((it) => {
-      const l = `<path d="${path(it.s.matches)}" class="ch-line" style="stroke:${it.s.color}" fill="none"/>`;
+      const l = `<path d="${path(it.s.draw)}" class="ch-line" style="stroke:${it.s.color}" fill="none"/>`;
       const dot = `<circle cx="${it.endX.toFixed(1)}" cy="${it.endY.toFixed(1)}" r="3" fill="${it.s.color}"/>`;
       const conn =
         Math.abs(it.labelY - it.endY) > 1.5

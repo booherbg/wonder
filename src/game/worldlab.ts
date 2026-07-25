@@ -744,7 +744,7 @@ export function startWorldLab(): void {
   let cloneAmount = DEFAULT_TUNING.mutationAmount;
   let cloneRng = makeRng(0);
   const SWARM_SAMPLE_INTERVAL = 40;
-  const SWARM_HISTORY_CAP = 2500;
+  const SWARM_HISTORY_CAP = 50000;
   const swarmMatchHistory = new Map<number, number[]>();
   const swarmEnergyHistory = new Map<number, number[]>();
   let lastSwarmSample = -Infinity;
@@ -1554,6 +1554,7 @@ export function startWorldLab(): void {
         flora: kernel.flora,
         swarmLayer,
         swarmMatchHistory,
+        critterCountOf: (id) => kernel.critterCountOf(id),
       }),
     );
   }

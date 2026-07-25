@@ -47,6 +47,8 @@ export interface LabChartsInput {
   flora: Flora;
   swarmLayer: Pick<SwarmLayer, "swarms">;
   swarmMatchHistory: ReadonlyMap<number, readonly number[]>;
+  /** Live critter headcount by species id; omit → treat as zero (empty bench). */
+  critterCountOf?: (speciesId: number) => number;
 }
 
 function biomeMakeup(map: WorldMap): { name: string; share: number; color: string }[] {
@@ -73,7 +75,18 @@ function padLeft(counts: number[], len: number): number[] {
 }
 
 export function buildLabChartsView(input: LabChartsInput): ChartsView {
-  const { name, tick, census, plantSpecies, critterSpecies, map, flora, swarmLayer, swarmMatchHistory } = input;
+  const {
+    name,
+    tick,
+    census,
+    plantSpecies,
+    critterSpecies,
+    map,
+    flora,
+    swarmLayer,
+    swarmMatchHistory,
+    critterCountOf = () => 0,
+  } = input;
   const traces = census.list();
   const maxLen = Math.max(2, ...traces.map((t) => t.counts.length));
   const series: ChartSeries[] = traces
@@ -89,9 +102,12 @@ export function buildLabChartsView(input: LabChartsInput): ChartsView {
       peak: tr.peak,
     }));
   const sum = census.summary();
-  const stats = chainStats(plantSpecies, critterSpecies);
+  // Richness from living kinds only — latent defs on an empty construct read sparse.
+  const livePlants = plantSpecies.filter((sp) => (flora.speciesCounts.get(sp.id) ?? 0) > 0);
+  const liveCritters = critterSpecies.filter((sp) => critterCountOf(sp.id) > 0);
+  const stats = chainStats(livePlants, liveCritters);
   const score = Math.round(stats.chains + 2 * (stats.redundancy - 1));
-  const links = chainLinks(plantSpecies, critterSpecies)
+  const links = chainLinks(livePlants, liveCritters)
     .slice(0, 5)
     .map((l) => ({
       text: `${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}`,

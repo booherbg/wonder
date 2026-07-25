@@ -231,8 +231,8 @@ const census = new CensusLog();
 // but resemblance is the real drama: the ledger plots adaptation happening.
 // Reset with the island; sampled beside each swarm heartbeat. Bounded: at most
 // SWARM_COUNT_CAP clouds, each with a capped history.
-const SWARM_SAMPLE_INTERVAL = 40; // ticks between samples, matching CensusLog's default
-const SWARM_HISTORY_CAP = 2500; // ~100k ticks at interval 40 — matches census retention
+const SWARM_SAMPLE_INTERVAL = 10; // ticks between samples, matching CensusLog's default
+const SWARM_HISTORY_CAP = 50000; // ~500k ticks at interval 10 — matches census retention
 const swarmMatchHistory = new Map<number, number[]>(); // swarm id → match % over island-time
 let swarmSampleTick = 0;
 let lastSwarmSample = -Infinity;
@@ -490,10 +490,17 @@ function devTileComposition(): string {
   return devTileComp;
 }
 
-// this island's chain-potential, from the live species — the same measure the
-// seed-search uses to pick a viable island, read here so you can see it.
+// this island's chain-potential from living kinds — same measure as seed-search,
+// but never scores latent defs on an empty morning.
+function liveSpeciesForWeb(): { plants: typeof species; critters: typeof critterSpecies } {
+  const plants = species.filter((sp) => (flora.speciesCounts.get(sp.id) ?? 0) > 0);
+  const liveCritters = critterSpecies.filter((sp) => critters.some((c) => c.species === sp.id));
+  return { plants, critters: liveCritters };
+}
+
 function chainScoreNow(): number {
-  const s = chainStats(species, critterSpecies);
+  const { plants, critters } = liveSpeciesForWeb();
+  const s = chainStats(plants, critters);
   return s.chains + 2 * (s.redundancy - 1);
 }
 
@@ -501,8 +508,9 @@ function chainScoreNow(): number {
 // in a word and a number, how many links close into loops, how much backup
 // each source has, a few of the ACTUAL named chains, and what's live right now.
 function webLines(): string[] {
-  const stats = chainStats(species, critterSpecies);
-  const named = chainLinks(species, critterSpecies)
+  const { plants, critters } = liveSpeciesForWeb();
+  const stats = chainStats(plants, critters);
+  const named = chainLinks(plants, critters)
     .slice(0, 3)
     .map((l) => `    ${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}${l.closes ? " ↺" : ""}`);
   return [
@@ -570,9 +578,10 @@ function buildChartsView(): ChartsView {
       peak: tr.peak,
     }));
   const sum = census.summary();
-  const stats = chainStats(species, critterSpecies);
+  const { plants: livePlants, critters: liveCritters } = liveSpeciesForWeb();
+  const stats = chainStats(livePlants, liveCritters);
   const score = Math.round(stats.chains + 2 * (stats.redundancy - 1));
-  const links = chainLinks(species, critterSpecies)
+  const links = chainLinks(livePlants, liveCritters)
     .slice(0, 5)
     .map((l) => ({
       text: `${l.disperser.name} spreads ${l.source.name} → wakes ${l.feeder.name}`,
@@ -1001,6 +1010,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) {
     swarmLayer.tick(flora);
     sampleSwarms();
+    census.sample(flora.tick, flora.speciesCounts);
   }
   swarmLayer.takeEvents(); // moments from before the wanderer arrived went unwitnessed
   // has this island already pointed at its clouds? remembered across sittings

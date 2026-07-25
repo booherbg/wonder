@@ -11,9 +11,9 @@ export interface SpeciesTrace {
   peakTick: number;
 }
 
-/** Samples kept at the default 40-tick cadence ≈ 100k island ticks of history. */
-export const CENSUS_DEFAULT_CAP = 2500;
-export const CENSUS_DEFAULT_INTERVAL = 40;
+/** Samples kept at the default 10-tick cadence ≈ 500k island ticks of history. */
+export const CENSUS_DEFAULT_CAP = 50000;
+export const CENSUS_DEFAULT_INTERVAL = 10;
 
 const BARS = "▁▂▃▄▅▆▇█";
 
