@@ -91,8 +91,12 @@ Reuse existing `driftDistance` from `genome.ts` and speciation's `kinR` / cluste
 
 **What changes:**
 
-1. Maintain `shadeByTile: Float32Array` (or recompute lazily per tick): for each tile, `shade = Σ plant.genome.height` of plants on that tile.
-2. For a plant at `(tx, ty)`, compute `shadeAbove` from taller neighbors on the same tile (or canopy model: max height on tile minus own height — pick one model, document in code).
+1. Maintain `canopyByTile: Float32Array` — for each tile, `max(plant.genome.height)` of
+   the plants on it. `flora.byTile` already buckets plants by `ty * width + tx`, so this
+   is a fold over the existing bucket; keep it in step with `addPlant` / `removePlant`.
+2. For a plant at `(tx, ty)`: `shadeAbove = max(0, canopyByTile[key] - p.genome.height)`.
+   Canopy-max, tile-local — see Locked decisions §1 for why, and put that reasoning in
+   the code comment too.
 3. Repro multiplier in `simTick`: `repro *= shadeFactor(height, shadeAbove)` where short plants in deep shade reproduce slower and tall plants in open light reproduce faster. Clamp to `[0.2, 1.5]` or similar.
 
 **Update on:** plant add/remove/move (if moves exist), each `simTick` batch, or incrementally — prefer correctness + testability over micro-optimization.
@@ -154,7 +158,12 @@ Suggested constants: `PALATE_LEARN_RATE ≈ 0.02–0.05` per meal; clamp hue wid
 - [ ] Add optional `palateDrift?: { kindId, hueCenter, glowTaste }[]` to `SavedWorld` (or pack into existing extensibility pattern).
 - [ ] Apply on restore after species generation; default absent → worldgen palate.
 
-**Journal / codex (light):** If palate moved > ε from founder, journal inspect may note taste shift (optional polish, not blocking).
+**Codex surface (required, not optional):** the critter's inspect / codex card gains a
+`TASTE` row — two hue chips, `founder → now`, drawn from the worldgen palate and the
+current one. Keep the founder hue in the same save field as the drift so the pair
+survives a reload. No murmur or journal page in Phase 0 (Locked decisions §2).
+`src/render/inspect.ts` already renders the critter card and imports `Palate` via
+`bestOffering`, so this is a row, not a new surface.
 
 **Tests:**
 - [ ] 20 nibbles on red plants shift `hueCenter` toward red deterministically.
@@ -169,14 +178,23 @@ Suggested constants: `PALATE_LEARN_RATE ≈ 0.02–0.05` per meal; clamp hue wid
 
 **What changes:** The audit's #1 instrumentation gap: population charts show counts, not traits.
 
-1. **Sample:** On census cadence, for each live species with count > 0, record mean hue (or 8-bin hue histogram) from `flora.all` genomes. Store in ring buffer parallel to `CensusLog` — e.g. `TraitTrace { id, hueBins: number[] }` or `{ id, meanHue: number[] }`.
-2. **View model:** Extend `ChartsView` / `buildLabChartsView` with per-species hue series.
-3. **Render:** New chart section in lab ledger under population: **trait / hue** — stacked or multi-line per species, same time windows (5k/10k/50k/100k/All) and downsample rules as honest-time charts.
+1. **Sample:** On census cadence, for each live species with count > 0, record an
+   **8-bin hue histogram** over `flora.all` genomes. Store in a ring buffer parallel to
+   `CensusLog` — `TraitTrace { id, hueBins: number[] /* 8 per sample */ }`.
+2. **View model:** Extend `ChartsView` / `buildLabChartsView` with a per-species bin
+   series. `viewForWindow` must window it the same way it windows counts.
+3. **Render:** New chart section in the lab ledger under population: **trait / hue** —
+   a **ribbon per species** (Locked decisions §3). Time on x, the 8 bins stacked on y,
+   each cell filled with that bin's real hue at opacity = bin share of the species'
+   population. Same windows (5k/10k/50k/100k/All) and downsample rules as the
+   honest-time charts; `seriesForChartPath`'s bucketing gives the x columns.
 4. **Wire:** `worldlab.ts` / `kernel.ts` call `traitCensus.sample(flora)` alongside `census.sample`.
 
 **Tests:**
 - [ ] Sampling is deterministic; bin counts sum to species population.
-- [ ] Downsampled SVG path point count bounded (reuse chart-window helpers).
+- [ ] Downsampled ribbon column count bounded (reuse chart-window helpers).
+- [ ] A bimodal population renders two lit lanes with a dark gap between them —
+      the case a mean line would have hidden.
 
 **Acceptance:** Run bench with life + warm; hue distribution visibly shifts after B1–B4 land. Without B1–B4, chart is flat drift noise (still valid baseline).
 
@@ -216,11 +234,27 @@ Automated: full vitest + tsc + build green; add ≥1 test per task file above.
 
 ---
 
-## Open questions for Blaine (before B4/B5 polish)
+## Locked decisions (Blaine, 2026-07-25)
 
-1. **Shade model:** sum heights on tile vs canopy-max? Affects forest readability.
-2. **Palate drift in codex:** show founder → current swatch, or journal-only?
-3. **Trait chart default:** mean hue per species vs 8-bin histogram per species (histogram is more revealing, busier UI).
+1. **Shade model: canopy-max, tile-local.** `shadeAbove(p) = max(height on p's tile) - p.genome.height`,
+   floored at 0. Bounded to `[0,1]` by construction, so it needs no tuning against
+   `perTileCap`, and it keeps shade about the *vertical* niche while the crowding
+   thin goes on governing density. One tree shades about as much as three — canopy
+   closure, true to life. Accepted cost: a thicket of equal-height shrubs never
+   darkens. The player-facing sentence is *"the tallest thing here shades you by
+   how much taller it is."*
+2. **Palate drift: a founder → now swatch on the critter's inspect / codex card.**
+   Two hue chips side by side. The palate is invisible on the island today (it only
+   decides which pouch seed a critter accepts), so drift needs a place you can
+   *check*, not just a moment that fires once. No murmur / journal page in Phase 0 —
+   the swatch is the whole surface. (Revisit only if the drift proves too slow to notice.)
+3. **Trait chart: a hue-bin ribbon over time, one strip per species.** Time on x,
+   8 hue bins on y, each cell tinted its real hue with opacity = share of that
+   species' population. Reuses the existing time windows and downsample rules.
+   Chosen over a mean line because Phase 0 exists to turn drift into selection, and
+   the three outcomes read as *narrowing* (selection), *widening* (drift) and
+   *splitting* (speciation) — a mean shows none of them, and sits in the empty
+   valley of a bimodal distribution exactly when the split is the story.
 
 ---
 
