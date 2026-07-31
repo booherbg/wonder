@@ -1,0 +1,1161 @@
+<style>
+  /* ------------------------------------------------------------------
+     The Reagent Economy — a bench for Wonder's chemistry.
+     Specimen-plate identity: graphite + bone chrome, hairline rules,
+     and the ONLY saturated colour on the page is reagent and pigment.
+     That's the thesis made visual — colour is earned, not decorated.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --ground:  #E9EAE6;
+    --panel:   #F3F4F0;
+    --sunk:    #DFE1DB;
+    --ink:     #191E1C;
+    --muted:   #676D68;
+    --rule:    #CBCEC7;
+    --slate:   #3D4A56;
+    --shadow:  rgba(25, 30, 28, .09);
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141817;  --panel: #1C2220;  --sunk: #101413;
+      --ink: #E3E6E1;     --muted: #8C938B;  --rule: #2D3532;
+      --slate: #92A6B7;   --shadow: rgba(0, 0, 0, .45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141817;  --panel: #1C2220;  --sunk: #101413;
+    --ink: #E3E6E1;     --muted: #8C938B;  --rule: #2D3532;
+    --slate: #92A6B7;   --shadow: rgba(0, 0, 0, .45);
+  }
+  :root[data-theme="light"] {
+    --ground: #E9EAE6;  --panel: #F3F4F0;  --sunk: #DFE1DB;
+    --ink: #191E1C;     --muted: #676D68;  --rule: #CBCEC7;
+    --slate: #3D4A56;   --shadow: rgba(25, 30, 28, .09);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s8); }
+
+  /* ---------- masthead ---------- */
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 var(--s3);
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1.1;
+    letter-spacing: -.015em;
+    text-wrap: balance;
+    margin: 0 0 var(--s3);
+  }
+  .standfirst {
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 16px;
+    margin: 0 0 var(--s5);
+  }
+  .standfirst em { color: var(--ink); font-style: italic; }
+
+  /* ---------- controls ---------- */
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: var(--s2);
+    align-items: center;
+    padding: var(--s3) 0 var(--s5);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--s6);
+  }
+  .controls .spacer { flex: 1 1 auto; }
+
+  button {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  button:hover { border-color: var(--slate); }
+  button:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  button.primary { background: var(--slate); border-color: var(--slate); color: var(--ground); }
+  button.primary:hover { filter: brightness(1.12); }
+  button:disabled { opacity: .4; cursor: default; border-color: var(--rule); }
+
+  .seedbox {
+    display: flex; align-items: baseline; gap: var(--s2);
+    font-family: var(--font-mono); font-size: 12px; color: var(--muted);
+  }
+  .seedbox input {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--ink); background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 5px 7px; width: 9ch;
+  }
+  .seedbox input:focus-visible { outline: 2px solid var(--slate); outline-offset: 1px; }
+
+  /* ---------- layout ---------- */
+
+  .plate {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--s6);
+    align-items: start;
+  }
+  @media (max-width: 900px) { .plate { grid-template-columns: minmax(0, 1fr); } }
+
+  section { margin-bottom: var(--s7); }
+
+  h2 {
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 500;
+    letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 var(--s3);
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400; font-size: 20px;
+    letter-spacing: -.01em;
+    margin: 0 0 var(--s1);
+  }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 60ch; margin: 0 0 var(--s4); }
+
+  /* ---------- the deck ---------- */
+
+  .tiers { display: flex; flex-direction: column; gap: var(--s2); }
+  .tier {
+    display: grid; grid-template-columns: 78px minmax(0, 1fr);
+    gap: var(--s3); align-items: start;
+    padding: var(--s2) 0;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .tier:last-child { border-bottom: 0; }
+  .tier-label {
+    font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+    padding-top: 3px;
+  }
+  .tier-label b { display: block; color: var(--ink); font-weight: 500; letter-spacing: 0; }
+  .reagents { display: flex; flex-wrap: wrap; gap: var(--s2); }
+
+  .reagent {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px;
+    padding: 3px 9px 3px 4px;
+    border: 1px solid var(--rule); border-radius: 999px;
+    background: var(--panel);
+    white-space: nowrap;
+  }
+  .swatch { width: 13px; height: 13px; border-radius: 2px; flex: 0 0 auto; }
+  .reagent .cat {
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: .08em; color: var(--muted);
+    border-left: 1px solid var(--rule); padding-left: 6px; margin-left: 2px;
+  }
+
+  /* ---------- the hand + run ---------- */
+
+  .cards { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s4); }
+  .card {
+    display: flex; align-items: center; gap: var(--s3);
+    padding: var(--s2) var(--s3);
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule);
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  .card.fired { border-left-color: var(--slate); }
+  .card .kind {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); width: 8ch; flex: 0 0 auto;
+  }
+  .card .recipe { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .card .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .card .arrow { color: var(--muted); margin: 0 3px; }
+  .card .plays {
+    margin-left: auto; font-family: var(--font-mono); font-size: 11px;
+    color: var(--muted); flex: 0 0 auto;
+  }
+
+  .runlog {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3); margin: 0;
+    max-height: 240px; overflow-y: auto; overflow-x: auto;
+  }
+  .runlog div { white-space: nowrap; }
+  .runlog .n { color: var(--muted); display: inline-block; width: 3ch; }
+  .runlog .cat { color: var(--slate); }
+
+  .pile { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .cube { width: 11px; height: 11px; border-radius: 2px; }
+
+  /* ---------- the specimen ---------- */
+
+  .specimen {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: var(--s4);
+    box-shadow: 0 1px 3px var(--shadow);
+    position: sticky; top: var(--s4);
+  }
+  @media (max-width: 900px) { .specimen { position: static; } }
+
+  .specimen canvas {
+    display: block; width: 100%; height: auto;
+    image-rendering: pixelated;
+    background: var(--sunk);
+    border-radius: 2px;
+  }
+  .binomial {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 18px; margin: var(--s3) 0 2px;
+  }
+  .readout {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s3);
+    font-family: var(--font-mono); font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    margin-top: var(--s3); padding-top: var(--s3);
+    border-top: 1px solid var(--rule);
+  }
+  .readout dt { color: var(--muted); letter-spacing: .04em; }
+  .readout dd { margin: 0; text-align: right; }
+
+  .pigbar {
+    height: 34px; border-radius: 2px; margin-top: var(--s3);
+    border: 1px solid var(--rule);
+  }
+
+  /* ---------- gallery ---------- */
+
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: var(--s3);
+  }
+  .cell {
+    background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: var(--s2);
+    cursor: pointer; text-align: left;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .12s, transform .12s;
+  }
+  .cell:hover { border-color: var(--slate); }
+  .cell[aria-current="true"] { border-color: var(--slate); box-shadow: inset 0 0 0 1px var(--slate); }
+  .cell:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  .cell canvas {
+    display: block; width: 100%; height: auto;
+    image-rendering: pixelated; background: var(--sunk); border-radius: 2px;
+  }
+  .cell .nm {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 12.5px; line-height: 1.25; color: var(--ink);
+  }
+  .cell .tr {
+    font-family: var(--font-mono); font-size: 9.5px;
+    letter-spacing: .06em; color: var(--muted);
+    display: flex; justify-content: space-between; gap: var(--s2);
+  }
+
+  /* ---------- reading ---------- */
+
+  .reading { max-width: 66ch; }
+  .reading p { margin: 0 0 var(--s3); }
+  .reading strong { font-weight: 600; }
+  .reading ul { margin: 0 0 var(--s3); padding-left: 1.1em; }
+  .reading li { margin-bottom: 6px; }
+  code {
+    font-family: var(--font-mono); font-size: .89em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  footer {
+    margin-top: var(--s7); padding-top: var(--s4);
+    border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: .06em; color: var(--muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Wonder · ecology foundations · working prototype</p>
+  <h1>The reagent economy</h1>
+  <p class="standfirst">
+    A world rolls its own chemistry. A plant inherits a small hand of conversions and
+    runs it once, at maturity. What comes out is <em>energy</em>, a <em>pigment</em>, and
+    a <em>body</em> — all three from the same computation. Nothing here is decorative:
+    every colour on this page below the rule was earned by a chain that actually fired.
+  </p>
+
+  <div class="controls">
+    <button class="primary" id="rollWorld">Roll a new world</button>
+    <button id="rollPlants">Reseed the flora</button>
+    <span class="spacer"></span>
+    <label class="seedbox">seed <input id="seed" type="text" inputmode="numeric" value="2438"></label>
+    <button id="applySeed">Go</button>
+  </div>
+
+  <section>
+    <h2>This world's chemistry</h2>
+    <p class="note" id="worldNote"></p>
+    <div class="tiers" id="tiers"></div>
+  </section>
+
+  <div class="plate">
+    <div>
+      <section style="margin-bottom: var(--s6);">
+        <h2>The hand it inherited</h2>
+        <p class="note">
+          Three to five conversion cards, drawn from this world's deck. Cards are tried in
+          genome order and the chain repeats until nothing can fire — so a hand that loops
+          is an engine.
+        </p>
+        <div class="cards" id="cards"></div>
+      </section>
+
+      <section style="margin-bottom: var(--s6);">
+        <h2>The run</h2>
+        <p class="note">
+          One digest, played out. This whole log is what a player would read on the
+          plant's card — the chemistry explains itself in sentences, not numbers.
+        </p>
+        <div class="runlog" id="runlog"></div>
+      </section>
+
+      <section style="margin-bottom: var(--s2);">
+        <h2>What it ended holding</h2>
+        <div class="pile" id="finalPile"></div>
+      </section>
+    </div>
+
+    <aside>
+      <div class="specimen">
+        <canvas id="specimen" width="150" height="230"></canvas>
+        <div class="binomial" id="binomial"></div>
+        <div class="pigbar" id="pigbar"></div>
+        <dl class="readout" id="readout"></dl>
+      </div>
+    </aside>
+  </div>
+
+  <section style="margin-top: var(--s7);">
+    <h2>A generation of this island's flora</h2>
+    <p class="note">
+      Twenty plants, same world, same chemistry, different hands. Click one to run it.
+      The palette you're looking at is the island's — roll a new world and the whole
+      shelf changes key.
+    </p>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="reading">
+    <h2>How to read this</h2>
+    <p>
+      <strong>Colour is a readout, not a decoration.</strong> Hue is the circular mean of
+      what the plant ended up holding, weighted steeply by tier — so the rarest thing in
+      the pile is what colours it. Chroma reads the pigment-weighted <em>mean</em> tier
+      rather than the ceiling, because one stray unit of essence in a heap of base
+      shouldn't blaze like a plant that is mostly essence. That makes
+      <strong>saturation a measure of metabolic sophistication</strong>: tier-one scrapers
+      come out sage and ochre, and the jewel tones have to be earned outright. Lightness is
+      yield over cost, so a plant in the wrong soil visibly pales.
+    </p>
+    <p>
+      <strong>The body is the same computation.</strong> There is no separate morphology
+      genome. Each conversion emits one growth instruction as it fires — a gather extends,
+      an upgrade branches, a trade puts out a whorl, a catalysed step swells a node — and
+      the roots are the same program run downward. A plant that runs an elaborate chain
+      grows an elaborate body, always, because they are the same thing. Form cannot lie
+      about function here.
+    </p>
+    <p>
+      <strong>Catalysts are the reason to care about your neighbours.</strong> A catalyst
+      has to be <em>present</em>, not spent. Cards that need one are marked in the log.
+      That single rule turns a field of rivals into a field of relationships: whatever
+      first leaks a catalyst onto a tile opens a branch of chemistry for everything that
+      grows there afterwards.
+    </p>
+    <p>
+      Worth poking at: roll worlds until you find one with a narrow hue spread — those come
+      out tonal and harmonious. Wide-spread worlds go polychrome. Then look for a plant that
+      reached tier four; it should be the only thing on the shelf you can't stop looking at.
+      If that isn't true, the chroma ladder needs work, and that's exactly the kind of thing
+      this bench is for.
+    </p>
+  </section>
+
+  <footer>Prototype for docs/02-ECOLOGY-FOUNDATIONS.md §12–§14 · everything is derived from the seed · nothing here is wired to the game yet</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================ rng ============================ */
+  // mulberry32, matching src/core/rng.ts. Warmed, because the first draw
+  // correlates across nearby seeds (a gotcha this project already learned).
+  function makeRng(seed) {
+    let a = seed >>> 0;
+    const f = function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < 12; i++) f();
+    return f;
+  }
+  const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
+  const range = (rng, lo, hi) => lo + rng() * (hi - lo);
+  const irange = (rng, lo, hi) => Math.floor(range(rng, lo, hi + 1 - 1e-9));
+
+  /* ======================= oklch -> sRGB ======================= */
+  // Ottosson's matrices. We convert ourselves rather than handing oklch()
+  // to the canvas so the swatches and the sprites can never disagree.
+  function oklabToLinear(L, a, b) {
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    return [
+       4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ];
+  }
+  const inGamut = (v) => v.every((c) => c >= -0.0005 && c <= 1.0005);
+
+  function oklch(L, C, H) {
+    L = Math.max(0, Math.min(1, L));
+    const rad = (H * Math.PI) / 180;
+    // Walk chroma down until it fits sRGB — clipping channels instead would
+    // shift the hue, and hue is carrying information here.
+    let c = Math.max(0, C), lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+    for (let i = 0; i < 24 && !inGamut(lin); i++) {
+      c *= 0.92;
+      lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+    }
+    const enc = (x) => {
+      x = Math.max(0, Math.min(1, x));
+      const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+      return Math.round(Math.max(0, Math.min(1, s)) * 255);
+    };
+    const [r, g, b] = lin.map(enc);
+    return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  }
+
+  /* ========================= the world ========================= */
+
+  const NAMES = [
+    "ochre", "saline", "verdigris", "cinnabar", "lime", "orpiment", "malachite",
+    "azurite", "realgar", "gypsum", "hematite", "smalt", "vermilion", "indigo",
+    "madder", "weld", "woad", "umber", "sienna", "celadon", "minium", "litharge",
+    "bice", "saffron", "gamboge", "alum", "natron", "tincal", "galena", "mica",
+    "feldspar", "cobalt", "antimony", "quartz",
+  ];
+  const TIER_NAME = ["", "base", "refined", "compound", "essence"];
+  const TIER_ENERGY = [0, 1, 3, 9, 27];
+  const TIER_CHROMA = [0, 0.045, 0.105, 0.17, 0.235];
+  // Pigment weight climbs much faster than energy: one unit of essence should
+  // colour a plant that is otherwise a hundred units of mud. The scarce thing
+  // is what you see.
+  const TIER_PIGMENT = [0, 1, 7, 40, 180];
+  const COUNTS = [0, 4, 3, 2, 1];
+
+  const ISLE_A = ["Pol", "Kes", "Tarn", "Vel", "Mor", "Ashen", "Bramm", "Ost", "Fenn", "Lir"];
+  const ISLE_B = ["pol", "mere", "holt", "reach", "scar", "wick", "fell", "strand"];
+
+  function rollWorld(seed) {
+    const rng = makeRng(seed ^ 0x9e37);
+    const pool = NAMES.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    // A world's hue signature: an anchor and a spread. Narrow spreads come out
+    // tonal, wide ones polychrome — the single best per-world colour knob.
+    const anchor = rng() * 360;
+    const spread = range(rng, 70, 330);
+
+    const reagents = [];
+    let cursor = 0;
+    for (let tier = 1; tier <= 4; tier++) {
+      for (let k = 0; k < COUNTS[tier]; k++) {
+        const t = reagents.length;
+        reagents.push({
+          id: t,
+          name: pool[cursor++],
+          tier: tier,
+          hue: (anchor + spread * (rng() - 0.5)) % 360,
+          catalyst: false,
+        });
+      }
+    }
+    reagents.forEach((r) => { if (r.hue < 0) r.hue += 360; });
+
+    // One or two catalysts, in the middle tiers — the reagents worth having
+    // around rather than worth spending.
+    const mid = reagents.filter((r) => r.tier === 2 || r.tier === 3);
+    const nCat = rng() < 0.45 ? 2 : 1;
+    for (let i = 0; i < nCat && mid.length; i++) {
+      const c = mid.splice(Math.floor(rng() * mid.length), 1)[0];
+      c.catalyst = true;
+    }
+
+    const byTier = (t) => reagents.filter((r) => r.tier === t);
+    const deck = [];
+
+    // Gather — always available for every base reagent, so no world is a dud.
+    byTier(1).forEach((r) => {
+      deck.push({ kind: "gather", out: r.id, n: irange(rng, 3, 6) });
+    });
+    // Upgrade — the ladder-climbing primitive, and generic like Spice Road's:
+    // spend any two of a tier to get one of the next. Generic is what makes a
+    // random hand chainable instead of dead.
+    // Cost climbs with the rung, so the top of the ladder is genuinely hard to
+    // reach and a shelf of specimens spreads out instead of all landing together.
+    for (let t = 1; t <= 3; t++) {
+      byTier(t + 1).forEach((up) => {
+        deck.push({ kind: "upgrade", fromTier: t, cost: t + 1, out: up.id, n: 1 });
+      });
+    }
+    // Trade — Blaine's own `3 of A + 2 of B -> C`.
+    for (let i = 0; i < 5; i++) {
+      const t = irange(rng, 1, 2);
+      const a = pick(rng, byTier(t)), b = pick(rng, byTier(t));
+      const outs = byTier(Math.min(4, t + 1));
+      if (!a || !b || a.id === b.id || !outs.length) continue;
+      deck.push({
+        kind: "trade",
+        inp: [{ id: a.id, n: irange(rng, 2, 3) }, { id: b.id, n: irange(rng, 1, 2) }],
+        out: pick(rng, outs).id, n: 1,
+      });
+    }
+    // Catalyse — needs a reagent present, doesn't spend it.
+    reagents.filter((r) => r.catalyst).forEach((cat) => {
+      for (let i = 0; i < 2; i++) {
+        const t = irange(rng, 1, 3);
+        const from = pick(rng, byTier(t));
+        const outs = byTier(Math.min(4, t + 1));
+        if (!from || !outs.length) continue;
+        deck.push({
+          kind: "catalyse", needs: cat.id,
+          inp: [{ id: from.id, n: irange(rng, 1, 2) }],
+          out: pick(rng, outs).id, n: irange(rng, 1, 2),
+        });
+      }
+    });
+
+    const isle = pick(rng, ISLE_A) + pick(rng, ISLE_B);
+    // What the ground here offers: a couple of base reagents, and sometimes a
+    // trace of a catalyst — the permissive tile that unlocks a whole branch.
+    const soil = {};
+    const bases = byTier(1);
+    for (let i = 0; i < 2; i++) soil[pick(rng, bases).id] = irange(rng, 2, 4);
+    const cats = reagents.filter((r) => r.catalyst);
+    if (rng() < 0.5 && cats.length) soil[pick(rng, cats).id] = 1;
+
+    return { seed, reagents, deck, isle, anchor, spread, soil, rng };
+  }
+
+  /* ========================= the plant ========================= */
+
+  const EPITHET = [
+    "palustris", "sylvatica", "arenaria", "nivalis", "rupestris", "lucens",
+    "fusca", "gracilis", "umbrosa", "tenuis", "vernalis", "cinerea",
+    "aurata", "torquata", "patula", "serotina",
+  ];
+  const GENUS = [
+    "Calyx", "Thren", "Vesper", "Umbra", "Solen", "Astra", "Corvid",
+    "Nubila", "Ferrum", "Halcyon", "Cirrus", "Ligna",
+  ];
+
+  function rollPlant(world, salt) {
+    const rng = makeRng((world.seed ^ 0x51a7) + salt * 0x9e3779b1);
+    const size = irange(rng, 3, 5);
+    // Always one gather (or it can never start) and at most one (two is a
+    // wasted card), then the rest drawn from everything else.
+    const hand = [pick(rng, world.deck.filter((c) => c.kind === "gather"))];
+    const rest = world.deck.filter((c) => c.kind !== "gather");
+    for (let i = 1; i < size && rest.length; i++) {
+      const c = rest.splice(Math.floor(rng() * rest.length), 1)[0];
+      hand.push(c);
+    }
+    const name = pick(rng, GENUS) + " " + pick(rng, EPITHET);
+    // A wide budget spread is what separates the shelf: some plants are simply
+    // never going to get far enough up the ladder to be interesting, and that
+    // should be visible.
+    return { hand: hand, name: name, budget: irange(rng, 8, 36), rng: rng };
+  }
+
+  /* ========================== the run ========================== */
+
+  function has(pile, inp) { return inp.every((i) => (pile[i.id] || 0) >= i.n); }
+
+  const take = (pile, id, n) => { pile[id] -= n; if (pile[id] <= 0) delete pile[id]; };
+
+  // An upgrade spends any `cost` units held at `fromTier`, cheapest-hue-first
+  // so the choice is deterministic. Returns what it spent, or null.
+  function spendTier(world, pile, tier, cost) {
+    const held = Object.keys(pile)
+      .filter((id) => world.reagents[id].tier === tier && pile[id] > 0)
+      .sort((a, b) => pile[b] - pile[a] || a - b);
+    let need = cost;
+    const spent = [];
+    for (const id of held) {
+      if (need <= 0) break;
+      const n = Math.min(need, pile[id]);
+      spent.push({ id: +id, n: n });
+      need -= n;
+    }
+    if (need > 0) return null;
+    spent.forEach((s) => take(pile, s.id, s.n));
+    return spent;
+  }
+
+  function runChain(world, plant) {
+    const pile = Object.assign({}, world.soil);
+    const steps = [];
+    const plays = new Map();
+    let fired = true, n = 0;
+
+    while (fired && n < plant.budget) {
+      fired = false;
+      for (const card of plant.hand) {
+        if (n >= plant.budget) break;
+        let spent = null;
+
+        if (card.kind === "gather") {
+          // The caravan limit: a gather idles once there's plenty on hand, so
+          // the chain has to actually spend before it can draw again.
+          if ((pile[card.out] || 0) >= card.n + 2) continue;
+        } else if (card.kind === "upgrade") {
+          spent = spendTier(world, pile, card.fromTier, card.cost);
+          if (!spent) continue;
+        } else {
+          if (!has(pile, card.inp)) continue;
+          if (card.kind === "catalyse" && (pile[card.needs] || 0) < 1) continue;
+          card.inp.forEach((i) => take(pile, i.id, i.n));
+          spent = card.inp;
+        }
+
+        pile[card.out] = (pile[card.out] || 0) + card.n;
+        plays.set(card, (plays.get(card) || 0) + 1);
+        steps.push({ card: card, spent: spent, pile: Object.assign({}, pile) });
+        fired = true; n++;
+      }
+    }
+
+    let energy = 0, top = 0;
+    for (const id in pile) {
+      const r = world.reagents[id];
+      energy += pile[id] * TIER_ENERGY[r.tier];
+      if (pile[id] > 0) top = Math.max(top, r.tier);
+    }
+    const cost = 4 + steps.length * 1.2;
+    return {
+      pile: pile, steps: steps, plays: plays,
+      energy: energy, top: top, cost: cost, ratio: energy / (4 + steps.length * 1.2),
+    };
+  }
+
+  /* ========================== pigment ========================== */
+
+  function pigment(world, run) {
+    let x = 0, y = 0, w = 0;
+    for (const id in run.pile) {
+      const r = world.reagents[id];
+      // Weight steeply by tier, so the scarce thing is what colours the plant
+      // rather than the pile of leftover base it's sitting on.
+      const k = run.pile[id] * TIER_PIGMENT[r.tier];
+      const rad = (r.hue * Math.PI) / 180;
+      x += Math.cos(rad) * k; y += Math.sin(rad) * k; w += k;
+    }
+    let hue = w > 0 ? (Math.atan2(y, x) * 180) / Math.PI : world.anchor;
+    if (hue < 0) hue += 360;
+
+    // Chroma reads the pigment-weighted MEAN tier, not the ceiling: one stray
+    // unit of essence in a pile of base shouldn't blaze like a plant that is
+    // mostly essence. Plus a nudge for a pile whose hues agree, because a
+    // muddled pile genuinely should look muddled.
+    let tw = 0;
+    for (const id in run.pile) {
+      const r = world.reagents[id];
+      tw += run.pile[id] * TIER_PIGMENT[r.tier] * r.tier;
+    }
+    const meanTier = w > 0 ? Math.max(1, Math.min(4, tw / w)) : 1;
+    const lo = Math.floor(meanTier), hi = Math.min(4, lo + 1);
+    const ramp = TIER_CHROMA[lo] + (TIER_CHROMA[hi] - TIER_CHROMA[lo]) * (meanTier - lo);
+    const coherence = w > 0 ? Math.sqrt(x * x + y * y) / w : 0;
+    const chroma = ramp * (0.66 + 0.34 * coherence);
+
+    const ratio = run.energy / run.cost;
+    const light = 0.46 + 0.34 * Math.max(0, Math.min(1, Math.log2(1 + ratio) / 4));
+
+    return {
+      hue: hue, chroma: chroma, light: light, coherence: coherence,
+      ratio: ratio, meanTier: meanTier,
+      hex: oklch(light, chroma, hue),
+      leaf: oklch(Math.max(0.26, light - 0.2), chroma * 0.62, hue),
+      lit: oklch(Math.min(0.93, light + 0.14), chroma * 1.05, hue),
+      iridescent: run.top >= 4,
+      shift: oklch(light, chroma, (hue + 62) % 360),
+    };
+  }
+
+  /* ==================== body from the chain ==================== */
+  // No separate morphology genome: each conversion, as it fires, emits one
+  // growth instruction. Roots are the same program run downward.
+
+  function growBody(ctx, W, H, world, run, pig, phase) {
+    ctx.clearRect(0, 0, W, H);
+    const steps = run.steps;
+    const soilY = Math.round(H * 0.70);
+    const scale = Math.min(W / 150, H / 230);
+
+    // ground band
+    ctx.fillStyle = pig.leaf;
+    ctx.globalAlpha = 0.12; ctx.fillRect(0, soilY, W, H - soilY);
+    ctx.globalAlpha = 0.40; ctx.fillRect(0, soilY, W, 1);
+    ctx.globalAlpha = 1;
+    if (!steps.length) return;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // How tall this one gets is its yield; how *complex* it gets is its chain.
+    // Normalising height to the plate keeps a gallery comparable, so the thing
+    // that varies between specimens is structure, not scale.
+    const vigor = Math.max(0.35, Math.min(1, Math.log2(1 + run.ratio) / 2.6));
+    const canopy = (soilY - 8 * scale) * (0.42 + 0.58 * vigor);
+    const cx = W / 2;
+
+    /* ---------------- roots: established early, subordinate ---------------- */
+    const rootSteps = steps.slice(0, Math.max(3, Math.round(steps.length * 0.5)));
+    const rootDepth = (H - soilY - 4 * scale) * (0.55 + 0.45 * vigor);
+    const rseg = rootDepth / Math.max(4, rootSteps.length * 0.75);
+    let rtips = [{ x: cx, y: soilY, ang: Math.PI / 2, th: 2.0 * scale }];
+
+    ctx.globalAlpha = 0.85;
+    rootSteps.forEach((s, i) => {
+      const out = world.reagents[s.card.out];
+      if (s.card.kind === "upgrade" && rtips.length < 7) {
+        // roots fork toward what they're chasing
+        const fan = 0.42 + (out.hue / 360) * 0.55;
+        const next = [];
+        rtips.forEach((t) => {
+          [-1, 1].forEach((sgn) => {
+            if (next.length >= 7) return;
+            const a2 = t.ang + sgn * fan * 0.7;
+            const nx = t.x + Math.cos(a2) * rseg, ny = t.y + Math.sin(a2) * rseg;
+            ctx.strokeStyle = pig.leaf; ctx.lineWidth = Math.max(1, t.th * 0.8);
+            ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(nx, ny); ctx.stroke();
+            next.push({ x: nx, y: ny, ang: a2, th: Math.max(1, t.th * 0.78) });
+          });
+        });
+        rtips = next;
+      } else {
+        rtips.forEach((t, k) => {
+          const wob = Math.sin(i * 1.6 + k * 2.3 + phase) * 0.34;
+          const nx = t.x + Math.cos(t.ang + wob) * rseg;
+          const ny = t.y + Math.sin(t.ang + wob) * rseg;
+          ctx.strokeStyle = pig.leaf; ctx.lineWidth = Math.max(1, t.th);
+          ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(nx, ny); ctx.stroke();
+          t.x = Math.max(3, Math.min(W - 3, nx));
+          t.y = Math.min(H - 2, ny);
+          t.ang += wob * 0.5; t.th = Math.max(1, t.th * 0.9);
+        });
+      }
+    });
+    ctx.globalAlpha = 1;
+
+    /* ------------------------------ the shoot ------------------------------ */
+    // A leader that keeps growing, plus side branches — a plant silhouette,
+    // not a broom. Branching keeps the parent alive; that's the whole
+    // difference between this reading as flora and reading as a fan.
+    const seg = canopy / Math.max(5, steps.length * 0.62);
+    let tips = [{ x: cx, y: soilY, ang: -Math.PI / 2, th: 3.2 * scale, lead: true }];
+    const MAX_TIPS = 5;
+    let bloomed = 0, branchTurn = 0;
+
+    const extend = (t, len, i, k) => {
+      const wob = Math.sin(i * 1.1 + k * 2.7 + phase) * (t.lead ? 0.07 : 0.19);
+      const nx = t.x + Math.cos(t.ang + wob) * len;
+      const ny = t.y + Math.sin(t.ang + wob) * len;
+      ctx.strokeStyle = pig.hex; ctx.lineWidth = Math.max(1, t.th);
+      ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(nx, ny); ctx.stroke();
+      t.x = Math.max(4, Math.min(W - 4, nx));
+      t.y = Math.max(4, ny);
+      t.ang += wob * 0.3;
+      t.th = Math.max(1, t.th * 0.95);
+    };
+
+    steps.forEach((s, i) => {
+      const card = s.card;
+      const out = world.reagents[card.out];
+      const late = i / Math.max(1, steps.length - 1);
+
+      if (card.kind === "gather") {
+        tips.forEach((t, k) => extend(t, seg * (0.72 + Math.min(0.4, card.n * 0.05)), i, k));
+
+      } else if (card.kind === "upgrade") {
+        // one new side branch off a tip, taken in turn; the parent lives on
+        if (tips.length < MAX_TIPS) {
+          const parent = tips[branchTurn++ % tips.length];
+          const side = branchTurn % 2 ? 1 : -1;
+          const fan = 0.42 + (out.hue / 360) * 0.5;
+          const a2 = parent.ang + side * fan;
+          const nx = parent.x + Math.cos(a2) * seg * 0.9;
+          const ny = parent.y + Math.sin(a2) * seg * 0.9;
+          ctx.strokeStyle = pig.hex; ctx.lineWidth = Math.max(1, parent.th * 0.7);
+          ctx.beginPath(); ctx.moveTo(parent.x, parent.y); ctx.lineTo(nx, ny); ctx.stroke();
+          tips.push({ x: nx, y: Math.max(4, ny), ang: a2 * 0.55 + -Math.PI / 2 * 0.45,
+                      th: Math.max(1, parent.th * 0.68), lead: false });
+        }
+        tips.forEach((t, k) => extend(t, seg * 0.55, i, k));
+
+      } else if (card.kind === "trade") {
+        // a whorl of leaves, as many as the recipe takes in
+        const n = Math.min(3, card.inp.reduce((a, i2) => a + i2.n, 0));
+        ctx.fillStyle = pig.leaf;
+        tips.forEach((t) => {
+          for (let k = 0; k < n; k++) {
+            const a2 = t.ang + (k % 2 ? 1 : -1) * (0.8 + k * 0.2);
+            const lr = (4.6 + k * 0.8) * scale;
+            ctx.beginPath();
+            ctx.ellipse(t.x + Math.cos(a2) * lr * 0.8, t.y + Math.sin(a2) * lr * 0.8,
+                        lr * 0.9, lr * 0.38, a2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        tips.forEach((t, k) => extend(t, seg * 0.5, i, k));
+
+      } else if (card.kind === "catalyse") {
+        // a swollen node where the catalyst did its work
+        tips.forEach((t) => {
+          ctx.fillStyle = pig.lit;
+          ctx.beginPath(); ctx.arc(t.x, t.y, (2.0 + late * 1.3) * scale, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = pig.hex; ctx.lineWidth = Math.max(1, scale * 0.9);
+          ctx.beginPath(); ctx.arc(t.x, t.y, (3.6 + late * 1.5) * scale, 0, Math.PI * 2); ctx.stroke();
+        });
+        tips.forEach((t, k) => extend(t, seg * 0.6, i, k));
+      }
+
+      // a refined-or-better product, late in the chain, terminates in a bloom
+      if (out.tier >= 2 && late > 0.62 && bloomed < 5) {
+        tips.forEach((t) => {
+          if (bloomed >= 5) return;
+          bloomed++;
+          drawBloom(ctx, t.x, t.y, (2.1 + out.tier * 1.25) * scale, out.tier, pig, phase);
+        });
+      }
+    });
+
+    if (!bloomed) {
+      const t = tips.reduce((a, b) => (b.y < a.y ? b : a), tips[0]);
+      ctx.fillStyle = pig.leaf;
+      ctx.beginPath(); ctx.arc(t.x, t.y, 2.2 * scale, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+
+  function drawBloom(ctx, x, y, r, tier, pig, phase) {
+    const petals = tier >= 4 ? 8 : tier === 3 ? 6 : 5;
+    for (let p = 0; p < petals; p++) {
+      const pa = (p / petals) * Math.PI * 2 + phase * 0.3;
+      if (pig.iridescent) {
+        const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+        g.addColorStop(0, pig.lit); g.addColorStop(0.55, pig.shift); g.addColorStop(1, pig.hex);
+        ctx.fillStyle = g;
+      } else {
+        ctx.fillStyle = pig.lit;
+      }
+      ctx.beginPath();
+      ctx.ellipse(x + Math.cos(pa) * r * 0.62, y + Math.sin(pa) * r * 0.62,
+                  r * 0.56, r * 0.36, pa, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = pig.hex;
+    ctx.beginPath(); ctx.arc(x, y, r * 0.36, 0, Math.PI * 2); ctx.fill();
+  }
+
+
+  /* ========================== rendering ========================== */
+
+  const $ = (id) => document.getElementById(id);
+  let world, focus, focusRun, focusPig, shelf = [];
+
+  function cube(hex, title) {
+    const d = document.createElement("span");
+    d.className = "cube"; d.style.background = hex;
+    d.title = title || ""; return d;
+  }
+  function swatch(r) {
+    const d = document.createElement("span");
+    d.className = "swatch";
+    d.style.background = oklch(0.62, TIER_CHROMA[r.tier] * 1.1, r.hue);
+    return d;
+  }
+  function reagentHex(r) { return oklch(0.62, TIER_CHROMA[r.tier] * 1.1, r.hue); }
+
+  function renderWorld() {
+    const spreadWord = world.spread < 130 ? "tonal" : world.spread < 240 ? "mixed" : "polychrome";
+    const cats = world.reagents.filter((r) => r.catalyst).map((r) => r.name);
+    $("worldNote").textContent =
+      world.isle + " · " + world.reagents.length + " reagents across four tiers · a " +
+      spreadWord + " hue signature (" + Math.round(world.spread) + "°) · " +
+      (cats.length > 1 ? "catalysts: " : "catalyst: ") + cats.join(" and ") +
+      " · the ground here offers " +
+      Object.keys(world.soil).map((id) => world.reagents[id].name).join(", ");
+
+    const host = $("tiers");
+    host.textContent = "";
+    for (let t = 1; t <= 4; t++) {
+      const row = document.createElement("div"); row.className = "tier";
+      const lab = document.createElement("div"); lab.className = "tier-label";
+      lab.innerHTML = "<b>" + TIER_NAME[t] + "</b>" + TIER_ENERGY[t] + " energy";
+      const box = document.createElement("div"); box.className = "reagents";
+      world.reagents.filter((r) => r.tier === t).forEach((r) => {
+        const el = document.createElement("span"); el.className = "reagent";
+        el.appendChild(swatch(r));
+        el.appendChild(document.createTextNode(r.name));
+        if (r.catalyst) {
+          const c = document.createElement("span"); c.className = "cat";
+          c.textContent = "CATALYST"; el.appendChild(c);
+        }
+        box.appendChild(el);
+      });
+      row.appendChild(lab); row.appendChild(box); host.appendChild(row);
+    }
+  }
+
+  function recipeInto(el, card) {
+    const wrap = document.createElement("span"); wrap.className = "recipe";
+    if (card.kind === "gather") {
+      const t = document.createElement("span"); t.className = "count";
+      t.textContent = "from the soil"; wrap.appendChild(t);
+    } else if (card.kind === "upgrade") {
+      const t = document.createElement("span"); t.className = "count";
+      t.textContent = card.cost + " × any " + TIER_NAME[card.fromTier];
+      wrap.appendChild(t);
+    } else {
+      card.inp.forEach((i, k) => {
+        if (k) { const p = document.createElement("span"); p.className = "arrow"; p.textContent = "+"; wrap.appendChild(p); }
+        const n = document.createElement("span"); n.className = "count"; n.textContent = i.n;
+        wrap.appendChild(n); wrap.appendChild(cube(reagentHex(world.reagents[i.id]), world.reagents[i.id].name));
+      });
+    }
+    const a = document.createElement("span"); a.className = "arrow"; a.textContent = "→"; wrap.appendChild(a);
+    const n2 = document.createElement("span"); n2.className = "count"; n2.textContent = card.n;
+    wrap.appendChild(n2); wrap.appendChild(cube(reagentHex(world.reagents[card.out]), world.reagents[card.out].name));
+    if (card.kind === "catalyse") {
+      const c = document.createElement("span"); c.className = "count";
+      c.textContent = " needs " + world.reagents[card.needs].name + " present";
+      wrap.appendChild(c);
+    }
+    el.appendChild(wrap);
+  }
+
+  function renderFocus() {
+    const cards = $("cards"); cards.textContent = "";
+    focus.hand.forEach((card) => {
+      const el = document.createElement("div"); el.className = "card";
+      const played = focusRun.plays.get(card) || 0;
+      if (played) el.classList.add("fired");
+      const k = document.createElement("span"); k.className = "kind"; k.textContent = card.kind;
+      el.appendChild(k);
+      recipeInto(el, card);
+      const p = document.createElement("span"); p.className = "plays";
+      p.textContent = played ? "×" + played : "never fired";
+      el.appendChild(p);
+      cards.appendChild(el);
+    });
+
+    const log = $("runlog"); log.textContent = "";
+    if (!focusRun.steps.length) {
+      const d = document.createElement("div");
+      d.textContent = "nothing fired — a dead hand, on this ground";
+      log.appendChild(d);
+    }
+    const spentWords = (s) =>
+      (s.spent || []).map((i2) => i2.n + " " + world.reagents[i2.id].name).join(" + ");
+
+    const lineFor = (s) => {
+      const out = world.reagents[s.card.out];
+      if (s.card.kind === "gather") return "drew " + s.card.n + " " + out.name + " out of the ground";
+      if (s.card.kind === "upgrade") return "upgraded " + spentWords(s) + " into " + out.name;
+      if (s.card.kind === "trade") return "traded " + spentWords(s) + " for " + s.card.n + " " + out.name;
+      return "made " + s.card.n + " " + out.name + " from " + spentWords(s);
+    };
+
+    // Collapse consecutive identical steps — an engine repeats, and reading
+    // "drew 4 smalt" nine times in a row teaches nothing the ×9 doesn't.
+    const logRows = [];
+    focusRun.steps.forEach((s) => {
+      const txt = lineFor(s);
+      const last = logRows[logRows.length - 1];
+      if (last && last.txt === txt) last.n++;
+      else logRows.push({ txt: txt, n: 1, card: s.card });
+    });
+
+    logRows.forEach((row, i) => {
+      const d = document.createElement("div");
+      const n = document.createElement("span"); n.className = "n"; n.textContent = (i + 1) + ".";
+      d.appendChild(n);
+      d.appendChild(document.createTextNode(row.txt));
+      if (row.n > 1) {
+        const m = document.createElement("span"); m.className = "n";
+        m.textContent = "  ×" + row.n; m.style.width = "auto";
+        d.appendChild(m);
+      }
+      if (row.card.kind === "catalyse") {
+        const c = document.createElement("span"); c.className = "cat";
+        c.textContent = " — catalysed by " + world.reagents[row.card.needs].name;
+        d.appendChild(c);
+      }
+      log.appendChild(d);
+    });
+
+    const fp = $("finalPile"); fp.textContent = "";
+    const ids = Object.keys(focusRun.pile).sort((a, b) => world.reagents[b].tier - world.reagents[a].tier);
+    if (!ids.length) { fp.textContent = "—"; }
+    ids.forEach((id) => {
+      const r = world.reagents[id];
+      const lab = document.createElement("span");
+      lab.style.cssText = "font-family:var(--font-mono);font-size:11.5px;color:var(--muted);margin:0 4px 0 10px";
+      lab.textContent = focusRun.pile[id] + "× " + r.name;
+      fp.appendChild(lab);
+      for (let i = 0; i < Math.min(8, focusRun.pile[id]); i++) fp.appendChild(cube(reagentHex(r), r.name));
+    });
+
+    $("binomial").textContent = focus.name;
+    $("pigbar").style.background = focusPig.iridescent
+      ? "linear-gradient(100deg," + focusPig.hex + "," + focusPig.shift + "," + focusPig.lit + ")"
+      : focusPig.hex;
+
+    const ro = $("readout"); ro.textContent = "";
+    const rows = [
+      ["tier reached", focusRun.top ? TIER_NAME[focusRun.top] : "—"],
+      ["energy", focusRun.energy.toFixed(0)],
+      ["cost", focusRun.cost.toFixed(1)],
+      ["yield ÷ cost", focusRun.ratio.toFixed(2)],
+      ["steps", focusRun.steps.length + " / " + focus.budget],
+      ["hue", Math.round(focusPig.hue) + "°"],
+      ["mean tier", focusPig.meanTier.toFixed(2)],
+      ["chroma", focusPig.chroma.toFixed(3)],
+      ["lightness", focusPig.light.toFixed(2)],
+    ];
+    rows.forEach((r) => {
+      const dt = document.createElement("dt"); dt.textContent = r[0];
+      const dd = document.createElement("dd");
+      dd.textContent = r[1];
+      ro.appendChild(dt); ro.appendChild(dd);
+    });
+
+    const cv = $("specimen");
+    growBody(cv.getContext("2d"), cv.width, cv.height, world, focusRun, focusPig, 0.6);
+  }
+
+  function renderShelf() {
+    const host = $("gallery"); host.textContent = "";
+    shelf.forEach((s, i) => {
+      const cell = document.createElement("button");
+      cell.className = "cell"; cell.type = "button";
+      cell.setAttribute("aria-current", String(s.plant === focus));
+      const cv = document.createElement("canvas");
+      cv.width = 100; cv.height = 150;
+      cell.appendChild(cv);
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = s.plant.name;
+      cell.appendChild(nm);
+      const tr = document.createElement("div"); tr.className = "tr";
+      const a = document.createElement("span");
+      // The mean tier, worded — it varies across a shelf where "highest reached"
+      // would read "compound" twenty times and tell you nothing.
+      a.textContent = s.run.steps.length ? TIER_NAME[Math.max(1, Math.round(s.pig.meanTier))] : "—";
+      const b = document.createElement("span"); b.textContent = s.run.energy + "e";
+      tr.appendChild(a); tr.appendChild(b);
+      cell.appendChild(tr);
+      cell.addEventListener("click", () => {
+        focus = s.plant; focusRun = s.run; focusPig = s.pig;
+        renderFocus(); renderShelf();
+        document.querySelector(".plate").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      host.appendChild(cell);
+      growBody(cv.getContext("2d"), cv.width, cv.height, world, s.run, s.pig, i * 0.9);
+    });
+  }
+
+  function reseed(salt) {
+    shelf = [];
+    for (let i = 0; i < 20; i++) {
+      const plant = rollPlant(world, salt + i);
+      const run = runChain(world, plant);
+      shelf.push({ plant: plant, run: run, pig: pigment(world, run) });
+    }
+    // Lead with the most accomplished specimen — it's the one worth looking at.
+    const best = shelf.slice().sort((a, b) => b.run.top - a.run.top || b.run.energy - a.run.energy)[0];
+    focus = best.plant; focusRun = best.run; focusPig = best.pig;
+    renderFocus(); renderShelf();
+  }
+
+  let saltCursor = 1;
+  function build(seed) {
+    world = rollWorld(seed);
+    $("seed").value = String(seed);
+    saltCursor = 1;
+    renderWorld();
+    reseed(saltCursor);
+  }
+
+  $("rollWorld").addEventListener("click", () => build((Math.random() * 1e9) | 0));
+  $("rollPlants").addEventListener("click", () => { saltCursor += 37; reseed(saltCursor); });
+  $("applySeed").addEventListener("click", () => {
+    const v = parseInt($("seed").value, 10);
+    build(Number.isFinite(v) ? v : 2438);
+  });
+  $("seed").addEventListener("keydown", (e) => { if (e.key === "Enter") $("applySeed").click(); });
+
+  build(2438);
+})();
+</script>

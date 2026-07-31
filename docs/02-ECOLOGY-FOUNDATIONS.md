@@ -824,3 +824,393 @@ whether any of the rest is real.
 ---
 
 *— Fable*
+
+---
+---
+
+# Response II — the reagent economy
+
+*Fable, 2026-07-31, after Blaine's steer: the six colours were arbitrary; make the
+colours beautiful; make energy flow feel like Century: Spice Road; generate at
+events and cache; split the sensor map from the extraction map so one organism can
+carry several sensors; get morphology out of emergent computation.*
+
+**Companion prototype:** `docs/superpowers/prototypes/2026-07-31-reagent-economy.html`
+(also live at <https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0>)
+— roll a world's chemistry, watch a plant run its metabolism, see the pigment and
+the body that come out of it. Built to be argued with. Try seed 7 or 42 for a
+polychrome world; 2438 and 5150 come out tonal.
+
+---
+
+## 11 · First, a retraction
+
+My §2 argument was **"six identity-map colours, six minerals, one alphabet."** You've
+told me the six was arbitrary, which means the specific claim — that the code was
+quietly waiting for exactly six minerals — is dead. I'd rather say that plainly than
+let it sit there looking clever.
+
+What survives, and I think survives *stronger*:
+
+> Pigment should be the shared alphabet between what's in the ground and what the
+> eye sees. It just shouldn't be six discrete indices. It should be **continuous**,
+> and it should be **earned**.
+
+A fixed palette of six can only ever give you six flowers. What you actually want —
+"let us see beautiful colors" — needs a colour space, not a colour list. §13.
+
+---
+
+## 12 · The reagent economy (Spice Road for plants)
+
+Century: Spice Road is exactly the right reference and I think it's a better model
+than anything in my first response. The reason it works as a *game* is the reason
+it'll work here: **the resources are boring and the conversions are the fun.** You
+don't get excited about turmeric. You get excited about the moment you realise your
+four cards chain into a loop.
+
+The mechanics worth taking, more or less intact:
+
+| Spice Road | Wonder |
+|---|---|
+| 4 spices in a value ladder | 4 **reagent tiers** — base / refined / compound / essence |
+| Upgrade cards (spice → next spice) | **Upgrade** — the primitive that makes the ladder climbable |
+| Trade cards (`2 turmeric → 3 saffron`) | **Trade** — your own `3 of A + 2 of B → C`, verbatim |
+| Gain cards (∅ → spices) | **Gather** — what the roots pull from the soil |
+| Your *hand* is the engine | A genome carries **3–5 conversion cards** |
+| Caravan limit forces spending | A **pile cap** forces the chain to actually run |
+
+**Energy is the tier, not the substance.** Say `1 / 3 / 9 / 27` per unit. Superlinear,
+so climbing is always worth it — and it's the same shape as the Avida reward ladder
+that turned out to be the load-bearing detail in that experiment (§7): reward the
+rungs, and something eventually reaches the top.
+
+**The run.** At a *digest event* (not every tick — see §15) a plant starts with what
+its roots gathered and applies its hand in genome order, repeating until no card can
+fire or a step budget runs out. Output: a final pile → energy, pigment, and a growth
+program.
+
+That loop is the emergent computation. A hand that cycles is an **engine**, and it
+feels exactly like the Spice Road moment where you realise you can go round again.
+The step budget is both the safety rail and a genuinely good tuning knob — a plant
+with more stored energy gets more steps, so vigor buys *depth of metabolism*, which
+buys more vigor.
+
+And the whole run is **printable**:
+
+> *gathered 6 ochre → traded 3 ochre + 2 saline for 1 verdigris → upgraded verdigris
+> → **1 cinnabar**, catalysed by the trace of lime in this soil*
+
+That's a sentence a player can read. It is the single most legible thing anyone has
+proposed for this game, and it falls out of the mechanic rather than being written
+for the UI.
+
+### 12.1 Catalysts — the best idea in this document
+
+A **catalyst** is a reagent that must be *present* for a conversion to fire but is
+**not consumed**. In board-game terms it's a card that reads "if you have at least
+one cinnabar, you may convert...".
+
+I want to be emphatic about this one, because of what it does structurally:
+
+- **It creates dependency without competition.** You need the catalyst to *exist
+  nearby*, not to take it from anyone. So a plant that leaks a catalyst as a
+  byproduct **enables its neighbours' metabolism**. That is facilitation — a
+  positive interaction between plants — and Wonder currently has essentially none.
+  Everything in the ecology today is competition or neutral coexistence.
+- **Pioneer and nurse species emerge.** The first thing that can make cinnabar on a
+  barren tile unlocks a whole branch of chemistry for everything that lands there
+  afterwards. Succession stops being "the crowd thins" and becomes "somebody opened
+  a door."
+- **Place gains permanent memory.** A trace catalyst deposit is a biodiversity
+  hotspot forever — not because it's rich, but because it's *permissive*.
+- **A carried catalyst is an obligate mutualism, emergent.** If a pollinator's body
+  carries a trace of what it last ate, and that trace catalyses the next flower's
+  chemistry, then the plant genuinely needs the insect — not for a rate bonus but to
+  run at all. That relationship would arise on its own, on some islands and not
+  others, and you would be able to watch it happen. Nothing in the current design
+  can produce a dependency that specific.
+
+Catalysts are cheap (a flag and a presence check), and they're the difference
+between an ecology of rivals and an ecology of *relationships*.
+
+### 12.2 Keeping worlds alive
+
+The failure mode is a **dead hand** — a genome whose cards can't fire, which gets
+nothing and dies without ever expressing anything. Three guards:
+
+1. **Tier-1 reagents are always directly edible.** Gathering alone always yields
+   *some* energy. That's the moss floor from §4.4, and it can't be rolled away.
+2. **Upgrade is always in the deck.** Every world has the ladder-climbing primitive,
+   so there is always *a* path up even if the fancy trades are absent.
+3. **Roll-and-reject the rest** against the §4.4 viability gates, reusing
+   `pickNewSeed`'s rejection sampling.
+
+Cap hands at 3–5 cards. Spice Road players hold a handful, not a library, and the
+legibility ceiling is real (§6.1).
+
+---
+
+## 13 · Colour, properly
+
+The ask was "systems that let us see beautiful colors." Here's the system.
+
+**Pigment is made, not found.** Its colour is determined by *how it was made*, not
+just what it's made of — which is true of real pigments and is also the thing that
+makes the colour carry information.
+
+Work in **OKLCH**, not HSL. This is not fussiness: averaging colours in RGB or HSL
+produces mud, reliably and unavoidably, and a system whose whole point is blending
+reagents will look grey and cheap if it blends in the wrong space. OKLCH blends stay
+vivid, and its lightness is perceptually even, so "brighter = healthier" actually
+reads as brighter instead of just reading as yellow.
+
+Then map the metabolism onto the three axes, each carrying real information:
+
+| Axis | Driven by | What it tells you |
+|---|---|---|
+| **Hue** | circular weighted mean of the pile's reagent hues, **weighted by tier** | *what* it metabolises — and because rare high-tier reagents dominate the mean, the scarce thing colours the plant |
+| **Chroma** | the **highest tier** the chain reached | *how sophisticated* it is. Tier 1 is sage and ochre; tier 4 is jewel-saturated |
+| **Lightness** | yield ÷ cost | *how well it's doing, right now*. A thriving plant is luminous; a struggling one is muted |
+
+Three consequences I like a great deal:
+
+**Saturation becomes a readout of ecological maturity.** A young island is all dusty
+sage and ochre. As lineages climb the ladder, the island *saturates*. You'd watch a
+world become more colourful as it matures — and that's not a scripted arc, it's the
+chemistry showing through. It's the single most beautiful emergent property I can
+find in this design.
+
+**Struggle is visible without a single number.** A plant in the wrong soil goes pale.
+Not a health bar — just a wash of colour draining out of a corner of the map.
+
+**Insects transform colour rather than copying it.** Today a swarm's body colour is
+its sensor map's dominant colour — it *matches* the flower. Under this system the
+insect runs *its own* chain on the reagents in the nectar, so its colour is a
+function of the flower's chemistry **and** its own gut. Two swarms on the same flower
+can end up different colours because they metabolise it differently. That's far
+more interesting than mimicry, and it makes an insect's appearance an honest signal
+of what it can digest.
+
+### 13.1 The top of the ladder isn't a pigment
+
+Tier 4 shouldn't be "a really saturated colour." Real biology's most spectacular
+colours aren't pigments at all — the morpho butterfly, the peacock, jewel beetles
+are all **structural colour**, made by microstructure rather than chemistry.
+
+So: reaching tier 4 doesn't buy a pigment, it buys **iridescence** — a hue that
+shifts with viewing angle and time of day, rendered as a two-hue shimmer. Rare,
+spectacular, unmistakable, and *earned by a metabolic achievement you could watch
+happen*. It also ties straight into §14: structure, not chemistry, means it belongs
+to the body plan.
+
+That's the thing you'd cross an island to see.
+
+---
+
+## 14 · Morphology from the same computation
+
+You asked for organisms to "generate interesting morphologies and adaptations
+through emergent computation." Here's the move I'd make, and it's the part of this
+response I'm most pleased with:
+
+> **Don't give plants a separate morphology genome. Run the metabolic chain as the
+> growth program.**
+
+Each conversion step, as it fires, emits one growth instruction:
+
+| Conversion | Growth instruction |
+|---|---|
+| **Gather** | extend a segment — thickness ∝ amount pulled |
+| **Upgrade** | branch — angle taken from the reagent's hue position |
+| **Trade** | a whorl or a leaf pair — count from the input ratio |
+| **Catalyse** | a spiral, or a swollen node at the catalyst site |
+| **Terminal high-tier product** | a flower, fruit or capsule — size ∝ amount |
+
+Run the chain, get a body. And **run the same chain downward, mirrored, with tropism
+bias from the gather step, to get the root.** Root and shoot from one program — which
+is roughly how plants actually work, and it halves the machinery.
+
+What this buys:
+
+- **Form honestly reports function.** A plant that runs a long elaborate chain grows
+  an elaborate body; one scraping tier-1 grows a stub. You look at a silhouette and
+  you know its chemistry. There is no way for the visuals to lie, ever, because
+  they're the same computation.
+- **Every world gets its own body-plan vocabulary.** Different chemistry deck →
+  different instruction mixes → islands that don't just have different palettes but
+  different *shapes*. That's the variety-and-surprise pillar at a level the current
+  14 hardcoded `PlantForm`s can't reach.
+- **It answers §4.1's fork.** I proposed tropism-growth over CA rule tables because
+  the fitness landscape is friendlier. This is better than both: the growth process
+  *is* the metabolism, so there's no separate thing to evolve and no second landscape
+  to fight. The chain is under selection for energy, and morphology comes along for
+  the ride — which is, not incidentally, how it works in life.
+- **It's cacheable**, because it runs at an event (§15).
+
+The existing 14 `PlantForm`s don't have to die for this. Easiest path: the form stays
+as an archetype that biases the instruction set (a Tree branches more, a Moss extends
+less), and the chain does the rest. That keeps every sprite drawer, habitat pool and
+save field intact while the bodies get much more varied underneath.
+
+---
+
+## 15 · Generate at events, cache, read every tick
+
+You named this and I want to promote it from an optimisation to **an architectural
+rule**, because it changes what the game can afford to be:
+
+> **Roll at the event. Cache the result. Read the cache every tick.**
+
+| Event | What generates | Cached as |
+|---|---|---|
+| **Germination** | root program from the chain + local soil | root mask, uptake profile |
+| **Maturation** | the metabolic run → pigment, body, flower map | pigment (OKLCH), body sprite, flower signature |
+| **Pollination** | two hands meet — the child's hand is **drafted** from both parents' cards | the child genome |
+| **Insect feeding** | the gut chain runs on the nectar's reagents | that swarm's colour + energy yield |
+| **Digest tick** *(slow, e.g. every N heartbeats)* | re-run the chain if the soil changed | refreshed yield |
+
+Three reasons this is more than a perf trick:
+
+**It makes the sim event-driven, and events can be *witnessed*.** Every expensive
+computation now has a moment attached to it, and a moment is something the player can
+stand next to and watch. That's the "show, don't commemorate" pillar getting a
+mechanism instead of a reminder. A pollination stops being an invisible rate bump and
+becomes a visible little transaction — two hands meeting, cards drafted, a new
+chemistry born.
+
+**Pollination-as-draft is a genuinely lovely mechanic.** Crossing floats gives you a
+midpoint. Drafting *cards* from two hands gives you a child that can do something
+neither parent could — a real recombination event with discrete, nameable outcomes.
+That's where surprise lives, and it's the same reason deck-builders are fun.
+
+**The costs land where there's headroom.** `simTick` samples 480 plants per heartbeat
+against ~8000 live (`flora.ts:526-529`), on a 2-second beat. Births and maturations
+are a few dozen per heartbeat at most. Running an expensive chain there is free;
+running it per-plant-per-tick would not be. Cache on a genome+soil hash through the
+existing `core/lru.ts`, exactly as the sprite caches already do.
+
+**One hard rule that makes it affordable:** *the board game is played at events; the
+world stores only the score.* Do not keep per-plant cube inventories on 8000 plants.
+The pile exists during a run and in the inspect view; what persists is the outcome —
+yield, pigment, body key.
+
+---
+
+## 16 · Two locks: sensor *and* stomach
+
+Your instinct to split the sensor map from the extraction map is right, and it's
+worth more than it looks. Split the insect into three parts:
+
+**1 · A sensor repertoire — 1 to 4 maps.** Each tuned to a different flower. Each
+costs upkeep, and the mutation budget is *split across them*, so:
+
+- **Specialist** — one razor-sharp sensor. Jackpot on its flower, and it goes down
+  with the ship. (This finally gives the audit's "ghost pollinator" story a
+  mechanism.)
+- **Generalist** — four mediocre sensors. Never great, never wiped out.
+
+That's a real strategy axis that *emerges* from a cost curve instead of being
+authored, and it makes divergence meaningful — a cousin can split off by dropping a
+sensor and sharpening the rest.
+
+**2 · A gut hand.** Its own conversion cards, same reagent economy as plants. Nectar
+arrives as a reagent pile and the insect runs its own chain over it.
+
+**3 · Behaviour genes** — range, nerve, cohesion. These already exist.
+
+The consequence I care about: **finding it and digesting it become separate
+problems.** A perfect sensor on a flower your gut can't process yields almost
+nothing. That doubles the niche space with no new entities, and it produces genuine
+**resource partitioning** — two swarms can share one flower by taking different
+reagents out of the same nectar. Nothing in the game can express that today.
+
+It also quietly fixes the nectar problem from §4.3, where regen is called inside
+`stepSwarm` so nectar isn't actually contested. Under a reagent pile, what one swarm
+takes is gone, and what it leaves may be exactly what another needs.
+
+---
+
+## 17 · What I'd want to be careful about
+
+**17.1 This is bigger than my v1 cut, and I should say so.** It replaces a scalar
+energy budget with an economy. But it *subsumes* the mineral proposal rather than
+stacking on it, and I'd argue it's **more** legible, not less — cubes and cards are
+more concrete than floats, and the printable run sentence beats any chart.
+
+**17.2 Loops need a budget.** A cycling hand is the best outcome and also the
+infinite loop. Cap steps per run; tie the cap to stored energy so it's a knob, not
+just a guard.
+
+**17.3 Colour needs the right space or it will look cheap.** Blending in RGB/HSL
+gives mud. OKLCH, and validate the palette for contrast against the ground tiles —
+the audit's earlier art pass already found "contrast over sand" was a real problem.
+
+**17.4 Don't let the deck become a spreadsheet.** 3–5 cards per genome, 4 tiers,
+maybe 8–12 reagents per world. If a player can't hold the island's chemistry in
+their head after an hour, it's failed — and Cyberlife said an hour or two was how
+long *Creatures* took to click (§7). That's the bar.
+
+**17.5 The 14 forms.** Decide early whether chain-grown bodies replace `PlantForm`
+or bias it. I recommend bias (§14) — replacing it touches every sprite drawer,
+habitat pool and save field, and buys little that biasing doesn't.
+
+---
+
+## 18 · What I'd build first, revised
+
+The prototype next to this document does §12–§14 with no game code: roll a chemistry,
+run a plant's hand, see the pigment and the body that come out. Play with it and tell
+me whether the colours are actually beautiful and whether the runs read as
+interesting, because those two questions decide everything else.
+
+### 18.1 Five things building it already taught
+
+These came out of tuning it, not out of thinking about it, and they'd all have been
+expensive to discover after the mechanic was wired into the game:
+
+1. **Upgrades must be generic — "spend any two of a tier" — not "spend two ochre".**
+   With reagent-specific upgrades, a random 4-card hand almost never contains a
+   connected path and most plants got nothing. Generic upgrades are also what Spice
+   Road actually does. This one change took the failure rate from most plants to
+   almost none.
+2. **The rung cost has to climb** (2 / 3 / 4 as you go up). At a flat cost of two,
+   *every* plant on the shelf reached tier three and the whole ladder collapsed into
+   a formality. Escalating cost is what spreads a generation out across base,
+   refined, compound, and the occasional essence.
+3. **Pigment must weight tier very steeply** — I ended up at 1 / 7 / 40 / 180 against
+   an energy ladder of 1 / 3 / 9 / 27. Weight it by energy and every plant comes out
+   mud-brown, because the pile is mostly leftover base. The rare thing has to
+   genuinely dominate the colour or the whole "colour is a readout" idea dies.
+4. **Chroma should read the *mean* tier, not the highest reached.** Max-tier made
+   every specimen identically saturated, since almost any run leaves one unit of
+   something good lying around. Mean tier gives a continuous spread and is honest:
+   one stray unit of essence shouldn't blaze like a plant that is mostly essence.
+5. **Branching has to keep the parent tip alive.** Splitting every tip in two turned
+   every plant into the same broom. A leader that keeps growing plus occasional side
+   branches is the difference between "this reads as flora" and "this reads as a
+   fan" — and it cost about four lines.
+
+Two open flaws I left in on purpose, because they're arguable rather than wrong:
+runs normalise their height to the plate (so a gallery stays comparable and
+*structure* carries the difference rather than scale), and dead cards that never fire
+stay visible in the hand rather than being hidden. Both are shown, not smoothed over.
+
+If it holds up, the revised v1 is: **reagent economy + catalysts + OKLCH pigment +
+chain-grown bodies + event-generation-and-cache.** The soil layer from Response I
+becomes the *gather* step of the chain rather than a system of its own — which is a
+simplification, not an addition.
+
+**Still open, and now more interesting:**
+
+1. Do reagent piles persist on a plant between digests, or does each run start from
+   what the roots just pulled? (Persisting gives you storage, seasonality, and
+   fruiting. It also gives you 8000 inventories — see §15's hard rule.)
+2. Does the player get to *hold* reagents? A pouch of cinnabar makes the garden a
+   real puzzle and is the most Stardew-shaped idea in this document.
+3. Do catalysts diffuse, or sit still? Diffusing gives you catalyst *plumes* and
+   downwind biodiversity; sitting still gives you sharp permanent hotspots. I lean
+   diffuse-slowly, because it makes wind matter.
+4. Is the chemistry deck per-world, or does the player carry cards between islands?
+
+*— Fable*
