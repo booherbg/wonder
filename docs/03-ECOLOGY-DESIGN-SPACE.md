@@ -810,7 +810,92 @@ well-mixed competing-species model. A well-mixed patch is structurally blind to
 anything that needs space or discreteness, so the negative result here is about
 *our* simplification, and a spatial version could still show the effect.
 
-### Benches 2, 3, 4, 6, 7
+### Bench 2 — Ruggedness
+
+**The answer is K = 3, with a usable band of 2–4**, and four independent measures
+agree on it. Mean fitness reached at N=16 runs 0.680 (K=0) → 0.716 (K=2) →
+**0.724 (K=3)** → 0.710 (K=4) → 0.652 (K=15).
+
+The finding that makes this actionable: **the best K does not scale with genome
+size.** Argmax across N = 10, 12, 14, 16, 18, 20 is K = 4, 3, 2, 3, 3, 3 — a small
+constant. So the recommendation survives Wonder's genome growing, which was the
+thing I was most worried about.
+
+What K=3 buys, in the terms §2.2 cared about: **a menu rather than a monolith or a
+haystack.** 58 local optima among 65,536 genotypes; the most popular basin takes
+12.5% of independent lineages and the top three take 29%. Compare K=0 at 100% (one
+answer, always, on every island) and K=15 at 0.8% (no answer is ever *the*
+answer). A population run ends on 4.0 distinct peaks with the dominant one holding
+87% — which reads exactly as **"one common form plus a few odd rare ones"**, and
+that is a good description of an island worth walking around.
+
+Adaptation also stays legible at K=3: correlation length 3.3 mutations, walks 4.9
+steps. A visible handful of events, not one jump and not an endless shuffle.
+
+Two results I did not expect:
+
+- **K=0 reaches *lower* fitness than every K from 1 to 9.** A perfectly smooth
+  landscape is not just boring, it is *worse*. No interactions means no happy
+  accidents either. That is a much better argument for epistasis than "it's more
+  realistic."
+- **The complexity catastrophe is real but not our problem.** At K=N−1 it costs
+  0.669 → 0.644 going from 10 to 20 traits — about 2.5 points out of a 17-point
+  band above chance. At fixed low K there is *no* decline at all across N=4…20.
+  Extrapolation puts genuinely catastrophic territory at 100–200 loci.
+  > **Wonder can grow its genome. It just cannot grow K alongside it.**
+  That fully resolves the §6.4 worry from the previous document: doubling the
+  genome is safe, provided the new traits do not all interact with the old ones.
+
+The drift control is the one to show Blaine: with selection at zero the population
+pins at fitness 0.500 with mean Hamming distance exactly N/2 **at every K**. That
+is Wonder today, on any landscape you like. Ruggedness is the *second* decision;
+having a fitness function at all is the first.
+
+### Bench 3 — Body as attractor
+
+**Stability: confirmed, and it is exact rather than approximate.** Mean activation
+over an attractor cycle is a property of the cycle *as a set*, so it cannot depend
+on entry phase or on which basin member you started from — 160/160 checks across
+10 seeds returned bit-identical phenotype vectors. The body is a pure function of
+the attractor, so it computes once at birth and caches, which was a hard
+requirement.
+
+**Distinctness: fails on the obvious readout, and the fix is known.** Reading only
+the first 12 genes throws the rest of the network away, and in the ordered regime
+most genes are frozen — so at N=24, K=2, **26% of attractor pairs draw literally
+the same plant**, and at N=48 it collapses to 68%. That is a readout bug rather
+than a problem with Kauffman's idea: hash *all* N mean-activations into the 12
+morphological parameters instead of truncating.
+
+Canalisation behaves exactly as the theory says, which is reassuring given how
+much of the surrounding theory turned out to be contested:
+
+| K (at p=0.5) | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| sensitivity `2Kp(1−p)` | 0.5 | 1.0 | 1.5 | 2.0 | 2.5 |
+| **silent mutations** | 70% | **59%** | 39% | **19%** | 16% |
+| mean cycle length | 2.1 | 4.2 | 8.9 | 54 | 170 |
+| frozen genes | 88% | 60% | 30% | 7% | 3% |
+
+**Recommended: N = 32, K = 2, p = 0.40** — sensitivity 0.96, just inside ordered.
+Gives 4.8 attractors, 4.1 *distinct* bodies, 4% collision, 70% canalisation, and a
+genome under 100 bytes.
+
+And the finding that matters most for the game:
+
+> **Mutation effect sizes are bimodal in the ordered regime** — 73% under 0.1, 19%
+> over 0.4, only 8% in between — and smooth in the chaotic regime. Punctuation is
+> specifically an *ordered-regime* property.
+
+That is the witnessable jump, delivered: a lineage holds its shape through most
+mutations and then, occasionally, changes dramatically. Not a slider being nudged
+— an event. Wonder has no mechanism that can currently produce one.
+
+*(Note the two benches recommend different K values — 3 for the fitness landscape,
+2 for the regulatory network. They are different models measuring different
+things; there is no contradiction, but the numbers should not be pooled.)*
+
+### Benches 4, 6, 7
 
 *Reported on the benches themselves; summary pending.*
 
@@ -824,9 +909,21 @@ anything that needs space or discreteness, so the negative result here is about
    terms.
 3. **Periodic forcing is off the v1 list** and the seed bank moves up, which is
    close to a reversal of the audit's cheapest-win claim.
-4. **Two citations corrected before they shipped** — the intermediate disturbance
+4. **Ruggedness has a number: K = 3.** And critically, it does not move as the
+   genome grows — which clears the §6.4 objection to doubling the genome, provided
+   the new traits do not all couple to the old ones.
+5. **A perfectly smooth landscape is worse than a moderately rugged one**, not just
+   duller. That reframes epistasis from a realism argument into a quality one.
+6. **Punctuated morphological change is available**, and it comes specifically from
+   the ordered regime of a regulatory network. If we want witnessable jumps rather
+   than sliders drifting, that is where they live.
+7. **Two citations corrected before they shipped** — the intermediate disturbance
    hypothesis (§4.2) and the building-block hypothesis (§3.2), both of which I had
-   written in their popular and indefensible forms.
+   written in their popular and indefensible forms. A third, Swailem & Täuber, was
+   mis-described as a competing-species model when it is predator–prey on a
+   lattice; that one matters because it is the paper the periodic-forcing idea
+   rests on, and the correction explains why our well-mixed bench could not
+   reproduce it.
 
 ---
 
