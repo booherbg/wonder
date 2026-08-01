@@ -361,6 +361,109 @@ benches is currently measuring.
 That is the payoff of doing this as a parameter study rather than as a design
 document: the sliders become the roll table.
 
+### 4.6 The island's market — scarcity as the instrument
+
+The reagent economy creates emergent scarcity, and scarcity has a natural
+readout that this project has not considered: **a price.**
+
+For each reagent, compute a shadow price from how contested it is — demand across
+all live metabolisms against what the ground actually supplies. Then show the
+island a **market report**: what is cheap, what is dear, what has moved this
+season.
+
+Why this is worth more than another chart:
+
+- It is the single most **compressed** description of an island's state. One
+  column of numbers tells you what the place is short of, which is the same thing
+  as telling you what will invade next and what any newcomer will be selected for.
+- It is **predictive**, so it rewards being read. A player who notices violet is
+  dear can go and plant something that makes violet, and be right. That is a
+  genuine strategy loop that costs no new mechanics — it is a *view* onto
+  mechanics we already have.
+- It is exactly the SimCity/Civ/Factorio register Blaine has been asking for, and
+  it arrives without making the game about optimisation, because the player is
+  still only choosing where to perturb.
+
+Prices also give a clean, principled definition of a **niche**: an unexploited
+combination of cheap inputs. The empty regions of the audit's requested
+niche-space map are just the bargains nobody is taking.
+
+### 4.7 Two generative systems, for two different visual jobs
+
+A distinction worth making explicitly, because conflating them is why generated
+creatures so often look generated:
+
+- **Structure** — the silhouette, the branching, the architecture. Best from a
+  **growth grammar** (the metabolic chain as a program, §14 of the previous doc).
+  Grammars produce structure that reads as *grown*.
+- **Surface pattern** — spots, stripes, marbling, the markings on a wing.
+  Structure grammars are bad at this. **Reaction–diffusion is what actually
+  produces it in life**, and it is cheap, and it is stunning.
+
+Running a small Gray–Scott field over an organism's body to generate its markings
+would give Wonder a pattern vocabulary it has no other route to, and it would tie
+back into the tag system directly: the resulting pattern *is* the appearance map
+the pollinators and predators read. Two parameters per organism, and the markings
+are heritable because the parameters are.
+
+### 4.8 Niche construction — the theory name for what the soil layer already does
+
+Plants draw reagents down, leak catalysts, and drop litter. That changes the
+ground, which changes what can grow there next, which changes selection on the
+plants. This is **niche construction** (Odling-Smee, Laland), and naming it
+matters because the theory says something we would otherwise have to discover the
+hard way: organisms that improve their own habitat become *founders of
+communities*, and the resulting feedback can be far stronger than selection on the
+organism alone.
+
+The design consequence: **do not treat drawdown purely as depletion.** A plant
+that leaves the ground *better* for its own kind — or for a specific partner — is
+where the most interesting long-run behaviour will come from, and it is one flag
+away from what §6.3 of the previous document already proposes.
+
+### 4.9 Every mechanic must land in the first ten seconds
+
+The legibility failures are the ones that killed the ancestors of this game, so
+this deserves an architecture rather than a reminder. Three tiers, each with a
+different audience and a different budget of attention:
+
+| Tier | Cost to the player | What carries it |
+|---|---|---|
+| **Ambient** | 0 seconds — just looking | colour, form, movement, density. A meadow gone violet; a plant with visibly elaborate roots |
+| **The tell** | ~10 seconds — lean in, inspect | *one sentence* naming the cause. "Its roots chase gold, and there is little here." |
+| **The ledger** | minutes — charts, market, chain logs | the full instrumentation, for the player who wants to be right about a hypothesis |
+
+And the rule that follows:
+
+> **A mechanic that does not land at the ambient tier does not ship.** Not "gets a
+> readout added later" — does not ship.
+
+Wonder's own stated principle is that every hidden value earns a visible tell.
+This is the stronger version: the tell must be visible *before the player asks*,
+because the player who has to ask is already the player who was going to stay.
+The one we lose is the one who never leaned in, and they only ever see tier one.
+
+Note how well this composes with §3.1's rule — prefer mechanisms whose state is
+already visible to something else in the world. A mechanism read by another
+creature is automatically ambient, because you can watch the creature respond to
+it. The two rules are the same rule seen from different ends.
+
+### 4.10 The session arc this all has to serve
+
+Concretely, what a good hour looks like, so the mechanics can be checked against
+it rather than against taste:
+
+| Time | What happens | What it requires |
+|---|---|---|
+| 0–2 min | arrive; the island is beautiful; walk | **beauty at the ambient tier** |
+| 2–10 min | notice something odd — a colour, a shape, a bare patch | **variance that reads without explanation** |
+| 10–30 min | form a hypothesis; check it against a tell or the ledger | **traceable causation** |
+| 30+ min | perturb — amend a bed, carry a catalyst, move a seed | **verbs that change the question** (§4.1) |
+| next session | return and find out what came of it | **persistence, and a world that moved without you** |
+
+Everything in this document is in service of the middle three rows. The game
+already does the first row well and the last row adequately.
+
 ---
 
 ## 5 · The design space, as axes
@@ -413,9 +516,92 @@ prototype that these extend.
 
 Stated as a bet, so it can be wrong.
 
+### 7.0 First — the minimal grade-3 loop, and why it should ship before the economy
+
+I want to argue against my own previous proposal on sequencing, because stress-
+testing it turned up something worth acting on.
+
+Ask what the **smallest possible system** is that delivers grade-3 adaptive
+surprise (§1) with traceable causation (§0). It needs exactly five things:
+
+1. the ground offers something **typed and spatially patterned**,
+2. organisms have a **heritable, modular way** to exploit it,
+3. exploitation success drives **differential reproduction**,
+4. the strategy is **visible in the organism's appearance**,
+5. **something else in the world reads that appearance**.
+
+Here is a design that satisfies all five and is perhaps two hundred lines:
+
+> Soil carries N reagent types in tiled patterns. A plant's genome gains an
+> **affinity vector** — N floats, how well it uses each reagent. `uptake =
+> affinity · local availability`, `vigor = uptake − cost`. Vigor multiplies
+> reproduction and biases the crowding thin. **Pigment is the tier-weighted mean
+> hue of what it actually took.** Insects match pigment. Done.
+
+No cards. No tiers. No chemistry, no catalysts, no chain-as-body. And it still
+produces the thing we are actually after: put that system in two biomes with
+different patterns and the lineages **diverge into visibly different colours
+because they are solving different problems**, and you can trace it.
+
+That matters because it is the honest de-risking move. The card economy is better
+— §12–§14 of the previous document argues why, and I stand behind all of it — but
+it is *much* bigger, and if it fails the ten-minute test (§4.4) we will have spent
+a month finding out. The minimal loop is small enough to build and evaluate
+quickly, and everything the economy adds sits cleanly **on top** of it rather than
+replacing it:
+
+| The economy adds | On top of the minimal loop |
+|---|---|
+| conversion cards | the affinity vector becomes the *gather* step |
+| tiers and chemistry | lets a plant **make** what the ground lacks |
+| catalysts | plants start facilitating each other (§2.1, §4.8) |
+| chain-as-body | morphology stops being a separate system |
+| the printable run | the tell gets a sentence instead of a number |
+
+**So: build the minimal loop first, confirm the loop actually closes and reads,
+then layer the economy.** Same destination, one early checkpoint where being wrong
+is cheap.
+
+#### What it would actually touch
+
+I checked this against the code rather than estimating, and it is smaller than I
+expected — because `genome.ts` turns out to be **table-driven**.
+
+`mutate`, `cross`, `clampTrait`, `driftDistance` and `phenoKey` all iterate
+`NUMERIC_TRAITS`, which is just `Object.keys(GENOME_BOUNDS)`
+(`genome.ts:36-49`). So adding an affinity vector is **six new rows in one
+table** — `aff0: [0,1] … aff5: [0,1]` — and every genetic operator picks them up
+with no edit at all. Mutation, crossing, drift distance and the render cache key
+all just start including them.
+
+| File | Change |
+|---|---|
+| `world/minerals.ts` *(new, pure)* | `rollMinerals(seed)` → per-biome motifs; `mineralAt(map, x, y, m)`. Follows `materials.ts`'s deterministic `hash2d` scatter; derived from seed, so nothing new to save |
+| `world/generate.ts` | hoist the **moisture** value that is currently computed and thrown away at line 271 onto `WorldMap` — one `Float32Array`, and it is the natural gradient input |
+| `life/genome.ts` | six rows in `GENOME_BOUNDS`. **Plus the drift fix below** |
+| `life/floraFitness.ts` *(new, pure)* | `uptake`, `cost`, `vigor` — fully testable in isolation |
+| `life/flora.ts` | the two lines: `repro *= vigor(p)` at ~548, and sample-3-take-worst in the crowding thin at ~531 |
+| `game/swarms.ts` | flower palette from the affinity vector instead of `randColor(rng)` at ~465 |
+| `render/renderer.ts`, `game/worldlab.ts` | a mineral overlay (copy the 18-line `soilTiles` block at `renderer.ts:498-516`) and a lab dock tab |
+
+**The one non-obvious hazard, now confirmed by reading it:** `driftDistance`
+(`genome.ts:97-107`) sums squared per-trait distances and divides by
+`NUMERIC_TRAITS.length`. Going from 9 traits to 15 therefore *dilutes every
+existing trait's contribution by a factor of ~1.7*, and speciation — which
+triggers off exactly this number — will shift on every already-saved seed. That
+is not a reason not to do it; it is a reason to ship the fix in the same commit.
+The fix is as table-driven as the rest: a `DRIFT_WEIGHTS: Record<NumericTrait,
+number>` beside `GENOME_BOUNDS`, weighting load-bearing traits up and cosmetic
+ones down, and a weighted mean instead of a flat one. Perhaps five lines, and it
+independently repairs the audit's finding #3 — that speciation currently fires
+mostly on meaningless drift.
+
+### 7.1 Then the economy
+
 **The spine stays what it was in §10/§18 of the previous document** — reagent
 economy, catalysts, OKLCH pigment, chain-grown bodies, event-driven generation and
-caching, the two-line fitness rewire in `flora.ts`. Nothing here displaces it.
+caching, the two-line fitness rewire in `flora.ts`. Nothing here displaces it; §7.0
+just puts a checkpoint in front of it.
 
 **What this document adds to the v1 list:**
 
