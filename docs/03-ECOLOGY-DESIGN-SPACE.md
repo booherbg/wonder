@@ -1367,9 +1367,64 @@ the worst damage happens where the *tint* peaks. Driving glow off the tint term
 instead is a one-line change, and the bench deliberately leaves it broken so the
 table still shows the problem.
 
-### Benches 8 and 11
+### Bench 11 — Motion signature
 
-*Reported on the benches themselves; summary pending.*
+**Motion is a real phenotype, and at gameplay zoom it beats colour outright.**
+
+**Separability: 89.1% against a 12.5% chance level** — leave-one-out
+nearest-neighbour over eight genomes drawn *uniformly at random* from the gene box
+(not hand-picked archetypes), 24 ten-second flights each, twelve features. Seven
+times chance, 85.9–97.9% across four seeds, with between-genome scatter 1.87× the
+within-genome scatter. The four named lineages score 100% with a clean diagonal,
+but that number means less and the bench says so.
+
+**The headline comparison:**
+
+| sprite size | 2px | 5px | 14px |
+|---|---|---|---|
+| **motion** | 51% | **88.9%** | 99% |
+| **colour** | 24% | **58.3%** | 100% |
+
+Same classifier, same chance level, and colour was given its best case — four hues
+spaced evenly at full palette chroma. **The curves cross at 8.5px.** Below that,
+motion wins; above it, colour does. Colour's collapse comes from chromatic spatial
+summation: a small sprite's chroma gets averaged over a patch much larger than the
+sprite. That is the one assumed constant, so the bench swept it — across three
+patch sizes and half/double σ the crossing stays between **5.2 and 11.2px**. The
+exact pixel is soft; the direction is not. Motion is also ahead from the *first
+quarter-second glance* (68% vs 47%), because speed is itself a gene.
+
+> Wonder's world-zoom insects are about 5px. **At the size the player actually
+> sees them, how a cloud moves is a better identifier than what colour it is** —
+> and colour is the only channel the game currently varies.
+
+This composes with Bench 9's crypsis finding in a way neither bench could see
+alone: if insects mostly end up wearing their host's colour, then colour was never
+going to distinguish them, and motion is not a nice extra — it is the channel that
+still works.
+
+**The camouflage trade-off is real, not a story.** 10 non-dominated genomes of 100,
+**six distinct optima** across 41 predation weightings, spanning 77.6% of the feed
+range, and every gene varies over 0.66–0.98 of its range along the front. The
+control settles it: turn the predator off and the front collapses to **one** member
+and one best motion. That is a frustrated optimisation of exactly the kind §4 of
+the audit argued produces persistent diversity — and here it is, measured.
+
+Two things worth acting on directly:
+
+- **A legibility ranking for the genes**, which tells us what to build and what to
+  cut: hover 1.85, dart frequency 1.75, speed 1.09, dart impulse 0.99, wind
+  coupling 0.97, curvature 0.56, **turn sharpness 0.28**. The *rhythm* genes beat
+  speed. Turn sharpness is nearly worthless and is the first thing to drop.
+- **A heritability floor.** A genome differs from *itself*, run to run, by 0.232 of
+  a lineage-distance. Mutations at σ ≤ 0.05 land under that floor and are invisible
+  to a player *and* to the classifier; σ = 0.30 moves an offspring half a lineage
+  in one step. That is a directly usable mutation-size range, and it is the sort of
+  number that is very expensive to guess wrong.
+
+### Bench 8
+
+*Reported on the bench itself; summary pending.*
 
 ---
 

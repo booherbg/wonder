@@ -217,7 +217,7 @@
   /* ---------------- lineage ---------------- */
 
   .strip { display: flex; gap: var(--s2); align-items: flex-start; min-width: 0; }
-  .gen { flex: 0 0 118px; }
+  .gen { flex: 1 1 96px; min-width: 96px; }
   .gen canvas {
     display: block; width: 100%; height: auto; image-rendering: pixelated;
     background: var(--sunk); border: 1px solid var(--rule); border-radius: 2px;
@@ -228,15 +228,21 @@
 
   /* ---------------- applied gallery ---------------- */
 
+  /* the two rows must line up across all four shapes or the comparison is
+     unreadable, so every sprite gets an identical band and sizes to fit it */
   .gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
   @media (max-width: 720px) { .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .shape {
     background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s2);
-    display: flex; flex-direction: column; gap: 5px;
+    display: grid; grid-template-rows: auto 132px auto 132px auto; gap: 5px;
+  }
+  .band {
+    background: var(--sunk); border-radius: 2px; min-height: 0;
+    display: flex; align-items: center; justify-content: center; padding: 3px;
   }
   .shape canvas {
-    display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges;
-    background: var(--sunk); border-radius: 2px;
+    display: block; max-width: 100%; max-height: 100%; width: auto; height: auto;
+    image-rendering: pixelated; image-rendering: crisp-edges;
   }
   .shape .nm { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .shape .mt { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -587,7 +593,10 @@
           of the box-filtered sprite divided by that of the full field. It is a direct measure
           of how much of the pattern survived the shrink, and it collapses exactly where Nyquist
           says it should — once a pattern feature is worth less than about two sprite pixels,
-          box-averaging eats it.
+          box-averaging eats it. The chart below averages over four crop origins, because a
+          single crop can happen to land inside one blob and read as flat; that is a fact about
+          that crop, not about the pattern. The sprites above are one honest crop each, so
+          expect them to scatter around the curve.
         </p>
         <div class="chartbox" style="margin-top: var(--s4)">
           <canvas id="downChart" width="1000" height="330"></canvas>
@@ -645,6 +654,7 @@
             <dt>Children whose regime <em>label</em> changes at the same four</dt><dd>4 / 10 / 34 / 66 %</dd>
             <dt>Pattern wavelength across the zoo (power-weighted, 64²)</dt><dd>4.9 – 8.5 cells</dd>
             <dt>Contrast kept at 1 / 2 / 3 / 4 / 6 / 12 field-cells per sprite pixel</dt><dd>100 / 90 / 75 / 59 / 33 / 19 %</dd>
+            <dt>Spread between 32×32, 16×16, 12×12, 8×8 and 7×7 at equal cells-per-pixel</dt><dd>under 4 points</dd>
             <dt>7×7 tile: child at δ = 0.002 / 0.008 / 0.03, growth seed inherited</dt><dd>0.53 / 0.71 / 0.89</dd>
             <dt>7×7 tile: <em>sibling</em>, identical genome, seed re-rolled</dt><dd>1.14</dd>
             <dt>7×7 tile: unrelated genome / two random tiles</dt><dd>1.06 / 1.13</dd>
@@ -715,13 +725,19 @@
             <strong>Pixel-scale survival is a hard geometric constraint, and it is the finding
             most likely to change how this ships.</strong> The wavelength is set by the
             chemistry — 4.9 to 8.5 cells, call it 7 — and it does not care how big your sprite
-            is. Contrast retention falls off exactly on the Nyquist schedule: 90 % at two field
-            cells per sprite pixel, 59 % at four, 33 % at six, 19 % at twelve. Concretely: cram a
-            64² field onto an 8×8 insect wing and you keep 19 % of the contrast, which is mush.
-            Crop a 16-cell window instead — 2.3 features — and you keep 90 %. <em>So the sprite
-            must not show the whole field.</em> An 8×8 wing carries two or three marks and no
-            more; a 7×7 identity map carries about two features, which is the difference between
-            "two dots", "one bar" and "plain", and nothing finer.
+            is. Only one number matters, <em>field cells per sprite pixel</em>, and contrast
+            retention falls off it on the Nyquist schedule: 100 % at 1, 90 % at 2, 75 % at 3,
+            59 % at 4, 33 % at 6, 19 % at 12. All five sprite sizes lie on that one curve within
+            four points — a 32×32 sprite and a 7×7 sprite lose the same fraction at the same
+            cells-per-pixel, so sprite size is not the variable, the crop is.
+            Concretely: an 8×8 insect wing showing a 96-cell
+            field is 12 cells per pixel and keeps 19 % — mush. Show it a 16-cell window instead,
+            2 cells per pixel and 2.3 features, and it keeps 90 % — three clean marks.
+            <em>So the sprite must not show the whole field.</em> Crop deliberately, aim for two
+            to three field cells per sprite pixel, and accept what that implies: an 8×8 wing
+            carries two or three marks and no more; a 7×7 identity map carries about two
+            features, which is the difference between "two dots", "one bar" and "plain", and
+            nothing finer.
           </p>
           <p>
             <strong>The identity-map tie-in works, but only if the growth seed becomes part of
@@ -1270,7 +1286,7 @@
   const CALIB = { nullD: 0.335, floorD: 0.0545, floorMax: 0.172, randTile: 1.128 };
 
   const S = {
-    F: 0.0340, k: 0.0630, alpha: 0.00, ratio: 2.0,
+    F: 0.0300, k: 0.0580, alpha: 0.00, ratio: 2.0,
     N: 64, steps: 3000, delta: 0.008, win: 16, seed: 1867,
     focal: null, desc: null, ana: null, cls: 0, pig: null,
     map: null, mapMeta: null, mapBusy: false,
@@ -1490,7 +1506,7 @@
     tb.appendChild(tr);
   }
 
-  const MAPPAD = { l: 62, r: 18, t: 16, b: 40 };
+  const MAPPAD = { l: 78, r: 18, t: 16, b: 40 };
   function mapGeom(cv) {
     return {
       x0: MAPPAD.l, y0: MAPPAD.t,
@@ -1546,7 +1562,7 @@
       ctx.fillText(k.toFixed(3), G.x0 - 8, y);
     }
     ctx.save();
-    ctx.translate(14, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.translate(17, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     ctx.fillText("k  ·  kill rate", 0, 0);
     ctx.restore();
@@ -2028,13 +2044,16 @@
 
   /* ====================== sprite rendering ====================== */
 
-  function boxDown(V, N, W, S1, S2) {
+  function boxDown(V, N, W, S1, S2, ox, oy) {
+    ox = ox || 0; oy = oy || 0;
     const out = new Float64Array(S1 * S2);
     for (let y = 0; y < S2; y++) for (let x = 0; x < S1; x++) {
       const x0 = Math.floor((x * W) / S1), x1 = Math.max(x0 + 1, Math.floor(((x + 1) * W) / S1));
       const y0 = Math.floor((y * W) / S2), y1 = Math.max(y0 + 1, Math.floor(((y + 1) * W) / S2));
       let s = 0, n = 0;
-      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) { s += V[(yy % N) * N + (xx % N)]; n++; }
+      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
+        s += V[((yy + oy) % N) * N + ((xx + ox) % N)]; n++;
+      }
       out[y * S1 + x] = s / n;
     }
     return out;
@@ -2088,7 +2107,9 @@
   ];
 
   function drawSprite(cv, shape, W) {
-    const w = shape.w, h = shape.h, SC = 9;
+    // SC is uniform across shapes so the four columns are literally comparable,
+    // and small enough that no sprite is ever resampled by CSS
+    const w = shape.w, h = shape.h, SC = 6;
     cv.width = w * SC; cv.height = h * SC;
     const ctx = cv.getContext("2d");
     ctx.clearRect(0, 0, cv.width, cv.height);
@@ -2138,9 +2159,11 @@
       const nm = document.createElement("div"); nm.className = "nm";
       nm.textContent = sh.nm + " · " + sh.w + "×" + sh.h;
       cell.appendChild(nm);
-      const c1 = document.createElement("canvas"); cell.appendChild(c1);
+      const b1 = document.createElement("div"); b1.className = "band";
+      const c1 = document.createElement("canvas"); b1.appendChild(c1); cell.appendChild(b1);
       const m1 = document.createElement("div"); m1.className = "mt"; cell.appendChild(m1);
-      const c2 = document.createElement("canvas"); cell.appendChild(c2);
+      const b2 = document.createElement("div"); b2.className = "band";
+      const c2 = document.createElement("canvas"); b2.appendChild(c2); cell.appendChild(b2);
       const m2 = document.createElement("div"); m2.className = "mt"; cell.appendChild(m2);
       host.appendChild(cell);
       const r1 = drawSprite(c1, sh, S.win);
@@ -2190,7 +2213,9 @@
     ctx.translate(13, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
     ctx.textAlign = "center"; ctx.fillText("contrast kept", 0, 0);
     ctx.restore();
-    // one line per sprite size; each point is a (size, window) pair, x = window/size
+    // One line per sprite size; each point is a (size, window) pair. Five series
+    // is one too many for direct labels — several end at the same x and collide —
+    // so identity comes from a legend plus distinct dash patterns.
     const cols = [cssvar("--ink"), cssvar("--slate"), cssvar("--slate"), cssvar("--slate"), cssvar("--ink")];
     const dashes = [[], [], [5, 4], [2, 3], [7, 3]];
     sizes.forEach((sz, si) => {
@@ -2198,8 +2223,13 @@
       ratios.forEach((r) => {
         const W = Math.round(sz * r);
         if (W > N) return;
-        const t = boxDown(V, N, W, sz, sz);
-        pts.push([r, full > 1e-6 ? sdOf(t) / full : 0]);
+        // average over four crop origins: a single crop can land inside one
+        // blob and read as flat, which is a fact about that crop rather than
+        // about the pattern. The gallery above still shows one honest crop.
+        let acc = 0;
+        const offs = [0, N >> 2, N >> 1, (3 * N) >> 2];
+        for (let q = 0; q < 4; q++) acc += sdOf(boxDown(V, N, W, sz, sz, offs[q], offs[(q + 1) & 3]));
+        pts.push([r, full > 1e-6 ? acc / 4 / full : 0]);
       });
       if (!pts.length) return;
       ctx.strokeStyle = cols[si]; ctx.lineWidth = si === 4 ? 2.25 : 1.75; ctx.setLineDash(dashes[si]);
@@ -2207,10 +2237,15 @@
       pts.forEach((p, i) => { const x = xOf(p[0]), y = yOf(p[1]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.stroke(); ctx.setLineDash([]);
       pts.forEach((p) => { ctx.fillStyle = cols[si]; ctx.beginPath(); ctx.arc(xOf(p[0]), yOf(p[1]), 2.5, 0, Math.PI * 2); ctx.fill(); });
-      const last = pts[pts.length - 1];
-      ctx.fillStyle = cols[si]; ctx.font = mono;
-      ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      ctx.fillText(sz + "×" + sz + " sprite", xOf(last[0]) + 7, yOf(last[1]));
+    });
+    // legend, outside the plot so it can never sit on the data
+    ctx.font = mono; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    sizes.forEach((sz, si) => {
+      const ly = G.y0 + 12 + si * 15, lx = G.x0 + G.w + 10;
+      ctx.strokeStyle = cols[si]; ctx.lineWidth = si === 4 ? 2.25 : 1.75; ctx.setLineDash(dashes[si]);
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 22, ly); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = cssvar("--muted");
+      ctx.fillText(sz + "×" + sz, lx + 28, ly);
     });
     // the Nyquist marker: below ~2 sprite px per feature the box filter eats it
     if (isFinite(S.desc && S.desc.lambda)) {
