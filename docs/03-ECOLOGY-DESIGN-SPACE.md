@@ -1,11 +1,16 @@
 # The ecology design space
 
-*Fable, 2026-08-01. A synthesis written alongside six working benches. Companion
+*Fable, 2026-08-01. A synthesis written alongside seven working benches. Companion
 to [`02-ECOLOGY-FOUNDATIONS.md`](02-ECOLOGY-FOUNDATIONS.md), which holds Blaine's
 soil/CA proposal, my response, and the reagent-economy design. This document goes
 underneath all of that: what the ecology is **for**, what Kauffman and Holland
 actually give us, the axes the design can vary along, and which of those axes the
-benches are measuring.*
+benches measured.*
+
+> **Start with the benches:**
+> <https://claude.ai/code/artifact/6c48a76a-4bd1-48af-888c-acb9e5248ad1>
+> — seven live instruments, every dial adjustable, every run seeded. §8 has the
+> findings; §7 has what I would ship because of them.
 
 ---
 
@@ -701,27 +706,47 @@ economy, catalysts, OKLCH pigment, chain-grown bodies, event-driven generation a
 caching, the two-line fitness rewire in `flora.ts`. Nothing here displaces it; §7.0
 just puts a checkpoint in front of it.
 
-**What this document adds to the v1 list:**
+**What this document adds to the v1 list** — the conditionals are now resolved, so
+these are commitments rather than bets:
 
-- **A rolled ruggedness parameter**, once Bench 2 says what range is usable. Cheap,
-  and it is the difference between islands that vary and islands that vary *in
-  kind*.
-- **The RAF check as the worldgen viability gate**, replacing my hand-written
-  rules, if Bench 1 says the transition is sharp enough to sit a threshold on.
-- **Capacity-ceiling trophic coupling**, if Bench 5 confirms the funded model
-  flickers.
-- **Periodic forcing on carrying capacity**, if Bench 5 reproduces the
-  coexistence-widening result. It is nearly free and the signals already exist.
+- **A rolled ruggedness parameter, centred on K = 3 with a band of 2–4.** Bench 2
+  settled it, and settled the follow-up worry too: the best K does not move as the
+  genome grows, so this does not have to be re-tuned every time we add a trait.
+- **The RAF check as the worldgen viability gate** — but gating on **maxRAF size
+  (≥ 5 reactions)**, never on RAF existence, which Bench 1 showed fires 3× too
+  early on trivia. And the target is islands *near* the transition with a large
+  unreached frontier, not the richest chemistry available.
+- **Capacity-ceiling trophic coupling.** Confirmed at 1.000 versus 0.490 top-level
+  persistence over 200 paired seeds, and it survives zero noise.
+- **A "mean surplus over time" chart, built before the hue ribbon.** Bench 6 found
+  it separates selection from drift by tick 50 where the ribbon needs 250–400. It
+  is also much cheaper to build.
+- **~~Periodic forcing on carrying capacity~~ — dropped.** Bench 5 returned a
+  negative result: it *narrows* coexistence by 4.6%, because shared multiplicative
+  forcing leaves every capacity ratio unchanged. This reverses the audit's
+  "cheapest real win on this whole list" and is the clearest example of why the
+  benches were worth building.
+- **Pattern regularity demoted** from balance-critical to a texture control, per
+  Bench 6 (§8).
 
 **What moves to v2, deliberately:**
 
-- Boolean-network morphology. It is the most beautiful idea here, but the chain-as-
-  growth-program already covers morphology for v1 and two morphology systems is one
-  too many. Revisit when the chain version's limits are known.
-- Species-as-autocatalytic-loop. Genuinely radical; needs Bench 1 to say the loops
-  are common before it is anything but a nice thought.
-- Disturbance and the seed bank. Wants selection to exist first, or there is
-  nothing for it to reset.
+- Boolean-network morphology. It is the most beautiful idea here and Bench 3 says
+  it works — exact stability, 70% canalisation, bimodal punctuated jumps — but the
+  chain-as-growth-program already covers morphology for v1, and two morphology
+  systems is one too many. The bench also found the readout bug (truncating to the
+  first 12 genes collides 26% of phenotypes) so whoever picks this up starts a day
+  ahead.
+- Species-as-autocatalytic-loop. Still the most interesting idea in the document,
+  and Bench 1 says the loops do show up — but also that closure is not evolution,
+  so it would be an origination mechanism rather than a replacement for genomes.
+- **Disturbance, promoted from "later" to "soon", and specifically the gentle
+  version.** Bench 7 found suppression beats clearing (4.91 vs 4.52 effective
+  species) because clearing subsidises colonisers. It still wants selection to
+  exist first, or there is nothing for it to reset.
+- The seed bank, **demoted**. Bench 7 found it is worth nothing at the diversity
+  peak and only saves the high-disturbance tail — and that peaceful dynamics
+  already remove most of the extinction risk it insures against.
 
 **What I would not build at all**, and want on the record: interference
 competition, lethal predation, and any mechanic whose only surface is a number in a
