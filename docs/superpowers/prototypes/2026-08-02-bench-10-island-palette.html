@@ -1,0 +1,2153 @@
+<style>
+  /* ------------------------------------------------------------------
+     Bench 10 — The island palette.
+     Colour at the scene scale, not the organism scale. Same specimen-plate
+     identity as the rest of the suite: graphite and bone chrome, hairline
+     rules, and the only saturated colour on the page is generated.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --ground:  #E9EAE6;  --panel: #F3F4F0;  --sunk: #DFE1DB;
+    --ink:     #191E1C;  --muted: #676D68;  --rule: #CBCEC7;
+    --slate:   #3D4A56;  --shadow: rgba(25, 30, 28, .09);
+    --good:    #3F6B4A;  --warn: #8A6A2B;  --bad: #8A3B32;
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141817; --panel: #1C2220; --sunk: #101413;
+      --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+      --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+      --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141817; --panel: #1C2220; --sunk: #101413;
+    --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+    --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+    --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+  }
+  :root[data-theme="light"] {
+    --ground: #E9EAE6; --panel: #F3F4F0; --sunk: #DFE1DB;
+    --ink: #191E1C;    --muted: #676D68; --rule: #CBCEC7;
+    --slate: #3D4A56;  --shadow: rgba(25,30,28,.09);
+    --good: #3F6B4A;   --warn: #8A6A2B;  --bad: #8A3B32;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s8); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s3);
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(30px, 5vw, 46px); line-height: 1.1;
+    letter-spacing: -.015em; text-wrap: balance; margin: 0 0 var(--s3);
+  }
+  .standfirst { max-width: 64ch; color: var(--muted); font-size: 16px; margin: 0 0 var(--s5); }
+  .standfirst em { color: var(--ink); font-style: italic; }
+  h2 {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  }
+  h3 {
+    font-family: var(--font-display); font-weight: 400; font-size: 20px;
+    letter-spacing: -.01em; margin: var(--s5) 0 var(--s2);
+  }
+  section { margin-bottom: var(--s7); }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 62ch; margin: 0 0 var(--s4); }
+  code { font-family: var(--font-mono); font-size: .89em; background: var(--sunk); padding: 1px 4px; border-radius: 2px; }
+
+  button {
+    font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    color: var(--ink); background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 7px 13px; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  button:hover { border-color: var(--slate); }
+  button:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  button.primary { background: var(--slate); border-color: var(--slate); color: var(--ground); }
+  button.primary:hover { filter: brightness(1.12); }
+  button:disabled { opacity: .4; cursor: default; border-color: var(--rule); }
+
+  footer {
+    margin-top: var(--s7); padding-top: var(--s4); border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* ---------- controls strip ---------- */
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center;
+    padding: var(--s3) 0 var(--s5);
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--s6);
+  }
+  .controls .spacer { flex: 1 1 auto; }
+  .stamp {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- the rail ---------- */
+
+  .rail {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3);
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+  .ctrl label { font-size: 13px; }
+  .ctrl .val {
+    font-family: var(--font-mono); font-size: 12px; color: var(--slate);
+    font-variant-numeric: tabular-nums;
+  }
+  .ctrl .hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .ctrl input[type="range"] { width: 100%; accent-color: var(--slate); margin: 2px 0 0; }
+  .ctrl input[type="range"]:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
+  .ctrl select {
+    font-family: var(--font-ui); font-size: 13px; color: var(--ink);
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 5px 7px; width: 100%;
+  }
+  .ctrl select:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  .railsplit { border-top: 1px solid var(--rule); margin: var(--s1) 0 0; padding-top: var(--s3); }
+  .railsplit .rl {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: var(--s2);
+  }
+
+  .readout {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s3);
+    font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  }
+  .readout dt { color: var(--muted); }
+  .readout dd { margin: 0; text-align: right; }
+  .pill {
+    display: inline-block; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px;
+    border-radius: 999px; border: 1px solid currentColor;
+  }
+
+  /* ---------- layout ---------- */
+
+  .plate { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--s5); align-items: start; }
+  @media (max-width: 900px) { .plate { grid-template-columns: minmax(0, 1fr); } }
+  .sticky { position: sticky; top: var(--s3); }
+  @media (max-width: 900px) { .sticky { position: static; } }
+
+  .panelbox {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s4); box-shadow: 0 1px 3px var(--shadow);
+  }
+
+  canvas.scene {
+    display: block; width: 100%; height: auto;
+    image-rendering: pixelated; background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 2px;
+  }
+  .capt {
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    margin-top: var(--s2); font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- the six-key strip ---------- */
+
+  .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s3); }
+  .keycell {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s2); display: flex; flex-direction: column; gap: 6px;
+    text-align: left; cursor: pointer; color: inherit;
+    transition: border-color .12s;
+  }
+  .keycell:hover { border-color: var(--slate); }
+  .keycell[aria-current="true"] { border-color: var(--slate); box-shadow: inset 0 0 0 1px var(--slate); }
+  .keycell:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  .keycell canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; border-radius: 2px; }
+  .keycell .kn { font-family: var(--font-display); font-size: 15px; }
+  .keycell .kn .ctl { font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+  .keycell .km {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+    font-variant-numeric: tabular-nums; display: flex; justify-content: space-between; gap: var(--s2);
+  }
+
+  /* ---------- species chips ---------- */
+
+  .chips { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 2px 8px 2px 3px;
+    border: 1px solid var(--rule); border-radius: 999px;
+    background: var(--panel); color: inherit; white-space: nowrap; cursor: pointer;
+    font-family: var(--font-ui);
+  }
+  .chip:hover { border-color: var(--slate); }
+  .chip:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  .chip[aria-current="true"] { border-color: var(--slate); box-shadow: inset 0 0 0 1px var(--slate); }
+  .sw { width: 13px; height: 13px; border-radius: 2px; flex: 0 0 auto; border: 1px solid var(--rule); }
+  .chip i { font-family: var(--font-display); font-style: italic; }
+  .chip .gl { font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; color: var(--muted); }
+
+  /* ---------- tables ---------- */
+
+  .scrollx { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.tbl {
+    border-collapse: collapse; font-family: var(--font-mono); font-size: 11px;
+    font-variant-numeric: tabular-nums; min-width: 620px; width: 100%;
+  }
+  table.tbl th, table.tbl td {
+    padding: 4px 9px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  table.tbl th { color: var(--muted); font-weight: 500; letter-spacing: .05em; }
+  table.tbl th:first-child, table.tbl td:first-child { text-align: left; }
+  table.tbl tr.cur td { background: var(--sunk); }
+  table.tbl tr.ctl td { color: var(--muted); }
+  table.tbl caption {
+    caption-side: bottom; text-align: left; color: var(--muted);
+    font-size: 11px; padding-top: var(--s2); font-family: var(--font-ui);
+  }
+  td.g { color: var(--good); } td.w { color: var(--warn); } td.b { color: var(--bad); }
+
+  /* ---------- growth panel ---------- */
+
+  .growrow { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--s5); align-items: start; }
+  @media (max-width: 700px) { .growrow { grid-template-columns: minmax(0, 1fr); } }
+  canvas.grow {
+    display: block; width: 100%; max-width: 170px; height: auto;
+    image-rendering: pixelated; background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 2px;
+  }
+  .steps {
+    font-family: var(--font-mono); font-size: 11.5px; line-height: 1.7;
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3); margin: 0; max-height: 190px; overflow-y: auto; overflow-x: auto;
+  }
+  .steps div { white-space: nowrap; }
+  .steps .n { color: var(--muted); display: inline-block; width: 3ch; }
+  .steps .on { color: var(--slate); }
+
+  /* ---------- prose ---------- */
+
+  .reading { max-width: 68ch; }
+  .reading p { margin: 0 0 var(--s3); }
+  .reading ul { margin: 0 0 var(--s3); padding-left: 1.1em; }
+  .reading li { margin-bottom: 6px; }
+  .reading strong { font-weight: 600; }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Wonder · ecology foundations · bench 10 of 11</p>
+  <h1>The island palette</h1>
+  <p class="standfirst">
+    A plant's colour is earned: hue from the reagents its metabolism ended up holding,
+    chroma from how sophisticated that metabolism is, lightness from how well it is doing.
+    That works on a specimen plate. This bench asks the question the plate cannot —
+    <em>what do twenty of them look like standing in the same field, on real ground,
+    under real light?</em> Every colour below the rule was computed, including the dirt.
+  </p>
+
+  <div class="controls">
+    <button class="primary" id="rollIsland" type="button">Roll a new island</button>
+    <button id="reseedFlora" type="button">Reseed the flora</button>
+    <span class="spacer"></span>
+    <span class="stamp" id="stamp"></span>
+  </div>
+
+  <div class="plate">
+    <div>
+      <div class="rail sticky" id="rail"></div>
+    </div>
+
+    <div>
+      <section style="margin-bottom: var(--s6)">
+        <h2>The island, at the current key</h2>
+        <p class="note">
+          Ground bands, water and sky are computed from the same key as the flora, so the
+          palette is not solving half the problem. Scrub <em>time of day</em> and watch what
+          happens to the colour differences you were told were meaningful.
+        </p>
+        <div class="panelbox">
+          <canvas class="scene" id="hero" width="384" height="164"></canvas>
+          <div class="capt" id="heroCapt"></div>
+          <div class="chips" id="chips"></div>
+        </div>
+      </section>
+
+      <section style="margin-bottom: var(--s6)">
+        <h2>Live palette geometry</h2>
+        <p class="note">
+          Recomputed on every change, over the species plus the seven terrain colours.
+          Near-grey entries (<code>C &lt; 0.025</code>) are excluded from the hue statistics —
+          the hue of slate rock is not information.
+        </p>
+        <div class="panelbox">
+          <dl class="readout" id="live"></dl>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section>
+    <h2>The same island in six keys</h2>
+    <p class="note">
+      Identical seed, identical terrain, identical chemistry, identical plant positions and
+      identical metabolisms. The <em>only</em> thing that differs between these six is where the
+      reagent hues were allowed to land. <strong>none</strong> is the control — it is what Wonder
+      does today. Click a cell to make it the live key.
+    </p>
+    <div class="strip" id="strip"></div>
+  </section>
+
+  <section>
+    <h2>Does the bias cost us variety?</h2>
+    <p class="note">
+      The two numbers pull in opposite directions and that tension is the whole finding.
+      <strong>Island difference</strong> is how unlike two islands' palettes look side by side
+      (12-bin circular hue histogram, chroma-weighted, total-variation distance — rotation
+      <em>sensitive</em>). <strong>Structure repeat</strong> is the same distance computed on the
+      histogram of pairwise hue <em>intervals</em>, which is rotation <em>invariant</em>: it asks
+      whether every island has the same shape even when it has a different root hue. High island
+      difference is good. High structure repeat means samey.
+    </p>
+    <div class="panelbox">
+      <div style="display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;margin-bottom:var(--s3)">
+        <button class="primary" id="sweepBtn" type="button">Run the sweep</button>
+        <span class="spacer"></span>
+        <span class="pill" id="sweepState" style="color:var(--muted)">not run</span>
+      </div>
+      <div class="scrollx">
+        <table class="tbl" id="sweepTbl">
+          <caption id="sweepCap">18 configurations — six keys at bias 0.0 / 0.5 / 1.0, 14 islands each.</caption>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Does earned colour survive the light?</h2>
+    <p class="note">
+      Pairwise OKLab separation between the species' rendered colours, as a percentage of their
+      unlit separation. 100% means every distinction the metabolism earned is still on screen;
+      low means the atmosphere has eaten the signal. <em>Indistinct pairs</em> counts species
+      pairs closer than ΔE 0.025 — at a 3-pixel sprite that is "the same colour" to a player.
+    </p>
+    <div class="panelbox">
+      <div class="scrollx">
+        <table class="tbl" id="lightTbl">
+          <caption>Foreground plants only — depth haze is applied on top of this and compounds it.</caption>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Growth, run visibly</h2>
+    <p class="note">
+      Wonder's plants pop into existence fully formed. But a body here <em>is</em> a program —
+      each conversion emits one growth instruction as it fires — so the program can simply be run
+      over a second and a half instead of instantly. Nothing about the plant changes. Pick a
+      species from the chips above; the log below is the same chain, stepping.
+    </p>
+    <div class="panelbox">
+      <div class="growrow">
+        <div>
+          <canvas class="grow" id="grow" width="150" height="200"></canvas>
+          <div style="margin-top:var(--s2);display:flex;gap:var(--s2);flex-wrap:wrap">
+            <button id="growBtn" type="button">Grow it again</button>
+          </div>
+        </div>
+        <div>
+          <div class="steps" id="growLog"></div>
+          <dl class="readout" id="growRead" style="margin-top:var(--s3)"></dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="reading">
+    <h2>How to read this</h2>
+    <p>
+      <strong>A harmony key is a bias, not a constraint.</strong> Each key is a set of anchor hues
+      on a rolled root — one anchor for analogous, two opposed for complementary, three at 120°
+      for triadic, and so on. A reagent still rolls a uniform hue; the bias then compresses its
+      distance from the nearest anchor. At bias 0 nothing moves and you are looking at Wonder as
+      it ships today. At bias 1 a hue is squeezed into a narrow arc around its anchor
+      (±37° for analogous, ±12° for tetradic), but which anchor it lands on is still the roll's
+      choice. The key never picks the colours; it only decides which colours are near each other.
+    </p>
+    <p>
+      <strong>The terrain participates.</strong> Sand, grass, forest, marsh, rock, water and sky
+      are pulled toward the same anchors at 40% of the flora's bias, which is enough to make the
+      ground belong to the chord and not enough to stop sand being sand. Every palette statistic
+      on this page includes those seven colours. A palette measured only over the plants is
+      measuring a specimen plate again.
+    </p>
+    <p>
+      <strong>The <em>key root</em> control is the one that matters most.</strong> Rolled, each
+      island picks its root hue freely and the terrain is merely dragged toward whatever chord
+      came up. Grounded, the root is chosen so that one anchor lands exactly on the terrain green
+      — the ground is a <em>member</em> of the chord rather than a guest. That single switch turns
+      out to be worth more than the choice of key, which is the finding I did not expect and the
+      reason the table below re-runs when you flip it.
+    </p>
+    <p>
+      <strong>Plants do not inherit the key directly.</strong> This matters more than I expected.
+      A plant's hue is the tier-weighted circular mean of the reagents in its final pile, so a
+      plant holding two reagents from two different anchors lands <em>between</em> them — in the
+      interval the key was trying to keep empty. The key is applied to the chemistry; the flora
+      only sees it through the metabolism. The "chord adherence" readout is exactly this leak,
+      measured: mean degrees from each species hue to its nearest anchor.
+    </p>
+    <p>
+      <strong>Light is applied in OKLab, not as an overlay.</strong> Time of day produces a
+      luminance factor, a chroma factor and a tint colour; each rendered colour is scaled and
+      then mixed toward the tint. That is why the survival table can be honest — the same
+      transform that draws the pixels produces the numbers, so there is no way for the picture
+      and the measurement to disagree.
+    </p>
+  </section>
+
+  <section class="reading">
+    <h2>Findings</h2>
+    <p>
+      Written after running it, and two of these came out against what I expected. Sweep figures
+      are <strong>14 islands per configuration, 10 species each</strong>, seeds 1000 + 7919·i,
+      with <code>chroma ceiling 0.16</code> and <code>lightness spread 0.40</code>. The light
+      figures are averaged over 5 island seeds, 45 species pairs each. The control everywhere is
+      <em>no key at all</em>, which is Wonder as it ships today: <strong>scene discord 26.1%,
+      flora discord 23.5%, island difference 0.302, character spread 10.4°</strong>.
+    </p>
+
+    <h3>A key that ignores the ground buys almost nothing</h3>
+    <p id="f1">
+      This is the result that reorganised the rest. With the root <em>rolled</em>, biasing the
+      reagents to a chord does exactly what you would hope <em>to the flora</em> — complementary
+      at bias 1.0 takes flora discord from 23.5% down to <strong>8.3%</strong> — and yet the
+      whole-scene number barely moves, 26.1% → <strong>23.4%</strong>. The plants agree with each
+      other and go on disagreeing with the dirt. Switch the root to <em>grounded</em>, which puts
+      one anchor on the terrain green and changes nothing else, and the same key drops the scene
+      to 20.3%; grounded tetradic reaches <strong>9.6%</strong>, a 63% reduction against control.
+      On the default island, six of the fifteen colours in the discord count are ground or sky,
+      and they carry 69% of the weight in the tonality figure. <strong>Harmony that stops at the
+      flora is measuring a specimen plate again.</strong>
+    </p>
+
+    <h3>Recommendation: split-complementary, grounded root, bias 0.70</h3>
+    <p id="f2">
+      At those settings: scene discord <strong>19.5%</strong> (−25% against control), flora
+      discord <strong>18.8%</strong>, island difference <strong>0.380</strong> (<em>up</em> 26%),
+      character spread <strong>11.2°</strong> (up 8%). It is the only configuration in the sweep
+      where every number moves the right way at once.
+    </p>
+    <p>
+      Grounded tetradic and grounded triadic score better on beauty — 9.6% and 11.1% at bias 1.0 —
+      and I am not recommending them, for a reason the metrics cannot see. Their offsets are
+      closed under their own rotation, so <em>grounding</em> them produces one identical anchor
+      set for every island in the game: tetradic grounded is always {62°, 152°, 242°, 332°}. The
+      island-difference number stays flat (0.288) because islands still differ in <em>which</em>
+      anchors they populate, which is exactly the blind spot: the statistic cannot tell "different
+      palette" from "different proportions of the same four paints". Split-complementary's
+      offsets (0/150/210) are not rotation-symmetric, so grounding it yields three distinct
+      chords rather than one.
+    </p>
+    <p>
+      Bias 0.70 rather than 1.0 is also a judgement call the numbers do not force — grounded split
+      at 1.0 is strictly better on discord (17.3%) with the same variety figures. The argument is
+      arithmetic about arc width. At bias <em>b</em> a hue at the chord boundary lands
+      <code>60(1−b) + 14b</code> degrees from its anchor, so the reachable band is ±28° at 0.70
+      and ±14° at 1.0. Across the three grounded split chords that is five anchor hues, which
+      means <strong>78% of the hue wheel remains reachable at 0.70 and 39% at 1.0</strong>. A game
+      whose flora can only occupy 39% of the wheel has stopped having a palette and started having
+      a brand guideline. I would go to 0.8 and no further.
+    </p>
+
+    <h3>Variety does not measurably suffer — it improves</h3>
+    <p id="f3">
+      This was the risk and the answer is genuinely the opposite of what I expected. Island
+      difference <em>rises</em> under a rolled root — 0.302 with no key, 0.514 for split at bias
+      0.70, 0.607 for complementary at 1.0. The reason is that <strong>an unbiased island has no
+      character to differ in</strong>: ten uniformly-rolled reagent hues make a flat hue histogram
+      and every flat histogram resembles every other one. Give an island a chord and a rolled
+      root and it acquires a colour it can be unlike the next island in.
+    </p>
+    <p>
+      The exception, and the trap, is <strong>analogous</strong>. It is the only key that makes
+      measured discord <em>worse</em> — 26.1% → 31.3% rolled at 0.70, → 37.7% grounded — because
+      squeezing the flora into one arc does nothing about the ground, and the arc tends to land at
+      a mid-distance from it, which is precisely the discord band. Grounded analogous then
+      collapses variety outright: island difference 0.302 → <strong>0.141</strong>, character
+      spread 10.4° → <strong>2.1°</strong>. It is the key that looks best in a single screenshot
+      and worst in a game. If you take one number from this bench, take that one.
+    </p>
+
+    <h3>The chord leaks, and that is a feature</h3>
+    <p id="f4">
+      Chord adherence is measured twice on purpose. For grounded split-complementary at bias 1.0
+      the <em>reagents</em> average <strong>7.7°</strong> from their nearest anchor while the
+      <em>flora</em> that eat them average <strong>15.1°</strong> — the leak roughly doubles the
+      distance. At the recommended 0.70 it is 15.3° against 21.2°, and on the default island the
+      live readout shows 12° against 26°.
+      The leak is the circular mean in the pigment step: a plant holding reagents
+      from two different anchors is genuinely an in-between colour, and it should be. That is what
+      stops a triadic island reading as three paint pots. The mechanism that makes colour
+      meaningful is also the mechanism that softens the key — a pleasant accident rather than
+      a designed one, and a reason not to reach for bias 1.0.
+    </p>
+
+    <h3>Earned colour does not survive dusk. Glow is the fix, and it fires too late</h3>
+    <p id="f5">
+      Measured against unlit pigment separation, averaged over five islands: full daylight
+      (08:00–16:30) retains <strong>93%</strong> with 4 of 45 species pairs indistinct. The dusk
+      twilight peak at 17:48 retains <strong>35%</strong> with <strong>22.8 of 45</strong>
+      indistinct; deep twilight at 18:18 retains 24% with 35 of 45; night sits at
+      <strong>27%</strong> with 30 of 45. Mean hue rotation at the twilight peaks is
+      <strong>60–62°</strong> — more than a sixth of the wheel, applied to everything at once.
+      Retention is below 50% from roughly 17:30 to 06:30, which is <strong>54% of the modelled
+      cycle</strong>. Stated plainly: <strong>for more than half the day, a plant's pigment is not
+      communicating what its metabolism did.</strong> Almost all of that is the tint term rather
+      than the darkness — at the twilight peak the model mixes 49% of the way to a single warm
+      colour, and mixing everything toward one colour is definitionally the destruction of a
+      colour code.
+    </p>
+    <p>
+      The good news is that Wonder already ships the fix. A glowing plant is mixed back toward its
+      own pigment instead of toward the tint, and that restores night separation to
+      <strong>108%</strong> of unlit — better than unlit, because glow also lifts chroma 25% —
+      with indistinct pairs down from 30 to <strong>3.6 of 45</strong>. So the design implication
+      is concrete and slightly uncomfortable: <em>glow is not a cosmetic trait, it is the
+      night-time readability channel</em>, and a 10% glow share means 90% of the island goes
+      colour-blind at sunset.
+    </p>
+    <p>
+      The second implication is a one-line bug. This bench fades glow in on <em>luminance</em>, so
+      at the twilight peak — where the tint is strongest and the damage is worst — glow has barely
+      started, and it recovers only 74% there against 108% at full night. The trough is not
+      night, it is dusk. Driving the glow weight off the <em>tint</em> term instead of the
+      luminance term would close it, and costs nothing. I have deliberately not made that change
+      here, so the table still shows the problem.
+    </p>
+    <p>
+      Depth haze compounds all of this and is the cheapest thing on the page to get wrong. At the
+      default 0.45, a plant standing at the horizon retains <strong>51%</strong> of its separation
+      against 93% at the viewer's feet; at 0.75 it is 23%, and at 1.0 the far bands are literally
+      one colour. Haze buys scene coherence very cheaply, which is exactly why it is tempting to
+      overdo. I would cap it at 0.35.
+    </p>
+
+    <h3>What a player would actually see</h3>
+    <p id="f6">
+      Three things, none of which require them to know why. First, an island reads as
+      <em>a place with a colour</em> before it reads as individual plants — compare the control
+      cell in the strip, where coral, olive and violet turn up in the same square metre of grass,
+      against the split cell where the same twenty metabolisms land on a coral-and-sage chord that
+      the sand and the sea are also in. Second, the next island is still a different place, because
+      the root rolls; the measured island difference is higher with the key than without it.
+      Third — and this is the one they would complain about without being able to name — at dusk
+      the island stops having colours and starts having one colour, and if the glowing plants are
+      rare they will not notice the flora again until morning.
+    </p>
+
+    <h3>What this does not tell us</h3>
+    <p>
+      The discord metric is a heuristic. The 25–65° band is a working stand-in for "reads as an
+      accident", drawn from ordinary colour practice rather than from a perceptual result; it is
+      directionally trustworthy and it is not a measurement of beauty. The strip is the actual
+      evidence for the beauty half and it is a picture, which is the honest status of that claim.
+      The bench also fixes the terrain palette by hand — a Wonder island whose ground varies by
+      biome would need the 40% terrain pull re-tuned — and it models none of silhouette, foliage
+      density or texture, all of which plausibly do more for scene coherence than hue does. And
+      the light model is one artistic choice among many: a gentler golden hour would produce a
+      gentler finding, so the number to take from the dusk section is not "35%" but "the tint
+      fraction is the parameter that decides whether your colour code survives, and nobody had
+      picked it on purpose".
+    </p>
+  </section>
+
+  <footer>
+    Bench 10 for docs/02-ECOLOGY-FOUNDATIONS.md · colour at the scene scale ·
+    self-contained, no external requests · every number derived from the seed ·
+    nothing here is wired to the game
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================== rng ============================== */
+  // mulberry32, matching src/core/rng.ts. Warmed 12 draws because the first
+  // draw correlates across nearby seeds; this project has been bitten by that.
+  function makeRng(seed) {
+    let a = seed >>> 0;
+    const f = function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < 12; i++) f();
+    return f;
+  }
+  const range = (rng, lo, hi) => lo + rng() * (hi - lo);
+  const irange = (rng, lo, hi) => Math.floor(range(rng, lo, hi + 1 - 1e-9));
+  const pick = (rng, a) => a[Math.floor(rng() * a.length)];
+  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const wrap180 = (d) => (((d + 180) % 360) + 360) % 360 - 180;
+  const hueDist = (a, b) => Math.abs(wrap180(a - b));
+  const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+  /* ========================== oklch -> sRGB ========================== */
+  // Ottosson's matrices. We convert ourselves rather than handing oklch() to
+  // canvas so swatches, sprites and the measured numbers can never disagree.
+  function oklabToLinear(L, a, b) {
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+    const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+    return [
+       4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ];
+  }
+  const inGamut = (v) => v.every((c) => c >= -0.0005 && c <= 1.0005);
+
+  // Chroma is walked down until it fits sRGB, because clipping channels would
+  // shift the hue and hue is carrying information in these benches.
+  function oklchRGB(L, C, H) {
+    L = clamp(L, 0, 1);
+    const rad = (H * Math.PI) / 180;
+    let c = Math.max(0, C);
+    let lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+    for (let i = 0; i < 24 && !inGamut(lin); i++) {
+      c *= 0.92;
+      lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+    }
+    const enc = (x) => {
+      x = clamp(x, 0, 1);
+      const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+      return Math.round(clamp(s, 0, 1) * 255);
+    };
+    return lin.map(enc);
+  }
+  function oklch(L, C, H) {
+    return "#" + oklchRGB(L, C, H).map((n) => n.toString(16).padStart(2, "0")).join("");
+  }
+  const hexOf = (c) => oklch(c.L, c.C, c.H);
+  function packOf(c) {
+    const v = oklchRGB(c.L, c.C, c.H);
+    return ((0xff000000 | (v[2] << 16) | (v[1] << 8) | v[0]) >>> 0);
+  }
+
+  const lch2lab = (c) => {
+    const r = (c.H * Math.PI) / 180;
+    return { L: c.L, a: c.C * Math.cos(r), b: c.C * Math.sin(r) };
+  };
+  const lab2lch = (l) => ({
+    L: l.L, C: Math.hypot(l.a, l.b),
+    H: ((Math.atan2(l.b, l.a) * 180) / Math.PI + 360) % 360,
+  });
+  function mixLCH(a, b, w) {
+    const A = lch2lab(a), B = lch2lab(b);
+    return lab2lch({ L: A.L + (B.L - A.L) * w, a: A.a + (B.a - A.a) * w, b: A.b + (B.b - A.b) * w });
+  }
+  function dE(a, b) {
+    const A = lch2lab(a), B = lch2lab(b);
+    return Math.hypot(A.L - B.L, A.a - B.a, A.b - B.b);
+  }
+
+  /* ============================ harmony keys ============================ */
+  // A key is a set of anchor offsets from a rolled root, plus the arc a hue is
+  // squeezed into at full bias. Nothing here forbids a hue; it only compresses
+  // the distance to the nearest anchor, so the roll still decides everything.
+
+  const KEYS = [
+    { id: "none",   name: "none",              offs: null,               sigma: 360,
+      blurb: "uniform — Wonder today" },
+    { id: "analog", name: "analogous",         offs: [0],                sigma: 74,
+      blurb: "one narrow arc" },
+    { id: "comp",   name: "complementary",     offs: [0, 180],           sigma: 34,
+      blurb: "two poles" },
+    { id: "split",  name: "split-complement",  offs: [0, 150, 210],      sigma: 28,
+      blurb: "a pole and its flanks" },
+    { id: "triad",  name: "triadic",           offs: [0, 120, 240],      sigma: 28,
+      blurb: "three at 120°" },
+    { id: "tetrad", name: "tetradic",          offs: [0, 90, 180, 270],  sigma: 24,
+      blurb: "four at 90°" },
+  ];
+  const KEY_BY = {};
+  KEYS.forEach((k) => { KEY_BY[k.id] = k; });
+
+  function anchorsFor(key, root) {
+    if (!key.offs) return null;
+    return key.offs.map((o) => (root + o + 720) % 360);
+  }
+  function pullHue(h, anchors, sigma, bias) {
+    if (!anchors || bias <= 0) return ((h % 360) + 360) % 360;
+    let best = anchors[0], bd = 1e9;
+    for (let i = 0; i < anchors.length; i++) {
+      const d = hueDist(h, anchors[i]);
+      if (d < bd) { bd = d; best = anchors[i]; }
+    }
+    const d = wrap180(h - best);
+    const maxd = 180 / anchors.length;      // widest a hue can be from its anchor
+    const target = (d / maxd) * (sigma / 2); // that distance, compressed into the arc
+    return ((best + d * (1 - bias) + target * bias) % 360 + 360) % 360;
+  }
+  function adherence(hues, anchors) {
+    if (!anchors || !hues.length) return null;
+    let s = 0;
+    hues.forEach((h) => {
+      let bd = 1e9;
+      anchors.forEach((a) => { bd = Math.min(bd, hueDist(h, a)); });
+      s += bd;
+    });
+    return s / hues.length;
+  }
+
+  /* ============================== terrain ============================== */
+  // Wonder's ground: cool desaturated greens, sands and slate blues. These are
+  // the unlit, un-keyed base colours; the key pulls them at TERRAIN_PULL of the
+  // flora's bias, which is enough to belong to the chord and not enough to
+  // stop sand reading as sand.
+  const TERRAIN_PULL = 0.40;
+  // top = where the band begins as a fraction of frame height; dens = how
+  // willingly plants stand on it (the foreground rock shelf is nearly bare,
+  // which is what stops the strip reading as a lawn).
+  const TERRAIN = [
+    { id: "sand",   name: "sand",   base: { L: 0.790, C: 0.048, H: 84 },  top: 0.455, dens: 0.40 },
+    { id: "grass",  name: "grass",  base: { L: 0.585, C: 0.062, H: 140 }, top: 0.545, dens: 1.00 },
+    { id: "forest", name: "forest", base: { L: 0.415, C: 0.058, H: 152 }, top: 0.660, dens: 1.25 },
+    { id: "marsh",  name: "marsh",  base: { L: 0.480, C: 0.046, H: 168 }, top: 0.790, dens: 0.75 },
+    { id: "rock",   name: "rock",   base: { L: 0.455, C: 0.024, H: 240 }, top: 0.905, dens: 0.18 },
+  ];
+  const WATER = { L: 0.470, C: 0.055, H: 232 };
+  const SKY_D = { L: 0.845, C: 0.052, H: 246 };
+  const HORIZON_F = 0.355;
+  // area weights (share of a typical frame) — used for the palette statistics
+  const TERRAIN_W = [0.075, 0.115, 0.120, 0.085, 0.115];
+  const WATER_W = 0.080, SKY_W = 0.410;
+
+  /* ============================ the chemistry ============================ */
+  // A slimmed re-implementation of the reagent economy bench: gather, upgrade,
+  // trade. Colour still has to be earned by a chain that actually fires — this
+  // bench varies where the reagent HUES land, not how the chemistry works.
+
+  const TIER_ENERGY = [0, 1, 3, 9, 27];
+  const TIER_NAME = ["", "base", "refined", "compound", "essence"];
+  const TIER_PIGMENT = [0, 1, 7, 40, 180];
+  const COUNTS = [0, 4, 3, 2, 1];
+
+  const GENUS = ["Calyx", "Thren", "Vesper", "Umbra", "Solen", "Astra", "Corvid",
+                 "Nubila", "Ferrum", "Halcyon", "Cirrus", "Ligna", "Selen", "Orach",
+                 "Pellis", "Rhamn", "Stell", "Tessa"];
+  const EPITHET = ["palustris", "sylvatica", "arenaria", "nivalis", "rupestris", "lucens",
+                   "fusca", "gracilis", "umbrosa", "tenuis", "vernalis", "cinerea",
+                   "aurata", "torquata", "patula", "serotina", "littoralis", "hyalina"];
+  const ISLE_A = ["Pol", "Kes", "Tarn", "Vel", "Mor", "Ashen", "Bramm", "Ost", "Fenn", "Lir"];
+  const ISLE_B = ["pol", "mere", "holt", "reach", "scar", "wick", "fell", "strand"];
+
+  function buildDeck(rng, reagents) {
+    const byTier = (t) => reagents.filter((r) => r.tier === t);
+    const deck = [];
+    byTier(1).forEach((r) => deck.push({ kind: "gather", out: r.id, n: irange(rng, 3, 6) }));
+    for (let t = 1; t <= 3; t++) {
+      byTier(t + 1).forEach((up) =>
+        deck.push({ kind: "upgrade", fromTier: t, cost: t + 1, out: up.id, n: 1 }));
+    }
+    for (let i = 0; i < 5; i++) {
+      const t = irange(rng, 1, 2);
+      const a = pick(rng, byTier(t)), b = pick(rng, byTier(t));
+      const outs = byTier(Math.min(4, t + 1));
+      if (!a || !b || a.id === b.id || !outs.length) continue;
+      deck.push({
+        kind: "trade",
+        inp: [{ id: a.id, n: irange(rng, 2, 3) }, { id: b.id, n: irange(rng, 1, 2) }],
+        out: pick(rng, outs).id, n: 1,
+      });
+    }
+    return deck;
+  }
+
+  const take = (pile, id, n) => { pile[id] -= n; if (pile[id] <= 0) delete pile[id]; };
+  const has = (pile, inp) => inp.every((i) => (pile[i.id] || 0) >= i.n);
+
+  function spendTier(reagents, pile, tier, cost) {
+    const held = Object.keys(pile)
+      .filter((id) => reagents[id].tier === tier && pile[id] > 0)
+      .sort((a, b) => pile[b] - pile[a] || a - b);
+    let need = cost; const spent = [];
+    for (const id of held) {
+      if (need <= 0) break;
+      const n = Math.min(need, pile[id]);
+      spent.push({ id: +id, n: n }); need -= n;
+    }
+    if (need > 0) return null;
+    spent.forEach((s) => take(pile, s.id, s.n));
+    return spent;
+  }
+
+  function runChain(reagents, soil, hand, budget) {
+    const pile = Object.assign({}, soil);
+    const steps = [];
+    let fired = true, n = 0;
+    while (fired && n < budget) {
+      fired = false;
+      for (const card of hand) {
+        if (n >= budget) break;
+        let spent = null;
+        if (card.kind === "gather") {
+          if ((pile[card.out] || 0) >= card.n + 2) continue;
+        } else if (card.kind === "upgrade") {
+          spent = spendTier(reagents, pile, card.fromTier, card.cost);
+          if (!spent) continue;
+        } else {
+          if (!has(pile, card.inp)) continue;
+          card.inp.forEach((i) => take(pile, i.id, i.n));
+          spent = card.inp;
+        }
+        pile[card.out] = (pile[card.out] || 0) + card.n;
+        steps.push({ card: card, spent: spent });
+        fired = true; n++;
+      }
+    }
+    let energy = 0, top = 0;
+    for (const id in pile) {
+      const r = reagents[id];
+      energy += pile[id] * TIER_ENERGY[r.tier];
+      if (pile[id] > 0) top = Math.max(top, r.tier);
+    }
+    const cost = 4 + steps.length * 1.2;
+    return { pile: pile, steps: steps, energy: energy, top: top, cost: cost, ratio: energy / cost };
+  }
+
+  // Hue from what it ended holding, chroma from how sophisticated the chain was,
+  // lightness from how well it did. The ceiling and the spread are rail params.
+  function pigmentOf(reagents, run, chromaCeil, lightSpread, fallbackHue) {
+    let x = 0, y = 0, w = 0, tw = 0;
+    for (const id in run.pile) {
+      const r = reagents[id];
+      const k = run.pile[id] * TIER_PIGMENT[r.tier];
+      const rad = (r.hue * Math.PI) / 180;
+      x += Math.cos(rad) * k; y += Math.sin(rad) * k; w += k;
+      tw += k * r.tier;
+    }
+    let hue = w > 0 ? ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360 : fallbackHue;
+    const meanTier = w > 0 ? clamp(tw / w, 1, 4) : 1;
+    const coherence = w > 0 ? Math.hypot(x, y) / w : 0;
+    const C = chromaCeil * (0.18 + 0.82 * (meanTier - 1) / 3) * (0.66 + 0.34 * coherence);
+    const vig = clamp(Math.log2(1 + run.ratio) / 4, 0, 1);
+    const L = clamp(0.56 + lightSpread * (vig - 0.5), 0.20, 0.92);
+    return { L: L, C: C, H: hue, meanTier: meanTier, coherence: coherence, vig: vig };
+  }
+
+  /* ============================== the island ============================== */
+  // Two rng streams on purpose. STRUCTURE (deck, hands, chains, forms, band
+  // preferences, terrain noise) comes from one; HUES come from another. That is
+  // what lets the six-key strip be honestly "the same island" — changing the key
+  // moves colours and nothing else.
+
+  function makeIsland(seed, S) {
+    const key = KEY_BY[S.key] || KEYS[0];
+    const rs = makeRng(seed ^ 0x9e37);        // structure
+    const rh = makeRng(seed ^ 0x5bf03635);    // hues
+
+    // Both root modes consume exactly two draws, so every key and every root
+    // mode sees the *same* raw uniform hue rolls afterwards. That is what makes
+    // the six-key strip an honest comparison rather than six different islands.
+    const r0 = rh(), r1 = rh();
+    const root = (S.rootMode === "grounded" && key.offs)
+      ? ((152 - key.offs[Math.floor(r1 * key.offs.length)]) % 360 + 360) % 360
+      : r0 * 360;
+    const anchors = anchorsFor(key, root);
+
+    const reagents = [];
+    for (let t = 1; t <= 4; t++) {
+      for (let k = 0; k < COUNTS[t]; k++) {
+        reagents.push({ id: reagents.length, tier: t, hue: pullHue(rh() * 360, anchors, key.sigma, S.bias) });
+      }
+    }
+    const deck = buildDeck(rs, reagents);
+    const bases = reagents.filter((r) => r.tier === 1);
+    const soil = {};
+    for (let i = 0; i < 2; i++) soil[pick(rs, bases).id] = irange(rs, 2, 4);
+
+    const isle = pick(rs, ISLE_A) + pick(rs, ISLE_B);
+
+    // Terrain and sky are members of the palette, pulled at 40% of the bias.
+    const terrain = TERRAIN.map((t) => ({
+      id: t.id, name: t.name, top: t.top,
+      col: { L: t.base.L, C: t.base.C, H: pullHue(t.base.H, anchors, key.sigma, S.bias * TERRAIN_PULL) },
+    }));
+    const water = { L: WATER.L, C: WATER.C, H: pullHue(WATER.H, anchors, key.sigma, S.bias * TERRAIN_PULL) };
+    const skyHue = pullHue(SKY_D.H, anchors, key.sigma, S.bias * TERRAIN_PULL);
+
+    const species = [];
+    for (let i = 0; i < S.species; i++) {
+      const r = makeRng(((seed ^ 0x51a7) + i * 0x9e3779b1) >>> 0);
+      const gathers = deck.filter((c) => c.kind === "gather");
+      const hand = [pick(r, gathers)];
+      const rest = deck.filter((c) => c.kind !== "gather");
+      const size = irange(r, 3, 5);
+      for (let k = 1; k < size && rest.length; k++) {
+        hand.push(rest.splice(Math.floor(r() * rest.length), 1)[0]);
+      }
+      const budget = irange(r, 8, 30);
+      const run = runChain(reagents, soil, hand, budget);
+      const pig = pigmentOf(reagents, run, S.chromaCeil, S.lightSpread, root);
+      const fav = irange(r, 0, 4);
+      const bandW = [1, 1, 1, 1, 1];
+      bandW[fav] = 5;
+      species.push({
+        i: i, name: pick(r, GENUS) + " " + pick(r, EPITHET),
+        hand: hand, run: run, pig: pig,
+        form: irange(r, 0, 3),
+        height: irange(r, 4, 12),
+        bandW: bandW, fav: fav,
+        glow: r() < S.glowShare,
+        leaf: { L: Math.max(0.20, pig.L - 0.16), C: pig.C * 0.62, H: pig.H },
+        bloom: { L: Math.min(0.94, pig.L + 0.13), C: pig.C * 1.06, H: pig.H },
+      });
+    }
+
+    return {
+      seed: seed, key: key, root: root, anchors: anchors, reagents: reagents,
+      soil: soil, deck: deck, isle: isle, species: species,
+      terrain: terrain, water: water, skyHue: skyHue,
+    };
+  }
+
+  /* ============================== the light ============================== */
+
+  function lightAt(hour) {
+    const e = Math.sin((Math.PI * (hour - 6)) / 12);   // sun elevation, -1..1
+    const day = smooth(-0.18, 0.30, e);
+    const twilight = Math.exp(-Math.pow(e / 0.24, 2));
+    const chromaMul = 0.42 + 0.58 * day;
+
+    const NITE = { L: 0.30, C: 0.055, H: 258 };
+    const NOON = { L: 0.95, C: 0.018, H: 96 };
+    const WARM = { L: 0.80, C: 0.130, H: 52 };
+    let tint = mixLCH(NITE, NOON, day);
+    tint = mixLCH(tint, WARM, twilight * 0.80);
+    const tintW = clamp(0.07 + 0.30 * twilight + 0.26 * (1 - day), 0, 0.50);
+
+    // sky: zenith and horizon, both moved by the same three regimes
+    let zen = mixLCH({ L: 0.16, C: 0.050, H: 268 }, { L: 0.845, C: 0.052, H: 246 }, day);
+    let hor = mixLCH({ L: 0.22, C: 0.044, H: 256 }, { L: 0.905, C: 0.032, H: 232 }, day);
+    zen = mixLCH(zen, { L: 0.50, C: 0.090, H: 300 }, twilight * 0.62);
+    hor = mixLCH(hor, { L: 0.76, C: 0.135, H: 44 }, twilight * 0.80);
+
+    return { hour: hour, e: e, day: day, twilight: twilight, tint: tint, tintW: tintW,
+             chromaMul: chromaMul, zen: zen, hor: hor };
+  }
+
+  function applyLight(c, LM) {
+    const L = clamp(c.L * (0.24 + 0.76 * LM.day) + 0.02 * LM.day, 0, 1);
+    return mixLCH({ L: L, C: c.C * LM.chromaMul, H: c.H }, LM.tint, LM.tintW);
+  }
+  // A glowing plant is mixed back toward its own pigment instead of the night
+  // tint. That is the whole mechanism, and it is why the survival table has a
+  // glow row that does not look like the others.
+  function applyGlowCol(c, LM) {
+    const lit = applyLight(c, LM);
+    const w = (1 - LM.day) * 0.85;
+    if (w <= 0.001) return lit;
+    return mixLCH(lit, { L: Math.min(0.90, c.L + 0.30), C: Math.min(0.32, c.C * 1.25), H: c.H }, w);
+  }
+
+  function phaseWord(LM) {
+    if (LM.day < 0.12) return "night";
+    if (LM.e < 0 && LM.twilight > 0.3) return "dusk";
+    if (LM.e > 0 && LM.twilight > 0.3) return "dawn";
+    if (LM.day > 0.9) return "day";
+    return LM.hour < 12 ? "morning" : "evening";
+  }
+  function hhmm(h) {
+    const hh = Math.floor(h) % 24, mm = Math.round((h - Math.floor(h)) * 60);
+    return String(hh).padStart(2, "0") + ":" + String(mm === 60 ? 0 : mm).padStart(2, "0");
+  }
+
+  /* ============================== the scene ============================== */
+
+  function noiseLine(rng, W, amp, pts) {
+    const cps = [];
+    for (let i = 0; i <= pts; i++) cps.push((rng() * 2 - 1) * amp);
+    const out = new Float32Array(W);
+    for (let x = 0; x < W; x++) {
+      const t = (x / W) * pts, i = Math.floor(t), f = t - i;
+      const s = (1 - Math.cos(f * Math.PI)) / 2;
+      out[x] = cps[i] * (1 - s) + cps[Math.min(pts, i + 1)] * s;
+    }
+    return out;
+  }
+
+  // Layout is structural: it does not move when the key or the light change.
+  function buildLayout(island, W, H, S) {
+    const rng = makeRng((island.seed ^ 0x2545f491) >>> 0);
+    const horizon = Math.round(H * HORIZON_F);
+    const edges = TERRAIN.map((t) => Math.round(H * t.top));
+    // two octaves per boundary, or the coastline reads as a ruled line
+    const wob = TERRAIN.map((t, i) => {
+      const a = noiseLine(rng, W, 2.6 + i * 0.9, 4 + i);
+      const b = noiseLine(rng, W, 1.1 + i * 0.3, 11 + i * 2);
+      const out = new Float32Array(W);
+      for (let x = 0; x < W; x++) out[x] = a[x] + b[x];
+      return out;
+    });
+    const edgeAt = (i, x) => Math.round(edges[i] + wob[i][x]);
+
+    const stars = [];
+    for (let i = 0; i < 70; i++) {
+      stars.push({ x: Math.floor(rng() * W), y: Math.floor(rng() * (horizon - 2)), b: 0.35 + rng() * 0.65 });
+    }
+    const shimmer = [];
+    for (let i = 0; i < 46; i++) {
+      shimmer.push({ x: Math.floor(rng() * W), y: horizon + 1 + Math.floor(rng() * Math.max(1, edges[0] - horizon - 1)),
+                     w: 2 + Math.floor(rng() * 5) });
+    }
+    // pebbles and tussocks — flat bands read as a colour chart, not ground
+    const grit = [];
+    for (let i = 0; i < Math.round(W * H / 160); i++) {
+      grit.push({ x: Math.floor(rng() * W), y: 0, t: rng(), d: rng() });
+    }
+    grit.forEach((g) => { g.y = Math.round(edges[0] + (H - 1 - edges[0]) * Math.pow(g.t, 0.7)); });
+
+    const nPlants = Math.round((30 + 620 * S.density) * (W * H) / (384 * 164));
+    const plants = [];
+    for (let i = 0; i < nPlants; i++) {
+      const x = Math.floor(rng() * W);
+      const top = edges[0];
+      const y = Math.round(top + (H - 1 - top) * Math.pow(rng(), 0.82));
+      const keep = rng();
+      let band = 0;
+      for (let b = 0; b < TERRAIN.length; b++) if (y >= edgeAt(b, x)) band = b;
+      if (y < edgeAt(0, x)) continue;
+      if (keep > TERRAIN[band].dens) continue;
+      plants.push({ x: x, y: y, band: band, r: rng(), r2: rng() });
+    }
+    plants.sort((a, b) => a.y - b.y);
+    return { horizon: horizon, edges: edges, edgeAt: edgeAt, stars: stars,
+             shimmer: shimmer, grit: grit, plants: plants };
+  }
+
+  // Species assignment is per-layout-plant and depends only on structure, so it
+  // is stable across keys too.
+  function assignSpecies(island, layout) {
+    for (const p of layout.plants) {
+      const ws = island.species.map((s) => s.bandW[p.band]);
+      let tot = 0; ws.forEach((w) => { tot += w; });
+      let t = p.r * tot, k = 0;
+      while (k < ws.length - 1 && t > ws[k]) { t -= ws[k]; k++; }
+      p.sp = k;
+    }
+  }
+
+  function renderScene(cv, island, layout, S) {
+    const W = cv.width, H = cv.height;
+    const ctx = cv.getContext("2d");
+    const img = ctx.createImageData(W, H);
+    const buf = new Uint32Array(img.data.buffer);
+    const LM = lightAt(S.hour);
+
+    /* ---- sky ---- */
+    const skyZen = { L: LM.zen.L, C: LM.zen.C, H: mixHue(LM.zen.H, island.skyHue, 0.45) };
+    const skyHor = { L: LM.hor.L, C: LM.hor.C, H: mixHue(LM.hor.H, island.skyHue, 0.30) };
+    const hz = layout.horizon;
+    const skyRow = [];
+    for (let y = 0; y < hz; y++) {
+      const c = mixLCH(skyZen, skyHor, Math.pow(y / Math.max(1, hz - 1), 1.35));
+      skyRow.push(c);
+      const p = packOf(c);
+      buf.fill(p, y * W, y * W + W);
+    }
+    /* stars */
+    if (LM.day < 0.5) {
+      const a = (1 - LM.day * 2) * 0.9;
+      for (const st of layout.stars) {
+        if (st.y >= hz) continue;
+        const base = skyRow[st.y];
+        buf[st.y * W + st.x] = packOf({ L: clamp(base.L + a * st.b * 0.62, 0, 1), C: base.C * 0.35, H: base.H });
+      }
+    }
+    /* sun or moon */
+    drawDisc(buf, W, H, layout, LM);
+
+    /* ---- haze reference: the horizon sky ---- */
+    const hazeCol = { L: Math.min(0.96, skyHor.L * 1.02 + 0.02), C: skyHor.C * 0.85, H: skyHor.H };
+    const far = (y) => clamp(1 - (y - hz) / Math.max(1, H - hz), 0, 1);
+    const hazeW = (y) => S.haze * Math.pow(far(y), 1.6);
+
+    /* ---- water: deep at the horizon, shoaling toward the beach ---- */
+    const waterLit = applyLight(island.water, LM);
+    const wTop = hz, wBot = layout.edges[0] + 2;
+    for (let y = wTop; y < wBot; y++) {
+      const t = (y - wTop) / Math.max(1, wBot - wTop);
+      const shoal = mixLCH(waterLit, { L: Math.min(0.92, waterLit.L + 0.20), C: waterLit.C * 1.1, H: waterLit.H }, t * t);
+      const refl = mixLCH(shoal, skyHor, 0.30 * (1 - t));
+      const c = mixLCH(refl, hazeCol, hazeW(y));
+      const p = packOf(c);
+      const pd = packOf({ L: Math.max(0, c.L - 0.035), C: c.C, H: c.H });
+      // banded, not diagonal — a diagonal dither reads as a compression artefact
+      for (let x = 0; x < W; x++) buf[y * W + x] = (hash2(x >> 1, y) & 7) === 0 ? pd : p;
+    }
+    for (const sh of layout.shimmer) {
+      if (sh.y >= hz && sh.y < layout.edges[0]) {
+        const base = mixLCH(mixLCH(waterLit, skyHor, 0.3), hazeCol, hazeW(sh.y));
+        const p = packOf({ L: Math.min(1, base.L + 0.11), C: base.C * 0.75, H: base.H });
+        for (let k = 0; k < sh.w; k++) if (sh.x + k < W) buf[sh.y * W + sh.x + k] = p;
+      }
+    }
+
+    /* ---- land bands: colour depends only on (band, row), so precompute ---- */
+    const bandRow = island.terrain.map(() => new Int32Array(H));
+    const bandRowD = island.terrain.map(() => new Int32Array(H));
+    const bandRowL = island.terrain.map(() => new Int32Array(H));
+    for (let b = 0; b < island.terrain.length; b++) {
+      const lit = applyLight(island.terrain[b].col, LM);
+      for (let y = 0; y < H; y++) {
+        const c = mixLCH(lit, hazeCol, hazeW(y));
+        bandRow[b][y] = packOf(c);
+        bandRowD[b][y] = packOf({ L: Math.max(0, c.L - 0.035), C: c.C * 0.96, H: c.H });
+        bandRowL[b][y] = packOf({ L: Math.min(1, c.L + 0.030), C: c.C * 1.02, H: c.H });
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      const tops = island.terrain.map((t, i) => layout.edgeAt(i, x));
+      for (let b = 0; b < island.terrain.length; b++) {
+        const y0 = Math.max(0, tops[b]);
+        const y1 = b + 1 < tops.length ? tops[b + 1] : H;
+        for (let y = y0; y < Math.min(H, y1); y++) {
+          // a lit lip on the first row of a band and a shadow on the last two:
+          // that single trick is what stops five flat fills reading as a chart
+          const hsh = hash2(x, y);
+          const p = y - y0 === 0 ? bandRowL[b][y]
+                  : y >= y1 - 2 ? bandRowD[b][y]
+                  : (hsh & 7) === 0 ? bandRowD[b][y]
+                  : (hsh & 15) === 1 ? bandRowL[b][y] : bandRow[b][y];
+          buf[y * W + x] = p;
+        }
+      }
+      // a bright shoal line where sand meets water
+      const s0 = tops[0];
+      if (s0 - 1 >= 0 && s0 - 1 < H) {
+        const c = mixLCH(applyLight({ L: 0.88, C: 0.030, H: island.terrain[0].col.H }, LM), hazeCol, hazeW(s0));
+        buf[(s0 - 1) * W + x] = packOf(c);
+      }
+    }
+    /* ---- grit ---- */
+    for (const g of layout.grit) {
+      if (g.y < 1 || g.y >= H) continue;
+      let band = 0;
+      for (let b = 0; b < island.terrain.length; b++) if (g.y >= layout.edgeAt(b, g.x)) band = b;
+      if (g.y < layout.edgeAt(0, g.x)) continue;
+      const p = g.d < 0.5 ? bandRowD[band][g.y] : bandRowL[band][g.y];
+      buf[g.y * W + g.x] = p;
+      if (g.d > 0.85 && g.x + 1 < W) buf[g.y * W + g.x + 1] = p;
+    }
+
+    /* ---- plants ---- */
+    const cache = new Map();
+    const colsFor = (sp, bucket) => {
+      const k = sp.i * 32 + bucket;
+      let v = cache.get(k);
+      if (v) return v;
+      const w = (bucket / 24) * S.haze;
+      // no hard cutoff: applyGlowCol's own weight fades to nothing in daylight,
+      // so the picture and the survival table are computed by the same function
+      const useGlow = sp.glow && (1 - LM.day) * 0.85 > 0.06;
+      const f = useGlow ? applyGlowCol : applyLight;
+      const body = mixLCH(f(sp.leaf, LM), hazeCol, w);
+      const bloom = mixLCH(f(sp.bloom, LM), hazeCol, w);
+      const stem = mixLCH(f({ L: Math.max(0.12, sp.pig.L - 0.24), C: sp.pig.C * 0.5, H: sp.pig.H }, LM), hazeCol, w);
+      v = {
+        body: packOf(body), bloom: packOf(bloom), stem: packOf(stem),
+        glowRGB: useGlow ? oklchRGB(Math.min(0.95, sp.pig.L + 0.30), sp.pig.C * 1.1, sp.pig.H) : null,
+        glowA: useGlow ? (1 - LM.day) * 0.55 : 0,
+      };
+      cache.set(k, v);
+      return v;
+    };
+
+    for (const p of layout.plants) {
+      const sp = island.species[p.sp];
+      if (!sp) continue;
+      const d = far(p.y);
+      // haze depends only on the row, so quantise it and cache the 25 variants
+      const bucket = clamp(Math.round(Math.pow(d, 1.6) * 24), 0, 24);
+      const cols = colsFor(sp, bucket);
+      const scale = 0.34 + 0.66 * (1 - d);
+      const h = Math.max(2, Math.round(sp.height * scale));
+      drawSprite(buf, W, H, p.x, p.y, h, sp.form, cols);
+    }
+
+    ctx.putImageData(img, 0, 0);
+    return LM;
+  }
+
+  // A cheap deterministic per-pixel hash for ground speckle. A linear form like
+  // ((x*7 + y*13) & 3) makes visible diagonal banding once the whole frame is
+  // tinted at dusk — it reads as a compression artefact rather than as soil.
+  function hash2(x, y) {
+    let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    return (n ^ (n >>> 16)) >>> 0;
+  }
+
+  function mixHue(a, b, w) {
+    const d = wrap180(b - a);
+    return ((a + d * w) % 360 + 360) % 360;
+  }
+
+  function drawDisc(buf, W, H, layout, LM) {
+    const up = LM.e >= -0.12;
+    const t = up ? clamp((LM.hour - 5.2) / 13.6, 0, 1) : clamp(((LM.hour + 12) % 24 - 5.2) / 13.6, 0, 1);
+    const cx = Math.round(W * (0.08 + 0.84 * t));
+    const el = Math.max(0.02, Math.abs(LM.e));
+    const cy = Math.round(layout.horizon - (layout.horizon - 9) * el);
+    const r = up ? 4 : 3;
+    const col = up
+      ? { L: Math.min(0.99, 0.90 + 0.08 * LM.day), C: 0.06 + 0.09 * LM.twilight, H: 70 - 22 * LM.twilight }
+      : { L: 0.90, C: 0.02, H: 250 };
+    const p = packOf(col);
+    for (let y = -r; y <= r; y++) {
+      for (let x = -r; x <= r; x++) {
+        if (x * x + y * y > r * r) continue;
+        const px = cx + x, py = cy + y;
+        if (px < 0 || py < 0 || px >= W || py >= layout.horizon) continue;
+        if (!up && x * x + (y + 1.4) * (y + 1.4) < (r - 0.4) * (r - 0.4)) continue; // crescent
+        buf[py * W + px] = p;
+      }
+    }
+  }
+
+  function put(buf, W, H, x, y, c) {
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    buf[y * W + x] = c;
+  }
+  function add(buf, W, H, x, y, rgb, a) {
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const i = y * W + x, v = buf[i];
+    const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255;
+    const nr = Math.min(255, r + rgb[0] * a) | 0;
+    const ng = Math.min(255, g + rgb[1] * a) | 0;
+    const nb = Math.min(255, b + rgb[2] * a) | 0;
+    buf[i] = ((0xff000000 | (nb << 16) | (ng << 8) | nr) >>> 0);
+  }
+
+  // Sprites are mostly CANOPY, not stem. The earned pigment has to be the part
+  // of the plant a player's eye lands on; the first version of this bench drew
+  // a field of matchsticks and the colour argument went with it.
+  function drawSprite(buf, W, H, x, y, h, form, cols) {
+    const ty = y - h;
+    if (cols.glowRGB) {
+      const a = cols.glowA;
+      for (let dy = -3; dy <= 2; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const m = Math.abs(dx) + Math.abs(dy + 1);
+          if (m > 3) continue;
+          add(buf, W, H, x + dx, ty + dy + 1, cols.glowRGB,
+              a * (m === 0 ? 0.60 : m === 1 ? 0.34 : m === 2 ? 0.17 : 0.07));
+        }
+      }
+    }
+    const trunk = Math.max(1, Math.round(h * 0.42));
+    for (let i = 0; i < trunk; i++) put(buf, W, H, x, y - i, cols.stem);
+    const ch = Math.max(1, h - trunk);          // canopy height
+    const cw = h >= 9 ? 2 : h >= 5 ? 1 : 0;     // canopy half-width
+
+    if (form === 0) {                            // spire — narrow, tall crown
+      for (let i = 0; i < ch; i++) {
+        const w = i < ch - 2 ? Math.min(cw, 1) : 0;
+        for (let dx = -w; dx <= w; dx++) put(buf, W, H, x + dx, y - trunk - i, cols.body);
+      }
+      put(buf, W, H, x, ty, cols.bloom);
+      if (h >= 6) put(buf, W, H, x, ty + 1, cols.bloom);
+
+    } else if (form === 1) {                     // shrub — a rounded mass
+      for (let i = 0; i < ch; i++) {
+        const t = i / Math.max(1, ch - 1);
+        const w = Math.round(cw * Math.sin(Math.PI * (0.25 + 0.75 * (1 - Math.abs(t - 0.45) * 1.6))));
+        for (let dx = -w; dx <= w; dx++) put(buf, W, H, x + dx, y - trunk - i, cols.body);
+      }
+      put(buf, W, H, x, ty, cols.bloom);
+      if (cw > 0) put(buf, W, H, x - 1, ty + 1, cols.bloom);
+
+    } else if (form === 2) {                     // umbel — a flat head on a stalk
+      for (let i = 0; i < Math.max(1, ch - 1); i++) put(buf, W, H, x, y - trunk - i, cols.body);
+      for (let dx = -(cw + 1); dx <= cw + 1; dx++) put(buf, W, H, x + dx, ty + 1, cols.bloom);
+      for (let dx = -cw; dx <= cw; dx++) put(buf, W, H, x + dx, ty, cols.bloom);
+
+    } else {                                     // tuft — a low fan of blades
+      const spread = cw + 1;
+      for (let dx = -spread; dx <= spread; dx++) {
+        const hh = Math.max(1, ch - Math.abs(dx));
+        for (let i = 0; i < hh; i++) put(buf, W, H, x + dx, y - trunk - i, cols.body);
+        if (hh > 1 && Math.abs(dx) !== 1) put(buf, W, H, x + dx, y - trunk - hh + 1, cols.bloom);
+      }
+    }
+  }
+
+  /* ============================== statistics ============================== */
+
+  function paletteEntries(island) {
+    const out = [];
+    island.terrain.forEach((t, i) => out.push({ L: t.col.L, C: t.col.C, H: t.col.H, w: TERRAIN_W[i], kind: "ground" }));
+    out.push({ L: island.water.L, C: island.water.C, H: island.water.H, w: WATER_W, kind: "ground" });
+    out.push({ L: SKY_D.L, C: SKY_D.C, H: island.skyHue, w: SKY_W, kind: "ground" });
+    const each = 0.45 / Math.max(1, island.species.length);
+    island.species.forEach((s) => out.push({ L: s.pig.L, C: s.pig.C, H: s.pig.H, w: each, kind: "flora" }));
+    return out;
+  }
+
+  function statsOf(island) {
+    const ent = paletteEntries(island);
+    const vivid = ent.filter((e) => e.C >= 0.025);
+    let sum = 0, n = 0, discord = 0;
+    let fn = 0, fd = 0, gn = 0, gd = 0;
+    const ds = [];
+    for (let i = 0; i < vivid.length; i++) {
+      for (let j = i + 1; j < vivid.length; j++) {
+        const d = hueDist(vivid[i].H, vivid[j].H);
+        const bad = d >= 25 && d <= 65;   // the "reads as an accident" band
+        ds.push(d); sum += d; n++;
+        if (bad) discord++;
+        // split the same statistic by what it is a pair OF, because the ground
+        // has a discord floor the flora cannot be blamed for
+        if (vivid[i].kind === "flora" && vivid[j].kind === "flora") { fn++; if (bad) fd++; }
+        if (vivid[i].kind === "ground" && vivid[j].kind === "ground") { gn++; if (bad) gd++; }
+      }
+    }
+    const meanD = n ? sum / n : 0;
+    let vs = 0; ds.forEach((d) => { vs += (d - meanD) * (d - meanD); });
+    const sdD = n ? Math.sqrt(vs / n) : 0;
+
+    // muddiness: the chroma of the weighted mean over the mean chroma. 1 means
+    // every hue agrees; near 0 means the island averages to grey.
+    let al = 0, aa = 0, ab = 0, mc = 0, tw = 0;
+    ent.forEach((e) => {
+      const l = lch2lab(e);
+      al += l.L * e.w; aa += l.a * e.w; ab += l.b * e.w; mc += e.C * e.w; tw += e.w;
+    });
+    const mud = mc > 1e-6 ? Math.hypot(aa / tw, ab / tw) / (mc / tw) : 0;
+
+    const cs = island.species.map((s) => s.pig.C);
+    const cm = cs.reduce((a, b) => a + b, 0) / Math.max(1, cs.length);
+    let cv = 0; cs.forEach((c) => { cv += (c - cm) * (c - cm); });
+    const chromaSD = Math.sqrt(cv / Math.max(1, cs.length));
+
+    const floraHues = island.species.filter((s) => s.pig.C >= 0.025).map((s) => s.pig.H);
+    const adh = adherence(floraHues, island.anchors);
+    const radh = adherence(island.reagents.map((r) => r.hue), island.anchors);
+
+    const ls = island.species.map((s) => s.pig.L);
+    const lm = ls.reduce((a, b) => a + b, 0) / Math.max(1, ls.length);
+    let lv = 0; ls.forEach((l) => { lv += (l - lm) * (l - lm); });
+
+    return { meanD: meanD, sdD: sdD, discord: n ? discord / n : 0, mud: mud,
+             discordFlora: fn ? fd / fn : 0, floraPairs: fn,
+             discordGround: gn ? gd / gn : 0, groundPairs: gn,
+             chromaSD: chromaSD, chromaMean: cm, adh: adh, radh: radh, pairs: n,
+             lightMean: lm, lightSD: Math.sqrt(lv / Math.max(1, ls.length)) };
+  }
+
+  const BINS = 12;
+  function hueHist(island) {
+    const h = new Float64Array(BINS);
+    let tot = 0;
+    paletteEntries(island).forEach((e) => {
+      if (e.C < 0.025) return;
+      const w = e.w * e.C;
+      h[Math.min(BINS - 1, Math.floor((e.H / 360) * BINS))] += w;
+      tot += w;
+    });
+    if (tot > 0) for (let i = 0; i < BINS; i++) h[i] /= tot;
+    return h;
+  }
+  function tv(a, b) {
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+    return s / 2;
+  }
+  function meanPairTV(list) {
+    let s = 0, n = 0;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) { s += tv(list[i], list[j]); n++; }
+    }
+    return n ? s / n : 0;
+  }
+
+  const ISLAND_SEEDS = [];
+  for (let i = 0; i < 20; i++) ISLAND_SEEDS.push(1000 + i * 7919);
+
+  // Two variety numbers, because "samey" has two meanings and they behave
+  // differently. ISLAND DIFFERENCE asks whether two islands look unlike each
+  // other (rotation-sensitive hue histogram). CHARACTER SPREAD asks whether
+  // every island has the same colour *temperament* — the across-island standard
+  // deviation of each island's own mean pairwise hue distance. A locked key
+  // makes every island a triad; character spread is what detects that, and
+  // unlike a histogram distance it is not confounded by how peaked the
+  // distribution happens to be.
+  function configStats(key, bias, S, nIslands) {
+    const hs = [], mds = [];
+    let discord = 0, discordF = 0, mud = 0, adh = 0, radh = 0, chromaSD = 0, sdD = 0;
+    const N = nIslands || 14;
+    for (let i = 0; i < N; i++) {
+      const S2 = Object.assign({}, S, { key: key, bias: bias });
+      const isl = makeIsland(ISLAND_SEEDS[i % ISLAND_SEEDS.length], S2);
+      const st = statsOf(isl);
+      mds.push(st.meanD);
+      discord += st.discord; discordF += st.discordFlora;
+      mud += st.mud; chromaSD += st.chromaSD; sdD += st.sdD;
+      adh += st.adh == null ? 0 : st.adh;
+      radh += st.radh == null ? 0 : st.radh;
+      hs.push(hueHist(isl));
+    }
+    const md = mds.reduce((a, b) => a + b, 0) / N;
+    let v = 0; mds.forEach((x) => { v += (x - md) * (x - md); });
+    return {
+      key: key, bias: bias, n: N,
+      meanD: md, discord: discord / N, discordFlora: discordF / N,
+      mud: mud / N, sdD: sdD / N, chromaSD: chromaSD / N,
+      adh: adh / N, radh: radh / N,
+      absTV: meanPairTV(hs), charSD: Math.sqrt(v / N),
+    };
+  }
+
+  /* ======================= does colour survive light ======================= */
+
+  function meanPairDE(cols) {
+    let s = 0, n = 0;
+    for (let i = 0; i < cols.length; i++) {
+      for (let j = i + 1; j < cols.length; j++) { s += dE(cols[i], cols[j]); n++; }
+    }
+    return { mean: n ? s / n : 0, n: n };
+  }
+  function collisions(cols, thr) {
+    let c = 0;
+    for (let i = 0; i < cols.length; i++) {
+      for (let j = i + 1; j < cols.length; j++) if (dE(cols[i], cols[j]) < thr) c++;
+    }
+    return c;
+  }
+  // 06:15 is the dawn twilight peak and 17:48 the dusk one — the hours where
+  // this light model's tint term is strongest, which is where the signal is
+  // most at risk. 22:30 is flat night.
+  const PHASES = [
+    { label: "dawn", hour: 6.25 },
+    { label: "noon", hour: 12.0 },
+    { label: "dusk", hour: 17.8 },
+    { label: "night", hour: 22.5 },
+  ];
+  function lightSurvival(island) {
+    const base = island.species.map((s) => s.pig);
+    const ref = meanPairDE(base);
+    const rows = PHASES.map((r) => {
+      const LM = lightAt(r.hour);
+      const cols = base.map((c) => applyLight(c, LM));
+      const sep = meanPairDE(cols);
+      let rot = 0;
+      cols.forEach((c, i) => { rot += hueDist(c.H, base[i].H); });
+      return {
+        label: r.label, hour: r.hour,
+        ret: ref.mean > 0 ? sep.mean / ref.mean : 0,
+        rot: rot / Math.max(1, cols.length),
+        coll: collisions(cols, 0.025), pairs: sep.n,
+      };
+    });
+    [{ label: "dusk · glowing", hour: 17.8 }, { label: "night · glowing", hour: 22.5 }].forEach((g) => {
+      const LMg = lightAt(g.hour);
+      const cols = base.map((c) => applyGlowCol(c, LMg));
+      const sep = meanPairDE(cols);
+      let rot = 0;
+      cols.forEach((c, i) => { rot += hueDist(c.H, base[i].H); });
+      rows.push({
+        label: g.label, hour: g.hour,
+        ret: ref.mean > 0 ? sep.mean / ref.mean : 0,
+        rot: rot / Math.max(1, cols.length),
+        coll: collisions(cols, 0.025), pairs: sep.n, glow: true,
+      });
+    });
+    return rows;
+  }
+  // The same measurement, but for a plant standing at the horizon rather than
+  // at the viewer's feet — haze compounds whatever the light already did.
+  function hazeSurvival(island, S) {
+    const base = island.species.map((s) => s.pig);
+    const ref = meanPairDE(base);
+    const LM = lightAt(S.hour);
+    const hazeCol = { L: Math.min(0.96, LM.hor.L * 1.02 + 0.02), C: LM.hor.C * 0.85, H: LM.hor.H };
+    const cols = base.map((c) => mixLCH(applyLight(c, LM), hazeCol, S.haze));
+    const sep = meanPairDE(cols);
+    return ref.mean > 0 ? sep.mean / ref.mean : 0;
+  }
+
+  /* ============================== growth ============================== */
+  // The body is the chain. Each conversion emits one growth instruction as it
+  // fires, so "grow it visibly" is just running the same program with a clock.
+
+  function buildGrowth(island, sp, W, H) {
+    const acts = [];
+    const soilY = Math.round(H * 0.87);
+    const scale = Math.min(W / 150, H / 200);
+    const steps = sp.run.steps;
+    if (!steps.length) return { acts: acts, soilY: soilY, scale: scale };
+    const vig = clamp(Math.log2(1 + sp.run.ratio) / 2.6, 0.35, 1);
+    const canopy = (soilY - 10 * scale) * (0.50 + 0.50 * vig);
+    const seg = canopy / Math.max(5, steps.length * 0.62);
+    let tips = [{ x: W / 2, y: soilY, ang: -Math.PI / 2, th: 3.6 * scale }];
+    let bloomed = 0, turn = 0;
+
+    const extend = (t, len, i, k) => {
+      const wob = Math.sin(i * 1.1 + k * 2.7) * 0.14;
+      const nx = clamp(t.x + Math.cos(t.ang + wob) * len, 4, W - 4);
+      const ny = Math.max(4, t.y + Math.sin(t.ang + wob) * len);
+      acts.push({ t: "seg", x1: t.x, y1: t.y, x2: nx, y2: ny, w: Math.max(1, t.th), c: "stem" });
+      t.x = nx; t.y = ny;
+      // a restoring pull toward upright, or the wobble integrates into a lean
+      t.ang += wob * 0.3 + (-Math.PI / 2 - t.ang) * 0.10;
+      t.th = Math.max(1, t.th * 0.95);
+    };
+
+    steps.forEach((s, i) => {
+      const out = island.reagents[s.card.out];
+      const late = i / Math.max(1, steps.length - 1);
+      if (s.card.kind === "gather") {
+        tips.forEach((t, k) => extend(t, seg * 0.8, i, k));
+      } else if (s.card.kind === "upgrade") {
+        if (tips.length < 5) {
+          const parent = tips[turn++ % tips.length];
+          const side = turn % 2 ? 1 : -1;
+          const fan = 0.42 + (out.hue / 360) * 0.5;
+          const a2 = parent.ang + side * fan;
+          const nx = clamp(parent.x + Math.cos(a2) * seg * 0.9, 4, W - 4);
+          const ny = Math.max(4, parent.y + Math.sin(a2) * seg * 0.9);
+          acts.push({ t: "seg", x1: parent.x, y1: parent.y, x2: nx, y2: ny, w: Math.max(1, parent.th * 0.7), c: "stem" });
+          tips.push({ x: nx, y: ny, ang: a2 * 0.55 - (Math.PI / 2) * 0.45, th: Math.max(1, parent.th * 0.68) });
+        }
+        tips.forEach((t, k) => extend(t, seg * 0.55, i, k));
+      } else {
+        const n = Math.min(3, s.card.inp.reduce((a, b) => a + b.n, 0));
+        tips.forEach((t) => {
+          for (let k = 0; k < n; k++) {
+            const a2 = t.ang + (k % 2 ? 1 : -1) * (0.8 + k * 0.2);
+            const lr = (4.4 + k * 0.8) * scale;
+            acts.push({ t: "leaf", x: t.x + Math.cos(a2) * lr * 0.8, y: t.y + Math.sin(a2) * lr * 0.8,
+                        rx: lr * 0.9, ry: lr * 0.38, a: a2, c: "leaf" });
+          }
+        });
+        tips.forEach((t, k) => extend(t, seg * 0.5, i, k));
+      }
+      if (out.tier >= 2 && late > 0.60 && bloomed < 5) {
+        tips.forEach((t) => {
+          if (bloomed >= 5) return;
+          bloomed++;
+          acts.push({ t: "bloom", x: t.x, y: t.y, r: (2.1 + out.tier * 1.25) * scale, tier: out.tier });
+        });
+      }
+    });
+    if (!bloomed && tips.length) {
+      const t = tips.reduce((a, b) => (b.y < a.y ? b : a), tips[0]);
+      acts.push({ t: "bloom", x: t.x, y: t.y, r: 2.4 * scale, tier: 1 });
+    }
+
+    // Normalise the specimen into the plate. Chain lengths vary by 4× across a
+    // shelf, so an unscaled turtle either overflows the canvas or draws a twig
+    // in one corner; both make the specimen look like a bug rather than a plant.
+    let minX = 1e9, maxX = -1e9, minY = 1e9;
+    const seen = (x, y, r) => {
+      minX = Math.min(minX, x - r); maxX = Math.max(maxX, x + r); minY = Math.min(minY, y - r);
+    };
+    acts.forEach((a) => {
+      if (a.t === "seg") { seen(a.x1, a.y1, a.w / 2); seen(a.x2, a.y2, a.w / 2); }
+      else if (a.t === "leaf") { const r = Math.max(a.rx, a.ry); seen(a.x, a.y, r); }
+      else seen(a.x, a.y, a.r);
+    });
+    const k = clamp(Math.min((W - 14) / Math.max(8, maxX - minX),
+                             (soilY - 9) / Math.max(8, soilY - minY)), 0.55, 2.4);
+    const bx = W / 2;
+    const tx = (x) => bx + (x - bx) * k;
+    const ty = (y) => soilY + (y - soilY) * k;
+    const dx = W / 2 - (tx(minX) + tx(maxX)) / 2;
+    acts.forEach((a) => {
+      if (a.t === "seg") {
+        a.x1 = tx(a.x1) + dx; a.y1 = ty(a.y1);
+        a.x2 = tx(a.x2) + dx; a.y2 = ty(a.y2);
+        a.w = Math.max(1, a.w * k);
+      } else {
+        a.x = tx(a.x) + dx; a.y = ty(a.y);
+        if (a.t === "leaf") { a.rx *= k; a.ry *= k; } else a.r *= k;
+      }
+    });
+    return { acts: acts, soilY: soilY, scale: scale };
+  }
+
+  function paintGrowth(cv, island, sp, G, p) {
+    const ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    const LM = lightAt(12);
+    const stem = hexOf(sp.pig), leaf = hexOf(sp.leaf), bloom = hexOf(sp.bloom);
+    ctx.fillStyle = leaf; ctx.globalAlpha = 0.14;
+    ctx.fillRect(0, G.soilY, W, H - G.soilY);
+    ctx.globalAlpha = 0.4; ctx.fillRect(0, G.soilY, W, 1);
+    ctx.globalAlpha = 1;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+
+    const total = G.acts.length;
+    const upto = p * total;
+    for (let i = 0; i < total; i++) {
+      const f = clamp(upto - i, 0, 1);
+      if (f <= 0) break;
+      const a = G.acts[i];
+      if (a.t === "seg") {
+        ctx.strokeStyle = stem; ctx.lineWidth = a.w;
+        ctx.beginPath(); ctx.moveTo(a.x1, a.y1);
+        ctx.lineTo(a.x1 + (a.x2 - a.x1) * f, a.y1 + (a.y2 - a.y1) * f);
+        ctx.stroke();
+      } else if (a.t === "leaf") {
+        ctx.fillStyle = leaf;
+        ctx.beginPath();
+        ctx.ellipse(a.x, a.y, Math.max(0.5, a.rx * f), Math.max(0.4, a.ry * f), a.a, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        const r = a.r * f;
+        const petals = a.tier >= 4 ? 8 : a.tier === 3 ? 6 : 5;
+        for (let q = 0; q < petals; q++) {
+          const pa = (q / petals) * Math.PI * 2;
+          ctx.fillStyle = bloom;
+          ctx.beginPath();
+          ctx.ellipse(a.x + Math.cos(pa) * r * 0.62, a.y + Math.sin(pa) * r * 0.62,
+                      Math.max(0.5, r * 0.56), Math.max(0.4, r * 0.36), pa, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = stem;
+        ctx.beginPath(); ctx.arc(a.x, a.y, Math.max(0.5, r * 0.36), 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  /* ============================== the page ============================== */
+
+  const $ = (id) => document.getElementById(id);
+
+  // Defaults are this bench's recommendation, so the page opens on the thing it
+  // argues for. The "none" cell in the strip below is the control.
+  const S = {
+    key: "split", bias: 0.70, rootMode: "grounded",
+    species: 10, chromaCeil: 0.16, lightSpread: 0.40,
+    hour: 12.0, haze: 0.45, glowShare: 0.30, density: 0.55,
+    seed: 4711,
+  };
+
+  const HERO = { W: 384, H: 164 };
+  const CELL = { W: 352, H: 150 };
+
+  let island = null, layout = null, sel = 0, growth = null, growCache = null;
+  const stripCanvases = [];
+
+  function slider(host, opts) {
+    const wrap = document.createElement("div"); wrap.className = "ctrl";
+    const row = document.createElement("div"); row.className = "row";
+    const lab = document.createElement("label"); lab.textContent = opts.label;
+    const val = document.createElement("span"); val.className = "val";
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = opts.min; input.max = opts.max; input.step = opts.step || 1;
+    input.value = opts.value;
+    lab.htmlFor = input.id = "c_" + opts.label.replace(/\W+/g, "_");
+    const fmt = opts.fmt || ((v) => String(v));
+    const paint = () => { val.textContent = fmt(+input.value); };
+    input.addEventListener("input", () => { paint(); opts.onInput(+input.value); });
+    row.appendChild(lab); row.appendChild(val);
+    wrap.appendChild(row); wrap.appendChild(input);
+    if (opts.hint) {
+      const h = document.createElement("div"); h.className = "hint"; h.textContent = opts.hint;
+      wrap.appendChild(h);
+    }
+    host.appendChild(wrap); paint();
+    return input;
+  }
+
+  function selectCtrl(host, opts) {
+    const wrap = document.createElement("div"); wrap.className = "ctrl";
+    const row = document.createElement("div"); row.className = "row";
+    const lab = document.createElement("label"); lab.textContent = opts.label;
+    const val = document.createElement("span"); val.className = "val";
+    const sl = document.createElement("select");
+    lab.htmlFor = sl.id = "c_" + opts.label.replace(/\W+/g, "_");
+    opts.options.forEach((o) => {
+      const op = document.createElement("option");
+      op.value = o.value; op.textContent = o.label;
+      sl.appendChild(op);
+    });
+    sl.value = opts.value;
+    const paint = () => {
+      const o = opts.options.filter((x) => x.value === sl.value)[0];
+      val.textContent = o ? (o.tag || "") : "";
+    };
+    sl.addEventListener("change", () => { paint(); opts.onInput(sl.value); });
+    row.appendChild(lab); row.appendChild(val);
+    wrap.appendChild(row); wrap.appendChild(sl);
+    if (opts.hint) {
+      const h = document.createElement("div"); h.className = "hint"; h.textContent = opts.hint;
+      wrap.appendChild(h);
+    }
+    host.appendChild(wrap); paint();
+    return sl;
+  }
+
+  function group(host, title) {
+    const d = document.createElement("div");
+    d.className = "railsplit";
+    const t = document.createElement("div"); t.className = "rl"; t.textContent = title;
+    d.appendChild(t);
+    host.appendChild(d);
+    return d;
+  }
+
+  let keySelect = null;
+
+  function buildRail() {
+    const host = $("rail"); host.textContent = "";
+
+    const g1 = document.createElement("div");
+    g1.style.cssText = "display:flex;flex-direction:column;gap:var(--s3)";
+    host.appendChild(g1);
+
+    keySelect = selectCtrl(g1, {
+      label: "harmony key", value: S.key,
+      options: KEYS.map((k) => ({ value: k.id, label: k.name, tag: k.blurb })),
+      onInput: (v) => { S.key = v; rebuild(); },
+      hint: "The interval structure the reagent hues are biased toward. “none” is Wonder today.",
+    });
+    slider(g1, {
+      label: "bias strength", min: 0, max: 1, step: 0.05, value: S.bias,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.bias = v; rebuild(); },
+      hint: "0 = pure uniform roll. 1 = every hue squeezed into the arc around its nearest anchor.",
+    });
+    selectCtrl(g1, {
+      label: "key root", value: S.rootMode,
+      options: [
+        { value: "rolled", label: "rolled per island", tag: "varies" },
+        { value: "grounded", label: "grounded in the terrain", tag: "locked" },
+      ],
+      onInput: (v) => { S.rootMode = v; rebuild(); },
+      hint: "Grounded forces one anchor onto the terrain green — a strictly stronger version of “include the ground”, and a variety risk.",
+    });
+
+    const g2 = group(host, "the flora");
+    slider(g2, {
+      label: "species", min: 3, max: 18, step: 1, value: S.species,
+      onInput: (v) => { S.species = v; rebuild(); },
+      hint: "How many distinct metabolisms are on the island. More species means more chances to collide in hue.",
+    });
+    slider(g2, {
+      label: "chroma ceiling", min: 0.04, max: 0.30, step: 0.005, value: S.chromaCeil,
+      fmt: (v) => v.toFixed(3), onInput: (v) => { S.chromaCeil = v; rebuild(); },
+      hint: "The most saturated a fully-earned pigment may be. Everything below scales off it.",
+    });
+    slider(g2, {
+      label: "lightness spread", min: 0, max: 0.70, step: 0.02, value: S.lightSpread,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.lightSpread = v; rebuild(); },
+      hint: "How far yield-over-cost may push lightness either side of mid. 0 flattens the island.",
+    });
+    slider(g2, {
+      label: "glow share", min: 0, max: 1, step: 0.05, value: S.glowShare,
+      fmt: (v) => Math.round(v * 100) + "%", onInput: (v) => { S.glowShare = v; rebuild(); },
+      hint: "Fraction of species carrying the glow trait. At night this is the only channel left carrying pigment.",
+    });
+    slider(g2, {
+      label: "plant density", min: 0, max: 1, step: 0.02, value: S.density,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.density = v; redrawScenes(); },
+      hint: "Plants scattered across the strip. Sparse reads as terrain; dense reads as flora.",
+    });
+
+    const g3 = group(host, "the light");
+    slider(g3, {
+      label: "time of day", min: 0, max: 24, step: 0.1, value: S.hour,
+      fmt: (v) => hhmm(v), onInput: (v) => { S.hour = v; redrawScenes(); refreshLive(); },
+      hint: "Scrub it. The question is whether the colour differences survive the trip.",
+    });
+    slider(g3, {
+      label: "haze strength", min: 0, max: 1, step: 0.02, value: S.haze,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.haze = v; redrawScenes(); },
+      hint: "Depth fog toward the horizon. Cheap coherence — and it eats distant pigment.",
+    });
+
+    const g4 = group(host, "the world");
+    slider(g4, {
+      label: "seed", min: 1, max: 9999, step: 1, value: S.seed,
+      onInput: (v) => { S.seed = v; rebuild(); },
+      hint: "Everything on this page is derived from it. Same seed, same island, forever.",
+    });
+  }
+
+  /* ---------------------------- rendering ---------------------------- */
+
+  function rebuild() {
+    island = makeIsland(S.seed, S);
+    layout = buildLayout(island, HERO.W, HERO.H, S);
+    assignSpecies(island, layout);
+    if (sel >= island.species.length) sel = 0;
+    growCache = null;
+    renderChips();
+    redrawScenes();
+    refreshLive();
+    refreshLightTable();
+    refreshGrowth(true);
+    if (keySelect) keySelect.value = S.key;
+    renderStripLabels();
+  }
+
+  function redrawScenes() {
+    if (!island) return;
+    renderScene($("hero"), island, layout, S);
+    const LM = lightAt(S.hour);
+    $("heroCapt").textContent =
+      island.isle + " · seed " + S.seed + " · key " + island.key.name +
+      " @ bias " + S.bias.toFixed(2) + " · root " + Math.round(island.root) + "° · " +
+      hhmm(S.hour) + " " + phaseWord(LM) + " · " + layout.plants.length + " plants";
+    $("stamp").textContent =
+      "seed " + S.seed + " · " + island.key.name + " · bias " + S.bias.toFixed(2) + " · " + hhmm(S.hour);
+    drawStrip();
+  }
+
+  function drawStrip() {
+    KEYS.forEach((k, i) => {
+      const cv = stripCanvases[i];
+      if (!cv) return;
+      const S2 = Object.assign({}, S, { key: k.id });
+      const isl = makeIsland(S.seed, S2);
+      const lay = buildLayout(isl, CELL.W, CELL.H, S2);
+      assignSpecies(isl, lay);
+      renderScene(cv, isl, lay, S2);
+      const st = statsOf(isl);
+      const m = cv.parentNode.querySelector(".km");
+      if (m) {
+        m.textContent = "";
+        const a = document.createElement("span");
+        a.textContent = "scene discord " + Math.round(st.discord * 100) + "%";
+        const b = document.createElement("span");
+        b.textContent = "flora " + Math.round(st.discordFlora * 100) + "%";
+        m.appendChild(a); m.appendChild(b);
+      }
+    });
+  }
+
+  function renderStripLabels() {
+    const host = $("strip");
+    if (host.childNodes.length) {
+      KEYS.forEach((k, i) => {
+        const cell = host.childNodes[i];
+        if (cell) cell.setAttribute("aria-current", String(k.id === S.key));
+      });
+      return;
+    }
+    host.textContent = "";
+    stripCanvases.length = 0;
+    KEYS.forEach((k) => {
+      const cell = document.createElement("button");
+      cell.type = "button"; cell.className = "keycell";
+      cell.setAttribute("aria-current", String(k.id === S.key));
+      const cv = document.createElement("canvas");
+      cv.width = CELL.W; cv.height = CELL.H;
+      cell.appendChild(cv);
+      const nm = document.createElement("div"); nm.className = "kn";
+      nm.appendChild(document.createTextNode(k.name + " "));
+      if (k.id === "none") {
+        const c = document.createElement("span"); c.className = "ctl"; c.textContent = "control";
+        nm.appendChild(c);
+      }
+      cell.appendChild(nm);
+      const km = document.createElement("div"); km.className = "km";
+      cell.appendChild(km);
+      cell.addEventListener("click", () => { S.key = k.id; rebuild(); });
+      host.appendChild(cell);
+      stripCanvases.push(cv);
+    });
+  }
+
+  function renderChips() {
+    const host = $("chips"); host.textContent = "";
+    island.species.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip";
+      b.setAttribute("aria-current", String(i === sel));
+      const sw = document.createElement("span"); sw.className = "sw";
+      sw.style.background = hexOf(s.pig);
+      b.appendChild(sw);
+      const it = document.createElement("i"); it.textContent = s.name;
+      b.appendChild(it);
+      const gl = document.createElement("span"); gl.className = "gl";
+      gl.textContent = (s.glow ? "GLOW · " : "") + TIER_NAME[Math.max(1, Math.round(s.pig.meanTier))];
+      b.appendChild(gl);
+      b.addEventListener("click", () => { sel = i; growCache = null; renderChips(); refreshGrowth(true); });
+      host.appendChild(b);
+    });
+  }
+
+  function refreshLive() {
+    const st = statsOf(island);
+    const LM = lightAt(S.hour);
+    const surv = lightSurvival(island);
+    const now = surv.reduce((a, b) => (Math.abs(b.hour - S.hour) < Math.abs(a.hour - S.hour) ? b : a), surv[0]);
+    const ro = $("live"); ro.textContent = "";
+    const rows = [
+      ["mean pairwise hue distance", Math.round(st.meanD) + "°"],
+      ["spread of those distances", "±" + Math.round(st.sdD) + "°"],
+      ["discord band (25–65°) · all", Math.round(st.discord * 100) + "% of " + st.pairs + " pairs"],
+      ["discord · flora only", Math.round(st.discordFlora * 100) + "% of " + st.floraPairs + " pairs"],
+      ["discord · ground only", Math.round(st.discordGround * 100) + "% of " + st.groundPairs + " pairs"],
+      ["tonality (1 = one hue)", st.mud.toFixed(3)],
+      ["chroma mean / sd", st.chromaMean.toFixed(3) + " / " + st.chromaSD.toFixed(3)],
+      ["lightness mean / sd", st.lightMean.toFixed(3) + " / " + st.lightSD.toFixed(3)],
+      ["chord adherence — reagents", st.radh == null ? "n/a (no key)" : Math.round(st.radh) + "°"],
+      ["chord adherence — flora", st.adh == null ? "n/a (no key)" : Math.round(st.adh) + "°"],
+      ["glowing species", island.species.filter((s) => s.glow).length + " of " + island.species.length],
+      ["light: " + phaseWord(LM), "lum ×" + (0.24 + 0.76 * LM.day).toFixed(2) + " · tint " + Math.round(LM.tintW * 100) + "%"],
+      ["separation retained, foreground", Math.round(now.ret * 100) + "%"],
+      ["separation retained, at the horizon", Math.round(hazeSurvival(island, S) * 100) + "%"],
+    ];
+    rows.forEach((r) => {
+      const dt = document.createElement("dt"); dt.textContent = r[0];
+      const dd = document.createElement("dd"); dd.textContent = r[1];
+      ro.appendChild(dt); ro.appendChild(dd);
+    });
+  }
+
+  function cellTd(txt, cls) {
+    const td = document.createElement("td");
+    td.textContent = txt;
+    if (cls) td.className = cls;
+    return td;
+  }
+
+  function refreshLightTable() {
+    const rows = lightSurvival(island);
+    const t = $("lightTbl");
+    t.textContent = "";
+    const cap = document.createElement("caption");
+    cap.textContent = "Foreground plants only — depth haze is applied on top of this and compounds it. " +
+      island.species.length + " species, " + rows[0].pairs + " pairs, ΔE in OKLab.";
+    t.appendChild(cap);
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    ["light", "separation retained", "mean hue rotation", "indistinct pairs"].forEach((h) => {
+      const th = document.createElement("th"); th.textContent = h; hr.appendChild(th);
+    });
+    thead.appendChild(hr); t.appendChild(thead);
+    const tb = document.createElement("tbody");
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      if (r.glow) tr.className = "cur";
+      tr.appendChild(cellTd(r.label + " · " + hhmm(r.hour)));
+      tr.appendChild(cellTd(Math.round(r.ret * 100) + "%",
+        r.ret > 0.8 ? "g" : r.ret > 0.55 ? "w" : "b"));
+      tr.appendChild(cellTd(Math.round(r.rot) + "°"));
+      tr.appendChild(cellTd(r.coll + " of " + r.pairs,
+        r.coll / r.pairs < 0.08 ? "g" : r.coll / r.pairs < 0.25 ? "w" : "b"));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+  }
+
+  /* ------------------------------ the sweep ------------------------------ */
+
+  function runSweep() {
+    const btn = $("sweepBtn");
+    btn.disabled = true;
+    $("sweepState").textContent = "running";
+    const biases = [0.35, 0.70, 1.0];
+    const out = [configStats("none", 0, S, 14)];   // one control: bias 0 is the
+    const t0 = performance.now();                  // same roll whatever the key
+    KEYS.forEach((k) => {
+      if (k.id === "none") return;
+      biases.forEach((b) => { out.push(configStats(k.id, b, S, 14)); });
+    });
+    const ms = Math.round(performance.now() - t0);
+    renderSweep(out);
+    $("sweepState").textContent = out.length + " configs · " + ms + " ms";
+    btn.disabled = false;
+    return out;
+  }
+
+  function renderSweep(rows) {
+    const t = $("sweepTbl");
+    t.textContent = "";
+    const cap = document.createElement("caption");
+    cap.textContent = "14 islands per configuration, " + S.species +
+      " species each, seeds 1000 + 7919·i, key root " +
+      (S.rootMode === "grounded" ? "GROUNDED IN THE TERRAIN" : "ROLLED PER ISLAND") +
+      " — flip that control and re-run, the difference is the biggest effect on this page. " +
+      "Low discord is good. High island difference is good (two islands look unlike each " +
+      "other). Low character spread is the cost — it means every island has the same colour " +
+      "temperament.";
+    t.appendChild(cap);
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    ["key", "bias", "discord · all", "discord · flora", "tonality", "chord adh°",
+     "island difference", "character spread"]
+      .forEach((h) => { const th = document.createElement("th"); th.textContent = h; hr.appendChild(th); });
+    thead.appendChild(hr); t.appendChild(thead);
+    const tb = document.createElement("tbody");
+    const ctl = rows.filter((r) => r.key === "none")[0];
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      if (r.key === "none") tr.className = "ctl";
+      else if (r.key === S.key && Math.abs(r.bias - S.bias) < 0.16) tr.className = "cur";
+      tr.appendChild(cellTd(r.key === "none" ? "none · control" : KEY_BY[r.key].name));
+      tr.appendChild(cellTd(r.key === "none" ? "—" : r.bias.toFixed(2)));
+      tr.appendChild(cellTd(Math.round(r.discord * 100) + "%",
+        ctl && r.discord < ctl.discord - 0.03 ? "g" : ctl && r.discord > ctl.discord + 0.02 ? "b" : ""));
+      tr.appendChild(cellTd(Math.round(r.discordFlora * 100) + "%",
+        ctl && r.discordFlora < ctl.discordFlora * 0.6 ? "g" : ctl && r.discordFlora > ctl.discordFlora ? "b" : ""));
+      tr.appendChild(cellTd(r.mud.toFixed(3)));
+      tr.appendChild(cellTd(r.key === "none" ? "—" : Math.round(r.adh) + "°"));
+      tr.appendChild(cellTd(r.absTV.toFixed(3),
+        ctl && r.absTV > ctl.absTV * 1.2 ? "g" : ctl && r.absTV < ctl.absTV * 0.85 ? "b" : ""));
+      tr.appendChild(cellTd(r.charSD.toFixed(1) + "°",
+        ctl && r.charSD < ctl.charSD * 0.6 ? "b" : ctl && r.charSD < ctl.charSD * 0.85 ? "w" : ""));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+  }
+
+  /* ------------------------------ growth ------------------------------ */
+
+  const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let growRaf = 0, growT0 = 0;
+
+  function refreshGrowth(restart) {
+    const sp = island.species[sel];
+    if (!sp) return;
+    const cv = $("grow");
+    if (!growCache) growCache = buildGrowth(island, sp, cv.width, cv.height);
+    const log = $("growLog"); log.textContent = "";
+    const lines = [];
+    sp.run.steps.forEach((s) => {
+      const out = island.reagents[s.card.out];
+      const txt = s.card.kind === "gather"
+        ? "gather → " + out.tier + "·" + TIER_NAME[out.tier] + "  (extend)"
+        : s.card.kind === "upgrade"
+          ? "upgrade → " + out.tier + "·" + TIER_NAME[out.tier] + "  (branch)"
+          : "trade → " + out.tier + "·" + TIER_NAME[out.tier] + "  (whorl)";
+      const last = lines[lines.length - 1];
+      if (last && last.txt === txt) last.n++;
+      else lines.push({ txt: txt, n: 1 });
+    });
+    if (!lines.length) lines.push({ txt: "nothing fired — a dead hand on this ground", n: 1 });
+    lines.forEach((l, i) => {
+      const d = document.createElement("div");
+      const n = document.createElement("span"); n.className = "n"; n.textContent = (i + 1) + ".";
+      d.appendChild(n);
+      d.appendChild(document.createTextNode(l.txt + (l.n > 1 ? "  ×" + l.n : "")));
+      log.appendChild(d);
+    });
+
+    const ro = $("growRead"); ro.textContent = "";
+    [["species", sp.name],
+     ["steps in the chain", String(sp.run.steps.length)],
+     ["growth instructions", String(growCache.acts.length)],
+     ["tier reached", sp.run.top ? TIER_NAME[sp.run.top] : "—"],
+     ["hue / chroma / light", Math.round(sp.pig.H) + "° / " + sp.pig.C.toFixed(3) + " / " + sp.pig.L.toFixed(2)],
+     ["distance to nearest anchor", island.anchors
+        ? Math.round(Math.min.apply(null, island.anchors.map((a) => hueDist(sp.pig.H, a)))) + "°" : "n/a (no key)"],
+     ["glow", sp.glow ? "yes" : "no"]].forEach((r) => {
+      const dt = document.createElement("dt"); dt.textContent = r[0];
+      const dd = document.createElement("dd"); dd.textContent = r[1];
+      ro.appendChild(dt); ro.appendChild(dd);
+    });
+
+    if (growRaf) { cancelAnimationFrame(growRaf); growRaf = 0; }
+    if (REDUCED || !restart) { paintGrowth(cv, island, sp, growCache, 1); return; }
+    growT0 = 0;
+    const tick = (ts) => {
+      if (!growT0) growT0 = ts;
+      const p = clamp((ts - growT0) / 1600, 0, 1);
+      paintGrowth(cv, island, sp, growCache, p * p * (3 - 2 * p));
+      if (p < 1) growRaf = requestAnimationFrame(tick); else growRaf = 0;
+    };
+    growRaf = requestAnimationFrame(tick);
+  }
+
+  /* ------------------------------ wiring ------------------------------ */
+
+  let seedCursor = 4711;
+  function nextSeed() {
+    seedCursor = (Math.imul(seedCursor, 1103515245) + 12345) >>> 0;
+    return (seedCursor % 9000) + 100;
+  }
+
+  $("rollIsland").addEventListener("click", () => {
+    S.seed = nextSeed();
+    const el = document.getElementById("c_seed");
+    if (el) { el.value = String(S.seed); el.dispatchEvent(new Event("input")); }
+    else rebuild();
+  });
+  $("reseedFlora").addEventListener("click", () => {
+    S.seed = ((S.seed + 137) % 9999) + 1;
+    const el = document.getElementById("c_seed");
+    if (el) { el.value = String(S.seed); el.dispatchEvent(new Event("input")); }
+    else rebuild();
+  });
+  $("sweepBtn").addEventListener("click", runSweep);
+  $("growBtn").addEventListener("click", () => refreshGrowth(true));
+
+  buildRail();
+  renderStripLabels();
+  rebuild();
+
+  // Test hook for the playwright self-check. Nothing on the page reads it.
+  window.__bench10 = {
+    S: S,
+    stats: () => statsOf(island),
+    survival: () => lightSurvival(island),
+    horizon: () => hazeSurvival(island, S),
+    survivalAt: (hour) => {
+      const base = island.species.map((s) => s.pig);
+      const ref = meanPairDE(base), LM = lightAt(hour);
+      const plain = base.map((c) => applyLight(c, LM));
+      const glow = base.map((c) => applyGlowCol(c, LM));
+      return {
+        hour: hour, day: LM.day, twilight: LM.twilight, tintW: LM.tintW,
+        plain: meanPairDE(plain).mean / ref.mean,
+        glow: meanPairDE(glow).mean / ref.mean,
+        collPlain: collisions(plain, 0.025), collGlow: collisions(glow, 0.025),
+      };
+    },
+    sweep: (n) => {
+      const out = [];
+      KEYS.forEach((k) => {
+        [0, 0.35, 0.5, 0.7, 1.0].forEach((b) => {
+          if (k.id === "none" && b > 0) return;
+          out.push(configStats(k.id, b, S, n || 14));
+        });
+      });
+      return out;
+    },
+    set: (k, v) => { S[k] = v; rebuild(); },
+    signature: () => {
+      const st = statsOf(island);
+      return [island.root, st.meanD, st.discord, st.mud, st.adh,
+              island.species.map((s) => s.pig.H).join(",")].join("|");
+    },
+  };
+})();
+</script>

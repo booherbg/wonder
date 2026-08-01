@@ -1,0 +1,2396 @@
+<style>
+  /* ------------------------------------------------------------------
+     Bench 8 — Surface pattern. Gray–Scott reaction–diffusion tested as a
+     HERITABLE system: does a small genetic change give a small pattern
+     change? Specimen-plate chrome: graphite + bone, hairline rules.
+     The only saturated colour that is not a categorical legend on this
+     page was computed from the model — no hue was chosen by hand.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --ground:  #E9EAE6;  --panel: #F3F4F0;  --sunk: #DFE1DB;
+    --ink:     #191E1C;  --muted: #676D68;  --rule: #CBCEC7;
+    --slate:   #3D4A56;  --shadow: rgba(25, 30, 28, .09);
+    --good:    #3F6B4A;  --warn: #8A6A2B;  --bad: #8A3B32;
+
+    /* regime encoding — validated all-pairs for protan/deutan on this
+       surface; see the legend, which is mandatory relief for two swatches
+       that sit under 3:1 against the panel. */
+    --r-uniform:   #CBCEC7;
+    --r-spots:     #365d9d;
+    --r-gaps:      #20cca1;
+    --r-stripes:   #a87e05;
+    --r-labyrinth: #c27cf2;
+    --r-unsettled: #942531;
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141817; --panel: #1C2220; --sunk: #101413;
+      --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+      --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+      --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+      --r-uniform: #2D3532;
+      --r-spots: #518aea; --r-gaps: #04ab85; --r-stripes: #a67d03;
+      --r-labyrinth: #8d44ba; --r-unsettled: #ba002e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141817; --panel: #1C2220; --sunk: #101413;
+    --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+    --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+    --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+    --r-uniform: #2D3532;
+    --r-spots: #518aea; --r-gaps: #04ab85; --r-stripes: #a67d03;
+    --r-labyrinth: #8d44ba; --r-unsettled: #ba002e;
+  }
+  :root[data-theme="light"] {
+    --ground: #E9EAE6; --panel: #F3F4F0; --sunk: #DFE1DB;
+    --ink: #191E1C;    --muted: #676D68; --rule: #CBCEC7;
+    --slate: #3D4A56;  --shadow: rgba(25,30,28,.09);
+    --good: #3F6B4A;   --warn: #8A6A2B;  --bad: #8A3B32;
+    --r-uniform: #CBCEC7;
+    --r-spots: #365d9d; --r-gaps: #20cca1; --r-stripes: #a87e05;
+    --r-labyrinth: #c27cf2; --r-unsettled: #942531;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s8); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s3);
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(30px, 5vw, 46px); line-height: 1.1;
+    letter-spacing: -.015em; text-wrap: balance; margin: 0 0 var(--s3);
+  }
+  .standfirst { max-width: 64ch; color: var(--muted); font-size: 16px; margin: 0 0 var(--s5); }
+  .standfirst em { color: var(--ink); font-style: italic; }
+  h2 {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  }
+  h3 {
+    font-family: var(--font-display); font-weight: 400; font-size: 19px;
+    letter-spacing: -.01em; margin: 0 0 var(--s1);
+  }
+  section { margin-bottom: var(--s7); }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 62ch; margin: 0 0 var(--s4); }
+  code { font-family: var(--font-mono); font-size: .89em; background: var(--sunk); padding: 1px 4px; border-radius: 2px; }
+
+  button {
+    font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    color: var(--ink); background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 7px 13px; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  button:hover { border-color: var(--slate); }
+  button:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  button.primary { background: var(--slate); border-color: var(--slate); color: var(--ground); }
+  button:disabled { opacity: .45; cursor: default; border-color: var(--rule); }
+
+  footer {
+    margin-top: var(--s7); padding-top: var(--s4); border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* ---------------- the control rail ---------------- */
+
+  .rail {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3);
+    position: sticky; top: var(--s4);
+  }
+  @media (max-width: 900px) { .rail { position: static; } }
+  .ctrl { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+  .ctrl label { font-size: 13px; }
+  .ctrl .val {
+    font-family: var(--font-mono); font-size: 12px; color: var(--slate);
+    font-variant-numeric: tabular-nums;
+  }
+  .ctrl .hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .ctrl input[type="range"] { width: 100%; accent-color: var(--slate); margin: 2px 0 0; }
+  .ctrl input[type="range"]:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
+  .ctrl input[type="range"]:disabled { opacity: .45; }
+  .readout {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s3);
+    font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  .readout dt { color: var(--muted); }
+  .readout dd { margin: 0; text-align: right; }
+  .pill {
+    display: inline-block; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase; padding: 2px 7px;
+    border-radius: 999px; border: 1px solid currentColor;
+  }
+  .rulehr { border: 0; border-top: 1px solid var(--rule); margin: var(--s1) 0; }
+
+  /* the verdict block — the number the bench exists to produce */
+  .verdict { background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s3); }
+  .verdict .cap {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .verdict .big {
+    font-family: var(--font-mono); font-size: 30px; line-height: 1.1;
+    font-variant-numeric: tabular-nums; letter-spacing: -.02em; margin: 2px 0 4px;
+  }
+  .verdict .formula { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+  .gauge { position: relative; height: 6px; background: var(--rule); border-radius: 3px; margin: var(--s4) 0 3px; }
+  .gauge .band { position: absolute; top: 0; bottom: 0; background: var(--slate); opacity: .22; }
+  .gauge .tick { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--ink); opacity: .5; }
+  .gauge .mark { position: absolute; top: -3px; width: 3px; height: 12px; border-radius: 1px; background: var(--slate); }
+  .gauge-lab { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); }
+
+  .seedbox { display: flex; align-items: center; gap: var(--s2); }
+  .seedbox input {
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink); background: var(--sunk);
+    border: 1px solid var(--rule); border-radius: 3px; padding: 5px 7px; width: 8ch; flex: 0 1 auto;
+  }
+  .seedbox input:focus-visible { outline: 2px solid var(--slate); outline-offset: 1px; }
+  .seedbox button { padding: 5px 9px; font-size: 12px; }
+  .seedbox .lab { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+
+  .lockrow { display: flex; align-items: center; gap: var(--s2); font-size: 12px; color: var(--muted); }
+  .lockrow input { accent-color: var(--slate); }
+  .lockrow input:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+
+  /* ---------------- layout ---------------- */
+
+  .plate { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--s6); align-items: start; }
+  @media (max-width: 900px) { .plate { grid-template-columns: minmax(0, 1fr); gap: var(--s5); } }
+  .duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s5); align-items: start; }
+  @media (max-width: 760px) { .duo { grid-template-columns: minmax(0, 1fr); } }
+  .scroller { overflow-x: auto; }
+  .btnrow { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s4); align-items: center; }
+  .subline { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: .06em; }
+
+  /* ---------------- the (F,k) map ---------------- */
+
+  .mapwrap { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s3); }
+  .mapwrap canvas { display: block; width: 100%; height: auto; border-radius: 2px; }
+  .mapwrap canvas:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin-top: var(--s3); }
+  .lg { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; }
+  .lg .sw { width: 11px; height: 11px; border-radius: 2px; border: 1px solid var(--rule); flex: 0 0 auto; }
+  .lg .ct { color: var(--muted); }
+  .maphead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s2); margin-bottom: var(--s2); }
+  .stale { color: var(--warn); }
+
+  /* ---------------- the settled pattern ---------------- */
+
+  .fieldbox {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3); box-shadow: 0 1px 3px var(--shadow);
+  }
+  .fieldbox canvas {
+    display: block; width: 100%; height: auto; background: var(--sunk); border-radius: 2px;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  .caption { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: .05em; margin-top: 6px; }
+
+  .spec { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; height: 96px; align-items: end; }
+  .sbar { background: var(--slate); border-radius: 2px 2px 0 0; min-height: 1px; }
+
+  /* ---------------- charts ---------------- */
+
+  .chartbox { background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s3); }
+  .chartbox canvas { display: block; width: 100%; height: auto; }
+
+  /* ---------------- lineage ---------------- */
+
+  .strip { display: flex; gap: var(--s2); align-items: flex-start; min-width: 0; }
+  .gen { flex: 0 0 118px; }
+  .gen canvas {
+    display: block; width: 100%; height: auto; image-rendering: pixelated;
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 2px;
+  }
+  .gen .cap2 { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); margin-top: 4px; letter-spacing: .03em; }
+  .gen .cap2 b { color: var(--ink); font-weight: 500; }
+  .gen.dead canvas { border-style: dashed; border-color: var(--bad); }
+
+  /* ---------------- applied gallery ---------------- */
+
+  .gallery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
+  @media (max-width: 720px) { .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .shape {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: var(--s2);
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .shape canvas {
+    display: block; width: 100%; height: auto; image-rendering: pixelated; image-rendering: crisp-edges;
+    background: var(--sunk); border-radius: 2px;
+  }
+  .shape .nm { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .shape .mt { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .shape .mt b { color: var(--ink); font-weight: 500; }
+
+  /* ---------------- identity map ---------------- */
+
+  .idrow { display: flex; gap: var(--s3); flex-wrap: wrap; }
+  .idcell { flex: 0 0 116px; }
+  .idcell canvas {
+    display: block; width: 100%; height: auto; image-rendering: pixelated;
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 2px;
+  }
+  .idcell canvas + canvas { margin-top: 4px; }
+  .idcell .cap2 { font-family: var(--font-mono); font-size: 9.5px; color: var(--muted); margin-top: 4px; letter-spacing: .03em; }
+  .idcell .cap2 b { color: var(--ink); font-weight: 500; }
+  .idcell.stranger .cap2 b { color: var(--bad); }
+
+  /* ---------------- stats & chips ---------------- */
+
+  .statline { display: flex; flex-wrap: wrap; gap: var(--s5); margin: var(--s4) 0 0; }
+  .stat { min-width: 118px; }
+  .stat .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .stat .v { font-family: var(--font-mono); font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat .s { font-size: 11.5px; color: var(--muted); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; }
+  .chip .dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: 0 0 auto; }
+  .chip.pass { color: var(--good); }
+  .chip.fail { color: var(--bad); }
+  .chip.warn { color: var(--warn); }
+
+  table.tally { border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  table.tally th, table.tally td { text-align: right; padding: 2px var(--s3) 2px 0; border-bottom: 1px solid var(--rule); }
+  table.tally th { color: var(--muted); font-weight: 500; letter-spacing: .06em; }
+  table.tally td:first-child, table.tally th:first-child { text-align: left; }
+
+  /* ---------------- prose ---------------- */
+
+  .reading { max-width: 68ch; }
+  .reading p { margin: 0 0 var(--s3); }
+  .reading strong { font-weight: 600; }
+  .reading ul { margin: 0 0 var(--s3); padding-left: 1.1em; }
+  .reading li { margin-bottom: 6px; }
+  .findings {
+    background: var(--panel); border: 1px solid var(--rule); border-left: 3px solid var(--slate);
+    border-radius: 3px; padding: var(--s4) var(--s5); max-width: 74ch;
+  }
+  .findings dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px var(--s4); margin: 0 0 var(--s3); }
+  .findings dt { font-size: 13px; }
+  .findings dd { margin: 0; font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Wonder · ecology foundations · bench 8 of 11</p>
+  <h1>Markings</h1>
+  <p class="standfirst">
+    Wonder has a colour system and a structure system. It has no system at all for the
+    <em>surface</em> — the spots on a wing, the banding on a petal, the mottling on a
+    critter's flank. Grammars are bad at that; reaction–diffusion is what actually makes it
+    in life. Pretty patterns are the easy part. The question this bench exists to answer is
+    whether a <em>small genetic change gives a small pattern change</em>, because if tiny
+    parameter nudges cause wild jumps then a pattern can never be a lineage's identity, and
+    the whole idea is decoration rather than biology.
+  </p>
+
+  <div class="plate">
+
+    <aside>
+      <div class="rail">
+        <div class="verdict">
+          <div class="cap">Parent → child distance</div>
+          <div class="big" id="vBig">—</div>
+          <div class="formula" id="vFormula">at δ = —</div>
+          <div class="gauge">
+            <div class="band" id="gBand"></div>
+            <div class="tick" id="gFloor"></div>
+            <div class="tick" id="gNull"></div>
+            <div class="mark" id="gMark"></div>
+          </div>
+          <div class="gauge-lab"><span>0 · identical</span><span>0.62 · unrelated</span></div>
+          <div style="margin-top:8px"><span class="pill" id="vPill">—</span></div>
+        </div>
+
+        <div id="railTop"></div>
+
+        <div class="lockrow">
+          <input type="checkbox" id="ratioLock" checked="checked" />
+          <label for="ratioLock">lock D<sub>u</sub>/D<sub>v</sub> at 2</label>
+        </div>
+        <div id="railRatio"></div>
+
+        <hr class="rulehr" />
+        <div id="railMid"></div>
+
+        <hr class="rulehr" />
+        <div class="seedbox">
+          <span class="lab">growth seed</span>
+          <input id="seed" type="text" inputmode="numeric" value="1867" aria-label="initial-condition seed" />
+          <button id="rollSeed" type="button">Roll</button>
+        </div>
+        <div class="ctrl"><div class="hint">The seed places the initial blobs. It is <em>not</em> chemistry — but see §7: it has to be inherited.</div></div>
+
+        <hr class="rulehr" />
+        <dl class="readout" id="railRead"></dl>
+      </div>
+    </aside>
+
+    <div>
+
+      <section>
+        <h2>1 · The (F, k) parameter map — where the cliffs are</h2>
+        <p class="note">
+          Gray–Scott is a <em>two</em>-parameter model, not four. The diffusion rates are held
+          fixed at D<sub>u</sub> = 0.16, D<sub>v</sub> = 0.08 — that is what makes Pearson's zoo a
+          map you can draw on a page. Every cell below is a separate simulation, run to
+          settling and then classified by summary statistics. The classification is a
+          <em>heuristic</em>: connected-component counts on each phase, their circularity
+          4πA/P², the structure-tensor coherence, and how much the field is still moving at the
+          last step. It agrees with the eye most of the time and not all of it. Click or
+          arrow-key the map to move the current genome.
+        </p>
+        <div class="mapwrap">
+          <div class="maphead">
+            <span class="subline" id="mapStatus">building…</span>
+            <span class="subline" id="mapNote"></span>
+          </div>
+          <canvas id="fkmap" width="1000" height="620" tabindex="0" role="img"
+                  aria-label="Regime map over the F and k plane. Use arrow keys to move the current genome."></canvas>
+          <div class="legend" id="mapLegend"></div>
+        </div>
+        <div class="btnrow" style="margin-top: var(--s3)">
+          <button id="rebuildMap" type="button">Rebuild map</button>
+          <span class="subline" id="mapHover">—</span>
+        </div>
+        <p class="note" style="margin-top: var(--s2)">
+          The shape is the point. Most of this rectangle makes <strong>nothing</strong> — the
+          trivial state U = 1, V = 0 is stable and any perturbation decays. Pattern lives on a
+          thin crescent, and a large part of that crescent is one map cell away from the dead
+          region. That is the cliff, drawn.
+        </p>
+        <div class="scroller" style="margin-top: var(--s4)">
+          <table class="tally" id="mapTally">
+            <thead><tr><th>regime</th><th>cells</th><th>share of map</th><th>share of viable</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>2 · The settled pattern</h2>
+        <p class="note">
+          U and V on a torus, 9-point Laplacian (⅕ orthogonal, 1/20 diagonal, −1 centre),
+          dt = 1, explicit Euler. Seeded with a handful of square blobs at U = 0.5, V = 0.25
+          plus ±1% noise, all drawn from the seeded rng. The two colours are a pigment pair
+          whose hue is read off <em>k</em> and whose lightness spread is read off <em>F</em> —
+          nothing here was picked by hand.
+        </p>
+        <div class="duo">
+          <div>
+            <div class="fieldbox">
+              <canvas id="pattern" width="64" height="64"></canvas>
+              <div class="caption" id="patCaption">—</div>
+            </div>
+          </div>
+          <div>
+            <h3>Radial power spectrum</h3>
+            <p class="note" style="margin-bottom: var(--s3)">
+              The 2-D FFT of V, power averaged over all directions and binned by spatial
+              frequency. Where this peaks is the pattern's characteristic wavelength — the
+              single most important number for whether it survives being shrunk to a sprite.
+            </p>
+            <div class="spec" id="specChart"></div>
+            <div style="display:flex; justify-content:space-between; margin-top:4px" class="subline">
+              <span>coarse · λ = 20 px</span><span id="specPeak">—</span><span>fine · λ = 2 px</span>
+            </div>
+            <div class="statline">
+              <div class="stat">
+                <div class="k">Wavelength</div>
+                <div class="v" id="statLam">—</div>
+                <div class="s">cells per feature</div>
+              </div>
+              <div class="stat">
+                <div class="k">Features across</div>
+                <div class="v" id="statFeat">—</div>
+                <div class="s">over the whole grid</div>
+              </div>
+              <div class="stat">
+                <div class="k">Still moving</div>
+                <div class="v" id="statMot">—</div>
+                <div class="s">|dV/dt| ÷ sd at the last step</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>3 · What "pattern distance" means</h2>
+        <p class="note">
+          A heritability claim is worth nothing without a real metric, so here is the one this
+          page uses, stated in full. Two settled fields are compared by three numbers, each
+          invariant to <em>where</em> the pattern happens to sit:
+        </p>
+        <div class="reading" style="max-width: 68ch">
+          <ul>
+            <li><strong>Scale (weight 0.5).</strong> Cosine distance between the radially
+              averaged 2-D power spectra. Answers "how big are the features". Power spectra
+              throw away phase, which is exactly right: a lineage's identity is the size and
+              spacing of its marks, not which pixel a particular spot landed on.</li>
+            <li><strong>Orientation (weight 0.2).</strong> The power-weighted axial resultant
+              <code>q = Σ P·(cos 2θ, sin 2θ) / Σ P</code>, compared as a vector. Its length is
+              how directional the pattern is; its angle is which way. Doubling θ is the standard
+              trick for axial data — stripes have no head or tail.</li>
+            <li><strong>Tone (weight 0.3).</strong> Total-variation distance between 10-bin
+              histograms of V. This is the term that separates spots from holes, which the
+              power spectrum alone cannot do: invert a pattern and its spectrum is unchanged.</li>
+          </ul>
+          <p class="note" style="max-width:none">
+            The weights are a judgement call and the page shows the three components separately
+            so you can re-weight them by eye. Two properties are not judgement calls: the same
+            genome run twice with the same seed gives D = 0.00000 exactly, and the metric is
+            bounded in [0, 1].
+          </p>
+        </div>
+        <p class="note">
+          A distance is meaningless without a scale, so both ends are measured, not assumed.
+          <strong>The ceiling</strong> is the mean distance between unrelated viable genomes —
+          as different as two patterns in this study ever get. <strong>The floor</strong> is the
+          distance between two runs of the <em>same</em> genome with a different growth seed:
+          developmental noise, the part of the appearance that no child inherits. Note what the
+          floor is and is not. It is not a lower bound on visible mutation, because on this page
+          children inherit their parent's growth seed and so carry none of that noise. It is the
+          price of <em>not</em> inheriting it — and §7 shows that price is the whole game.
+        </p>
+        <div class="statline">
+          <div class="stat">
+            <div class="k">Ceiling · unrelated</div>
+            <div class="v" id="statNull">0.335</div>
+            <div class="s" id="statNullSub">276 pairs at 64² — run the sweep to remeasure</div>
+          </div>
+          <div class="stat">
+            <div class="k">Floor · same genome</div>
+            <div class="v" id="statFloor">0.055</div>
+            <div class="s" id="statFloorSub">growth seed re-rolled, 96 pairs at 64²</div>
+          </div>
+          <div class="stat">
+            <div class="k">Identical run</div>
+            <div class="v">0.000</div>
+            <div class="s">exact, by construction</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>4 · The heritability curve</h2>
+        <p class="note">
+          The crux. Take many viable parents, mutate each by δ — a fraction of every
+          parameter's range, applied as Gaussian noise to F, k and the anisotropy at once —
+          and measure the distance from parent to child. A usable system gives a smooth,
+          monotone curve. A cliff means the (F, k) plane has phase boundaries you fall off.
+          Children inherit the growth seed, which §7 shows is not optional.
+        </p>
+        <p class="note">
+          Every δ walks <em>the same fifty children</em> further out: one unit-Gaussian
+          direction is drawn per parent–child pair and then merely rescaled by δ. Without that
+          — drawing fresh mutations at each δ — sampling noise is larger than the effect being
+          measured and the curve comes out non-monotone by luck alone. We found that out the
+          hard way; the first version of this sweep failed its own monotonicity check.
+        </p>
+        <p class="note">
+          The live sweep runs at 32² so it finishes in seconds. That is honest about the
+          <em>shape</em> — the 32² and 64² curves never differ by more than 0.013 in the mean —
+          but it inflates the absolute numbers, because every distance here is a statistic over
+          however many pattern features fit on the grid, and 32² fits only about three. The
+          floor measured on the same ten genomes is 0.117 at 32², 0.066 at 64² and 0.038 at 128².
+          So the live "safe up to" reads about one δ step more conservative than the 64²
+          reference figure quoted in the Findings. Both are printed; neither is hidden.
+        </p>
+        <div class="btnrow">
+          <button id="runSweep" class="primary" type="button">Run the sweep</button>
+          <span class="subline" id="sweepStatus"></span>
+        </div>
+        <div class="chartbox">
+          <canvas id="heritChart" width="1000" height="460"></canvas>
+        </div>
+        <div class="chartbox" style="margin-top: var(--s2)">
+          <canvas id="deathChart" width="1000" height="190"></canvas>
+        </div>
+        <p class="note" style="margin-top: var(--s3)">
+          The mean is not where the cliff shows up — the mean is smooth all the way. The cliff
+          is in the <em>tail</em> and in the death rate: the 90th percentile stays flat and then
+          leaps, at the δ where a typical mutation step is large enough to carry a child across a
+          phase boundary or off the crescent entirely.
+        </p>
+        <div class="statline">
+          <div class="stat">
+            <div class="k">Safe up to</div>
+            <div class="v" id="statSafe">—</div>
+            <div class="s">9 in 10 kin, &lt; 10% die · at 32²; 0.008 at 64²</div>
+          </div>
+          <div class="stat">
+            <div class="k">Noise-equivalent</div>
+            <div class="v" id="statVis">—</div>
+            <div class="s">δ that moves a pattern as far as regrowing it</div>
+          </div>
+          <div class="stat">
+            <div class="k">Grid check</div>
+            <div class="v" id="statGrid">0.013</div>
+            <div class="s">32² vs 64², max gap in mean D</div>
+          </div>
+        </div>
+        <div style="margin-top: var(--s4); display: flex; flex-wrap: wrap; gap: var(--s5)">
+          <span class="chip" id="chipMono"><span class="dot"></span><span>—</span></span>
+          <span class="chip" id="chipCliff"><span class="dot"></span><span>—</span></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>5 · A lineage, walking</h2>
+        <p class="note">
+          One parent on the left, then each child mutated from the one before it by the current
+          δ. Mutations stack — this is a lineage walking, not seven independent rolls. Look
+          with your eyes rather than at the numbers: does the family still look like a family
+          by the far end? A dashed frame is a child whose pattern collapsed to nothing.
+        </p>
+        <div class="btnrow">
+          <button id="reroll" type="button">Re-roll the walk</button>
+          <span class="subline" id="lineStatus"></span>
+        </div>
+        <div class="scroller">
+          <div class="strip" id="strip"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>6 · At game resolution</h2>
+        <p class="note">
+          A gorgeous field at 64² is worth nothing to Wonder if it turns to mush at sprite
+          scale. Each shape below is drawn twice at exactly the pixel count it would have in
+          the game. The top row crops a <em>window</em> of the field sized so two or three
+          features land inside the sprite. The bottom row crams the whole field into the same
+          pixels — which is what you get if you never think about it.
+        </p>
+        <div class="gallery" id="gallery"></div>
+        <p class="note" style="margin-top: var(--s4)">
+          The number under each sprite is <strong>contrast kept</strong>: the standard deviation
+          of the box-filtered sprite divided by that of the full field. It is a direct measure
+          of how much of the pattern survived the shrink, and it collapses exactly where Nyquist
+          says it should — once a pattern feature is worth less than about two sprite pixels,
+          box-averaging eats it.
+        </p>
+        <div class="chartbox" style="margin-top: var(--s4)">
+          <canvas id="downChart" width="1000" height="330"></canvas>
+        </div>
+      </section>
+
+      <section>
+        <h2>7 · The 7×7 identity map</h2>
+        <p class="note">
+          Wonder already has a small pixel grid where a plant presents an appearance and an
+          insect's sensor adapts toward it. If surface pattern <em>is</em> that map rather than a
+          separate decoration, then one thing is simultaneously the beautiful thing and the
+          functional thing. So: reduce the pattern to the map's real size and ask whether
+          anything survives. Top canvas is the cropped field, bottom is the 7×7 the game would
+          actually store. The number is the distance between that tile and the parent's, on
+          z-scored tiles, where <strong>1.13 is what two unrelated random tiles score</strong>.
+        </p>
+        <div class="idrow" id="idrow"></div>
+        <p class="note" style="margin-top: var(--s4)">
+          The last cell is the one that decides the design. It is the parent's genome, exactly,
+          grown from a different seed — a sibling, not a mutant. If it scores like a stranger,
+          then the 7×7 tile is not carrying the genome at all, it is carrying the accident of
+          where the first blobs landed, and the identity-map tie-in fails unless the growth seed
+          is itself inherited.
+        </p>
+      </section>
+
+      <section>
+        <h2>8 · Findings</h2>
+        <div class="findings">
+          <p style="margin-top:0">
+            <strong>Measured by running this page's own algorithms.</strong> Reference map
+            40×40 over F ∈ [0.005, 0.085] × k ∈ [0.030, 0.072] at 48² / 3000 steps; heritability
+            10 parents × 5 children per δ under common random numbers, at both 32²/2000 and
+            64²/3000; calibration over 24 viable genomes (276 pairs) at 64²/3000; sprite
+            statistics at 64² / 3500 steps over six representative genomes. Nothing below is an
+            estimate.
+          </p>
+          <dl>
+            <dt>Share of the (F,k) rectangle that produces any pattern at all</dt><dd>22 % · 351/1600</dd>
+            <dt>Of those viable cells: touch a different regime / touch the dead region</dt><dd>54 % / 30 %</dd>
+            <dt>One map cell</dt><dd>ΔF 0.0020, Δk 0.0011</dd>
+            <dt>Ceiling — mean D between unrelated viable genomes, 276 pairs</dt><dd>0.335 [0.051–0.668]</dd>
+            <dt>Floor — same genome, growth seed re-rolled, 96 pairs</dt><dd>0.055, max 0.172</dd>
+            <dt>… of those, share landing in a different <em>regime label</em></dt><dd>11 %</dd>
+            <dt>Kin threshold used throughout — a third of the ceiling</dt><dd>0.112</dd>
+            <dt>Floor for the <em>same</em> ten genomes at 32² / 64² / 128²</dt><dd>0.117 / 0.066 / 0.038</dd>
+            <dt>… pattern features across the grid at those three sizes</dt><dd>3.3 / 8.0 / 14.5</dd>
+            <dt>Mean D at δ = 0.001 / 0.004 / 0.008 / 0.016 / 0.064 (64²)</dt><dd>0.016 / 0.033 / 0.053 / 0.086 / 0.228</dd>
+            <dt>… the same five at 32², as a grid-independence check</dt><dd>0.010 / 0.022 / 0.045 / 0.077 / 0.233</dd>
+            <dt>Largest gap between the two grids across all ten δ</dt><dd>0.013</dd>
+            <dt>Monotone in the mean, both grids, all ten δ</dt><dd>yes</dd>
+            <dt>90th percentile of D at δ = 0.004 / 0.008 / 0.016 / 0.032</dt><dd>0.073 / 0.110 / 0.249 / 0.372</dd>
+            <dt>Children that collapse to uniform at δ = 0.002 / 0.008 / 0.032 / 0.128</dt><dd>0 / 6 / 12 / 36 %</dd>
+            <dt>Children whose regime <em>label</em> changes at the same four</dt><dd>4 / 10 / 34 / 66 %</dd>
+            <dt>Pattern wavelength across the zoo (power-weighted, 64²)</dt><dd>4.9 – 8.5 cells</dd>
+            <dt>Contrast kept at 1 / 2 / 3 / 4 / 6 / 12 field-cells per sprite pixel</dt><dd>100 / 90 / 75 / 59 / 33 / 19 %</dd>
+            <dt>7×7 tile: child at δ = 0.002 / 0.008 / 0.03, growth seed inherited</dt><dd>0.53 / 0.71 / 0.89</dd>
+            <dt>7×7 tile: <em>sibling</em>, identical genome, seed re-rolled</dt><dd>1.14</dd>
+            <dt>7×7 tile: unrelated genome / two random tiles</dt><dd>1.06 / 1.13</dd>
+            <dt>Anisotropy α = 0 → 0.6: viable cells, and share that are aligned stripes</dt><dd>221→315, 5 %→84 %</dd>
+            <dt>D<sub>u</sub>/D<sub>v</sub> = 1.5 / 2.0 / 3.0: viable cells of 1024</dt><dd>103 / 221 / 449</dd>
+            <dt>Coarse map (24²/1200) vs the 48²/3000 reference</dt><dd>92.5 % of cells agree</dd>
+          </dl>
+          <p>
+            <strong>Yes — reaction–diffusion is heritable, and the curve is smoother than the
+            parameter plane has any right to allow.</strong> Mean pattern distance rises
+            <em>strictly</em> monotonically across three decades of δ, at both grid sizes, with no
+            step in it, and the 32² and 64² curves never differ by more than 0.013 — so this is
+            a property of the model and not of the grid. At δ = 0.004 a child sits at 10 % of
+            the unrelated-genome ceiling; at δ = 0.008, 16 %; at δ = 0.016, 26 %. Those are
+            family resemblances, and they are stable enough to serve as a lineage's identity.
+          </p>
+          <p>
+            <strong>The cliffs are real, but they live in the tail, not the mean.</strong> Up to
+            δ = 0.008 the 90th percentile of D stays at or under the kin threshold of 0.112 —
+            nine children in ten are unmistakably kin. At δ = 0.016 the 90th percentile leaps to
+            0.249 and at 0.032 to 0.372, past the unrelated-genome ceiling: one child in ten is
+            now a stranger. The map explains exactly why. Pattern occupies 22 % of the plane,
+            30 % of that is one cell from the dead region, and a δ = 0.016 step is about
+            two-thirds of a map cell — so at that rate a lineage regularly walks off the
+            crescent. The measured death rate agrees: 0 % at δ = 0.002, 6 % at 0.008, 12 % at
+            0.032, 36 % at 0.128.
+          </p>
+          <p>
+            <strong>The safe mutation range is δ ≤ 0.008 of parameter range per event — in
+            absolute terms, one standard deviation of ΔF ≈ 0.00064 and Δk ≈ 0.00036.</strong>
+            That is the largest δ at which nine children in ten stay inside the kin threshold
+            and fewer than one in ten dies. The upper bound is not soft: doubling to δ = 0.016
+            more than doubles the tail and doubles the deaths.
+          </p>
+          <p>
+            <strong>And here is the uncomfortable coincidence that decides the design.</strong>
+            The δ at which a mutation moves a pattern as far as <em>merely regrowing it</em>
+            (D = 0.055) is δ ≈ 0.008 — the same place the safe band ends. There is no comfortable
+            window where the genetic signal is loud and the developmental noise is quiet. Push
+            the mutation rate up to be seen and you fall off the crescent; keep it low and, if
+            the growth seed is re-rolled each generation, the noise is bigger than the
+            inheritance. The only way out is to stop generating noise: inherit the seed. Then
+            parent and child share their initial conditions exactly, the floor does not apply to
+            them at all, and δ = 0.001 already produces a clean visible nudge.
+          </p>
+          <p>
+            <strong>One caveat on the regime labels, because they look worse than the patterns
+            do.</strong> 10 % of children change regime label at δ = 0.008, next to a mean D of
+            0.053 — but the baseline for that is not zero. Regrow the <em>same</em> genome from a
+            different seed and it changes label 11 % of the time, which is to say the label
+            flips as often from noise as from a safe-sized mutation. Most flips are cosmetic
+            crossings of a classifier threshold — spots whose blobs have just elongated enough to
+            be called labyrinth. The label is more brittle than the appearance. Trust D, not the
+            name.
+          </p>
+          <p>
+            <strong>Developmental noise is not a property of the chemistry — it is a property of
+            how small the field is.</strong> Run the same ten genomes on three grids and the
+            floor falls monotonically with the number of pattern features you are averaging
+            over: 0.117 at 32² (3.3 features across), 0.066 at 64² (8.0), 0.038 at 128² (14.5).
+            On a large field the same genome always looks the same, because the statistics
+            converge. On a small one it does not, because they don't. This matters because a
+            <em>sprite is a small field</em> — the smallest one on this page. Whatever noise the
+            metric sees at 32² is a floor on what the game will see at 8×8, and it is why §7
+            comes out the way it does.
+          </p>
+          <p>
+            <strong>Pixel-scale survival is a hard geometric constraint, and it is the finding
+            most likely to change how this ships.</strong> The wavelength is set by the
+            chemistry — 4.9 to 8.5 cells, call it 7 — and it does not care how big your sprite
+            is. Contrast retention falls off exactly on the Nyquist schedule: 90 % at two field
+            cells per sprite pixel, 59 % at four, 33 % at six, 19 % at twelve. Concretely: cram a
+            64² field onto an 8×8 insect wing and you keep 19 % of the contrast, which is mush.
+            Crop a 16-cell window instead — 2.3 features — and you keep 90 %. <em>So the sprite
+            must not show the whole field.</em> An 8×8 wing carries two or three marks and no
+            more; a 7×7 identity map carries about two features, which is the difference between
+            "two dots", "one bar" and "plain", and nothing finer.
+          </p>
+          <p>
+            <strong>The identity-map tie-in works, but only if the growth seed becomes part of
+            the genome.</strong> This is the sharpest result on the page. With the seed
+            inherited, a δ = 0.002 child's 7×7 tile sits at 0.53 against a random baseline of
+            1.13, and degrades gracefully to 0.71 at δ = 0.008. With the seed re-rolled, a
+            <em>sibling with an identical genome</em> scores 1.14 — indistinguishable from two
+            random tiles, and further from its parent than an unrelated genome is (1.06). At
+            sprite scale the literal pixels are dominated by where the first blobs happened to
+            land, not by the chemistry. Inherit the seed and the tile is heritable; don't, and
+            an insect adapted to the parent will not recognise the child. It costs one extra
+            integer in the genome.
+          </p>
+          <p>
+            <strong>Two parameters must stay locked, and the numbers say how hard.</strong>
+            D<sub>u</sub>/D<sub>v</sub> is not a fourth free dial: at ratio 1.5 only 10 % of the
+            plane is viable, at 2.0 it is 22 %, at 3.0 it is 44 %. Moving it rescales the whole
+            map and invalidates every δ on this page. Anisotropy is safer and is the only way to
+            get <em>aligned</em> stripes at all — isotropic Gray–Scott makes labyrinths, never
+            stripes, and the map bears that out with 4 stripe cells out of 351 at α = 0. Push α
+            to 0.6 and 84 % of viable cells become stripes while the viable area <em>grows</em>
+            by 43 %. Anisotropy is a cheap, safe, expressive dial. The diffusion ratio is not.
+          </p>
+          <p>
+            <strong>One methodological finding worth writing down, because it cost an hour.</strong>
+            How you seed the field decides which half of the map exists. Perturbing scattered
+            single cells loses the entire high-F region — coral, κ and μ all decay to uniform —
+            because there the patterned state is bistable with the trivial one and needs a
+            nucleus above a critical size. Seeding with small square blobs recovers all of it.
+            A "which regimes exist" claim is a claim about the initial conditions as much as
+            about (F, k).
+          </p>
+        </div>
+      </section>
+
+      <section class="reading">
+        <h2>How to read this</h2>
+        <p>
+          <strong>What the model is.</strong> Two chemicals on a torus. U is fed in at rate F and
+          V is drained at rate F + k; the reaction U + 2V → 3V converts one to the other, so V is
+          autocatalytic — it needs itself to make more of itself. V diffuses at half U's rate,
+          and that difference is the whole engine: the activator stays put while the inhibitor
+          spreads, which is Turing's 1952 argument in its smallest possible form. Everything on
+          this page falls out of those two lines of arithmetic run a few thousand times.
+        </p>
+        <p>
+          <strong>Read the map first.</strong> Horizontal is F, vertical is k, and the grey mass
+          is death — the trivial state wins and nothing happens. Pattern is the crescent. Inside
+          it, spots sit toward high k, gaps and labyrinths toward low k, and the ragged tail at
+          low F and low k never settles at all. The white ring is the current genome. Everything
+          else on the page is a question about how far you can move that ring before the thing
+          inside it stops being the same thing.
+        </p>
+        <p>
+          <strong>Read the curve second.</strong> Two horizontal reference lines matter more than
+          the curve itself. The lower one is developmental noise — how different the same genome
+          looks when grown twice. The upper one is how different two unrelated genomes look.
+          Heritability is the claim that mutation distance rises smoothly between those two
+          lines as δ grows, and that is what the curve does. The shaded band is the range of δ
+          where children are reliably kin; the bar chart underneath is the price you pay in dead
+          children for going past it.
+        </p>
+        <p>
+          <strong>Why the metric ignores where the spots are.</strong> Two plants of the same
+          lineage grown side by side have their spots in different places, and nobody would call
+          them different species for it. So the texture metric works on power spectra and
+          histograms, which are blind to position by construction. That is the right choice for
+          "is this the same kind of pattern" — and it is the wrong choice for §7, where the
+          question is whether two <em>literal 7×7 grids</em> match. Section 7 therefore uses a
+          different, position-sensitive measure, and gets a different and much harsher answer.
+          Both are true; they are answering different questions.
+        </p>
+        <p>
+          <strong>What this does and does not tell us about Wonder.</strong> It tells us surface
+          pattern can be genetic: two floats, an anisotropy term and an integer seed — about ten
+          bytes — give a heritable, mutable, continuously-varying marking with a measured safe
+          mutation rate. It is cheap in the way that matters, too, because it is computed once at
+          birth and baked into a tiny tile; nothing here runs per tick. It tells us the tile has
+          to be small and the crop has to be deliberate. It does <em>not</em> tell us the pattern
+          means anything. Nothing here selects; a spotted plant is no fitter than a plain one,
+          and the ecology audit's finding that Wonder has no fitness function is untouched by
+          this bench. And it does not tell us the 7×7 map should be a pattern at all — only that
+          if it is, it can be, and what it costs.
+        </p>
+        <p>
+          <strong>What the player would actually see.</strong> A stand of the same plant, every
+          one of them wearing the same markings — the same size of spot, the same crowding, the
+          same slant — and wearing them in the same places, generation after generation, because
+          the growth seed is inherited along with the chemistry. Then a seedling comes up with
+          its spots a little larger and a little further apart. Not a different plant: the same
+          plant, marked differently, and you can see the family in it. Roughly one seedling in
+          twelve at the recommended rate comes up <em>plain</em> — no markings at all, because its
+          parameters fell off the edge of the crescent — and that one is a dead end rather than a
+          variant, which is worth knowing before a player names it. At the scale the game
+          actually draws things, an insect's wing carries two marks and a petal carries three or
+          four; anything finer is a smudge, and the honest version of this feature is bold,
+          coarse markings that a player can read at a glance rather than fine mottling nobody
+          will ever resolve.
+        </p>
+      </section>
+
+    </div>
+  </div>
+
+  <footer>Bench 8 · Gray–Scott reaction–diffusion; Turing 1952, Pearson 1993 · D<sub>u</sub>, D<sub>v</sub> fixed, (F, k) free · everything derived from the seed · nothing here is wired to the game yet</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================ rng ============================ */
+  // mulberry32, matching src/core/rng.ts. Warmed 12 draws because the first
+  // draw correlates across nearby seeds and this project has been bitten.
+  function makeRng(seed) {
+    let a = seed >>> 0;
+    const f = function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < 12; i++) f();
+    return f;
+  }
+  function gauss(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  /* =========================== oklch =========================== */
+  function oklch(L, C, H) {
+    L = Math.max(0, Math.min(1, L));
+    const rad = (H * Math.PI) / 180;
+    const lin = (c) => {
+      const a = c * Math.cos(rad), b = c * Math.sin(rad);
+      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+      const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+      const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+      return [ 4.0767416621*l - 3.3077115913*m + 0.2309699292*s,
+              -1.2684380046*l + 2.6097574011*m - 0.3413193965*s,
+              -0.0041960863*l - 0.7034186147*m + 1.7076147010*s];
+    };
+    let c = Math.max(0, C), v = lin(c);
+    for (let i = 0; i < 24 && !v.every((x) => x >= -0.0005 && x <= 1.0005); i++) v = lin(c *= 0.92);
+    const enc = (x) => {
+      x = Math.max(0, Math.min(1, x));
+      const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+      return Math.round(Math.max(0, Math.min(1, s)) * 255);
+    };
+    return "#" + v.map(enc).map((n) => n.toString(16).padStart(2, "0")).join("");
+  }
+
+  /* =========================== dom =========================== */
+  const $ = (id) => document.getElementById(id);
+  const cssvar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  function slider(host, opts) {
+    const wrap = document.createElement("div"); wrap.className = "ctrl";
+    const row = document.createElement("div"); row.className = "row";
+    const lab = document.createElement("label"); lab.textContent = opts.label;
+    const val = document.createElement("span"); val.className = "val";
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = opts.min; input.max = opts.max; input.step = opts.step || 1;
+    input.value = opts.value;
+    lab.htmlFor = input.id = "c_" + opts.label.replace(/\W+/g, "_");
+    const fmt = opts.fmt || ((v) => String(v));
+    const paint = () => { val.textContent = fmt(+input.value); };
+    input.addEventListener("input", () => { paint(); opts.onInput(+input.value); });
+    row.appendChild(lab); row.appendChild(val);
+    wrap.appendChild(row); wrap.appendChild(input);
+    if (opts.hint) {
+      const h = document.createElement("div"); h.className = "hint"; h.textContent = opts.hint;
+      wrap.appendChild(h);
+    }
+    host.appendChild(wrap); paint();
+    return { input: input, repaint: paint };
+  }
+
+  /* ====================== the Gray–Scott core ======================
+     Two chemicals on a torus. Du and Dv are FIXED — the Pearson zoo is a
+     two-parameter map over (F, k) with diffusion held constant, and treating
+     the ratio as a free dial silently rescales the whole map (measured: 10%
+     of the plane viable at ratio 1.5, 44% at 3.0). 9-point Laplacian.
+     Anisotropy redistributes the orthogonal weights between x and y while
+     leaving the centre weight at exactly -1, so the explicit scheme's
+     stability margin is untouched at any alpha.
+     ================================================================= */
+
+  const DU = 0.16;
+  const idxCache = new Map();
+  function wrapIdx(N) {
+    let c = idxCache.get(N);
+    if (!c) {
+      const m = new Int32Array(N), p = new Int32Array(N);
+      for (let i = 0; i < N; i++) { m[i] = (i - 1 + N) % N; p[i] = (i + 1) % N; }
+      c = { m: m, p: p }; idxCache.set(N, c);
+    }
+    return c;
+  }
+
+  function newSim(g, N, steps) {
+    const n2 = N * N;
+    const st = {
+      N: N, steps: steps, done: 0, g: g,
+      Du: DU, Dv: DU / g.ratio,
+      u: new Float32Array(n2), v: new Float32Array(n2),
+      u2: new Float32Array(n2), v2: new Float32Array(n2),
+      wx: 0.2 * (1 + g.alpha), wy: 0.2 * (1 - g.alpha), wd: 0.05,
+      idx: wrapIdx(N), dead: false,
+    };
+    const rng = makeRng(g.seed);
+    for (let i = 0; i < n2; i++) { st.u[i] = 1; st.v[i] = 0; }
+    // Square blobs, not scattered cells: at high F the patterned state is
+    // bistable with the trivial one and needs a nucleus above a critical size.
+    // Scattered single-cell noise silently loses the whole high-F half of the map.
+    const nb = Math.max(3, Math.round(n2 / 260));
+    for (let b = 0; b < nb; b++) {
+      const cx = Math.floor(rng() * N), cy = Math.floor(rng() * N), r = 2 + Math.floor(rng() * 2);
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const i = (((cy + dy) % N + N) % N) * N + (((cx + dx) % N + N) % N);
+        st.u[i] = 0.5; st.v[i] = 0.25;
+      }
+    }
+    for (let i = 0; i < n2; i++) { st.u[i] += (rng() - 0.5) * 0.02; st.v[i] += (rng() - 0.5) * 0.02; }
+    return st;
+  }
+
+  function advance(st, n) {
+    const N = st.N, IM = st.idx.m, IP = st.idx.p;
+    const wx = st.wx, wy = st.wy, wd = st.wd, Du = st.Du, Dv = st.Dv;
+    const F = st.g.F, k = st.g.k;
+    const target = Math.min(st.steps, st.done + n);
+    while (st.done < target) {
+      const uu = st.u, vv = st.v, un = st.u2, vn = st.v2;
+      for (let y = 0; y < N; y++) {
+        const ym = IM[y] * N, yp = IP[y] * N, y0 = y * N;
+        for (let x = 0; x < N; x++) {
+          const xm = IM[x], xp = IP[x], i = y0 + x;
+          const u = uu[i], v = vv[i];
+          const lu = wx * (uu[y0 + xm] + uu[y0 + xp]) + wy * (uu[ym + x] + uu[yp + x])
+            + wd * (uu[ym + xm] + uu[ym + xp] + uu[yp + xm] + uu[yp + xp]) - u;
+          const lv = wx * (vv[y0 + xm] + vv[y0 + xp]) + wy * (vv[ym + x] + vv[yp + x])
+            + wd * (vv[ym + xm] + vv[ym + xp] + vv[yp + xm] + vv[yp + xp]) - v;
+          const uvv = u * v * v;
+          un[i] = u + (Du * lu - uvv + F * (1 - u));
+          vn[i] = v + (Dv * lv + uvv - (F + k) * v);
+        }
+      }
+      st.u = un; st.u2 = uu; st.v = vn; st.v2 = vv;
+      st.done++;
+      // bail out of the dead region early — it is 78% of the plane and the
+      // map would otherwise spend most of its time simulating nothing
+      if (st.early && (st.done & 255) === 0) {
+        let mn = Infinity, mx = -Infinity;
+        for (let i = 0; i < st.v.length; i++) { const q = st.v[i]; if (q < mn) mn = q; if (q > mx) mx = q; }
+        if (mx - mn < 1e-4) { st.dead = true; st.done = st.steps; }
+      }
+    }
+    return st.done >= st.steps;
+  }
+
+  function finish(st) {
+    // one more step, unrecorded, purely to measure how much the field is still moving
+    const N = st.N, IM = st.idx.m, IP = st.idx.p, vv = st.v, uu = st.u;
+    const wx = st.wx, wy = st.wy, wd = st.wd, Dv = st.Dv, F = st.g.F, k = st.g.k;
+    let d = 0;
+    for (let y = 0; y < N; y++) {
+      const ym = IM[y] * N, yp = IP[y] * N, y0 = y * N;
+      for (let x = 0; x < N; x++) {
+        const xm = IM[x], xp = IP[x], i = y0 + x;
+        const u = uu[i], v = vv[i];
+        const lv = wx * (vv[y0 + xm] + vv[y0 + xp]) + wy * (vv[ym + x] + vv[yp + x])
+          + wd * (vv[ym + xm] + vv[ym + xp] + vv[yp + xm] + vv[yp + xp]) - v;
+        d += Math.abs(Dv * lv + u * v * v - (F + k) * v);
+      }
+    }
+    return { V: vv, N: N, resid: d / (N * N), steps: st.steps };
+  }
+
+  function runSim(g, N, steps, early) {
+    const st = newSim(g, N, steps);
+    st.early = !!early;
+    advance(st, steps);
+    return finish(st);
+  }
+
+  /* ====================== descriptors & distance ====================== */
+
+  function fft(re, im, n) {
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), h = len >> 1;
+      for (let i = 0; i < n; i += len) {
+        let cr = 1, ci = 0;
+        for (let j = 0; j < h; j++) {
+          const ur = re[i + j], ui = im[i + j];
+          const vr = re[i + j + h] * cr - im[i + j + h] * ci;
+          const vi = re[i + j + h] * ci + im[i + j + h] * cr;
+          re[i + j] = ur + vr; im[i + j] = ui + vi;
+          re[i + j + h] = ur - vr; im[i + j + h] = ui - vi;
+          const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+        }
+      }
+    }
+  }
+
+  const NBIN = 20, HBIN = 10, HMAX = 0.45;
+  function descriptor(V, N) {
+    let mean = 0;
+    for (let i = 0; i < V.length; i++) mean += V[i];
+    mean /= V.length;
+    let sd = 0;
+    for (let i = 0; i < V.length; i++) sd += (V[i] - mean) * (V[i] - mean);
+    sd = Math.sqrt(sd / V.length);
+
+    const re = new Float64Array(N * N), im = new Float64Array(N * N);
+    for (let i = 0; i < N * N; i++) re[i] = V[i] - mean;
+    const rr = new Float64Array(N), ii = new Float64Array(N);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) { rr[x] = re[y * N + x]; ii[x] = im[y * N + x]; }
+      fft(rr, ii, N);
+      for (let x = 0; x < N; x++) { re[y * N + x] = rr[x]; im[y * N + x] = ii[x]; }
+    }
+    for (let x = 0; x < N; x++) {
+      for (let y = 0; y < N; y++) { rr[y] = re[y * N + x]; ii[y] = im[y * N + x]; }
+      fft(rr, ii, N);
+      for (let y = 0; y < N; y++) { re[y * N + x] = rr[y]; im[y * N + x] = ii[y]; }
+    }
+    const radial = new Float64Array(NBIN);
+    let qx = 0, qy = 0, wsum = 0;
+    const half = N / 2;
+    for (let y = 0; y < N; y++) {
+      const fy = y <= half ? y : y - N;
+      for (let x = 0; x < N; x++) {
+        const fx = x <= half ? x : x - N;
+        if (fx === 0 && fy === 0) continue;
+        const p = re[y * N + x] * re[y * N + x] + im[y * N + x] * im[y * N + x];
+        const f = Math.sqrt(fx * fx + fy * fy) / N;
+        if (f > 0.5) continue;
+        radial[Math.min(NBIN - 1, Math.floor((f / 0.5) * NBIN))] += p;
+        const th = Math.atan2(fy, fx);
+        qx += p * Math.cos(2 * th); qy += p * Math.sin(2 * th); wsum += p;
+      }
+    }
+    let nrm = 0;
+    for (let b = 0; b < NBIN; b++) nrm += radial[b] * radial[b];
+    nrm = Math.sqrt(nrm);
+    if (!(nrm > 0) || !isFinite(nrm)) nrm = 1;
+    const rad = new Float64Array(NBIN);
+    for (let b = 0; b < NBIN; b++) rad[b] = radial[b] / nrm;
+
+    const hist = new Float64Array(HBIN);
+    for (let i = 0; i < V.length; i++) {
+      hist[Math.max(0, Math.min(HBIN - 1, Math.floor((V[i] / HMAX) * HBIN)))]++;
+    }
+    for (let b = 0; b < HBIN; b++) hist[b] /= V.length;
+
+    // wavelength from the power-weighted mean radial frequency (excluding the
+    // lowest bin, which is large-scale drift rather than pattern)
+    let num = 0, den = 0;
+    for (let b = 1; b < NBIN; b++) { const f = ((b + 0.5) / NBIN) * 0.5; num += rad[b] * f; den += rad[b]; }
+    const lambda = den > 0 && num > 0 ? den / num : Infinity;
+
+    let peak = 1;
+    for (let b = 2; b < NBIN; b++) if (rad[b] > rad[peak]) peak = b;
+
+    return {
+      rad: rad, hist: hist, mean: mean, sd: sd, lambda: lambda, peakBin: peak,
+      ox: wsum > 0 ? qx / wsum : 0, oy: wsum > 0 ? qy / wsum : 0,
+    };
+  }
+
+  function distance(a, b) {
+    let dot = 0;
+    for (let i = 0; i < NBIN; i++) dot += a.rad[i] * b.rad[i];
+    const dScale = Math.max(0, Math.min(1, 1 - dot));
+    const dOrient = Math.min(1, Math.hypot(a.ox - b.ox, a.oy - b.oy) / 2);
+    let tv = 0;
+    for (let i = 0; i < HBIN; i++) tv += Math.abs(a.hist[i] - b.hist[i]);
+    const dTone = Math.min(1, tv / 2);
+    const d = 0.5 * dScale + 0.2 * dOrient + 0.3 * dTone;
+    return { d: isFinite(d) ? d : 1, dScale: dScale, dOrient: dOrient, dTone: dTone };
+  }
+
+  /* ====================== regime classification ======================
+     Heuristic, and the page says so. Component counts and circularity on
+     both phases, structure-tensor coherence for alignment, and the residual
+     for "has this even stopped moving".
+     =================================================================== */
+
+  const REGIMES = ["uniform", "spots", "gaps", "stripes", "labyrinth", "unsettled"];
+  const REGIME_VAR = ["--r-uniform", "--r-spots", "--r-gaps", "--r-stripes", "--r-labyrinth", "--r-unsettled"];
+  const REGIME_DESC = [
+    "no pattern — the trivial state wins",
+    "isolated round blobs of V",
+    "round holes in a field of V",
+    "aligned bands — needs anisotropy",
+    "connected worms, no global direction",
+    "never settled: mitosis, waves or chaos",
+  ];
+
+  function analyse(V, N, resid) {
+    let mn = Infinity, mx = -Infinity, mean = 0;
+    for (let i = 0; i < V.length; i++) { const q = V[i]; if (q < mn) mn = q; if (q > mx) mx = q; mean += q; }
+    mean /= V.length;
+    let sd = 0;
+    for (let i = 0; i < V.length; i++) sd += (V[i] - mean) * (V[i] - mean);
+    sd = Math.sqrt(sd / V.length);
+    const thr = (mn + mx) / 2;
+    let cov = 0;
+    for (let i = 0; i < V.length; i++) if (V[i] > thr) cov++;
+    cov /= V.length;
+
+    let jxx = 0, jyy = 0, jxy = 0;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const xp = (x + 1) % N, xm = (x - 1 + N) % N, yp = ((y + 1) % N) * N, ym = ((y - 1 + N) % N) * N;
+      const gx = (V[y * N + xp] - V[y * N + xm]) / 2, gy = (V[yp + x] - V[ym + x]) / 2;
+      jxx += gx * gx; jyy += gy * gy; jxy += gx * gy;
+    }
+    const tr = jxx + jyy, det = jxx * jyy - jxy * jxy;
+    const coh = tr > 1e-12 ? (2 * Math.sqrt(Math.max(0, tr * tr / 4 - det))) / tr : 0;
+
+    const seen = new Uint8Array(N * N), stack = [];
+    const phase = (above) => {
+      seen.fill(0);
+      const inP = (i) => (above ? V[i] > thr : V[i] <= thr);
+      let n = 0, totA = 0, circW = 0, biggest = 0;
+      for (let i = 0; i < N * N; i++) {
+        if (!inP(i) || seen[i]) continue;
+        n++; let A = 0, P = 0;
+        stack.length = 0; stack.push(i); seen[i] = 1;
+        while (stack.length) {
+          const c = stack.pop(); A++;
+          const cy = (c / N) | 0, cx = c % N;
+          const q0 = cy * N + ((cx + 1) % N), q1 = cy * N + ((cx - 1 + N) % N);
+          const q2 = ((cy + 1) % N) * N + cx, q3 = ((cy - 1 + N) % N) * N + cx;
+          const four = [q0, q1, q2, q3];
+          for (let z = 0; z < 4; z++) {
+            const q = four[z];
+            if (!inP(q)) P++;
+            else if (!seen[q]) { seen[q] = 1; stack.push(q); }
+          }
+        }
+        const C = P > 0 ? (4 * Math.PI * A) / (P * P) : 1;
+        circW += C * A; totA += A;
+        if (A > biggest) biggest = A;
+      }
+      return { n: n, circ: totA > 0 ? circW / totA : 0, big: biggest / (N * N) };
+    };
+    const hi = phase(true), lo = phase(false);
+    return {
+      sd: sd, mean: mean, cov: cov, coh: coh, hi: hi, lo: lo, thr: thr, mn: mn, mx: mx,
+      motion: sd > 1e-6 ? resid / sd : 0,
+    };
+  }
+
+  function classify(a) {
+    if (a.sd < 0.010) return 0;
+    if (a.motion > 2.0e-3) return 5;
+    if (a.coh > 0.42) return 3;
+    const spotty = a.hi.n >= 3 && a.hi.circ > 0.45 && a.cov < 0.5;
+    const gappy = a.lo.n >= 3 && a.lo.circ > 0.45 && a.cov > 0.5;
+    if (spotty && !gappy) return 1;
+    if (gappy && !spotty) return 2;
+    if (spotty && gappy) return a.cov < 0.5 ? 1 : 2;
+    return 4;
+  }
+
+  /* ====================== pigment ======================
+     Hue from k, lightness spread from F. Nothing chosen by hand — the same
+     two numbers that make the pattern make the colour it is drawn in.
+     ===================================================== */
+
+  function pigment(g) {
+    const t = Math.max(0, Math.min(1, (g.F - 0.005) / 0.080));
+    const u = Math.max(0, Math.min(1, (g.k - 0.030) / 0.042));
+    const H = 22 + 318 * u;
+    const mark = { L: 0.31 + 0.13 * t, C: 0.115, H: H };
+    const grnd = { L: 0.84 - 0.10 * t, C: 0.062, H: H + 26 };
+    const ramp = [];
+    for (let i = 0; i < 32; i++) {
+      const s = i / 31;
+      ramp.push(oklch(grnd.L + (mark.L - grnd.L) * s, grnd.C + (mark.C - grnd.C) * s, grnd.H + (mark.H - grnd.H) * s));
+    }
+    return { mark: oklch(mark.L, mark.C, mark.H), ground: oklch(grnd.L, grnd.C, grnd.H),
+             rim: oklch(Math.max(0.14, mark.L - 0.14), mark.C * 0.9, H), ramp: ramp, H: H };
+  }
+
+  /* ====================== cooperative scheduler ======================
+     Long jobs are generators that yield; the pump spends a slice of each
+     frame on them so the page never locks. performance.now() here is a
+     scheduling clock only — chunking cannot change any result, every number
+     still comes from the seeded rng alone.
+     ================================================================== */
+
+  const Q = [];
+  let pumping = false;
+  function schedule(key, gen, prio) {
+    for (let i = Q.length - 1; i >= 0; i--) if (Q[i].key === key) Q.splice(i, 1);
+    const task = { key: key, it: gen(), prio: prio || 5 };
+    let at = Q.length;
+    for (let i = 0; i < Q.length; i++) if (Q[i].prio > task.prio) { at = i; break; }
+    Q.splice(at, 0, task);
+    pump();
+  }
+  function cancel(key) { for (let i = Q.length - 1; i >= 0; i--) if (Q[i].key === key) Q.splice(i, 1); }
+  function pump() {
+    if (pumping) return;
+    pumping = true;
+    const tick = () => {
+      const t0 = performance.now();
+      while (Q.length && performance.now() - t0 < 12) {
+        const task = Q[0];
+        let r;
+        try { r = task.it.next(); }
+        catch (e) { Q.shift(); pumping = false; throw e; }
+        if (r.done) { if (Q[0] === task) Q.shift(); }
+      }
+      if (Q.length) requestAnimationFrame(tick);
+      else pumping = false;
+    };
+    requestAnimationFrame(tick);
+  }
+  function* simGen(g, N, steps, out, early) {
+    const st = newSim(g, N, steps);
+    st.early = !!early;
+    const chunk = Math.max(1, Math.floor(1.2e6 / (N * N)));
+    while (!advance(st, chunk)) yield;
+    out.res = finish(st);
+  }
+
+  /* ====================== state ====================== */
+
+  const RANGE = { F: 0.080, k: 0.045, alpha: 1.2 };
+  const MAP = { F0: 0.005, F1: 0.085, K0: 0.030, K1: 0.072, R: 40, N: 24, STEPS: 1200 };
+  const CALIB = { nullD: 0.335, floorD: 0.0545, floorMax: 0.172, randTile: 1.128 };
+
+  const S = {
+    F: 0.0340, k: 0.0630, alpha: 0.00, ratio: 2.0,
+    N: 64, steps: 3000, delta: 0.008, win: 16, seed: 1867,
+    focal: null, desc: null, ana: null, cls: 0, pig: null,
+    map: null, mapMeta: null, mapBusy: false,
+    sweep: null, lineage: [], lineDelta: null, walkSeed: 5,
+  };
+  const genome = () => ({ F: S.F, k: S.k, alpha: S.alpha, ratio: S.ratio, seed: S.seed });
+
+  function mutate(g, dl, rng) {
+    return {
+      F: Math.max(0.004, Math.min(0.098, g.F + dl * RANGE.F * gauss(rng))),
+      k: Math.max(0.028, Math.min(0.074, g.k + dl * RANGE.k * gauss(rng))),
+      alpha: Math.max(-0.6, Math.min(0.6, g.alpha + dl * RANGE.alpha * gauss(rng))),
+      ratio: g.ratio, seed: g.seed,
+    };
+  }
+
+  /* ====================== the rail ====================== */
+
+  const ctrl = {};
+  ctrl.F = slider($("railTop"), {
+    label: "F · feed rate", min: 0.004, max: 0.098, step: 0.0005, value: S.F,
+    fmt: (v) => v.toFixed(4),
+    hint: "How fast U is replenished. Moves the genome left–right on the map.",
+    onInput: (v) => { S.F = v; onGenomeChange(); },
+  });
+  ctrl.k = slider($("railTop"), {
+    label: "k · kill rate", min: 0.028, max: 0.074, step: 0.0005, value: S.k,
+    fmt: (v) => v.toFixed(4),
+    hint: "How fast V is removed. Up–down on the map, and the pigment hue.",
+    onInput: (v) => { S.k = v; onGenomeChange(); },
+  });
+  ctrl.alpha = slider($("railTop"), {
+    label: "anisotropy α", min: -0.6, max: 0.6, step: 0.01, value: S.alpha,
+    fmt: (v) => (v > 0 ? "+" : "") + v.toFixed(2),
+    hint: "Splits diffusion between x and y. 0 gives labyrinths; ±0.4 and up gives aligned stripes.",
+    onInput: (v) => { S.alpha = v; markStale(); onGenomeChange(); },
+  });
+  ctrl.ratio = slider($("railRatio"), {
+    label: "Du/Dv ratio", min: 1.2, max: 4.0, step: 0.05, value: S.ratio,
+    fmt: (v) => v.toFixed(2),
+    hint: "Locked at 2 by default. This is NOT a fourth free parameter — moving it rescales the entire map (10% of the plane viable at 1.5, 44% at 3.0) and invalidates every δ measured here.",
+    onInput: (v) => { S.ratio = v; markStale(); onGenomeChange(); },
+  });
+  ctrl.ratio.input.disabled = true;
+  $("ratioLock").addEventListener("change", (e) => {
+    ctrl.ratio.input.disabled = e.target.checked;
+    if (e.target.checked && S.ratio !== 2) {
+      S.ratio = 2; ctrl.ratio.input.value = "2"; ctrl.ratio.repaint(); markStale(); onGenomeChange();
+    }
+  });
+
+  ctrl.N = slider($("railMid"), {
+    label: "grid", min: 5, max: 7, step: 1, value: 6,
+    fmt: (v) => Math.pow(2, v) + "²",
+    hint: "Powers of two only — the distance metric needs a radix-2 FFT. Wavelength does not scale with this, so a bigger grid means more features, not bigger ones.",
+    onInput: (v) => { S.N = Math.pow(2, v); onGenomeChange(); },
+  });
+  ctrl.steps = slider($("railMid"), {
+    label: "steps", min: 500, max: 6000, step: 250, value: S.steps,
+    fmt: (v) => String(v),
+    hint: "Integration steps before the field is read. Watch the 'still moving' number: below ~2e-3 it has settled.",
+    onInput: (v) => { S.steps = v; onGenomeChange(); },
+  });
+  ctrl.delta = slider($("railMid"), {
+    label: "mutation δ", min: 0.0005, max: 0.060, step: 0.0005, value: S.delta,
+    fmt: (v) => v.toFixed(4),
+    hint: "One σ of mutation, as a fraction of each parameter's range. δ = 0.008 means σ(F) = 0.00064.",
+    onInput: (v) => { S.delta = v; onDeltaChange(); },
+  });
+  ctrl.win = slider($("railMid"), {
+    label: "sprite window", min: 6, max: 64, step: 1, value: S.win,
+    fmt: (v) => v + " cells",
+    hint: "How much of the field one sprite crops. This is the dial that decides whether a pattern survives being small.",
+    onInput: (v) => { S.win = v; paintApplied(); paintIdentity(); paintReadout(); },
+  });
+
+  $("seed").addEventListener("change", () => {
+    const v = parseInt($("seed").value, 10);
+    S.seed = isFinite(v) ? (v >>> 0) : 1867;
+    $("seed").value = String(S.seed);
+    onGenomeChange();
+  });
+  $("rollSeed").addEventListener("click", () => {
+    const r = makeRng(S.seed + 77);
+    S.seed = Math.floor(r() * 900000) + 1000;
+    $("seed").value = String(S.seed);
+    onGenomeChange();
+  });
+  $("reroll").addEventListener("click", () => { S.walkSeed = (S.walkSeed * 7 + 13) >>> 0; runLineage(); });
+  $("rebuildMap").addEventListener("click", () => buildMap());
+  $("runSweep").addEventListener("click", () => runSweep());
+
+  /* ====================== the focal simulation ====================== */
+
+  function onGenomeChange() {
+    S.pig = pigment(genome());
+    schedule("focal", function* () {
+      const out = {};
+      yield* simGen(genome(), S.N, S.steps, out, false);
+      S.focal = out.res;
+      S.desc = descriptor(out.res.V, S.N);
+      S.ana = analyse(out.res.V, S.N, out.res.resid);
+      S.cls = classify(S.ana);
+      paintPattern(); paintSpectrum(); paintApplied(); paintIdentity();
+      paintReadout(); drawMap();
+    }, 1);
+    runLineage();
+  }
+  function onDeltaChange() { runLineage(); paintIdentity(); drawHerit(); }
+
+  /* ====================== the lineage walk ====================== */
+
+  const GENS = 7;
+  function runLineage() {
+    const dl = S.delta, LN = Math.min(S.N, 64);
+    $("lineStatus").textContent = "walking…";
+    schedule("lineage", function* () {
+      const rng = makeRng((S.seed ^ (S.walkSeed * 2654435761)) >>> 0);
+      const out = [];
+      let g = genome();
+      for (let i = 0; i < GENS; i++) {
+        if (i > 0) g = mutate(g, dl, rng);
+        const o = {};
+        yield* simGen(g, LN, Math.min(S.steps, 3000), o, false);
+        const d = descriptor(o.res.V, LN);
+        const a = analyse(o.res.V, LN, o.res.resid);
+        out.push({ g: g, res: o.res, desc: d, ana: a, cls: classify(a), N: LN });
+        S.lineage = out; S.lineDelta = dl;
+        paintStrip();
+      }
+      $("lineStatus").textContent = "δ = " + dl.toFixed(4) + " per step · grid " + LN + "²";
+      paintVerdict();
+    }, 3);
+  }
+
+  /* ====================== the (F,k) map ====================== */
+
+  function buildMap() {
+    if (S.mapBusy) cancel("map");
+    S.mapBusy = true;
+    const R = MAP.R, ratio = S.ratio, alpha = 0;
+    const m = new Uint8Array(R * R);
+    m.fill(255);
+    S.map = m;
+    S.mapMeta = { ratio: ratio, alpha: alpha, R: R, N: MAP.N, steps: MAP.STEPS, done: 0, stale: false };
+    $("rebuildMap").disabled = true;
+    schedule("map", function* () {
+      for (let j = 0; j < R; j++) {
+        const k = MAP.K0 + ((j + 0.5) / R) * (MAP.K1 - MAP.K0);
+        for (let i = 0; i < R; i++) {
+          const F = MAP.F0 + ((i + 0.5) / R) * (MAP.F1 - MAP.F0);
+          const r = runSim({ F: F, k: k, alpha: alpha, ratio: ratio, seed: 1867 }, MAP.N, MAP.STEPS, true);
+          m[j * R + i] = classify(analyse(r.V, MAP.N, r.resid));
+          S.mapMeta.done++;
+          if ((i & 3) === 3) yield;
+        }
+        drawMap(); paintMapStatus();
+      }
+      S.mapBusy = false;
+      $("rebuildMap").disabled = false;
+      drawMap(); paintMapStatus(); paintMapTally();
+    }, 7);
+  }
+
+  function markStale() {
+    if (S.mapMeta && !S.mapBusy) {
+      S.mapMeta.stale = (Math.abs(S.mapMeta.ratio - S.ratio) > 1e-9) || (Math.abs(S.alpha) > 1e-9);
+      paintMapStatus();
+    }
+  }
+
+  function paintMapStatus() {
+    const el = $("mapStatus"), note = $("mapNote");
+    if (!S.mapMeta) { el.textContent = "building…"; return; }
+    const tot = S.mapMeta.R * S.mapMeta.R;
+    if (S.mapBusy) {
+      el.textContent = "building · " + S.mapMeta.done + " / " + tot + " cells";
+      el.className = "subline";
+    } else {
+      el.textContent = S.mapMeta.R + "×" + S.mapMeta.R + " cells · " + S.mapMeta.N + "² grid · " +
+        S.mapMeta.steps + " steps · agrees with a 48²/3000 reference on 92.5% of cells";
+      el.className = "subline" + (S.mapMeta.stale ? " stale" : "");
+    }
+    note.textContent = "map drawn at α = 0, Du/Dv = " + S.mapMeta.ratio.toFixed(2) +
+      (S.mapMeta.stale ? " — stale, rebuild to match the rail" : "");
+    note.className = "subline" + (S.mapMeta.stale ? " stale" : "");
+  }
+
+  function paintMapTally() {
+    const tb = $("mapTally").querySelector("tbody");
+    tb.textContent = "";
+    if (!S.map) return;
+    const counts = new Array(6).fill(0);
+    for (let i = 0; i < S.map.length; i++) if (S.map[i] < 6) counts[S.map[i]]++;
+    const tot = S.map.length, viable = tot - counts[0];
+    for (let c = 0; c < 6; c++) {
+      const tr = document.createElement("tr");
+      const nm = document.createElement("td");
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      sw.style.cssText = "display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;background:" + cssvar(REGIME_VAR[c]);
+      nm.appendChild(sw);
+      nm.appendChild(document.createTextNode(REGIMES[c]));
+      const a = document.createElement("td"); a.textContent = String(counts[c]);
+      const b = document.createElement("td"); b.textContent = (100 * counts[c] / tot).toFixed(1) + "%";
+      const d = document.createElement("td");
+      d.textContent = c === 0 ? "—" : viable ? (100 * counts[c] / viable).toFixed(1) + "%" : "—";
+      tr.appendChild(nm); tr.appendChild(a); tr.appendChild(b); tr.appendChild(d);
+      tb.appendChild(tr);
+    }
+    const tr = document.createElement("tr");
+    const nm = document.createElement("td"); nm.textContent = "viable (any pattern)";
+    const a = document.createElement("td"); a.textContent = String(viable);
+    const b = document.createElement("td"); b.textContent = (100 * viable / tot).toFixed(1) + "%";
+    const d = document.createElement("td"); d.textContent = "100%";
+    tr.appendChild(nm); tr.appendChild(a); tr.appendChild(b); tr.appendChild(d);
+    tb.appendChild(tr);
+  }
+
+  const MAPPAD = { l: 62, r: 18, t: 16, b: 40 };
+  function mapGeom(cv) {
+    return {
+      x0: MAPPAD.l, y0: MAPPAD.t,
+      w: cv.width - MAPPAD.l - MAPPAD.r,
+      h: cv.height - MAPPAD.t - MAPPAD.b,
+    };
+  }
+  function drawMap() {
+    const cv = $("fkmap"), ctx = cv.getContext("2d"), G = mapGeom(cv);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = cssvar("--sunk");
+    ctx.fillRect(G.x0, G.y0, G.w, G.h);
+    if (S.map) {
+      const R = MAP.R, cw = G.w / R, ch = G.h / R;
+      const cols = REGIME_VAR.map((v) => cssvar(v));
+      for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) {
+        const c = S.map[j * R + i];
+        if (c > 5) continue;
+        ctx.fillStyle = cols[c];
+        ctx.fillRect(G.x0 + i * cw, G.y0 + G.h - (j + 1) * ch, Math.ceil(cw) + 0.5, Math.ceil(ch) + 0.5);
+      }
+      // boundary overlay — every edge where the regime changes
+      ctx.strokeStyle = cssvar("--ground");
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      for (let j = 0; j < R; j++) for (let i = 0; i < R; i++) {
+        const c = S.map[j * R + i];
+        if (c > 5) continue;
+        const px = G.x0 + i * cw, py = G.y0 + G.h - (j + 1) * ch;
+        if (i + 1 < R && S.map[j * R + i + 1] !== c) { ctx.moveTo(px + cw, py); ctx.lineTo(px + cw, py + ch); }
+        if (j + 1 < R && S.map[(j + 1) * R + i] !== c) { ctx.moveTo(px, py); ctx.lineTo(px + cw, py); }
+      }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // frame + axes
+    ctx.strokeStyle = cssvar("--rule"); ctx.lineWidth = 1;
+    ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+    ctx.fillStyle = cssvar("--muted");
+    ctx.font = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let t = 0; t <= 4; t++) {
+      const F = MAP.F0 + (t / 4) * (MAP.F1 - MAP.F0);
+      const x = G.x0 + (t / 4) * G.w;
+      ctx.fillText(F.toFixed(3), x, G.y0 + G.h + 8);
+    }
+    ctx.fillText("F  ·  feed rate", G.x0 + G.w / 2, G.y0 + G.h + 24);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let t = 0; t <= 4; t++) {
+      const k = MAP.K0 + (t / 4) * (MAP.K1 - MAP.K0);
+      const y = G.y0 + G.h - (t / 4) * G.h;
+      ctx.fillText(k.toFixed(3), G.x0 - 8, y);
+    }
+    ctx.save();
+    ctx.translate(14, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("k  ·  kill rate", 0, 0);
+    ctx.restore();
+    // the current genome
+    const mx = G.x0 + ((S.F - MAP.F0) / (MAP.F1 - MAP.F0)) * G.w;
+    const my = G.y0 + G.h - ((S.k - MAP.K0) / (MAP.K1 - MAP.K0)) * G.h;
+    if (mx >= G.x0 - 6 && mx <= G.x0 + G.w + 6) {
+      ctx.lineWidth = 3; ctx.strokeStyle = cssvar("--ground");
+      ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 1.75; ctx.strokeStyle = cssvar("--ink");
+      ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(mx - 13, my); ctx.lineTo(mx - 9, my);
+      ctx.moveTo(mx + 9, my); ctx.lineTo(mx + 13, my);
+      ctx.moveTo(mx, my - 13); ctx.lineTo(mx, my - 9);
+      ctx.moveTo(mx, my + 9); ctx.lineTo(mx, my + 13);
+      ctx.stroke();
+    }
+  }
+
+  function mapLegend() {
+    const host = $("mapLegend"); host.textContent = "";
+    for (let c = 0; c < 6; c++) {
+      const el = document.createElement("span"); el.className = "lg";
+      const sw = document.createElement("span"); sw.className = "sw";
+      sw.style.background = cssvar(REGIME_VAR[c]);
+      const tx = document.createElement("span"); tx.textContent = REGIMES[c];
+      const ct = document.createElement("span"); ct.className = "ct"; ct.textContent = REGIME_DESC[c];
+      el.appendChild(sw); el.appendChild(tx); el.appendChild(ct);
+      host.appendChild(el);
+    }
+  }
+
+  function mapPick(ev) {
+    const cv = $("fkmap"), G = mapGeom(cv), r = cv.getBoundingClientRect();
+    const sx = cv.width / r.width, sy = cv.height / r.height;
+    const px = (ev.clientX - r.left) * sx, py = (ev.clientY - r.top) * sy;
+    const fu = (px - G.x0) / G.w, ku = (G.y0 + G.h - py) / G.h;
+    if (fu < 0 || fu > 1 || ku < 0 || ku > 1) return null;
+    return {
+      F: Math.round((MAP.F0 + fu * (MAP.F1 - MAP.F0)) / 0.0005) * 0.0005,
+      k: Math.round((MAP.K0 + ku * (MAP.K1 - MAP.K0)) / 0.0005) * 0.0005,
+      i: Math.min(MAP.R - 1, Math.max(0, Math.floor(fu * MAP.R))),
+      j: Math.min(MAP.R - 1, Math.max(0, Math.floor(ku * MAP.R))),
+    };
+  }
+  $("fkmap").addEventListener("click", (ev) => {
+    const p = mapPick(ev);
+    if (!p) return;
+    S.F = p.F; S.k = p.k;
+    ctrl.F.input.value = String(S.F); ctrl.F.repaint();
+    ctrl.k.input.value = String(S.k); ctrl.k.repaint();
+    onGenomeChange();
+  });
+  $("fkmap").addEventListener("mousemove", (ev) => {
+    const p = mapPick(ev);
+    if (!p) { $("mapHover").textContent = "—"; return; }
+    const c = S.map ? S.map[p.j * MAP.R + p.i] : 255;
+    $("mapHover").textContent = "F " + p.F.toFixed(4) + " · k " + p.k.toFixed(4) + " · " +
+      (c < 6 ? REGIMES[c] : "not yet computed");
+  });
+  $("fkmap").addEventListener("mouseleave", () => { $("mapHover").textContent = "—"; });
+  $("fkmap").addEventListener("keydown", (ev) => {
+    const step = ev.shiftKey ? 0.0005 : 0.002;
+    let used = true;
+    if (ev.key === "ArrowLeft") S.F = Math.max(0.004, S.F - step);
+    else if (ev.key === "ArrowRight") S.F = Math.min(0.098, S.F + step);
+    else if (ev.key === "ArrowDown") S.k = Math.max(0.028, S.k - step / 2);
+    else if (ev.key === "ArrowUp") S.k = Math.min(0.074, S.k + step / 2);
+    else used = false;
+    if (!used) return;
+    ev.preventDefault();
+    S.F = Math.round(S.F / 0.0005) * 0.0005;
+    S.k = Math.round(S.k / 0.0005) * 0.0005;
+    ctrl.F.input.value = String(S.F); ctrl.F.repaint();
+    ctrl.k.input.value = String(S.k); ctrl.k.repaint();
+    onGenomeChange();
+  });
+
+  /* ====================== pattern + spectrum ====================== */
+
+  function paintPattern() {
+    if (!S.focal) return;
+    const N = S.focal.N, cv = $("pattern");
+    cv.width = N; cv.height = N;
+    const ctx = cv.getContext("2d"), img = ctx.createImageData(N, N);
+    const V = S.focal.V, ramp = S.pig.ramp;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < V.length; i++) { if (V[i] < mn) mn = V[i]; if (V[i] > mx) mx = V[i]; }
+    const span = mx - mn > 1e-5 ? mx - mn : 1;
+    const rgb = ramp.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+    for (let i = 0; i < V.length; i++) {
+      const t = Math.max(0, Math.min(1, (V[i] - mn) / span));
+      const c = rgb[Math.min(31, Math.floor(t * 32))];
+      img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    $("patCaption").textContent = N + "² torus · " + S.focal.steps + " steps · " +
+      REGIMES[S.cls] + " · contrast sd " + S.ana.sd.toFixed(3) +
+      (S.ana.sd < 0.010 ? " — nothing here" : "");
+  }
+
+  function paintSpectrum() {
+    if (!S.desc) return;
+    const host = $("specChart"); host.textContent = "";
+    let mx = 0;
+    for (let b = 0; b < NBIN; b++) mx = Math.max(mx, S.desc.rad[b]);
+    for (let b = 0; b < NBIN; b++) {
+      const d = document.createElement("div");
+      d.className = "sbar";
+      d.style.height = Math.max(1, (mx > 0 ? S.desc.rad[b] / mx : 0) * 100) + "%";
+      if (b === S.desc.peakBin) d.style.background = cssvar("--ink");
+      const f = ((b + 0.5) / NBIN) * 0.5;
+      d.title = "λ ≈ " + (1 / f).toFixed(1) + " cells · relative power " +
+        (mx > 0 ? (S.desc.rad[b] / mx).toFixed(2) : "0");
+      host.appendChild(d);
+    }
+    const pf = ((S.desc.peakBin + 0.5) / NBIN) * 0.5;
+    $("specPeak").textContent = "peak λ ≈ " + (1 / pf).toFixed(1) + " px";
+    $("statLam").textContent = isFinite(S.desc.lambda) ? S.desc.lambda.toFixed(1) : "—";
+    $("statFeat").textContent = isFinite(S.desc.lambda) ? (S.focal.N / S.desc.lambda).toFixed(1) : "—";
+    $("statMot").textContent = S.ana.motion.toExponential(1);
+  }
+
+  /* ====================== the lineage strip ====================== */
+
+  function paintStrip() {
+    const host = $("strip"); host.textContent = "";
+    S.lineage.forEach((L, i) => {
+      const cell = document.createElement("div");
+      cell.className = "gen" + (L.cls === 0 ? " dead" : "");
+      const cv = document.createElement("canvas");
+      cv.width = L.N; cv.height = L.N;
+      cell.appendChild(cv);
+      const cap = document.createElement("div"); cap.className = "cap2";
+      const b = document.createElement("b");
+      const d = i === 0 ? 0 : distance(S.lineage[0].desc, L.desc).d;
+      b.textContent = i === 0 ? "parent" : "gen " + i;
+      cap.appendChild(b);
+      cap.appendChild(document.createTextNode(
+        i === 0 ? " · " + REGIMES[L.cls] : " · D " + d.toFixed(3) + (L.cls === 0 ? " · dead" : "")
+      ));
+      cell.appendChild(cap);
+      cell.title = "F " + L.g.F.toFixed(4) + " · k " + L.g.k.toFixed(4) + " · α " + L.g.alpha.toFixed(2) +
+        " · " + REGIMES[L.cls];
+      host.appendChild(cell);
+      // draw with the child's own pigment so drift in colour and pattern agree
+      const pg = pigment(L.g);
+      const ctx = cv.getContext("2d"), img = ctx.createImageData(L.N, L.N);
+      const V = L.res.V;
+      let mn = Infinity, mx = -Infinity;
+      for (let q = 0; q < V.length; q++) { if (V[q] < mn) mn = V[q]; if (V[q] > mx) mx = V[q]; }
+      const span = mx - mn > 1e-5 ? mx - mn : 1;
+      const rgb = pg.ramp.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+      for (let q = 0; q < V.length; q++) {
+        const t = mx - mn > 1e-5 ? Math.max(0, Math.min(1, (V[q] - mn) / span)) : 0;
+        const c = rgb[Math.min(31, Math.floor(t * 32))];
+        img.data[q * 4] = c[0]; img.data[q * 4 + 1] = c[1]; img.data[q * 4 + 2] = c[2]; img.data[q * 4 + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    });
+  }
+
+  /* ====================== the heritability sweep ====================== */
+
+  const DELTAS = [0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128];
+  const SWEEP = { parents: 10, kids: 5, N: 32, steps: 2000 };
+
+  function runSweep() {
+    $("runSweep").disabled = true;
+    schedule("sweep", function* () {
+      const rng = makeRng((S.seed * 2654435761 + 20260802) >>> 0);
+      const parents = [];
+      let tries = 0;
+      $("sweepStatus").textContent = "finding viable parents…";
+      while (parents.length < SWEEP.parents && tries < SWEEP.parents * 40) {
+        tries++;
+        const g = {
+          F: 0.012 + rng() * 0.048, k: 0.048 + rng() * 0.020,
+          alpha: (rng() - 0.5) * 0.5, ratio: S.ratio, seed: 101 + tries,
+        };
+        const o = {};
+        yield* simGen(g, SWEEP.N, SWEEP.steps, o, true);
+        const a = analyse(o.res.V, SWEEP.N, o.res.resid);
+        if (classify(a) === 0) continue;
+        parents.push({ g: g, d: descriptor(o.res.V, SWEEP.N), c: classify(a) });
+      }
+
+      // Common random numbers. One unit-Gaussian triple per (parent, child),
+      // reused at EVERY δ and merely rescaled. Without this the curve is a
+      // fresh sample at each δ and sampling noise swamps the effect being
+      // measured — it came out non-monotone by luck alone. With it, the
+      // curve is the same 50 children walked outward, and any wobble is the
+      // model rather than the dice.
+      const draws = parents.map(() => {
+        const row = [];
+        for (let c = 0; c < SWEEP.kids; c++) row.push([gauss(rng), gauss(rng), gauss(rng)]);
+        return row;
+      });
+      const child = (g, dl, z) => ({
+        F: Math.max(0.004, Math.min(0.098, g.F + dl * RANGE.F * z[0])),
+        k: Math.max(0.028, Math.min(0.074, g.k + dl * RANGE.k * z[1])),
+        alpha: Math.max(-0.6, Math.min(0.6, g.alpha + dl * RANGE.alpha * z[2])),
+        ratio: g.ratio, seed: g.seed,
+      });
+
+      const rows = [];
+      const total = DELTAS.length * parents.length * SWEEP.kids;
+      let seen = 0;
+      for (let di = 0; di < DELTAS.length; di++) {
+        const dl = DELTAS[di];
+        const ds = [];
+        let dead = 0, flip = 0, n = 0;
+        for (let pi = 0; pi < parents.length; pi++) {
+          const p = parents[pi];
+          for (let c = 0; c < SWEEP.kids; c++) {
+            const o = {};
+            yield* simGen(child(p.g, dl, draws[pi][c]), SWEEP.N, SWEEP.steps, o, true);
+            const a = analyse(o.res.V, SWEEP.N, o.res.resid);
+            const cc = classify(a);
+            if (cc === 0) dead++;
+            if (cc !== p.c) flip++;
+            ds.push(distance(p.d, descriptor(o.res.V, SWEEP.N)).d);
+            n++; seen++;
+          }
+          $("sweepStatus").textContent = "δ " + dl.toFixed(5) + " · " + seen + " / " + total + " children";
+        }
+        ds.sort((a, b) => a - b);
+        rows.push({
+          dl: dl,
+          mean: ds.reduce((a, b) => a + b, 0) / ds.length,
+          med: ds[ds.length >> 1],
+          p90: ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.9))],
+          dead: dead / n, flip: flip / n,
+        });
+        S.sweep = { rows: rows, parents: parents.length, kids: SWEEP.kids, N: SWEEP.N };
+        drawHerit();
+      }
+
+      // Both ends of the scale, measured here rather than quoted. The ceiling
+      // is every pair of these parents; the floor is each parent re-grown from
+      // a different seed, which is the part of the appearance no child inherits.
+      let cs = 0, cn = 0;
+      for (let i = 0; i < parents.length; i++) {
+        for (let j = i + 1; j < parents.length; j++) { cs += distance(parents[i].d, parents[j].d).d; cn++; }
+      }
+      let fs = 0, fn = 0, fflip = 0;
+      $("sweepStatus").textContent = "calibrating the floor…";
+      for (const p of parents) {
+        for (let t = 1; t <= 2; t++) {
+          const o = {};
+          yield* simGen({ F: p.g.F, k: p.g.k, alpha: p.g.alpha, ratio: p.g.ratio, seed: p.g.seed + t * 9001 },
+                        SWEEP.N, SWEEP.steps, o, true);
+          const a = analyse(o.res.V, SWEEP.N, o.res.resid);
+          if (classify(a) !== p.c) fflip++;
+          fs += distance(p.d, descriptor(o.res.V, SWEEP.N)).d; fn++;
+        }
+      }
+      S.sweep.ceiling = cn ? cs / cn : CALIB.nullD;
+      S.sweep.floor = fn ? fs / fn : CALIB.floorD;
+      S.sweep.floorFlip = fn ? fflip / fn : 0;
+      S.sweep.kin = S.sweep.ceiling / 3;
+      $("sweepStatus").textContent = S.sweep.parents + " parents × " + DELTAS.length + " δ × " +
+        SWEEP.kids + " children at " + SWEEP.N + "²/" + SWEEP.steps +
+        " · ceiling " + S.sweep.ceiling.toFixed(3) + " (" + cn + " pairs) · floor " +
+        S.sweep.floor.toFixed(3) + " (" + fn + " pairs)";
+      $("runSweep").disabled = false;
+      drawHerit(); paintSweepStats();
+    }, 8);
+  }
+  const HP = { l: 58, r: 96, t: 20, b: 40 };
+  function xOfDelta(G, dl) {
+    const lo = Math.log(DELTAS[0]), hi = Math.log(DELTAS[DELTAS.length - 1]);
+    return G.x0 + ((Math.log(dl) - lo) / (hi - lo)) * G.w;
+  }
+  function drawHerit() {
+    const cv = $("heritChart"), ctx = cv.getContext("2d");
+    const G = { x0: HP.l, y0: HP.t, w: cv.width - HP.l - HP.r, h: cv.height - HP.t - HP.b };
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = cssvar("--panel"); ctx.fillRect(0, 0, cv.width, cv.height);
+    const YMAX = 0.62;
+    const yOf = (v) => G.y0 + G.h - (Math.max(0, Math.min(YMAX, v)) / YMAX) * G.h;
+    const mono = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+
+    const C = calibOf();
+    // safe band — everything from the smallest δ up to the last one that keeps
+    // nine children in ten inside the kin threshold
+    const safe = S.sweep ? safeRange(S.sweep.rows, C) : null;
+    if (safe && safe.hi) {
+      ctx.fillStyle = cssvar("--sunk");
+      const a = xOfDelta(G, DELTAS[0]), b = xOfDelta(G, safe.hi);
+      ctx.fillRect(a, G.y0, b - a, G.h);
+      ctx.fillStyle = cssvar("--muted");
+      ctx.font = mono; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      ctx.fillText("safe: nine children in ten are kin", a + 6, G.y0 + 4);
+    }
+    // grid
+    ctx.strokeStyle = cssvar("--rule"); ctx.lineWidth = 1;
+    ctx.fillStyle = cssvar("--muted"); ctx.font = mono;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let v = 0; v <= 0.6001; v += 0.1) {
+      const y = yOf(v);
+      ctx.beginPath(); ctx.moveTo(G.x0, y + 0.5); ctx.lineTo(G.x0 + G.w, y + 0.5); ctx.stroke();
+      ctx.fillText(v.toFixed(1), G.x0 - 8, y);
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    DELTAS.forEach((d) => {
+      const x = xOfDelta(G, d);
+      ctx.fillText(d < 0.001 ? d.toFixed(5) : String(d), x, G.y0 + G.h + 8);
+    });
+    ctx.fillText("mutation size δ  ·  fraction of parameter range, log scale", G.x0 + G.w / 2, G.y0 + G.h + 24);
+    ctx.save();
+    ctx.translate(14, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center"; ctx.fillText("pattern distance D", 0, 0);
+    ctx.restore();
+
+    // reference lines
+    const refs = [
+      [C.floor, "regrowing the parent costs this much"],
+      [C.kin, "kin threshold · ⅓ of the ceiling"],
+      [C.ceiling, "unrelated genomes"],
+    ];
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = cssvar("--muted");
+    ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    refs.forEach(([v, lab]) => {
+      const y = yOf(v);
+      ctx.beginPath(); ctx.moveTo(G.x0, y + 0.5); ctx.lineTo(G.x0 + G.w, y + 0.5); ctx.stroke();
+      ctx.fillText(lab + " · " + v.toFixed(3), G.x0 + 6, y - 3);
+    });
+    ctx.setLineDash([]);
+
+    if (!S.sweep) {
+      ctx.fillStyle = cssvar("--muted");
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "13px system-ui, sans-serif";
+      ctx.fillText("press “Run the sweep” — 10 parents × 10 mutation sizes × 4 children", G.x0 + G.w / 2, G.y0 + G.h / 2);
+      ctx.strokeStyle = cssvar("--rule");
+      ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+      drawDeaths();
+      return;
+    }
+
+    const series = [
+      { key: "p90", lab: "90th pct", dash: [2, 3], w: 1.5, col: cssvar("--slate") },
+      { key: "mean", lab: "mean", dash: [], w: 2.25, col: cssvar("--ink") },
+      { key: "med", lab: "median", dash: [6, 4], w: 1.75, col: cssvar("--slate") },
+    ];
+    series.forEach((s) => {
+      ctx.strokeStyle = s.col; ctx.lineWidth = s.w; ctx.setLineDash(s.dash);
+      ctx.beginPath();
+      S.sweep.rows.forEach((r, i) => {
+        const x = xOfDelta(G, r.dl), y = yOf(r[s.key]);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      S.sweep.rows.forEach((r) => {
+        ctx.fillStyle = s.col;
+        ctx.beginPath(); ctx.arc(xOfDelta(G, r.dl), yOf(r[s.key]), s.key === "mean" ? 3 : 2.2, 0, Math.PI * 2); ctx.fill();
+      });
+      const last = S.sweep.rows[S.sweep.rows.length - 1];
+      ctx.fillStyle = s.col; ctx.font = mono;
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(s.lab, G.x0 + G.w + 8, yOf(last[s.key]));
+    });
+
+    // the current delta
+    const x = xOfDelta(G, Math.max(DELTAS[0], Math.min(DELTAS[DELTAS.length - 1], S.delta)));
+    ctx.strokeStyle = cssvar("--ink"); ctx.globalAlpha = 0.45; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, G.y0); ctx.lineTo(x, G.y0 + G.h); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = cssvar("--ink"); ctx.font = mono;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText("δ now", x, G.y0 + 2);
+
+    ctx.strokeStyle = cssvar("--rule"); ctx.lineWidth = 1;
+    ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+
+    drawDeaths();
+  }
+
+  function drawDeaths() {
+    const cv = $("deathChart"), ctx = cv.getContext("2d");
+    const G = { x0: HP.l, y0: 22, w: cv.width - HP.l - HP.r, h: cv.height - 22 - 40 };
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = cssvar("--panel"); ctx.fillRect(0, 0, cv.width, cv.height);
+    const mono = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillStyle = cssvar("--muted"); ctx.font = mono;
+    ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText("children whose pattern collapsed to nothing", G.x0, 4);
+    ctx.strokeStyle = cssvar("--rule");
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (const v of [0, 0.25, 0.5]) {
+      const y = G.y0 + G.h - v * 2 * G.h;
+      ctx.beginPath(); ctx.moveTo(G.x0, y + 0.5); ctx.lineTo(G.x0 + G.w, y + 0.5); ctx.stroke();
+      ctx.fillStyle = cssvar("--muted");
+      ctx.fillText(Math.round(v * 100) + "%", G.x0 - 8, y);
+    }
+    if (!S.sweep) {
+      ctx.strokeStyle = cssvar("--rule");
+      ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+      ctx.fillStyle = cssvar("--muted"); ctx.font = mono;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("not measured yet", G.x0 + G.w / 2, G.y0 + G.h / 2);
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      DELTAS.forEach((d) => ctx.fillText(d < 0.001 ? d.toFixed(5) : String(d), xOfDelta(G, d), G.y0 + G.h + 8));
+      return;
+    }
+    const bw = Math.max(6, G.w / (DELTAS.length * 1.9));
+    S.sweep.rows.forEach((r) => {
+      const x = xOfDelta(G, r.dl);
+      const h = Math.min(1, r.dead * 2) * G.h;
+      ctx.fillStyle = cssvar("--bad");
+      // 2px surface gap either side so neighbouring bars never touch
+      ctx.fillRect(x - bw / 2 + 1, G.y0 + G.h - h, bw - 2, h);
+      if (r.dead > 0.02) {
+        ctx.fillStyle = cssvar("--muted");
+        ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+        ctx.fillText(Math.round(r.dead * 100) + "%", x, G.y0 + G.h - h - 3);
+      }
+    });
+    ctx.fillStyle = cssvar("--muted"); ctx.font = mono;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    DELTAS.forEach((d) => ctx.fillText(d < 0.001 ? d.toFixed(5) : String(d), xOfDelta(G, d), G.y0 + G.h + 8));
+    ctx.strokeStyle = cssvar("--rule");
+    ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+  }
+
+  function calibOf() {
+    const s = S.sweep;
+    const ceiling = s && s.ceiling ? s.ceiling : CALIB.nullD;
+    const floor = s && s.floor ? s.floor : CALIB.floorD;
+    return { ceiling: ceiling, floor: floor, kin: ceiling / 3 };
+  }
+
+  // "Safe" is the largest δ at which nine children in ten stay inside the kin
+  // threshold (a third of the unrelated-genome ceiling) and fewer than one in
+  // ten dies. "Noise-equivalent" is the δ whose mean distance equals what
+  // merely regrowing the parent costs — not a lower bound on visibility, since
+  // children here inherit the growth seed and so carry no developmental noise.
+  function safeRange(rows, C) {
+    let hi = null, lo = null;
+    for (const r of rows) {
+      if (r.p90 < C.kin && r.dead < 0.10) hi = r.dl;
+      if (lo === null && r.mean >= C.floor) lo = r.dl;
+    }
+    return { lo: lo, hi: hi };
+  }
+
+  function paintSweepStats() {
+    if (!S.sweep) return;
+    const C = calibOf();
+    const sr = safeRange(S.sweep.rows, C);
+    $("statSafe").textContent = sr.hi ? "δ " + sr.hi.toFixed(4) : "none";
+    $("statVis").textContent = sr.lo ? "δ " + sr.lo.toFixed(4) : "> " + DELTAS[DELTAS.length - 1];
+    $("statNull").textContent = C.ceiling.toFixed(3);
+    $("statNullSub").textContent = "measured live, " + (S.sweep.parents * (S.sweep.parents - 1) / 2) + " pairs at " + S.sweep.N + "²";
+    $("statFloor").textContent = C.floor.toFixed(3);
+    $("statFloorSub").textContent = "measured live, " + (S.sweep.parents * 2) + " pairs at " + S.sweep.N + "²";
+    $("statGrid").textContent = "0.013";
+    let monoOk = true;
+    for (let i = 1; i < S.sweep.rows.length; i++) {
+      if (S.sweep.rows[i].mean < S.sweep.rows[i - 1].mean - 1e-9) monoOk = false;
+    }
+    const cm = $("chipMono");
+    cm.className = "chip " + (monoOk ? "pass" : "fail");
+    cm.lastChild.textContent = monoOk
+      ? "mean distance rises monotonically across all " + DELTAS.length + " mutation sizes — no step, no cliff in the mean"
+      : "mean distance is NOT monotone in δ — with common random numbers that would be the model, not the dice";
+    const big = S.sweep.rows.find((r) => r.p90 > C.ceiling * 0.7);
+    const cc = $("chipCliff");
+    cc.className = "chip " + (big ? "warn" : "pass");
+    cc.lastChild.textContent = big
+      ? "the tail breaks at δ = " + big.dl + ": one child in ten is now " +
+        Math.round(100 * big.p90 / C.ceiling) + "% of the way to a stranger"
+      : "no δ in range produced a stranger-distance tail";
+  }
+
+  /* ====================== sprite rendering ====================== */
+
+  function boxDown(V, N, W, S1, S2) {
+    const out = new Float64Array(S1 * S2);
+    for (let y = 0; y < S2; y++) for (let x = 0; x < S1; x++) {
+      const x0 = Math.floor((x * W) / S1), x1 = Math.max(x0 + 1, Math.floor(((x + 1) * W) / S1));
+      const y0 = Math.floor((y * W) / S2), y1 = Math.max(y0 + 1, Math.floor(((y + 1) * W) / S2));
+      let s = 0, n = 0;
+      for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) { s += V[(yy % N) * N + (xx % N)]; n++; }
+      out[y * S1 + x] = s / n;
+    }
+    return out;
+  }
+  const sdOf = (a) => {
+    let m = 0;
+    for (let i = 0; i < a.length; i++) m += a[i];
+    m /= a.length;
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m);
+    return Math.sqrt(s / a.length);
+  };
+  const zscore = (a) => {
+    let m = 0;
+    for (let i = 0; i < a.length; i++) m += a[i];
+    m /= a.length;
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += (a[i] - m) * (a[i] - m);
+    s = Math.sqrt(s / a.length) || 1e-9;
+    const o = new Float64Array(a.length);
+    for (let i = 0; i < a.length; i++) o[i] = (a[i] - m) / s;
+    return o;
+  };
+  const tileDist = (A, B) => {
+    const a = zscore(A), b = zscore(B);
+    let d = 0;
+    for (let i = 0; i < a.length; i++) d += Math.abs(a[i] - b[i]);
+    return d / a.length;
+  };
+
+  const SHAPES = [
+    { nm: "petal", w: 13, h: 19, inside: (x, y, w, h) => {
+        const u = ((x + 0.5) / w) * 2 - 1, t = (y + 0.5) / h;
+        return Math.abs(u) <= Math.pow(Math.sin(Math.PI * t), 0.62) * 0.97;
+      } },
+    { nm: "wing", w: 21, h: 11, inside: (x, y, w, h) => {
+        const u = (x + 0.5) / w, v = ((y + 0.5) / h) * 2 - 1;
+        const s = Math.sqrt(Math.max(0, 1 - Math.pow(2 * u - 1, 2)));
+        const c = -0.22 * Math.sin(Math.PI * u);
+        return Math.abs(v - c) <= s * (0.52 + 0.46 * (1 - u)) * 1.02;
+      } },
+    { nm: "leaf", w: 15, h: 20, inside: (x, y, w, h) => {
+        const u = ((x + 0.5) / w) * 2 - 1, t = (y + 0.5) / h;
+        const taper = t < 0.14 ? t / 0.14 : 1;
+        return Math.abs(u) <= Math.pow(Math.sin(Math.PI * Math.pow(t, 0.88)), 0.78) * 0.94 * taper;
+      } },
+    { nm: "flank", w: 19, h: 13, inside: (x, y, w, h) => {
+        const u = ((x + 0.5) / w) * 2 - 1, v = ((y + 0.5) / h) * 2 - 1;
+        return Math.pow(Math.abs(u), 2.3) + Math.pow(Math.abs(v / 0.94), 2.3) <= 1;
+      } },
+  ];
+
+  function drawSprite(cv, shape, W) {
+    const w = shape.w, h = shape.h, SC = 9;
+    cv.width = w * SC; cv.height = h * SC;
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (!S.focal) return { keep: 0, tones: 0 };
+    const V = S.focal.V, N = S.focal.N;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < V.length; i++) { if (V[i] < mn) mn = V[i]; if (V[i] > mx) mx = V[i]; }
+    const span = mx - mn > 1e-5 ? mx - mn : 1;
+    const tile = boxDown(V, N, Math.min(W, N), w, h);
+    const pg = S.pig;
+    const tones = [pg.ground, pg.ramp[15], pg.mark];
+    const used = [0, 0, 0];
+    const lvl = new Int8Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const t = (tile[i] - mn) / span;
+      lvl[i] = t < 0.33 ? 0 : t < 0.66 ? 1 : 2;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!shape.inside(x, y, w, h)) continue;
+      let rim = false;
+      const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let z = 0; z < 4; z++) {
+        const nx = x + nb[z][0], ny = y + nb[z][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || !shape.inside(nx, ny, w, h)) rim = true;
+      }
+      const L = lvl[y * w + x];
+      if (!rim) used[L] = 1;
+      ctx.fillStyle = rim ? pg.rim : tones[L];
+      ctx.fillRect(x * SC, y * SC, SC, SC);
+    }
+    // contrast kept, measured only over the pixels the shape actually shows
+    let inS = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (shape.inside(x, y, w, h)) inS.push(tile[y * w + x]);
+    const full = sdOf(V);
+    return {
+      keep: full > 1e-6 ? sdOf(Float64Array.from(inS)) / full : 0,
+      tones: used[0] + used[1] + used[2],
+      feats: isFinite(S.desc && S.desc.lambda) ? Math.min(W, N) / S.desc.lambda : 0,
+    };
+  }
+
+  function paintApplied() {
+    const host = $("gallery"); host.textContent = "";
+    if (!S.focal) return;
+    SHAPES.forEach((sh) => {
+      const cell = document.createElement("div"); cell.className = "shape";
+      const nm = document.createElement("div"); nm.className = "nm";
+      nm.textContent = sh.nm + " · " + sh.w + "×" + sh.h;
+      cell.appendChild(nm);
+      const c1 = document.createElement("canvas"); cell.appendChild(c1);
+      const m1 = document.createElement("div"); m1.className = "mt"; cell.appendChild(m1);
+      const c2 = document.createElement("canvas"); cell.appendChild(c2);
+      const m2 = document.createElement("div"); m2.className = "mt"; cell.appendChild(m2);
+      host.appendChild(cell);
+      const r1 = drawSprite(c1, sh, S.win);
+      const r2 = drawSprite(c2, sh, S.focal.N);
+      const fmt = (r, W) => {
+        const b = document.createElement("b");
+        b.textContent = Math.round(r.keep * 100) + "%";
+        const frag = document.createDocumentFragment();
+        frag.appendChild(document.createTextNode("crop " + W + " · "));
+        frag.appendChild(b);
+        frag.appendChild(document.createTextNode(" kept · " + r.feats.toFixed(1) + " feat · " + r.tones + "/3 tones"));
+        return frag;
+      };
+      m1.appendChild(fmt(r1, Math.min(S.win, S.focal.N)));
+      m2.appendChild(fmt(r2, S.focal.N));
+      c1.title = sh.nm + ", window " + Math.min(S.win, S.focal.N) + " cells";
+      c2.title = sh.nm + ", whole " + S.focal.N + "² field crammed in";
+    });
+    drawDownChart();
+  }
+
+  function drawDownChart() {
+    const cv = $("downChart"), ctx = cv.getContext("2d");
+    const P = { l: 58, r: 110, t: 20, b: 42 };
+    const G = { x0: P.l, y0: P.t, w: cv.width - P.l - P.r, h: cv.height - P.t - P.b };
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = cssvar("--panel"); ctx.fillRect(0, 0, cv.width, cv.height);
+    const mono = "11px ui-monospace, SFMono-Regular, Menlo, monospace";
+    if (!S.focal) return;
+    const V = S.focal.V, N = S.focal.N, full = sdOf(V);
+    const sizes = [32, 16, 12, 8, 7];
+    const ratios = [1, 1.5, 2, 3, 4, 6, 8, 12];
+    ctx.strokeStyle = cssvar("--rule"); ctx.lineWidth = 1;
+    ctx.fillStyle = cssvar("--muted"); ctx.font = mono;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    const yOf = (v) => G.y0 + G.h - Math.max(0, Math.min(1.1, v)) / 1.1 * G.h;
+    for (let v = 0; v <= 1.0001; v += 0.25) {
+      const y = yOf(v);
+      ctx.beginPath(); ctx.moveTo(G.x0, y + 0.5); ctx.lineTo(G.x0 + G.w, y + 0.5); ctx.stroke();
+      ctx.fillText(Math.round(v * 100) + "%", G.x0 - 8, y);
+    }
+    const xOf = (r) => G.x0 + (Math.log(r) / Math.log(12)) * G.w;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ratios.forEach((r) => ctx.fillText(String(r), xOf(r), G.y0 + G.h + 8));
+    ctx.fillText("field cells per sprite pixel  ·  log scale", G.x0 + G.w / 2, G.y0 + G.h + 24);
+    ctx.save();
+    ctx.translate(13, G.y0 + G.h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = "center"; ctx.fillText("contrast kept", 0, 0);
+    ctx.restore();
+    // one line per sprite size; each point is a (size, window) pair, x = window/size
+    const cols = [cssvar("--ink"), cssvar("--slate"), cssvar("--slate"), cssvar("--slate"), cssvar("--ink")];
+    const dashes = [[], [], [5, 4], [2, 3], [7, 3]];
+    sizes.forEach((sz, si) => {
+      const pts = [];
+      ratios.forEach((r) => {
+        const W = Math.round(sz * r);
+        if (W > N) return;
+        const t = boxDown(V, N, W, sz, sz);
+        pts.push([r, full > 1e-6 ? sdOf(t) / full : 0]);
+      });
+      if (!pts.length) return;
+      ctx.strokeStyle = cols[si]; ctx.lineWidth = si === 4 ? 2.25 : 1.75; ctx.setLineDash(dashes[si]);
+      ctx.beginPath();
+      pts.forEach((p, i) => { const x = xOf(p[0]), y = yOf(p[1]); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      ctx.stroke(); ctx.setLineDash([]);
+      pts.forEach((p) => { ctx.fillStyle = cols[si]; ctx.beginPath(); ctx.arc(xOf(p[0]), yOf(p[1]), 2.5, 0, Math.PI * 2); ctx.fill(); });
+      const last = pts[pts.length - 1];
+      ctx.fillStyle = cols[si]; ctx.font = mono;
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(sz + "×" + sz + " sprite", xOf(last[0]) + 7, yOf(last[1]));
+    });
+    // the Nyquist marker: below ~2 sprite px per feature the box filter eats it
+    if (isFinite(S.desc && S.desc.lambda)) {
+      const crit = S.desc.lambda / 2;
+      if (crit >= 1 && crit <= 12) {
+        const x = xOf(crit);
+        ctx.strokeStyle = cssvar("--ink"); ctx.globalAlpha = 0.4; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, G.y0); ctx.lineTo(x, G.y0 + G.h); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+        ctx.fillStyle = cssvar("--muted"); ctx.textAlign = "left"; ctx.textBaseline = "top";
+        ctx.fillText("2 px per feature", x + 5, G.y0 + 3);
+      }
+    }
+    ctx.strokeStyle = cssvar("--rule");
+    ctx.strokeRect(G.x0 + 0.5, G.y0 + 0.5, G.w - 1, G.h - 1);
+  }
+
+  /* ====================== the 7×7 identity map ====================== */
+
+  function drawTile(cv, tile, s, mn, span, px) {
+    cv.width = s * px; cv.height = s * px;
+    const ctx = cv.getContext("2d");
+    const pg = S.pig, tones = [pg.ground, pg.ramp[15], pg.mark];
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const t = (tile[y * s + x] - mn) / span;
+      ctx.fillStyle = tones[t < 0.33 ? 0 : t < 0.66 ? 1 : 2];
+      ctx.fillRect(x * px, y * px, px, px);
+    }
+  }
+  function drawField(cv, V, N, W, mn, span) {
+    const s = Math.min(W, N);
+    cv.width = s; cv.height = s;
+    const ctx = cv.getContext("2d"), img = ctx.createImageData(s, s);
+    const rgb = S.pig.ramp.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+      const t = Math.max(0, Math.min(1, (V[(y % N) * N + (x % N)] - mn) / span));
+      const c = rgb[Math.min(31, Math.floor(t * 32))], i = (y * s + x) * 4;
+      img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  function paintIdentity() {
+    const host = $("idrow"); host.textContent = "";
+    if (!S.focal) return;
+    const N = S.focal.N, W = Math.min(S.win, N), dl = S.delta;
+    const rng = makeRng((S.seed * 31 + 7) >>> 0);
+    const cases = [
+      { lab: "parent", g: genome() },
+      { lab: "child δ/4", g: mutate(genome(), dl / 4, rng) },
+      { lab: "child δ", g: mutate(genome(), dl, rng) },
+      { lab: "child 4δ", g: mutate(genome(), dl * 4, rng) },
+      { lab: "sibling", g: { F: S.F, k: S.k, alpha: S.alpha, ratio: S.ratio, seed: (S.seed + 9001) >>> 0 }, sib: true },
+    ];
+    const V0 = S.focal.V;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < V0.length; i++) { if (V0[i] < mn) mn = V0[i]; if (V0[i] > mx) mx = V0[i]; }
+    const span = mx - mn > 1e-5 ? mx - mn : 1;
+    const parentTile = boxDown(V0, N, W, 7, 7);
+    const nodes = [];
+    cases.forEach((c) => {
+      const cell = document.createElement("div");
+      cell.className = "idcell" + (c.sib ? " stranger" : "");
+      const cf = document.createElement("canvas"); cell.appendChild(cf);
+      const ct = document.createElement("canvas"); cell.appendChild(ct);
+      const cap = document.createElement("div"); cap.className = "cap2";
+      cell.appendChild(cap);
+      host.appendChild(cell);
+      nodes.push({ c: c, cf: cf, ct: ct, cap: cap });
+    });
+    schedule("identity", function* () {
+      for (let i = 0; i < nodes.length; i++) {
+        const nd = nodes[i];
+        let V = V0;
+        if (i > 0) {
+          const out = {};
+          yield* simGen(nd.c.g, N, S.steps, out, false);
+          V = out.res.V;
+        }
+        const tile = boxDown(V, N, W, 7, 7);
+        drawField(nd.cf, V, N, W, mn, span);
+        drawTile(nd.ct, tile, 7, mn, span, 14);
+        const d = i === 0 ? 0 : tileDist(parentTile, tile);
+        const b = document.createElement("b");
+        b.textContent = i === 0 ? "—" : d.toFixed(2);
+        nd.cap.textContent = "";
+        nd.cap.appendChild(document.createTextNode(nd.c.lab + " · "));
+        nd.cap.appendChild(b);
+        nd.cf.title = nd.c.lab + " · cropped field, " + W + " cells";
+        nd.ct.title = nd.c.lab + " · the 7×7 the game would store";
+      }
+    }, 4);
+  }
+
+  /* ====================== readouts ====================== */
+
+  function paintVerdict() {
+    const L = S.lineage;
+    if (!L || L.length < 2) return;
+    const d = distance(L[0].desc, L[1].desc).d;
+    const parts = distance(L[0].desc, L[1].desc);
+    $("vBig").textContent = d.toFixed(3);
+    $("vFormula").textContent = "δ " + (S.lineDelta || S.delta).toFixed(4) +
+      " · scale " + parts.dScale.toFixed(2) + " orient " + parts.dOrient.toFixed(2) + " tone " + parts.dTone.toFixed(2);
+    const MAXD = 0.62;
+    const C = calibOf();
+    const pct = (v) => Math.max(0, Math.min(100, (v / MAXD) * 100));
+    $("gFloor").style.left = pct(C.kin) + "%";
+    $("gFloor").title = "kin threshold — a third of the unrelated-genome ceiling";
+    $("gNull").style.left = pct(C.ceiling) + "%";
+    $("gNull").title = "unrelated genomes";
+    $("gBand").style.left = "0%";
+    $("gBand").style.width = pct(C.kin) + "%";
+    $("gMark").style.left = "calc(" + pct(d) + "% - 1px)";
+    const pill = $("vPill");
+    if (d < C.floor) { pill.textContent = "kin · under noise"; pill.style.color = cssvar("--good"); }
+    else if (d < C.kin) { pill.textContent = "kin"; pill.style.color = cssvar("--good"); }
+    else if (d < C.ceiling) { pill.textContent = "drifting"; pill.style.color = cssvar("--warn"); }
+    else { pill.textContent = "stranger"; pill.style.color = cssvar("--bad"); }
+  }
+
+  function paintReadout() {
+    const host = $("railRead"); host.textContent = "";
+    const rows = [
+      ["regime", S.ana ? REGIMES[S.cls] : "—"],
+      ["contrast sd", S.ana ? S.ana.sd.toFixed(4) : "—"],
+      ["coverage", S.ana ? (100 * S.ana.cov).toFixed(0) + "%" : "—"],
+      ["coherence", S.ana ? S.ana.coh.toFixed(2) : "—"],
+      ["λ", S.desc && isFinite(S.desc.lambda) ? S.desc.lambda.toFixed(1) + " px" : "—"],
+      ["features / grid", S.desc && isFinite(S.desc.lambda) ? (S.N / S.desc.lambda).toFixed(1) : "—"],
+      ["features / sprite", S.desc && isFinite(S.desc.lambda) ? (Math.min(S.win, S.N) / S.desc.lambda).toFixed(1) : "—"],
+      ["σ(F) at δ", (S.delta * RANGE.F).toFixed(5)],
+      ["σ(k) at δ", (S.delta * RANGE.k).toFixed(5)],
+      ["Du / Dv", DU.toFixed(2) + " / " + (DU / S.ratio).toFixed(3)],
+    ];
+    rows.forEach(([k, v]) => {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      host.appendChild(dt); host.appendChild(dd);
+    });
+  }
+
+  /* ====================== theme ====================== */
+
+  let repaintPending = false;
+  function repaintAll() {
+    if (repaintPending) return;
+    repaintPending = true;
+    requestAnimationFrame(() => {
+      repaintPending = false;
+      mapLegend(); drawMap(); paintMapTally(); paintSpectrum();
+      drawHerit(); paintStrip(); paintApplied(); paintVerdict();
+    });
+  }
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (mq.addEventListener) mq.addEventListener("change", repaintAll);
+  }
+  new MutationObserver(repaintAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  /* ====================== boot ====================== */
+
+  mapLegend();
+  paintMapTally();
+  drawHerit();
+  onGenomeChange();
+  buildMap();
+
+  // for the verification harness only — never read by the page itself
+  window.__bench8 = {
+    state: S,
+    idle: () => Q.length === 0,
+    digest: () => ({
+      F: S.F, k: S.k, seed: S.seed,
+      sd: S.ana ? +S.ana.sd.toFixed(6) : null,
+      lambda: S.desc && isFinite(S.desc.lambda) ? +S.desc.lambda.toFixed(4) : null,
+      cls: S.cls,
+      d1: S.lineage.length > 1 ? +distance(S.lineage[0].desc, S.lineage[1].desc).d.toFixed(6) : null,
+      map: S.map ? Array.from(S.map).join("") : null,
+    }),
+  };
+})();
+</script>

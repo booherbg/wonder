@@ -1267,7 +1267,109 @@ Findings land in §11 as they report.
 
 ## 11 · Art bench findings
 
-*Pending.*
+### Bench 9 — The host plate
+
+**Blaine's question is answered: yes, 30×50 is enough for the shoot — and the plate
+should ship at 30×74** (30 wide, 50 shoot, a ground line, 23 root), which is
+exactly what §5 of the previous document proposed. The aspect ratio does not want
+to change.
+
+At 30×50 the whole body plan reads: leader, branch order, leaf whorls, a median of
+**7 individually countable blooms**, berries and catalyst nodes. Going up to
+64×104 costs **4.4× the pixels and buys two more flowers**. Shoot ink coverage
+actually *falls* from 12.8% to 9.3% as the plate grows — **bigger plates buy paper,
+not detail.**
+
+**My insect estimate in §5 was about 3× too small.** I said a perched insect would
+be 2–3px. Measured against the real sprites — a world plant is 16×28
+(`plantSprites.ts:6`) and the inked insect inside its 7×7 canvas is ~5×4
+(`insectSprites.ts:15`) — holding that ratio puts a perched insect at **9px** on a
+30-wide plate. The legibility floor is 6px (head lifts clear of the wing) and 8px
+is unambiguous, and true scale crosses both *below* Blaine's proposed width. So
+single-insect legibility was never the constraint.
+
+**The actual constraint is crowding, and resolution barely helps.** At 30×50 the
+median plate holds **two** pollinators before they merge. Ask for eight and the
+median separable count is **one**, with a quarter of the plant occluded. 64×104
+has 4.4× the pixels and still fits only three, because true-scale insects grow
+with the plate.
+
+> **A host plate cannot show a swarm.** Past about three, the design has to break
+> true scale or stop drawing individuals. That is a real constraint on the whole
+> "watch the pollinators work this plant" idea and it needs deciding before the
+> view is built.
+
+**The root pane works**, but only after two non-obvious fixes that are themselves
+findings: six minerals **cannot be separated by hue** when a world rolls a hue
+spread as narrow as 70°, so the ground needs a per-world *value* ladder with hue
+riding on top; and the matched root pixel has to be the brightest thing in the
+pane, wearing the mineral's own colour. With both, a centre cut shows a median of
+**6 mineral bands** and matched-root length spans 1%–96% across islands — genuinely
+diagnostic. Its weakness is emptiness rather than resolution: roots touch only 24%
+of the ground drawn beneath them.
+
+**And the finding I did not see coming, which corrects §13 of the previous
+document.** Running my own colour rule literally, the median insect's gut chemistry
+lands **5.4° of hue from its host**, with 71% inside 15° (n=800).
+
+> I claimed "insects transform colour rather than copy it." It is true of about
+> **one in five**. **Crypsis is the default outcome of the colour system** — the
+> insect ends up wearing very nearly the flower's colour.
+
+That is excellent news for the birds-hunt-what-stands-out mechanic, which now has
+a natural baseline to hunt against. It is bad news for any UI that expects a player
+to spot pollinators by colour, and the bench had to force body-dark/wing-light
+*value* contrast to make them read at all. Value contrast, not hue, is what makes
+an insect visible on its host.
+
+### Bench 10 — Island palette and light
+
+**Recommendation: split-complementary, grounded root, bias 0.70.** Against the
+no-key control it is the only setting in the sweep where every number improves at
+once — scene discord 26.1% → 19.5%, flora discord 23.5% → 18.8%, island difference
+0.302 → 0.380, character spread 10.4° → 11.2°, over 14 islands per configuration.
+
+**The result that reorganised the whole question:** a key that only touches the
+*flora* buys almost nothing at scene scale. Complementary at full bias takes flora
+discord from 23.5% to **8.3%** while the whole-scene number barely moves — the
+plants agree beautifully with each other and go on disagreeing with the dirt.
+
+> **Grounding the root — anchoring one hue to the terrain green, changing nothing
+> else — is worth more than the choice of key.** Grounded tetradic reaches 9.6%
+> flora discord, a 63% reduction.
+
+The bench then declined to recommend the best-scoring option, for a reason I would
+not have caught: **tetradic and triadic offsets are closed under their own
+rotation**, so grounding them yields one identical anchor set for every island in
+the game — and the island-difference statistic is blind to that. Split-complementary's
+0/150/210 offsets are not rotation-symmetric, so grounding still produces distinct
+chords. Bias 0.70 rather than 1.0 is arithmetic about arc width: 78% of the hue
+wheel stays reachable at 0.70, only 39% at 1.0.
+
+**Variety did not suffer — it improved.** Island difference *rises* under bias
+(0.302 → 0.514), because an unbiased island has no character to differ in: ten
+uniform hues make a flat histogram, and every flat histogram resembles every
+other. The one genuine failure mode is **analogous**, the only key that makes
+discord worse (26.1% → 37.7%) and, grounded, collapses variety outright.
+
+**Earned colour does not survive dusk, and this is a real problem.** Pigment
+separation retention against the unlit palette: **93% in daylight, 35% at the
+twilight peak, 24% in deep twilight, 27% at night** — below half for about 54% of
+the modelled cycle, with mean hue rotation of 60–62° at the worst point. It is the
+*tint* term, not the darkness; at the peak the model mixes 49% toward a single warm
+colour.
+
+Since §13's whole argument is that colour carries information about metabolism,
+losing two-thirds of that signal for half of every day is not cosmetic. **Glow is
+the fix and it currently fires too late** — night-with-glow restores 108% of
+separation, but dusk-with-glow only 74%, because glow fades on *luminance* while
+the worst damage happens where the *tint* peaks. Driving glow off the tint term
+instead is a one-line change, and the bench deliberately leaves it broken so the
+table still shows the problem.
+
+### Benches 8 and 11
+
+*Reported on the benches themselves; summary pending.*
 
 ---
 
