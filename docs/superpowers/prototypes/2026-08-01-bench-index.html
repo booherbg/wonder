@@ -1,0 +1,303 @@
+<style>
+  /* ------------------------------------------------------------------
+     The ecology bench suite — index.
+     Same specimen-plate identity as the benches it lists: graphite and
+     bone chrome, hairline rules, and colour only where a model made it.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --ground:  #E9EAE6;  --panel: #F3F4F0;  --sunk: #DFE1DB;
+    --ink:     #191E1C;  --muted: #676D68;  --rule: #CBCEC7;
+    --slate:   #3D4A56;  --shadow: rgba(25, 30, 28, .09);
+    --good:    #3F6B4A;  --warn: #8A6A2B;  --bad: #8A3B32;
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141817; --panel: #1C2220; --sunk: #101413;
+      --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+      --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+      --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141817; --panel: #1C2220; --sunk: #101413;
+    --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+    --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+    --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+  }
+  :root[data-theme="light"] {
+    --ground: #E9EAE6; --panel: #F3F4F0; --sunk: #DFE1DB;
+    --ink: #191E1C;    --muted: #676D68; --rule: #CBCEC7;
+    --slate: #3D4A56;  --shadow: rgba(25,30,28,.09);
+    --good: #3F6B4A;   --warn: #8A6A2B;  --bad: #8A3B32;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s8); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s3);
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(32px, 5.5vw, 52px); line-height: 1.08;
+    letter-spacing: -.018em; text-wrap: balance; margin: 0 0 var(--s4);
+  }
+  .standfirst { max-width: 64ch; color: var(--muted); font-size: 16.5px; margin: 0 0 var(--s6); }
+  .standfirst em { color: var(--ink); font-style: italic; }
+  h2 {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s4); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  }
+  section { margin-bottom: var(--s7); }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 64ch; margin: 0 0 var(--s4); }
+
+  /* ---------- the bench cards ---------- */
+
+  .benches { display: flex; flex-direction: column; gap: var(--s3); }
+
+  .bench {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr);
+    gap: var(--s4);
+    background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: var(--s4) var(--s5) var(--s4) var(--s4);
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+  .bench .num {
+    font-family: var(--font-display); font-size: 30px; line-height: 1;
+    color: var(--muted); text-align: right; padding-top: 2px;
+    font-variant-numeric: lining-nums;
+  }
+  .bench h3 {
+    font-family: var(--font-display); font-weight: 400; font-size: 22px;
+    letter-spacing: -.01em; margin: 0 0 2px;
+  }
+  .bench h3 a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .bench h3 a:hover { border-bottom-color: var(--slate); }
+  .bench h3 a:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
+  .bench .q {
+    font-size: 14px; color: var(--muted); margin: 0 0 var(--s3);
+    max-width: 66ch;
+  }
+  .bench .finding {
+    font-size: 14.5px; margin: 0; padding: var(--s3) 0 0;
+    border-top: 1px dotted var(--rule); max-width: 68ch;
+  }
+  .bench .finding b {
+    font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+    display: block; margin-bottom: 3px;
+  }
+  .bench .pending { color: var(--muted); font-style: italic; }
+  .theory {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+    display: inline-block; margin-bottom: var(--s2);
+  }
+
+  /* ---------- reading ---------- */
+
+  .reading { max-width: 68ch; }
+  .reading p { margin: 0 0 var(--s3); }
+  .reading ul { margin: 0 0 var(--s3); padding-left: 1.15em; }
+  .reading li { margin-bottom: 7px; }
+  .reading strong { font-weight: 600; }
+  code {
+    font-family: var(--font-mono); font-size: .89em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  a { color: var(--slate); }
+  footer {
+    margin-top: var(--s7); padding-top: var(--s4); border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted);
+  }
+  @media (max-width: 620px) {
+    .bench { grid-template-columns: minmax(0, 1fr); }
+    .bench .num { text-align: left; font-size: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Wonder · ecology · parameter study · 2026-08-01</p>
+  <h1>Seven benches for a living ecology</h1>
+  <p class="standfirst">
+    Wonder's ecology has no fitness function, frozen fauna, and eleven of fourteen
+    plant forms outside every food web. Rebuilding it means choosing among a lot of
+    plausible mechanisms, so rather than argue, these are <em>instruments</em>: seven
+    parameterised models, each isolating one mechanism and each answering one
+    question with a number. Every dial is live and every run is seeded, so anything
+    you see here you can get back.
+  </p>
+
+  <section>
+    <h2>The suite</h2>
+    <div class="benches" id="benches"></div>
+  </section>
+
+  <section class="reading">
+    <h2>Why these seven</h2>
+    <p>
+      The 2026-07-24 audit found four capabilities structurally missing —
+      <strong>selection</strong>, <strong>niche</strong>, <strong>origination</strong>
+      and <strong>disturbance</strong> — and a fifth that matters more than any of
+      them: <strong>legible causation</strong>. A purple flower is decoration; a
+      purple flower you can trace back three steps to a cause is the thing this game
+      keeps reaching for and has never been able to deliver.
+    </p>
+    <p>
+      The benches divide along that list. Bench 1 is origination, and it is the only
+      mechanism here that can put something genuinely new into a world. Bench 2 asks
+      whether adaptation is possible <em>at all</em> at a given landscape ruggedness —
+      if that answer is wrong nothing built above it will work. Bench 3 asks where
+      form comes from. Bench 4 tests whether Holland's original tag ecology gives us
+      more than the slice we already ship. Bench 5 settles two specific coupling
+      decisions with numbers. Bench 6 is the integration, and bench 7 is the one
+      capability the peaceful pillar seems to forbid.
+    </p>
+    <p>
+      Two of them are deliberately set up to fail. Bench 7 tests the intermediate
+      disturbance hypothesis rather than assuming it, because that hypothesis is
+      genuinely contested in the literature. Bench 4 tests whether tag ecology's
+      structure survives being made non-lethal, because Wonder cannot ship visible
+      death and a mechanism that only works when things die is no use to us. Negative
+      results from those two would be worth more than positive ones.
+    </p>
+  </section>
+
+  <section class="reading">
+    <h2>The documents</h2>
+    <ul>
+      <li><code>docs/03-ECOLOGY-DESIGN-SPACE.md</code> — the synthesis: what the
+        ecology is <em>for</em>, three grades of surprise and why Wonder sits at the
+        cheapest one, what Kauffman and Holland each buy, and the design space
+        written out as axes.</li>
+      <li><code>docs/02-ECOLOGY-FOUNDATIONS.md</code> — the proposal these test: the
+        soil/mineral direction, the reagent economy, catalysts, earned colour, and
+        chain-grown bodies.</li>
+      <li><code>docs/superpowers/prototypes/BENCH-KIT.md</code> — the shared spec, so
+        the suite reads as one instrument.</li>
+      <li><code>docs/ecology-report-2026-07-24.html</code> — the field guide and
+        expansion audit that started all of this.</li>
+    </ul>
+  </section>
+
+  <footer>Every bench is standalone, seeded and reproducible · nothing here is wired to the game yet</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Findings are filled in from the benches themselves once each has been run.
+  // A bench with no finding says so rather than showing an encouraging blank.
+  const BENCHES = [
+    {
+      n: 1, slug: "autocatalysis", title: "Autocatalysis",
+      theory: "Kauffman · Hordijk & Steel RAF",
+      q: "When is a randomly-rolled chemistry actually alive? Finds the maximal self-sustaining reaction set, locates the phase transition, and computes the adjacent possible — the frontier of what a world could next invent.",
+      finding: null,
+    },
+    {
+      n: 2, slug: "nk-landscape", title: "The ruggedness dial",
+      theory: "Kauffman & Levin · NK landscapes",
+      q: "How rugged should Wonder be? Too smooth and every island converges on the same answer; too rugged and nothing adapts. Measures local optima, walk length and correlation length against K, and tests whether the complexity catastrophe bites at the genome sizes we actually use.",
+      finding: null,
+    },
+    {
+      n: 3, slug: "regulatory-morphology", title: "Body as attractor",
+      theory: "Kauffman · random boolean networks",
+      q: "Where does form come from? Treats the genome as a boolean network and the body as its attractor, then measures whether that gives shapes stable enough to be an identity while still able to jump.",
+      finding: null,
+    },
+    {
+      n: 4, slug: "tag-ecology", title: "Tag ecology",
+      theory: "Holland · ECHO",
+      q: "Does Holland's full tag model give us trophic layers and mimicry that our one-relationship slice does not — and does any of that structure survive being made non-lethal?",
+      finding: null,
+    },
+    {
+      n: 5, slug: "trophic-flow", title: "Trophic flow",
+      theory: "Pauly & Christensen · Swailem & Täuber",
+      q: "Fund individuals from the level below, or let the level below set a ceiling? And does periodically varying carrying capacity really widen the region where species coexist — Wonder has five periodic signals doing nothing mechanical.",
+      finding: null,
+    },
+    {
+      n: 6, slug: "island", title: "The island",
+      theory: "the integration",
+      q: "Does it cohere spatially? Runs the reagent economy on a grid with real competition, and puts selection-on versus selection-off side by side so you can see whether selection actually beats drift.",
+      finding: null,
+    },
+    {
+      n: 7, slug: "disturbance", title: "Disturbance and the seed bank",
+      theory: "contested — IDH, Fox 2013",
+      q: "Does disturbance maintain diversity, does a hump appear at all, and does the effect survive being softened into something a peaceful game could ship?",
+      finding: null,
+    },
+  ];
+
+  const host = document.getElementById("benches");
+  BENCHES.forEach(function (b) {
+    const el = document.createElement("article");
+    el.className = "bench";
+
+    const num = document.createElement("div");
+    num.className = "num"; num.textContent = b.n;
+    el.appendChild(num);
+
+    const body = document.createElement("div");
+
+    const th = document.createElement("span");
+    th.className = "theory"; th.textContent = b.theory;
+    body.appendChild(th);
+
+    const h = document.createElement("h3");
+    if (b.url) {
+      const a = document.createElement("a");
+      a.href = b.url; a.textContent = b.title;
+      a.rel = "noopener";
+      h.appendChild(a);
+    } else {
+      h.textContent = b.title;
+    }
+    body.appendChild(h);
+
+    const q = document.createElement("p");
+    q.className = "q"; q.textContent = b.q;
+    body.appendChild(q);
+
+    const f = document.createElement("p");
+    f.className = "finding";
+    const lab = document.createElement("b");
+    lab.textContent = b.finding ? "What it found" : "Status";
+    f.appendChild(lab);
+    if (b.finding) {
+      f.appendChild(document.createTextNode(b.finding));
+    } else {
+      const s = document.createElement("span");
+      s.className = "pending";
+      s.textContent = "built and running — finding not yet recorded here; the bench itself carries its own numbers.";
+      f.appendChild(s);
+    }
+    body.appendChild(f);
+
+    el.appendChild(body);
+    host.appendChild(el);
+  });
+})();
+</script>

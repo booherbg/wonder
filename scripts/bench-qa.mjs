@@ -87,8 +87,10 @@ for (const file of targets) {
       };
     });
 
+    // The index is a contents page, not an instrument — it has nothing to draw.
+    const isIndex = name.includes("index");
     if (probe.overflow > 1) problems.push(`${theme}: horizontal overflow ${probe.overflow}px @1280`);
-    if (probe.canvases === 0) problems.push(`${theme}: no canvas at all`);
+    if (probe.canvases === 0 && !isIndex) problems.push(`${theme}: no canvas at all`);
     if (probe.blank > 0) problems.push(`${theme}: ${probe.blank}/${probe.canvases} canvases blank`);
     if (probe.text < 900) problems.push(`${theme}: suspiciously little copy (${probe.text} chars)`);
     problems.push(...errs);
