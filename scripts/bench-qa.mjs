@@ -47,10 +47,14 @@ for (const file of targets) {
   // Math.random is only a bug in a *model* path — picking a fresh seed for a
   // "roll" button is fine and still reproducible, because the seed is then shown.
   // Report the actual lines so it can be judged rather than guessed at.
-  const rnd = raw.split("\n")
+  // Judge on a small window, not the bare line — the call is usually inside a
+  // `rollSeed` handler whose name sits a line or two above it.
+  const src = raw.split("\n");
+  const rnd = src
     .map((l, i) => [i + 1, l])
     .filter(([, l]) => /Math\.random\s*\(/.test(l));
-  const modelRnd = rnd.filter(([, l]) => !/seed|roll/i.test(l));
+  const modelRnd = rnd.filter(([n]) =>
+    !/seed|roll/i.test(src.slice(Math.max(0, n - 4), n + 3).join("\n")));
   if (modelRnd.length) {
     problems.push(`Math.random in a non-seed context: ${modelRnd.map(([n]) => "line " + n).join(", ")}`);
   } else if (rnd.length) {

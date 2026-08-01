@@ -339,6 +339,17 @@ its period and phase is a real, reachable, *visible* solution. **Pattern regular
 is the master tuning knob of this entire design**, and I'd put it on a slider in
 the bench on day one.
 
+> **⚠ Withdrawn, 2026-08-01 — this was tested and it is wrong.** Bench 6
+> (`2026-08-01-bench-6-island.html`) put regularity on a slider and found **no
+> threshold**: the field correlation moves as intended (0.97 → 0.48) while the
+> surplus gap stays flat scatter across the entire range. The reason is that
+> §4.1's recommended **tropism-grown roots are plastic** — they find good ground by
+> looking, so they never needed the motif to repeat. Regularity would only be
+> load-bearing for *genotype-fixed* roots, i.e. the CA rule table I argued against
+> on separate grounds. The two decisions turn out to be coupled: choosing plastic
+> growth removes the need for a learnable pattern. Keep the parameter as a texture
+> control; it is not balance-critical. See `03-ECOLOGY-DESIGN-SPACE.md` §8.
+
 Concretely, and cheaply:
 
 ```

@@ -589,21 +589,24 @@ Six parameterised instruments, each isolating one mechanism. All are standalone
 HTML in `docs/superpowers/prototypes/`, all share the kit in `BENCH-KIT.md`, all
 are seeded and reproducible.
 
-| # | Bench | The question it settles |
-|---|---|---|
-| 1 | **Autocatalysis** | When is a randomly-rolled chemistry *alive*? Where is the phase transition, and is the RAF condition usable as a worldgen gate? |
-| 2 | **NK landscape** | How rugged should Wonder be? What K, and does the complexity catastrophe bite at the genome sizes we actually use? |
-| 3 | **Regulatory morphology** | Does "body = network attractor" give forms stable enough to be an identity but still able to jump? |
-| 4 | **Tag ecology** | Does Holland's full ECHO produce trophic layers and mimicry — and does any of it survive being made non-lethal? |
-| 5 | **Trophic flow** | Fund individuals or set ceilings? And does periodic forcing really widen coexistence? |
-| 6 | **The island** | Does it cohere spatially, and can you *see* selection beat drift? |
+**Index (start here):** <https://claude.ai/code/artifact/6c48a76a-4bd1-48af-888c-acb9e5248ad1>
+
+| # | Bench | The question it settles | Live |
+|---|---|---|---|
+| 1 | **Autocatalysis** | When is a randomly-rolled chemistry *alive*? Where is the phase transition, and is the RAF condition usable as a worldgen gate? | [↗](https://claude.ai/code/artifact/54f6c253-96be-4733-b448-53fb1f677e04) |
+| 2 | **NK landscape** | How rugged should Wonder be? What K, and does the complexity catastrophe bite at the genome sizes we actually use? | [↗](https://claude.ai/code/artifact/5624c49b-28e0-47be-a538-4005fe2353f5) |
+| 3 | **Regulatory morphology** | Does "body = network attractor" give forms stable enough to be an identity but still able to jump? | [↗](https://claude.ai/code/artifact/d3ce6504-7b67-4b6b-a68b-687ce0cd547d) |
+| 4 | **Tag ecology** | Does Holland's full ECHO produce trophic layers and mimicry — and does any of it survive being made non-lethal? | [↗](https://claude.ai/code/artifact/7021b774-cbbe-402e-9003-9b76b81921ab) |
+| 5 | **Trophic flow** | Fund individuals or set ceilings? And does periodic forcing really widen coexistence? | [↗](https://claude.ai/code/artifact/b437e032-2aaf-427e-9cf3-0e8a42642cd1) |
+| 6 | **The island** | Does it cohere spatially, and can you *see* selection beat drift? | [↗](https://claude.ai/code/artifact/99589bf5-54bc-45c6-97ac-337fa8b932a0) |
 
 Findings from each are recorded on the benches themselves and summarised in
 [§8](#8--findings) once they land.
 
-**Prior benches:** the reagent economy
-(`2026-07-31-reagent-economy.html`) remains the chemistry/colour/morphology
-prototype that these extend.
+**Prior bench:** the reagent economy
+(`2026-07-31-reagent-economy.html`, [live](https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0))
+remains the chemistry/colour/morphology prototype these extend; it now carries a
+nine-dial parameter rail of its own.
 
 ---
 
@@ -895,9 +898,150 @@ mutations and then, occasionally, changes dramatically. Not a slider being nudge
 2 for the regulatory network. They are different models measuring different
 things; there is no contradiction, but the numbers should not be pooled.)*
 
-### Benches 4, 6, 7
+### Bench 4 — Tag ecology
 
-*Reported on the benches themselves; summary pending.*
+**Trophic layers: yes.** Sustained layering in 7/7 seeds by t ≈ 387. With combat
+bias at zero, **0/7** ever layer — mean trophic level sits at exactly 1.000. So the
+structure is real and it is caused by the mechanism rather than by the plotting.
+
+**Arms race: yes, and it is the cleanest signal in the suite.** Attack score falls
+0.354 → 0.276 against a no-combat drift control of 0.012 — six times the control —
+and keeps oscillating rather than settling. It has a signature you can read with
+your eyes: **defence tags go monotone** (`ccccc`, `bbbbbbbb`, repetition 0.852 vs
+0.488 control) while appearance stays mixed at 0.467. Hiding looks different from
+advertising, in the raw data, with no analysis.
+
+**Mimicry: no** — and this is the claim the bench was most expected to confirm. Raw
+appearance similarity reaches 0.8–1.0, but that is a maximum over hundreds of
+pairs. Measured against the right internal control — the same statistic on the two
+*private* tags, which cannot be imitated — the excess is **−0.021**. Public tags
+converge no more than unimitable ones do. No parameter regime lifted it above
+0.054. Mimicry needs something this model does not have.
+
+**The decisive result, and it reframes the peaceful constraint entirely:**
+
+> Lethal mode and non-lethal mode came out **bit-identical across all seven
+> seeds**, because starvation never fired at any survivable upkeep. Every bit of
+> the selection was competitive displacement at carrying capacity. Push upkeep 30×
+> until starvation does fire and it does not select — it exterminates (population
+> 0 versus 13 survivors).
+
+**It was never death doing the work. It was a full world.** That is a much better
+argument for Wonder's peaceful pillar than the one we have been making: turnover
+has to stay fitness-dependent, but it never has to be visible, attributable, or
+even lethal. Finite space plus differential rates is not a compromise, it is the
+mechanism.
+
+With one real cost, which should be on the record: **full rates-only keeps the
+layers but loses the arms race entirely** (attack score moves 0.0073 — *less* than
+the 0.0123 drift control). Species count nearly doubles, 35 → 65, with higher
+Shannon diversity. That is **diversity without differentiation** — more kinds of
+thing, less reason for any of them to be the way they are. Worth knowing before we
+soften everything by reflex.
+
+### Bench 6 — The island
+
+**Selection visibly beats drift, and the numbers are not close.** Same world, same
+soil, same founders, seed 2438, 900 ticks:
+
+| | drift (selection 0) | selected |
+|---|---|---|
+| effective hue bins (of 36) | 8.66, one mode | **4.54, two modes** |
+| mean surplus | −6.0 | **+27.2** |
+| mean tier reached | 1.07 | **2.31** |
+| uptake per root cell | 0.184 | **0.260** |
+| lineages | 560 | **173** |
+
+The ribbons separate from about tick 250 and are unmistakable by 400, and it holds
+on every seed tried. But **mean surplus is a far better instrument than the
+ribbon** — it separates by tick 50. If we want a chart that shows selection
+working, that is the one to build first.
+
+The drift arm's mean tier of **1.07** is the quietly damning number: without
+selection, **hands rot under mutation** until the island lives entirely off the
+"tier-1 is always edible" floor. Drift does not merely fail to improve things; it
+actively degrades an inherited metabolism.
+
+**It falsified my "master tuning knob" claim, and the reason is instructive.**
+§4.2 of the previous document argues that pattern regularity is the central dial,
+because a soil pattern must be predictable enough to be worth adapting to. The
+slider provably works (same-biome field correlation 0.97 → 0.48) — and **the
+surplus gap is flat scatter across its whole range** (+25.3, +16.0, +20.9, +20.0,
++18.8, +22.6). There is no threshold.
+
+> The reason: **tropism-grown roots are plastic.** They find good tiles by
+> *looking*, so they never needed the motif to repeat. Regularity would only
+> matter for genotype-fixed roots — a CA rule table, which is exactly the design
+> I argued against on other grounds in §4.1.
+
+So the two decisions are coupled in a way I did not see: **choosing plastic growth
+removes the need for a learnable pattern.** That is a simplification worth taking,
+and it means the regularity parameter can be a texture control rather than a
+balance-critical one.
+
+**Mobile versus immobile reagents diverged — but not as designed.** They split on
+*concentration*, not reach: peak tile mass 4.44 (immobile-led) versus 2.05
+(mobile-led), a 2.2× gap in every world, while spread barely moved (1.78 vs 2.13).
+And the split appears **at selection zero**, so it is phenotypic — the growth rule
+produces both shapes on contact with the ground. **Selection does not invent the
+strategies; it decides which one owns the island** (293/420 → 967/62 by tick 300).
+
+Four more things it surfaced that nobody designed:
+
+- **Half the rolled worlds are duds.** Seeds 7 and 42 end below tier 1.6 with
+  negative surplus *even at full selection*. The chemistry roll matters more than
+  any slider on the page — which makes Bench 1's rejection sampler not optional.
+- **Selection makes the island emptier first** (−22% population at tick 150,
+  crossing over around 340). Anyone watching a live tuning run would think they had
+  broken it.
+- **Selection collapses speciation 3.2×** while the population grows. Selection and
+  splitting pull against each other, which the current `driftDistance` tripwire
+  has no way to express.
+- **Catalysts pin their lineages to specific biome bands** with no range rule
+  anywhere in the code. That is §12.1's facilitation claim arriving unbidden.
+
+And a legibility finding worth keeping: the "tier-1 is always edible" floor turned
+out to be **load-bearing for the visuals**. Without it, one bad card swap zeroes a
+plant's pile, the pigment falls back to a constant, and the ribbon goes mute in
+*both* arms. The viability floor is not just kindness to the simulation; it is what
+keeps the picture readable.
+
+### Bench 7 — Disturbance and the seed bank
+
+**A hump appeared — in all four series — peaking at D ≈ 0.0114.** Effective
+species run 2.08 ± 0.38 at zero disturbance → **4.52 ± 0.26** at the peak → 1.99 at
+D = 0.15. A 2.2× gain.
+
+**The peaceful version survives, and beats the lethal one** — 4.91 ± 0.11 versus
+4.52 ± 0.26, outside the error bars. That is the opposite of what I expected. The
+reason is worth understanding because it generalises: peaceful mode holds ~96%
+occupancy against lethal's ~82%, so **clearing a patch is partly a coloniser
+subsidy**, while merely suppressing the incumbent makes it beatable *without
+surrendering the space*. Suppression is a better diversity mechanism than removal.
+
+Lengthening the recovery window (25 → 60) does not raise the peak but lifts the
+low-disturbance end sharply (4.18 → 4.69), moving the peak left. In design terms:
+**gentler weather buys the same ecology**, which is exactly the trade Wonder wants.
+
+**The seed bank works but is narrower than advertised**: 6 revivals against 0 with
+the bank off, ending 6-of-8 species versus 3-of-8. At the peak it is worth nothing
+(inside the error bars) — it earns its keep only in the high-disturbance tail
+(1.99 → 2.99). Half-life barely mattered. And the sharpest correction to my own
+priors: **peaceful mode posted 0 revivals and only 2 extinction events, against
+lethal's 8.** The bank insures against a risk that peacefulness largely removes.
+So §4.2's pairing of disturbance *with* a seed bank is right for a lethal world
+and partly redundant for ours.
+
+**The most uncomfortable result in the whole suite, and it should stay in.** The
+no-trade-off control collapses as expected (1.07 effective species, never above
+2.4). But **three of the four no-trade-off series still pass the hump test**,
+because five replicates make the error bars small enough. A statistically real hump
+describing a functionally dead two-species community.
+
+> That gap between *significant* and *meaningful* is a large part of what Fox
+> (2013) was complaining about — reproduced here by accident, in a model we
+> control completely. It is the best possible argument for why Bench 7 tests the
+> hypothesis rather than assuming it.
 
 ### What the findings have already changed
 
@@ -917,7 +1061,23 @@ things; there is no contradiction, but the numbers should not be pooled.)*
 6. **Punctuated morphological change is available**, and it comes specifically from
    the ordered regime of a regulatory network. If we want witnessable jumps rather
    than sliders drifting, that is where they live.
-7. **Two citations corrected before they shipped** — the intermediate disturbance
+7. **"Pattern regularity is the master tuning knob" is withdrawn.** Bench 6 found
+   no threshold at all, because plastic roots find good ground by looking. The
+   parameter stays as a texture control; it is not balance-critical, and choosing
+   plastic growth is what removed the need for it.
+8. **The peaceful pillar got a better argument than the one we had.** Bench 4
+   showed lethal and non-lethal runs coming out bit-identical — the selection was
+   always competitive displacement at carrying capacity, never starvation. Finite
+   space plus differential rates is the mechanism, not a compromise. But Bench 4
+   also priced the *full* softening: rates-only loses the arms race and yields
+   diversity without differentiation.
+9. **Disturbance is worth building, and the gentle version is the better one** —
+   suppression beat clearing (4.91 vs 4.52) because clearing subsidises colonisers.
+   The seed bank is narrower than I claimed: it matters in the high-disturbance
+   tail, and peacefulness already removes most of the risk it insures against.
+10. **Mean surplus, not the hue ribbon, is the instrument to build first.** It
+    separates selection from drift by tick 50 against the ribbon's 250–400.
+11. **Two citations corrected before they shipped** — the intermediate disturbance
    hypothesis (§4.2) and the building-block hypothesis (§3.2), both of which I had
    written in their popular and indefensible forms. A third, Swailem & Täuber, was
    mis-described as a competing-species model when it is predator–prey on a
