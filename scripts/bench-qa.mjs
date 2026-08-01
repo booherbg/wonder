@@ -36,14 +36,25 @@ for (const file of targets) {
   const warnings = [];
   let stats = {};
 
+  // Pre-kit prototypes are published as history. Check them for breakage
+  // (errors, overflow, blank canvases) but not for kit compliance.
+  const legacy = !/^2026-08-|reagent-economy/.test(name);
+  if (legacy) warnings.push("pre-kit prototype — compliance checks relaxed");
+
   // Fragment discipline: these get wrapped at publish time, so a stray document
   // scaffold in the file is a real (if silent) bug.
   for (const tag of ["<!doctype", "<html", "<head>", "<body"]) {
     if (raw.toLowerCase().includes(tag)) problems.push(`contains a bare ${tag} tag`);
   }
-  // A published artifact cannot reach the network at all.
-  const ext = raw.match(/(?:src|href)\s*=\s*["'](https?:)?\/\//gi);
-  if (ext) problems.push(`${ext.length} external resource reference(s)`);
+  // A published artifact cannot *load* anything off-host. Navigation links are
+  // fine — CSP blocks requests, not anchors — so only flag things the browser
+  // would fetch: src=, and href= on <link>.
+  const ext = [
+    ...raw.matchAll(/\bsrc\s*=\s*["'](?:https?:)?\/\//gi),
+    ...raw.matchAll(/<link\b[^>]*\bhref\s*=\s*["'](?:https?:)?\/\//gi),
+    ...raw.matchAll(/@import\s+(?:url\()?["']?(?:https?:)?\/\//gi),
+  ];
+  if (ext.length) problems.push(`${ext.length} external resource load(s)`);
   // Math.random is only a bug in a *model* path — picking a fresh seed for a
   // "roll" button is fine and still reproducible, because the seed is then shown.
   // Report the actual lines so it can be judged rather than guessed at.
@@ -56,7 +67,8 @@ for (const file of targets) {
   const modelRnd = rnd.filter(([n]) =>
     !/seed|roll/i.test(src.slice(Math.max(0, n - 4), n + 3).join("\n")));
   if (modelRnd.length) {
-    problems.push(`Math.random in a non-seed context: ${modelRnd.map(([n]) => "line " + n).join(", ")}`);
+    (legacy ? warnings : problems).push(
+      `Math.random in a non-seed context: ${modelRnd.map(([n]) => "line " + n).join(", ")}`);
   } else if (rnd.length) {
     warnings.push(`Math.random ×${rnd.length}, seed-selection only (ok): ${rnd.map(([n]) => "line " + n).join(", ")}`);
   }
@@ -92,11 +104,13 @@ for (const file of targets) {
     });
 
     // The index is a contents page, not an instrument — it has nothing to draw.
+    // The identity-map lab predates the bench kit and is published as a historical
+    // artifact, so it is not held to the kit's standards.
     const isIndex = name.includes("index");
     if (probe.overflow > 1) problems.push(`${theme}: horizontal overflow ${probe.overflow}px @1280`);
     if (probe.canvases === 0 && !isIndex) problems.push(`${theme}: no canvas at all`);
     if (probe.blank > 0) problems.push(`${theme}: ${probe.blank}/${probe.canvases} canvases blank`);
-    if (probe.text < 900) problems.push(`${theme}: suspiciously little copy (${probe.text} chars)`);
+    if (probe.text < 900 && !legacy) problems.push(`${theme}: suspiciously little copy (${probe.text} chars)`);
     problems.push(...errs);
     if (theme === "light") stats = probe;
 

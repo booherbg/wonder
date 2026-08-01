@@ -1112,4 +1112,163 @@ describing a functionally dead two-species community.
 
 ---
 
+## 9 · Addendum — what we missed
+
+*2026-08-01, after a full QA pass. Written by looking back at the suite and asking
+what it does not cover, which turns out to be a lot and to be concentrated in one
+place.*
+
+### 9.1 The gap, in one sentence
+
+**All seven benches are about mechanism. Not one of them is about art.**
+
+For a project whose first design pillar is beauty, that is a real omission and I
+should have caught it earlier. We measured fitness landscapes, autocatalysis,
+trophic coupling, canalisation and disturbance. We did not measure whether any of
+it *looks good*, or whether a person can read it, and those are the two things the
+game is actually judged on.
+
+Benches 8–11 start closing it: **surface pattern**, **the host plate**, **the
+island's palette and light**, and **motion as a phenotype**. They are described in
+§10.
+
+### 9.2 The three methodological holes
+
+Worth naming separately from the feature backlog, because no amount of new
+benches fixes them.
+
+**No human has read any of this.** Every bench measures the model. None measures
+whether a person can perceive what the model is doing. §4.4 proposed "one
+traceable causal chain within ten minutes" as an explicit target and it remains
+entirely unmeasured — which is precisely the failure mode that sank SimLife and
+made *Creatures* take an hour to click. **This is the most important untested
+claim in the whole programme**, and testing it needs a person, not a script.
+
+**Nothing was tested at game scale.** Bench 6 runs 64×48 tiles. Wonder runs
+300×300 with roughly 8,000 plants sampled 480-at-a-time on a two-second heartbeat.
+Every performance and visual-density conclusion here is an extrapolation across
+two orders of magnitude. The specific risk: at real density, colour that reads as
+meaningful on a shelf of twenty specimens may read as noise across a hillside of
+thousands — which is exactly what bench 10 is now for, but only at one scale.
+
+**Fauna are still frozen.** Audit finding #2 — critters cannot be born, cannot
+die, cannot change — is untouched by all eleven benches. Everything we built is
+plants, chemistry, or abstract agents. The learned palate (Phase 0's B4) remains
+the only proposal on the table, and it is unbuilt and unbenched. If Blaine's
+favourite thing about the game is the critters, and it is, that is the wrong place
+to have a hole.
+
+### 9.3 Low-hanging fruit, ranked by payoff per line
+
+**1 · Growth as animation.** Plants currently pop into existence fully formed. The
+body is *already* produced by running a program — so run it over a second or two
+instead of instantly and you can watch a plant write itself. This is perhaps
+twenty lines, it costs nothing at runtime (it is the same computation, paced), and
+it is "show, don't commemorate" applied to the single most obvious place in the
+game. I think this is the best value item in the entire document.
+
+**2 · Wind.** One vector field per island, rolled at worldgen. It is in the audit's
+list as "perhaps ten lines," but its real value is that it is the one system that
+ties four others together *visually*: seeds drift with it, insects fight it, plants
+lean into it, and surface patterns stretch along it. Windward and leeward floras
+diverge, and the island acquires an **orientation** you can read from a distance.
+One field, four visible consequences — the best leverage available.
+
+**3 · Surface pattern** (bench 8). Two parameters per organism for spots, stripes
+and marbling, and — if it survives reduction to 7×7 — the pattern *is* the identity
+map the insects match against, which makes the beautiful thing and the functional
+thing the same object.
+
+**4 · The island's key** (bench 10). One rolled number biasing the whole palette
+toward a harmonic interval. Cheap, and it is the difference between a world that
+has a mood and one that has a hue histogram.
+
+**5 · The chain as a sigil.** Render each metabolism as a small generated glyph —
+Rube-Goldberg machines as heraldry. Every species gets a mark you would recognise
+in the journal, derived from what it actually does. Extremely on-brand for the
+naturalist's-codex direction, and it is pure rendering with no simulation risk.
+
+**6 · Names that encode something.** We roll reagent names from a curated list of
+real pigment words (ochre, verdigris, cinnabar). That could go much further:
+species epithets derived from the *chain*, so a name tells you something true. The
+game already has a codex voice; this is cheap text with a high flavour return.
+
+**7 · Senescence as a phenotype.** Not death — Wonder does not do death as an
+event. But *how* a plant fades is free heritable variation with real visual
+payoff: one lineage goes gold before it goes, another just stops. Autumn, earned.
+
+### 9.4 Bigger swings, and why they are worth it
+
+**Stratigraphy.** Soil accumulates layers; digging shows the island's past as
+bands of colour. This makes the seed bank visible, makes *time* visible, and
+converts "the island remembers its dead" from a nice sentence into a picture. It
+pairs with disturbance (§8, bench 7), which is now promoted.
+
+**The scale zoom.** Island → plant → root → chemistry as one continuous
+gesture, each level its own visualisation. This is the insight surface (§4.9's
+three tiers) expressed as a *movement* rather than as separate screens, and it is
+the most natural fit I can find for the SimCity/Civ/Factorio compass without
+turning the game into an optimisation problem.
+
+**Convergent markings.** If pattern parameters derive from the metabolic chain,
+then a plant and the specialist that works it can converge on the **same pattern** —
+two organisms wearing the same stripes because they are locked together. Nobody
+would author that; it would fall out of two systems reading one tag. It is the
+single most striking image this design could produce and §3.1's "prefer mechanisms
+already visible to something else in the world" is exactly the rule that generates
+it.
+
+**The chorus, as synchronisation.** The audit sketches insect clouds converging on
+a shared signal. With motion genes (bench 11) that becomes a genuine
+**phase-locking** phenomenon — Kuramoto coupling between clouds — which is
+beautiful, emergent, cheap, and gives the "sensory exploitation" idea (a flower
+that fakes the chorus) something concrete to exploit.
+
+**Seasonal metabolism.** The chain's step budget varying with the season: long
+summer chains, short winter ones. Same genome, different body, same year. Plants
+that honestly look different at different times, with no new phenotype system.
+
+**Symbiogenesis.** Two lineages that co-occur and match for long enough fuse into
+a composite that inherits both habitats. In the audit, never explored, and it is
+the only mechanism on any list that produces genuinely astonishing organisms — a
+moss-coral living on rock *and* in the shallows.
+
+### 9.5 What I would do next, in order
+
+1. **Growth as animation** — a day, and it improves every existing screen.
+2. **The minimal grade-3 loop** (§7.0) — the checkpoint that de-risks everything.
+3. **Wind** — after the loop exists, so seed drift has something to bias.
+4. **Surface pattern**, if bench 8 says it is heritable and survives 7×7.
+5. **A legibility test with an actual person** — the ten-minute claim, measured.
+6. **Fauna**, finally: the learned palate, then whether critters should be
+   populations at all.
+
+Items 1, 3 and 4 are art; 2 and 6 are mechanism; 5 is the one that tells us whether
+any of it worked. That ratio is roughly right, and it is close to the inverse of
+what the first seven benches sampled.
+
+---
+
+## 10 · The art benches (8–11)
+
+Where §6's benches asked whether the mechanisms *work*, these ask whether they
+**read** — which, for this game, is the harder and more important half.
+
+| # | Bench | The question it settles |
+|---|---|---|
+| 8 | **Surface pattern** | Is reaction–diffusion *heritable* — does a small genetic change give a small pattern change — and does anything survive being shrunk to sprite scale, or to the 7×7 identity map? |
+| 9 | **The host plate** | Blaine's own unanswered question: **is 30×50 big enough?** Answered with pixels rather than prose, across five resolutions, with insects perched at true scale. |
+| 10 | **Island palette and light** | Twenty individually-justified colours can still compose into mud. Does biasing a world's hues toward a harmonic key make islands more beautiful without making them samey — and does earned colour survive dusk? |
+| 11 | **Motion signature** | At gameplay zoom an insect is five pixels, so you cannot see its colour — but you can see how it moves. Is motion legible as identity, and does it work as a second camouflage axis? |
+
+Findings land in §11 as they report.
+
+---
+
+## 11 · Art bench findings
+
+*Pending.*
+
+---
+
 *— Fable*
