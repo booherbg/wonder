@@ -351,6 +351,7 @@
   <div class="controls">
     <button class="primary" id="rollWorld">Roll a new world</button>
     <button id="rollPlants">Reseed the flora</button>
+    <button id="regrow">Watch it grow</button>
     <span class="spacer"></span>
     <label class="seedbox">seed <input id="seed" type="text" inputmode="numeric" value="2438"></label>
     <button id="applySeed">Go</button>
@@ -439,6 +440,16 @@
       the roots are the same program run downward. A plant that runs an elaborate chain
       grows an elaborate body, always, because they are the same thing. Form cannot lie
       about function here.
+    </p>
+    <p>
+      <strong>The plant writes itself, and that is free.</strong> Press
+      <em>Watch it grow</em> and the specimen redraws one conversion at a time.
+      There is no extra computation in that — it is the same chain, paced over a
+      second and a half instead of run in a single frame. Wonder's plants currently
+      pop into existence fully formed, which throws away the most watchable thing
+      the design produces: a body being written by a metabolism, in order, where
+      you can see which step put out the leaves and which one opened the bloom.
+      (Reduced-motion is honoured — the plate just draws finished.)
     </p>
     <p>
       <strong>Catalysts are the reason to care about your neighbours.</strong> A catalyst
@@ -800,9 +811,17 @@
   // No separate morphology genome: each conversion, as it fires, emits one
   // growth instruction. Roots are the same program run downward.
 
-  function growBody(ctx, W, H, world, run, pig, phase) {
+  // `reveal` (0..1) draws only the first fraction of the chain, so the same
+  // computation that makes the body can be *paced* instead of run instantly —
+  // you watch the plant write itself. Costs nothing: it is the same steps, drawn
+  // a few at a time.
+  function growBody(ctx, W, H, world, run, pig, phase, reveal) {
     ctx.clearRect(0, 0, W, H);
-    const steps = run.steps;
+    const all = run.steps;
+    const shown = reveal === undefined
+      ? all.length
+      : Math.max(1, Math.round(Math.max(0, Math.min(1, reveal)) * all.length));
+    const steps = all.slice(0, shown);
     const soilY = Math.round(H * 0.70);
     const scale = Math.min(W / 150, H / 230);
 
@@ -821,12 +840,15 @@
     // that varies between specimens is structure, not scale.
     const vigor = Math.max(0.35, Math.min(1, Math.log2(1 + run.ratio) / 2.6));
     const canopy = (soilY - 8 * scale) * (0.42 + 0.58 * vigor);
+    // Segment length is set by the FULL chain, not the revealed part, so a
+    // growing plant extends instead of rescaling under itself.
+    const paceN = all.length;
     const cx = W / 2;
 
     /* ---------------- roots: established early, subordinate ---------------- */
-    const rootSteps = steps.slice(0, Math.max(3, Math.round(steps.length * 0.5)));
+    const rootSteps = steps.slice(0, Math.max(3, Math.round(paceN * 0.5)));
     const rootDepth = (H - soilY - 4 * scale) * (0.55 + 0.45 * vigor);
-    const rseg = rootDepth / Math.max(4, rootSteps.length * 0.75);
+    const rseg = rootDepth / Math.max(4, Math.round(paceN * 0.5) * 0.75);
     let rtips = [{ x: cx, y: soilY, ang: Math.PI / 2, th: 2.0 * scale }];
 
     ctx.globalAlpha = 0.85;
@@ -866,7 +888,7 @@
     // A leader that keeps growing, plus side branches — a plant silhouette,
     // not a broom. Branching keeps the parent alive; that's the whole
     // difference between this reading as flora and reading as a fan.
-    const seg = canopy / Math.max(5, steps.length * 0.62);
+    const seg = canopy / Math.max(5, paceN * 0.62);
     let tips = [{ x: cx, y: soilY, ang: -Math.PI / 2, th: 3.2 * scale, lead: true }];
     const MAX_TIPS = 5;
     let bloomed = 0, branchTurn = 0;
@@ -886,7 +908,7 @@
     steps.forEach((s, i) => {
       const card = s.card;
       const out = world.reagents[card.out];
-      const late = i / Math.max(1, steps.length - 1);
+      const late = i / Math.max(1, paceN - 1);
 
       if (card.kind === "gather") {
         tips.forEach((t, k) => extend(t, seg * (0.72 + Math.min(0.4, card.n * 0.05)), i, k));
@@ -1145,8 +1167,34 @@
       ro.appendChild(dt); ro.appendChild(dd);
     });
 
+    growSpecimen();
+  }
+
+  // Growth as animation. The body is already *produced* by running the chain, so
+  // pacing that same run over a second and a half lets you watch the plant write
+  // itself — no new computation, just not doing it all in one frame. Wall-clock
+  // drives the pacing only; the model never reads it.
+  let growRaf = 0;
+  function growSpecimen(animate) {
     const cv = $("specimen");
-    growBody(cv.getContext("2d"), cv.width, cv.height, world, focusRun, focusPig, 0.6);
+    const ctx = cv.getContext("2d");
+    const draw = (reveal) =>
+      growBody(ctx, cv.width, cv.height, world, focusRun, focusPig, 0.6, reveal);
+
+    cancelAnimationFrame(growRaf);
+    const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still || animate === false) { draw(1); return; }
+
+    const DURATION = 1500;
+    let t0 = null;
+    const frame = (now) => {
+      if (t0 === null) t0 = now;
+      const t = Math.min(1, (now - t0) / DURATION);
+      // ease-out: the first conversions land fast, the last few settle
+      draw(1 - Math.pow(1 - t, 2));
+      if (t < 1) growRaf = requestAnimationFrame(frame);
+    };
+    growRaf = requestAnimationFrame(frame);
   }
 
   function renderShelf() {
@@ -1259,6 +1307,7 @@
 
   $("rollWorld").addEventListener("click", () => build((Math.random() * 1e9) | 0));
   $("rollPlants").addEventListener("click", () => { saltCursor += 37; reseed(saltCursor); });
+  $("regrow").addEventListener("click", () => growSpecimen());
   $("applySeed").addEventListener("click", () => {
     const v = parseInt($("seed").value, 10);
     build(Number.isFinite(v) ? v : 2438);
