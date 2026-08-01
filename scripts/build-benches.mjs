@@ -28,6 +28,10 @@ const LOCAL = {
   "99589bf5-54bc-45c6-97ac-337fa8b932a0": "bench-6-island.html",
   "3b4fd3e7-92eb-45c7-b346-55beed29bc70": "bench-7-disturbance.html",
   "5d1bc66c-6609-4e01-bb96-4c3b6be832c0": "reagent-economy.html",
+  "987c784c-9a01-4942-a589-7852d1a5b9eb": "bench-8-surface-pattern.html",
+  "b0722151-48d8-438a-9df0-4a1061ad4d23": "bench-9-host-plate.html",
+  "08d56254-4f5f-4e2f-8d8e-f12038aa4d0a": "bench-10-island-palette.html",
+  "a9abda24-c51f-4fa9-aeda-2252ae4026d1": "bench-11-motion-signature.html",
 };
 
 // Source file -> published filename. Anything not listed is skipped, so adding a
@@ -41,6 +45,10 @@ const PAGES = {
   "2026-08-01-bench-5-trophic-flow.html": "bench-5-trophic-flow.html",
   "2026-08-01-bench-6-island.html": "bench-6-island.html",
   "2026-08-01-bench-7-disturbance.html": "bench-7-disturbance.html",
+  "2026-08-02-bench-8-surface-pattern.html": "bench-8-surface-pattern.html",
+  "2026-08-02-bench-9-host-plate.html": "bench-9-host-plate.html",
+  "2026-08-02-bench-10-island-palette.html": "bench-10-island-palette.html",
+  "2026-08-02-bench-11-motion-signature.html": "bench-11-motion-signature.html",
   "2026-07-31-reagent-economy.html": "reagent-economy.html",
   "2026-07-21-identity-map-lab.html": "identity-map-lab.html",
 };

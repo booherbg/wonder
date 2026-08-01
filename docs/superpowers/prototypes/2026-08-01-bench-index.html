@@ -135,19 +135,69 @@
 <div class="wrap">
 
   <p class="eyebrow">Wonder · ecology · parameter study · 2026-08-01</p>
-  <h1>Seven benches for a living ecology</h1>
+  <h1>Eleven benches for a living ecology</h1>
   <p class="standfirst">
     Wonder's ecology has no fitness function, frozen fauna, and eleven of fourteen
     plant forms outside every food web. Rebuilding it means choosing among a lot of
-    plausible mechanisms, so rather than argue, these are <em>instruments</em>: seven
+    plausible mechanisms, so rather than argue, these are <em>instruments</em>: eleven
     parameterised models, each isolating one mechanism and each answering one
     question with a number. Every dial is live and every run is seeded, so anything
-    you see here you can get back.
+    you see here you can get back. Benches 1&ndash;7 ask whether the mechanisms
+    <em>work</em>; benches 8&ndash;11 ask whether they <em>read</em>, which for this
+    game is the harder half.
   </p>
 
   <section>
-    <h2>The suite</h2>
+    <h2>Do the mechanisms work?</h2>
     <div class="benches" id="benches"></div>
+  </section>
+
+
+  <section>
+    <h2>Do they read?</h2>
+    <p class="note">
+      The first seven benches all measured mechanism. For a game whose first pillar
+      is beauty, that was the wrong half to spend seven benches on. These four are
+      the correction.
+    </p>
+    <div class="benches">
+      <article class="bench">
+        <div class="num">8</div>
+        <div>
+          <span class="theory">Gray&ndash;Scott reaction&ndash;diffusion</span>
+          <h3><a href="https://claude.ai/code/artifact/987c784c-9a01-4942-a589-7852d1a5b9eb">Surface pattern</a></h3>
+          <p class="q">Structure grammars cannot make spots and stripes; reaction–diffusion is what does it in life. But pretty is easy — the question is whether a small genetic change gives a small pattern change, and whether anything survives being shrunk to a sprite.</p>
+          <p class="finding"><b>What it found</b>Heritable, with one mandatory change: the growth seed must be inherited. Re-roll it and a genetically identical sibling lands further from its parent than an unrelated genome does — one integer is the whole difference. Safe mutation step is δ ≤ 0.008; the cliffs sit in the tail, not the mean, because only 22% of the parameter rectangle makes a pattern at all. Crop the sprite to 2–3 field cells per pixel: a 7×7 map then carries about two features — two dots, one bar, or plain.</p>
+        </div>
+      </article>
+      <article class="bench">
+        <div class="num">9</div>
+        <div>
+          <span class="theory">the question nobody answered with pixels</span>
+          <h3><a href="https://claude.ai/code/artifact/b0722151-48d8-438a-9df0-4a1061ad4d23">The host plate</a></h3>
+          <p class="q">Blaine asked “is 30×50 big enough?” and it has only ever been answered in prose. Five resolutions side by side, insects perched at true scale, and the roots drawn over the soil they are eating.</p>
+          <p class="finding"><b>What it found</b>Yes for the shoot — ship 30×74. Going to 64×104 costs 4.4× the pixels and buys two more flowers; ink coverage actually falls as the plate grows. The insect estimate in the doc was 3× too small (9px, not 2–3), so legibility was never the constraint — crowding is. A plate holds two pollinators, three at a stretch, at any resolution. And insects come out cryptic by default, landing 5.4° of hue from their host, so value contrast rather than colour is what makes them visible.</p>
+        </div>
+      </article>
+      <article class="bench">
+        <div class="num">10</div>
+        <div>
+          <span class="theory">colour at the scene scale</span>
+          <h3><a href="https://claude.ai/code/artifact/08d56254-4f5f-4e2f-8d8e-f12038aa4d0a">Island palette and light</a></h3>
+          <p class="q">Twenty individually-justified colours can still compose into mud. Does biasing a world’s hues toward a harmonic key make islands more beautiful without making them all alike — and does earned colour survive being tinted by dusk?</p>
+          <p class="finding"><b>What it found</b>Split-complementary, grounded to the terrain, at bias 0.70 — and grounding matters more than the key. Variety improved rather than suffered, because an unbiased island has no character to differ in. But earned colour does not survive dusk: pigment separation falls from 93% to 35%, below half for over half the day. It is the tint, not the darkness, and glow currently fades on luminance when the damage peaks with tint. One-line fix, deliberately left broken so the table still shows it.</p>
+        </div>
+      </article>
+      <article class="bench">
+        <div class="num">11</div>
+        <div>
+          <span class="theory">the phenotype we forgot</span>
+          <h3><a href="https://claude.ai/code/artifact/a9abda24-c51f-4fa9-aeda-2252ae4026d1">Motion signature</a></h3>
+          <p class="q">At gameplay zoom an insect is about five pixels, so you can barely see its colour or shape. What you can see is how it moves. Is motion legible as a lineage identity, and does it work as a second camouflage axis?</p>
+          <p class="finding"><b>What it found</b>89.1% identification against a 12.5% chance level, from genomes drawn at random. At 5px motion scores 88.9% against colour’s 58.3% — the curves cross at 8.5px, and that direction holds across every swept assumption. Which composes with bench 9: if insects mostly wear their host’s colour anyway, motion is not a nice extra, it is the channel that still works. The feed-versus-be-seen trade-off is a real Pareto front that collapses to a single optimum when the predator is switched off.</p>
+        </div>
+      </article>
+    </div>
   </section>
 
   <section>

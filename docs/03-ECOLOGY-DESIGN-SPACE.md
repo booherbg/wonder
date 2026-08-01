@@ -1422,9 +1422,80 @@ Two things worth acting on directly:
   in one step. That is a directly usable mutation-size range, and it is the sort of
   number that is very expensive to guess wrong.
 
-### Bench 8
+### Bench 8 — Surface pattern
 
-*Reported on the bench itself; summary pending.*
+**Reaction–diffusion is heritable enough to be a lineage identity — with one
+mandatory design change that costs a single integer.**
+
+Mean pattern distance rises *strictly monotonically* across three decades of
+mutation size, at both 32² and 64² grids, never differing between them by more
+than 0.013 — so this is a property of the chemistry, not of the grid we happened
+to pick. At δ = 0.004 a child sits at 10% of the unrelated-genome ceiling; at
+δ = 0.008, 16%. Those are family resemblances.
+
+The metric is a real one rather than eyeballing: half cosine distance between
+radially-averaged 2-D FFT power spectra, a fifth axial orientation resultant so
+anisotropy is seen without discarding direction, and three tenths total-variation
+distance between V histograms — which is what separates *spots* from *holes*,
+something spectra cannot do. Identical runs score exactly 0.00000.
+
+**Safe mutation range: δ ≤ 0.008 of parameter range per event** (σ(ΔF) ≈ 0.00064,
+σ(Δk) ≈ 0.00036) — the largest step where nine children in ten stay recognisably
+kin and fewer than one in ten lands somewhere the pattern dies.
+
+> **The cliffs are in the tail, not in the mean.** The p90 child sits at 0.110 at
+> δ = 0.008 and then leaps to 0.249 at 0.016 and 0.372 at 0.032. Only **22% of the
+> (F,k) rectangle makes any pattern at all**, and 30% of that is one map cell away
+> from death. Averages would have said this was fine.
+
+**And the uncomfortable coincidence, which is the honest caveat on the whole
+idea:** the mutation size at which a child's pattern differs from its parent's is
+about the same size as the difference you get from merely *regrowing the same
+genome*. There is no window where the genetic signal is loud and developmental
+noise is quiet. Pattern can carry lineage identity, but not finely.
+
+**On surviving pixel-art scale, only one variable matters:** field cells per sprite
+pixel. All five sprite sizes from 32² down to 7² lie on a single curve. Contrast
+retained runs 100 / 90 / 75 / 59 / 33 / 19% at 1 / 2 / 3 / 4 / 6 / 12 cells per
+pixel.
+
+> **So the sprite must not show the whole field — crop it to 2–3 cells per pixel.**
+> An 8×8 wing then carries two or three marks. The **7×7 identity map carries about
+> two features**: "two dots", "one bar", or "plain". Nothing finer survives, and
+> that is the real vocabulary size of the appearance channel.
+
+That is a genuinely useful constraint rather than a disappointment. Two features is
+enough to be a tag, and it means the map, the marking and the thing pollinators
+match against can all be the same object — the strongest form of §3.1's rule.
+
+**The decisive finding, and it is nearly free: the growth seed must be inherited.**
+On a 7×7 tile with the seed passed down, a δ = 0.002 child scores 0.53 against a
+random baseline of 1.13, degrading gracefully to 0.71 at δ = 0.008. Re-roll the
+seed and **a sibling with a genetically identical genome scores 1.14** —
+indistinguishable from random, and *further from its parent than an unrelated
+genome is*. One extra integer in the genome is the difference between heritable
+markings and noise.
+
+---
+
+### What the art benches changed
+
+1. **The host plate ships at 30×74** — Blaine's 30×50 for the shoot was right, and
+   bigger plates buy paper rather than detail.
+2. **A host plate cannot show a swarm.** Two pollinators, three at a stretch. This
+   needs a design decision, not a resolution bump.
+3. **Insects are cryptic by default**, not transformative — my §13 claim was wrong.
+   Value contrast, not hue, is what makes them visible on a host.
+4. **Motion beats colour at the size the game actually renders insects**, and it
+   composes with (3): colour was never going to distinguish them anyway.
+5. **Bias the palette split-complementary at 0.70, grounded to the terrain** — and
+   grounding matters more than the key. Variety *improves* rather than suffering.
+6. **Earned colour dies at dusk** (93% → 35% separation) and glow currently fires
+   on the wrong term. One-line fix, but it needs making.
+7. **Patterns are heritable but coarse**, the safe mutation step is δ ≤ 0.008, the
+   7×7 map holds about two features, and **the growth seed must be genetic.**
+8. **Cut turn sharpness** from any motion genome; hover and dart-frequency are what
+   read.
 
 ---
 
