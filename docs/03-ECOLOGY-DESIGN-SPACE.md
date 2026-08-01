@@ -97,9 +97,29 @@ Kauffman's result: in a random soup of polymers where molecules catalyse
 reactions with some probability, once catalytic connectivity crosses a threshold,
 **self-sustaining reaction loops appear spontaneously.** Not built — found. The
 formal version is Hordijk & Steel's RAF (Reflexively Autocatalytic and
-F-generated) condition, and crucially it comes with an *algorithm*: a short
-fixed-point pruning that finds the maximal RAF in a reaction network. That is
-about thirty lines of code, and **Bench 1 implements it**.
+F-generated) condition, and crucially it comes with an *algorithm*: a greatest-
+fixed-point pruning that finds the maximal RAF in polynomial time. That is about
+thirty lines of code, and **Bench 1 implements it**.
+
+Two things to keep honest about it, both from the verification pass:
+
+- **The threshold result is mathematically sound — proved, not just simulated.**
+  What did *not* survive is Kauffman's original chemical argument: holding the
+  per-pair catalysis probability fixed as the network grows implicitly requires
+  each molecule to catalyse exponentially many reactions. Later RAF work rescued
+  the conclusion on much weaker assumptions rather than defending that argument.
+  The correct statement of the good news is that **each molecule needs to catalyse
+  only about one to two reactions on average**, and the required rate grows merely
+  *linearly in maximum polymer length* — which, since molecule count is
+  exponential in that length, is logarithmic in system size.
+- **Closure is not evolution.** Vasas, Fernando, Santos, Kauffman & Szathmáry
+  (2012) — with Kauffman himself on the paper — concluded they "cannot confirm
+  previous claims that autocatalytic sets of organic polymer molecules could
+  undergo evolution in any interesting sense by themselves." For us that is a
+  scoping note rather than a blocker: we want RAFs as a **viability test and an
+  origination mechanism**, with heredity carried separately by genomes. But it
+  rules out the most seductive version of the idea, where the chemistry evolves on
+  its own and we do nothing.
 
 Why this matters more than it looks: my §12.2 in the previous document proposed
 hand-written viability gates for rolled chemistry ("every biome has ≥2 usable
@@ -146,13 +166,26 @@ the alien, over-specialised, why-is-it-like-that feeling of Scavenger's Reign,
 which Blaine has named as a direct influence three separate times. It would arrive
 as a consequence of one rolled number.
 
-Kauffman's **complexity catastrophe** is the other half and it constrains us
-directly: at high K, as N grows, the fitness of reachable local optima falls back
-toward the mean. Translated: **there is a maximum useful genome size, and it
-depends on how coupled the traits are.** That is a hard answer to the worry I
-raised in §6.4 of the previous document — that adding reagent affinities and root
-genes roughly doubles the genome — and Bench 2 measures where the ceiling sits at
-the sizes Wonder actually uses.
+Kauffman's **complexity catastrophe** is the other half: at high K, as N grows, the
+fitness of the local optimum reached by an uphill walk falls back toward the mean.
+Translated: **there may be a maximum useful genome size, and it depends on how
+coupled the traits are** — which speaks directly to the worry I raised in §6.4 of
+the previous document, that adding reagent affinities and root genes roughly
+doubles the genome.
+
+But it is narrower than it is usually quoted, and the qualification matters for
+us. It is a statement about **that particular search rule**, not about the
+landscape: the *global* optimum stays far above the mean regardless of N, and
+Solow et al. showed the effect is substantially an artefact of the NK model's own
+assumption that fitness is an *average* of N random contributions, which forces
+concentration. Population subdivision, recombination and long-jump mutation all
+beat a single uphill walk. Fleming & Sorenson found no empirical inverted-U in
+K/N.
+
+So Bench 2 is not confirming a known law; it is measuring whether the effect bites
+**in our regime** — small N, a real population rather than one walker, and
+recombination present. If it does not, the constraint on genome size lifts and the
+reagent economy gets easier.
 
 ### 2.3 The adjacent possible — make the frontier a visible object
 
@@ -175,6 +208,18 @@ readout for an origination mechanic.
 Kauffman's biological claim was that **cell types are attractors** of the genomic
 regulatory network. Ported here: a plant's genome is a small boolean network, and
 its **body is the network's attractor**.
+
+*(Scope note, because the famous version of this is wrong. Kauffman's specific
+quantitative claim — that critical K=2 networks have ~√N attractors, matching
+cell-type counts — does not survive: Samuelsson & Troein showed the √N figure was
+an artefact of undersampling and the true count grows superpolynomially. The
+qualitative idea is fine, and has independent experimental support in real cells,
+but we should take **attractor-as-stable-identity** and leave the counting
+argument alone. Klemm & Bornholdt's finding is the more useful one for us: most
+attractors of a synchronous network are artefacts of the lockstep update and
+vanish under noisy timing — so if we want robust phenotypes we should be selecting
+for the attractors that survive perturbation, which is exactly what Bench 3's
+canalisation measure is looking at.)*
 
 What that buys, all at once:
 
@@ -229,12 +274,33 @@ than any chart we could build.
 
 ### 3.2 Building blocks — an argument for cards over floats, independent of everything else
 
-Holland's schema theorem says genetic algorithms work by recombining short,
-high-fitness **building blocks**. The corollary is uncomfortable for Wonder's
-current design: a flat vector of ten floats crossed by midpoint averaging has
-almost no building-block structure. Averaging two genomes is not recombination in
-Holland's sense — it destroys the very chunks that recombination is supposed to
-propagate.
+**A correction first**, because the popular version of this is not defensible and I
+had written it. The schema theorem is a **one-generation lower bound** on how
+short, low-order, above-average schemata propagate. It counts only the disruptive
+effects of crossover and mutation, it cannot be iterated (observed schema fitness
+shifts as selection biases the population), and it holds for *every* problem
+instance — so it cannot distinguish problems where GAs excel from ones where they
+fail. Wright, Vose & Rowe put it flatly: "The various claims about GAs that are
+traditionally made under the name of the building block hypothesis have, to date,
+no basis in theory." Holland's own Royal Road experiments came out backwards —
+random-mutation hill climbing beat the GA by roughly tenfold on R1. (Though note
+the detail the retelling always drops: steepest-ascent and next-ascent hill
+climbing never found the optimum at all.)
+
+What **is** defensible, and is enough for the argument:
+
+> Recombination lets a population assemble partial solutions discovered
+> separately, and on problems with the right structure this provably beats
+> mutation alone — Jansen and Wegener constructed "real royal road" functions on
+> which a steady-state GA with crossover finds the optimum in polynomial expected
+> time while mutation-only algorithms fail with all but exponentially small
+> probability.
+
+That still lands the point about Wonder, because the point is about
+*representation*. A flat vector of ten floats crossed by **midpoint averaging** has
+no separable partial solutions to assemble at all. Averaging two genomes is not
+recombination in any useful sense — it manufactures an intermediate, which is the
+one thing guaranteed to destroy whatever either parent had found.
 
 **Conversion cards are building blocks.** A card is a discrete, self-contained,
 recombinable unit of function. Drafting a child's hand from two parents' hands is
@@ -303,9 +369,32 @@ This is the most important product idea in this document.
 
 ### 4.2 Disturbance is compatible with peaceful, because weather is nobody's fault
 
-The intermediate disturbance hypothesis is one of the most robust results in
-community ecology: diversity peaks at *intermediate* disturbance. Wonder has none,
-which is a structural reason its islands monotonically converge and settle.
+I originally wrote that the intermediate disturbance hypothesis — diversity peaks
+at *intermediate* disturbance — is one of the most robust results in community
+ecology. **That is close to the opposite of the truth, and a verification pass
+caught it before it shipped.** Worth stating the real position, because it changes
+what Bench 7 is for:
+
+> Disturbance genuinely shapes diversity, but the textbook claim that diversity
+> peaks at intermediate disturbance does not hold as a general law. Mackey & Currie
+> (2001) found the hump-shaped pattern in only **16%** of 116 species-richness
+> studies, with *no significant relationship* the most common outcome. Fox (2013,
+> *TREE*) argued the hypothesis should be abandoned outright, on the grounds that
+> all three mechanisms usually invoked to produce the hump do not logically imply
+> it. Sheil & Burslem replied that Connell's narrow original formulation survives,
+> but consensus has not returned. The current framing (Miller, Roxburgh & Shea
+> 2011) is that disturbance–diversity relationships take **many** shapes depending
+> on whether frequency, intensity or extent is varied, and a hump is one possible
+> outcome among several rather than the expected one.
+
+So the case for disturbance in Wonder cannot lean on IDH. It has to rest on the
+narrower and better-supported claim that **disturbance resets succession**, and on
+the design argument that a world with no reset converges and stops being worth
+watching. Bench 7 therefore tests whether a hump appears *in our model* rather
+than assuming one, and a flat or messy curve there is a real result, not a bug.
+
+Wonder has no disturbance at all, which is a structural reason its islands
+monotonically converge and settle.
 
 The peaceful pillar seems to forbid it. I think that reads the pillar too
 narrowly. The pillar forbids *cruelty and death-as-event* — it does not forbid
@@ -325,8 +414,14 @@ a play session.** Trait drift over island-days is invisible at the timescale a
 person actually sits down for.
 
 Real ecologies run two clocks — fast within-lifetime learning, slow heritable
-change — and their interaction (the Baldwin effect: learning guides selection
-toward what is learnable) is where a lot of the interesting dynamics live.
+change. Their interaction is usually called the **Baldwin effect**: plastic
+individuals survive long enough for selection to act, turning a flat landscape
+with an isolated peak into one with a usable gradient. Worth flagging that this is
+an actively discussed mechanism rather than a settled fact — the plastic alleles
+never fully disappear in Hinton & Nowlan's canonical model, plasticity can also
+*slow* genetic change by shielding genotypes from selection, and a 2015
+re-analysis showed their benchmark task is solvable by conventional population
+genetics without any learning at all.
 
 For us the payoff is mostly practical: **the player watches learning, which moves
 in minutes, and infers genetics, which moves in hours.** Learned palate is already
@@ -633,8 +728,105 @@ panel.
 
 ## 8 · Findings
 
-*Filled in as the benches report. Each bench also carries its own findings block
-with the numbers in context.*
+*Each bench carries its own findings block with the numbers in context; this is
+the summary and, where a result changes the design, what it changes.*
+
+### Bench 1 — Autocatalysis
+
+**The RAF condition works as a viability gate, but the naive form is a trap.**
+Because the food set is unlimited, a single reaction `food + food → x` catalysed
+by a food molecule *is* formally a maximal RAF. So "does a RAF exist" crosses 50%
+at f ≈ 0.49 while a chemistry that can actually support a metabolism needs
+f ≈ 1.48 — a **3× error, entirely on trivia**. The fix is to gate on **maxRAF size
+≥ 5 reactions**, and that is not a fudge factor: the maxRAF is violently bimodal
+(at L=7 the median jumps 0 → 520 across one step in p), so any threshold from 3 to
+50 draws the same curve.
+
+The transition reproduces Hordijk & Steel's *shape* — across L=3→7 the reaction
+count grows 64×, critical p falls 12×, and critical catalysis rate rises only ~5×,
+roughly linearly in L. Their f ≈ 1–2 constant does not transfer directly, because
+this bench does ligation only and runs well below the polymer lengths the
+published figures come from.
+
+**The result I did not expect, and it inverts an assumption:** the *adjacent
+possible* — the frontier of what a world could next invent — peaks near the
+transition (32.5 molecules at f ≈ 1.5) and **collapses to zero** in rich chemistry
+(f = 6), where the closure has already swallowed the entire molecule set.
+Frontier-to-made ratio runs 3.6 at f = 1.5 down to 0.05 at f = 3.5.
+
+> **A "more chemistry is better" worldgen gate would select exactly the wrong
+> islands.** What we want is islands *near the line* — metabolically viable, but
+> with most of their space still unreached. That is a genuinely different tuning
+> target from the one I would have written, and it has a pleasing reading: the
+> most interesting island is not the richest one, it is the one with the most left
+> to discover.
+
+The three-way alternation also earns its keep rather than being ceremony: at the
+default state maxRA = 74 and maxF-generated = 196, but the true maxRAF is **17**.
+Fifty-seven reactions pass both conditions separately and fail together.
+
+### Bench 5 — Trophic flow
+
+**Decision 1: the capacity-ceiling model wins, decisively.** Top-level persistence
+**1.000 (ceiling) vs 0.490 (funded)** — paired difference +0.510, SE 0.0085,
+t ≈ 60, over 200 paired seeds × 2,000 ticks. Funded coupling blinks the top level
+out and back **19.7 times per 1,000 ticks**; the ceiling model never blinks.
+
+Three things make that more than a tuning artefact: it **survives zero noise**
+(the deterministic funded trajectory is a Rosenzweig–MacArthur limit cycle whose
+trough reaches 0.003 against a 0.030 threshold — a Holling type II consumer
+stacked two deep simply oscillates); no upkeep setting rescues it; and the only
+escape is transfer efficiency ≥ 0.35, i.e. abandoning the realistic 10%. Funded
+coupling does not even deliver the pyramid that motivated it — realised transfer
+at the top step is **3.0% versus 10.0%** for the ceiling, because the population it
+is funding spends half its life in the refuge.
+
+**Decision 2 is a negative result, and it overturns prior project guidance.** The
+2026-07-24 audit called wiring a periodic carrying capacity "the cheapest real win
+on this whole list." Tested: **periodic forcing did not widen coexistence, it
+narrowed it by ~4.6%.** Every cell of the competition-strength grid is zero or
+negative; the coexistence boundary moves the wrong way, 0.88 → 0.80.
+
+The *reason* matters more than the number, because it generalises:
+
+> Shared multiplicative forcing leaves every ratio Kᵢ/Kⱼ unchanged, and the
+> Lotka–Volterra coexistence condition depends only on those ratios. There is no
+> channel through which it could create a temporal niche. All that is left is the
+> cost of the troughs.
+
+Giving each species its own forcing phase — the obvious repair — makes it
+dramatically **worse** (−56.9%). Asynchronous forcing without a storage mechanism
+is a periodic execution, not a niche; Chesson's storage effect requires a life
+stage that survives the bad season.
+
+> **The actionable conclusion: if Wonder wants periodic forcing to buy diversity,
+> build the seed bank, not the wobble.** That also retroactively explains why §4.2
+> pairs disturbance *with* a seed bank rather than proposing it alone.
+
+Note this does not contradict Swailem & Täuber — and I had mis-described their
+result in earlier drafts. Theirs is a **stochastic spatial lattice predator–prey**
+model whose coexistence phase is sustained by pursuit-and-evasion waves, not a
+well-mixed competing-species model. A well-mixed patch is structurally blind to
+anything that needs space or discreteness, so the negative result here is about
+*our* simplification, and a spatial version could still show the effect.
+
+### Benches 2, 3, 4, 6, 7
+
+*Reported on the benches themselves; summary pending.*
+
+### What the findings have already changed
+
+1. **The worldgen chemistry gate** — target islands *near* the autocatalytic
+   transition with a large unreached frontier, not the richest chemistry. Gate on
+   maxRAF size, never on RAF existence.
+2. **Trophic coupling** — capacity ceilings, settled, with numbers. This was
+   already my recommendation on peacefulness grounds; it now also wins on its own
+   terms.
+3. **Periodic forcing is off the v1 list** and the seed bank moves up, which is
+   close to a reversal of the audit's cheapest-win claim.
+4. **Two citations corrected before they shipped** — the intermediate disturbance
+   hypothesis (§4.2) and the building-block hypothesis (§3.2), both of which I had
+   written in their popular and indefensible forms.
 
 ---
 
