@@ -293,6 +293,54 @@
   .findings dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px var(--s4); margin: 0 0 var(--s3); }
   .findings dt { font-size: 13px; }
   .findings dd { margin: 0; font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -308,6 +356,96 @@
     parameter nudges cause wild jumps then a pattern can never be a lineage's identity, and
     the whole idea is decoration rather than biology.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      Gray–Scott reaction–diffusion on a periodic grid. Two chemicals, U and V, diffuse at
+      different rates; V consumes U autocatalytically, U is fed in at rate <em>F</em>, and V
+      is removed at rate <em>k</em>. Left to run, the field settles into spots, stripes,
+      labyrinths or nothing at all, decided almost entirely by that pair of numbers. Here
+      (F, k) plus two shape parameters <em>are</em> the genome, and the bench measures
+      whether small changes to that genome give small changes to the pattern — because if
+      they do not, a pattern can never identify a lineage.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>field</dt>
+      <dd>Two N × N grids of floats, U and V, wrapping at the edges. N is a power of two
+        because the distance metric needs a radix-2 FFT.</dd>
+
+      <dt>F · feed rate</dt>
+      <dd>How fast U is replenished. Moves the genome left–right on the parameter map.</dd>
+
+      <dt>k · kill rate</dt>
+      <dd>How fast V is removed. Up–down on the map. Also drives the pigment hue, so
+        related patterns are related colours.</dd>
+
+      <dt>anisotropy α</dt>
+      <dd>Splits the diffusion coefficient between x and y. At 0 you get labyrinths; past
+        about ±0.4 the pattern aligns into stripes.</dd>
+
+      <dt>Du/Dv ratio</dt>
+      <dd>Locked at 2. <b>Not a fourth free gene</b> — moving it rescales the entire viable
+        region (10% of the plane at 1.5, 44% at 3.0) and invalidates every mutation step
+        measured on this page.</dd>
+
+      <dt>growth seed</dt>
+      <dd>The seed for the initial random perturbation the pattern grows out of. Treated
+        here as part of the genome, and the whole heritability result turns on that: an
+        identical (F, k) started from a different seed is a different-looking organism.</dd>
+
+      <dt>descriptor</dt>
+      <dd>A rotation-invariant summary of the settled field, taken from its 2-D power
+        spectrum. Two patterns are compared through their descriptors, not pixel by pixel,
+        so a translated or reflected pattern counts as the same pattern.</dd>
+
+      <dt>pattern distance</dt>
+      <dd>Distance between two descriptors, normalised so that an unrelated pair of viable
+        genomes scores about 1. Heritability means a parent–child pair scores far below
+        that.</dd>
+
+      <dt>δ · mutation size</dt>
+      <dd>One σ of Gaussian mutation, expressed as a fraction of each parameter's range —
+        δ = 0.008 means σ(F) = 0.00064.</dd>
+
+      <dt>sprite window</dt>
+      <dd>How many field cells one sprite crops. The dial that decides whether a pattern
+        survives being small, because wavelength does not scale with grid size: a bigger
+        grid means <em>more</em> features, not bigger ones.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Seed the field with a small random perturbation from the growth seed.</li>
+      <li>Integrate the Gray–Scott equations for a fixed number of steps. Watch the "still
+        moving" readout: below ~2×10⁻³ the field has settled and the pattern is final.</li>
+      <li>Take the descriptor, classify the result (spots / stripes / labyrinth / uniform),
+        and derive a pigment from k.</li>
+      <li><b>Heritability sweep.</b> For a range of δ, mutate a parent many times and record
+        the distribution of parent–child pattern distances against the unrelated baseline.
+        The cliffs live in the tail of that distribution, not in its mean.</li>
+      <li><b>Lineage walk.</b> Apply repeated mutations at the current δ and draw the
+        sequence, so drift is visible as a sequence rather than a statistic.</li>
+      <li><b>Downsample.</b> Box-filter the settled field into a sprite at the current
+        window and redraw it at game resolution, including a 7 × 7 identity map.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>1 · The (F, k) map</dt><dd>The parameter plane, coloured by what settles there. Only about a fifth of it makes a pattern at all — click anywhere to move the genome.</dd>
+      <dt>2 · The settled pattern</dt><dd>The current genome at full grid resolution, with its spectrum.</dd>
+      <dt>3 · Pattern distance</dt><dd>What the metric actually measures, shown against worked pairs.</dd>
+      <dt>4 · The heritability curve</dt><dd>Parent–child distance against δ, with the unrelated baseline drawn across it. Where they meet, inheritance has stopped meaning anything.</dd>
+      <dt>5 · A lineage</dt><dd>Successive mutations at the current δ.</dd>
+      <dt>6 · At game resolution</dt><dd>The same pattern as a sprite, at the current window.</dd>
+      <dt>7 · The 7 × 7 identity map</dt><dd>What is left at the size the game would actually store.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="plate">
 

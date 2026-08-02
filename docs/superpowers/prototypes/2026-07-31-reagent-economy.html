@@ -335,6 +335,54 @@
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -347,6 +395,112 @@
     a <em>body</em> — all three from the same computation. Nothing here is decorative:
     every colour on this page below the rule was earned by a chain that actually fired.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      A world generates a set of <b>reagents</b> and a <b>deck</b> of conversion recipes.
+      A plant is a <b>hand</b> of three to five of those recipes, drawn at birth. Running
+      that hand against the reagents present in its soil produces a <b>pile</b> — the
+      multiset of reagents it is left holding. Energy, colour and body shape are all
+      read off that one pile and the sequence of conversions that filled it. The run
+      happens once, at maturity, and is cached; nothing here is per-tick.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>reagent</dt>
+      <dd>A named substance. Carries a <b>tier</b> (1–4) and a fixed <b>hue</b>. About ten
+        per world, named from a shared pool so two islands never share a chemistry.</dd>
+
+      <dt>tier</dt>
+      <dd>Rank of a reagent: 1 base, 2 refined, 3 compound, 4 essence. Tier sets three
+        numbers — energy per unit <code>[1, 3, 9, 27]</code>, pigment weight
+        <code>[1, 7, 40, 180]</code>, and the chroma ceiling. Pigment weight climbs far
+        faster than energy on purpose: the scarce thing should be what you see.</dd>
+
+      <dt>catalyst</dt>
+      <dd>One or two mid-tier reagents flagged at worldgen. A catalyse recipe requires one
+        to be <em>present</em> and never consumes it, so a catalyst is worth having nearby
+        rather than worth spending.</dd>
+
+      <dt>card</dt>
+      <dd>One conversion recipe. Four kinds. <b>gather</b>: produce 3–6 units of one base
+        from nothing. <b>upgrade</b>: spend any <code>cost</code> units held at tier <em>t</em>
+        for one unit of a specific tier <em>t</em>+1 reagent — generic in its input, which is
+        what makes a randomly drawn hand chainable. <b>trade</b>: spend 2–3 of A and 1–2 of B
+        for one of something higher. <b>catalyse</b>: spend 1–2 of one reagent for 1–2 of the
+        next tier, but only while its catalyst is in the pile.</dd>
+
+      <dt>deck</dt>
+      <dd>Every recipe this world offers: one gather per base reagent, one generic upgrade
+        per reagent above tier 1, five rolled trades, and two rolled catalyse cards per
+        catalyst.</dd>
+
+      <dt>soil</dt>
+      <dd>What the ground offers before anything grows: two base reagents at 2–4 units
+        each, and a 50% chance of a single unit of a catalyst. The chain starts from this.</dd>
+
+      <dt>hand</dt>
+      <dd>The genome. Three to five cards drawn from the deck, always including exactly one
+        gather, held in a fixed order. Plus a <b>step budget</b> of 8–36 conversions.</dd>
+
+      <dt>pile</dt>
+      <dd>The reagents currently held, as counts per reagent. Starts as a copy of the soil;
+        every conversion spends from it and adds to it. The pile at the moment the chain
+        stops is what the colour and the energy are computed from.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li><b>Roll the world.</b> From the seed: reagent names, tiers, and hues drawn from a
+        single anchor ± half the hue spread — one narrow spread is what makes an island
+        tonal rather than polychrome. Flag the catalysts, build the deck, roll the soil.</li>
+      <li><b>Roll the plant.</b> Draw the hand and the step budget.</li>
+      <li><b>Run the chain.</b> Copy the soil into the pile, then walk the hand in genome
+        order, firing every card whose inputs are held. Repeat until a full pass fires
+        nothing or the budget is spent. A gather idles while the pile already holds its
+        output plus the <em>caravan headroom</em>, so the chain must spend before it can
+        draw again — that constraint is what stops every plant hoarding base.</li>
+      <li><b>Score it.</b> <code>energy = Σ units × tier energy</code>;
+        <code>cost = 4 + 1.2 × steps</code>; yield ratio is energy over cost.</li>
+      <li><b>Derive the pigment.</b> Hue is the circular mean of the held reagents' hues,
+        each weighted by <code>units × tier pigment weight</code>. Chroma comes from the
+        pigment-weighted <em>mean</em> tier (not the highest tier held), scaled by how well
+        the held hues agree. Lightness is a curve on the yield ratio.</li>
+      <li><b>Grow the body.</b> Replay the same run; each conversion emits one growth
+        instruction as it fires. Gather extends the tips, upgrade puts out a side branch
+        while the leader keeps growing, trade adds a whorl of leaves, catalyse swells a
+        node. A product of tier 2 or better, late in the chain, terminates in a bloom.
+        The roots are the first half of the same chain run downward.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>Parameters</dt>
+      <dd>Nine dials. Every one re-rolls the chemistry and the flora, so you are changing
+        the world rather than restyling it.</dd>
+      <dt>This world's chemistry</dt>
+      <dd>The reagents, columned by tier. Each swatch is that reagent's own hue; a ring
+        marks a catalyst.</dd>
+      <dt>The hand</dt>
+      <dd>The focused plant's genome, one card per recipe, in firing order.</dd>
+      <dt>The run</dt>
+      <dd>Every conversion that fired, in order, written as a sentence. This is the whole
+        log a player would read on the plant's card.</dd>
+      <dt>The final pile</dt>
+      <dd>What the chain was left holding when it stopped. The colour above is computed
+        from exactly these counts.</dd>
+      <dt>The specimen</dt>
+      <dd>The body that run grew, plus its pigment bar and readout.
+        <em>Watch it grow</em> paces the same chain instead of drawing it in one frame.</dd>
+      <dt>The flora</dt>
+      <dd>Twenty plants: same world, same chemistry, different hands. Click one to focus it.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="controls">
     <button class="primary" id="rollWorld">Roll a new world</button>
@@ -377,7 +531,7 @@
   <div class="plate">
     <div>
       <section style="margin-bottom: var(--s6);">
-        <h2>The hand it inherited</h2>
+        <h2>The hand — this plant's genome</h2>
         <p class="note">
           Three to five conversion cards, drawn from this world's deck. Cards are tried in
           genome order and the chain repeats until nothing can fire — so a hand that loops
@@ -387,7 +541,7 @@
       </section>
 
       <section style="margin-bottom: var(--s6);">
-        <h2>The run</h2>
+        <h2>The run — every conversion that fired</h2>
         <p class="note">
           One digest, played out. This whole log is what a player would read on the
           plant's card — the chemistry explains itself in sentences, not numbers.
@@ -396,7 +550,12 @@
       </section>
 
       <section style="margin-bottom: var(--s2);">
-        <h2>What it ended holding</h2>
+        <h2>The final pile</h2>
+        <p class="note">
+          What the chain was left holding when it stopped. The hue, chroma and
+          lightness above are computed from exactly these counts — nothing else
+          feeds the colour.
+        </p>
         <div class="pile" id="finalPile"></div>
       </section>
     </div>
@@ -422,48 +581,44 @@
   </section>
 
   <section class="reading">
-    <h2>How to read this</h2>
+    <h2>Why it is built this way</h2>
     <p>
-      <strong>Colour is a readout, not a decoration.</strong> Hue is the circular mean of
-      what the plant ended up holding, weighted steeply by tier — so the rarest thing in
-      the pile is what colours it. Chroma reads the pigment-weighted <em>mean</em> tier
-      rather than the ceiling, because one stray unit of essence in a heap of base
-      shouldn't blaze like a plant that is mostly essence. That makes
-      <strong>saturation a measure of metabolic sophistication</strong>: tier-one scrapers
-      come out sage and ochre, and the jewel tones have to be earned outright. Lightness is
-      yield over cost, so a plant in the wrong soil visibly pales.
+      <strong>Chroma reads the pigment-weighted mean tier, not the highest tier held.</strong>
+      One stray unit of essence sitting in a heap of base scores a mean tier near 1 and comes
+      out sage or ochre; a plant that is mostly essence scores near 4 and comes out a jewel
+      tone. The alternative — reading the ceiling — would paint every plant that ever touched
+      tier 4 the same, and the shelf would lose its spread. Hue is weighted by
+      <code>units × tier pigment weight</code>, with those weights at 1/7/40/180 against
+      energy's 1/3/9/27, so the scarce reagent colours the plant rather than the leftover base
+      it is sitting on. Lightness is yield over cost, so a plant in soil its hand cannot use
+      pales.
     </p>
     <p>
-      <strong>The body is the same computation.</strong> There is no separate morphology
-      genome. Each conversion emits one growth instruction as it fires — a gather extends,
-      an upgrade branches, a trade puts out a whorl, a catalysed step swells a node — and
-      the roots are the same program run downward. A plant that runs an elaborate chain
-      grows an elaborate body, always, because they are the same thing. Form cannot lie
-      about function here.
+      <strong>There is no separate morphology genome.</strong> Each conversion emits one
+      growth instruction as it fires, so a plant that runs a nine-step chain draws nine
+      instructions and a plant that runs three draws three. Roots are the first half of the
+      same program run downward. Structure and metabolism cannot disagree, because there is
+      only one of them.
     </p>
     <p>
-      <strong>The plant writes itself, and that is free.</strong> Press
-      <em>Watch it grow</em> and the specimen redraws one conversion at a time.
-      There is no extra computation in that — it is the same chain, paced over a
-      second and a half instead of run in a single frame. Wonder's plants currently
-      pop into existence fully formed, which throws away the most watchable thing
-      the design produces: a body being written by a metabolism, in order, where
-      you can see which step put out the leaves and which one opened the bloom.
-      (Reduced-motion is honoured — the plate just draws finished.)
+      <strong>Growth costs nothing extra to animate.</strong> Press <em>Watch it grow</em>
+      and the specimen redraws one conversion at a time — the same chain, paced over 1.5
+      seconds rather than run in a single frame. Measured on the default seed the shoot grows
+      5× in ink over that window, monotonically. Wonder's plants currently appear fully
+      formed, which discards the only visible record of which step put out the leaves and
+      which one opened the bloom. Reduced-motion is honoured; the plate draws finished.
     </p>
     <p>
-      <strong>Catalysts are the reason to care about your neighbours.</strong> A catalyst
-      has to be <em>present</em>, not spent. Cards that need one are marked in the log.
-      That single rule turns a field of rivals into a field of relationships: whatever
-      first leaks a catalyst onto a tile opens a branch of chemistry for everything that
-      grows there afterwards.
+      <strong>A catalyse card checks the pile for its catalyst and does not spend it.</strong>
+      That single rule is what makes neighbours worth having: whatever first leaks a catalyst
+      onto a tile opens a branch of chemistry for everything that grows there afterwards.
+      Cards that need one are marked in the run log.
     </p>
     <p>
-      Worth poking at: roll worlds until you find one with a narrow hue spread — those come
-      out tonal and harmonious. Wide-spread worlds go polychrome. Then look for a plant that
-      reached tier four; it should be the only thing on the shelf you can't stop looking at.
-      If that isn't true, the chroma ladder needs work, and that's exactly the kind of thing
-      this bench is for.
+      Worth trying: roll worlds until you find one with a narrow hue spread — those come out
+      tonal. Wide-spread worlds go polychrome. Then look for a plant that reached tier four;
+      it should be the only thing on the shelf you cannot stop looking at. If it is not, the
+      chroma ladder needs work, which is what this bench is for.
     </p>
   </section>
 

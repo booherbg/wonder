@@ -219,6 +219,54 @@
   }
   .verdict h3 { margin-bottom: var(--s2); }
   .verdict p:last-child { margin-bottom: 0; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -233,6 +281,86 @@
     instrument for exactly that: one integer, <code>K</code>, moves a landscape from a
     single glassy peak to pure noise. Everything below is measured live from the seed.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      An NK landscape is a fitness function you can dial from smooth to random with one
+      integer. A genome is <em>N</em> binary loci; each locus contributes a fitness value
+      that depends on its own bit and on <em>K</em> others. Fitness is the mean of the N
+      contributions. At K=0 every locus is independent and the landscape has a single peak
+      you can climb one bit at a time; at K=N−1 every contribution depends on everything,
+      and the landscape is white noise. Everything else on this page is measured from that.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>genome</dt>
+      <dd>N bits. The whole search space is 2<sup>N</sup> genomes; at N=12 that is 4096, so
+        the landscape can be enumerated exactly rather than sampled.</dd>
+
+      <dt>K</dt>
+      <dd>How many other loci each locus's contribution depends on — its <em>epistatic
+        partners</em>. This is the ruggedness dial and the only structural parameter.</dd>
+
+      <dt>contribution</dt>
+      <dd>A uniform value in [0,1] drawn deterministically by hashing (locus, its bit, its
+        partners' bits, seed). Because it is a hash rather than a stored table, the
+        landscape needs no memory and is reproducible from the seed alone.</dd>
+
+      <dt>fitness</dt>
+      <dd>The mean of the N contributions. Always in [0,1], and a random genome sits at
+        0.500 — which is why a drifting population parks there forever.</dd>
+
+      <dt>local optimum</dt>
+      <dd>A genome no single bit-flip improves. Counting them is the direct measure of
+        ruggedness; a menu of many good peaks is a different design outcome from one
+        best answer.</dd>
+
+      <dt>adaptive walk</dt>
+      <dd>From a random start, repeatedly flip the bit that improves fitness (greedy) or any
+        bit that improves it (random ascent), until stuck. Walk length is how many steps
+        adaptation gets before it runs out of moves.</dd>
+
+      <dt>correlation length</dt>
+      <dd>How far along a random walk fitness stays autocorrelated. Long means the landscape
+        gives usable gradient information; short means neighbours tell you nothing.</dd>
+
+      <dt>selection strength</dt>
+      <dd>The exponent on fitness in the reproduction weight. <b>0 is Wonder's current
+        model</b> — reproduction ignores fitness — and it is the control the bottom panel
+        exists to show.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Build the landscape from (N, K, model, seed): for each locus, pick K partners
+        and define its contribution as a hash of the relevant bits.</li>
+      <li>Enumerate or sample the space to find every local optimum and the basin each one
+        drains.</li>
+      <li>Run adaptive walks from random starts and record their length and endpoint.</li>
+      <li>Measure autocorrelation along a random walk to get the correlation length.</li>
+      <li>Sweep K from 0 to N−1, re-measuring reachable fitness at each — the chart that
+        answers the design question.</li>
+      <li>Sweep N at fixed K to test whether the complexity catastrophe bites at the genome
+        sizes Wonder actually uses.</li>
+      <li>Run a live population: <em>pop</em> individuals, reproduction weighted by
+        fitness<sup>sel</sup>, per-locus mutation <em>μ</em>, for a fixed number of
+        generations.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>1 · The landscape</dt><dd>The fitness surface itself with its local optima marked.</dd>
+      <dt>2 · Adaptive walks</dt><dd>Where lineages end up and how long they take to get stuck.</dd>
+      <dt>3 · The K sweep</dt><dd>The decision chart: reachable fitness against ruggedness.</dd>
+      <dt>4 · The complexity catastrophe</dt><dd>What happens to attainable fitness as the genome grows.</dd>
+      <dt>5 · A population</dt><dd>Live evolution on the current landscape. Set selection to 0 to watch drift sit at 0.500.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="plate">
 

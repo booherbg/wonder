@@ -287,6 +287,54 @@
   .findings dt { font-size: 13px; }
   .findings dd { margin: 0; font-family: var(--font-mono); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
   .scroller { overflow-x: auto; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -300,6 +348,86 @@
     right, we get discrete stable species, resistance to most mutations, and rare violent
     jumps, all for free, from one number: <em>2Kp(1−p)</em>.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      The genome is not a list of traits. It is a random boolean network: <em>N</em> genes,
+      each one switched on or off every step by a fixed rule reading <em>K</em> other genes.
+      Run it from any starting state and it must eventually repeat a state, at which point
+      it is trapped in a cycle it can never leave. That cycle is the phenotype — the body is
+      read off the average activity of each gene over the loop. Species, canalisation and
+      punctuated jumps are then properties of the network, not features anyone wrote.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>gene</dt>
+      <dd>One boolean node. Its value at step <em>t</em>+1 is a function only of the values
+        of its K inputs at step <em>t</em>.</dd>
+
+      <dt>truth table</dt>
+      <dd>The rule for one gene: 2<sup>K</sup> entries, each set to 1 with probability
+        <em>p</em>. Away from p = 0.5 the rules go lopsided and the network freezes.</dd>
+
+      <dt>state</dt>
+      <dd>The N bits at one instant. The state space is 2<sup>N</sup>, so the attractor
+        search is capped rather than exhaustive.</dd>
+
+      <dt>transient / attractor</dt>
+      <dd>Iterating from a start state produces a path that must eventually revisit a state.
+        Everything before the repeat is the transient; the loop is the <b>attractor</b>, of
+        length λ. λ = 1 is a frozen point attractor.</dd>
+
+      <dt>phenotype</dt>
+      <dd>The mean activation of each gene over one full cycle. This is a vector in [0,1]<sup>N</sup>,
+        and it is a property of the cycle <em>as a set</em> — which is why it is bit-exact
+        regardless of where on the cycle you start reading.</dd>
+
+      <dt>body</dt>
+      <dd>The phenotype vector mapped onto drawing parameters: stem count, branch angle,
+        leaf size, petal count, root depth and so on. A truncated readout is what makes
+        two distinct attractors draw the same plant.</dd>
+
+      <dt>2Kp(1−p)</dt>
+      <dd>Derrida's sensitivity: the expected number of genes a single flipped gene
+        perturbs on the next step. Below 1 the network is ordered, above 1 chaotic, and
+        the whole design question is which side to build on.</dd>
+
+      <dt>canalisation</dt>
+      <dd>The fraction of mutations that change nothing about the phenotype. High
+        canalisation is what makes a species stable enough to be an identity.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Build the genome: for each of N genes, choose K input genes and roll a
+        2<sup>K</sup>-entry truth table biased by <em>p</em>.</li>
+      <li>From a random start state, iterate the whole network synchronously until a state
+        repeats. Record the transient length and the cycle.</li>
+      <li>Read the phenotype as the per-gene mean activation over that cycle, and draw the
+        body from it.</li>
+      <li>Survey: repeat from many random starts. The set of distinct attractors found is
+        this genome's repertoire of possible bodies — Kauffman's claim is that these are
+        the cell types, and here they are the species.</li>
+      <li>Mutate: flip one truth-table entry, or rewire one input. Re-run from the same
+        start and measure how far the phenotype moved.</li>
+      <li>Sweep K × p to locate the ordered/chaotic boundary and put the current settings
+        on it.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>1 · The raster</dt><dd>Genes down, time across. Frozen rows are the ordered core; flickering ones carry the state.</dd>
+      <dt>2 · The attractor survey</dt><dd>Every cycle found from random starts, with its length and basin size.</dd>
+      <dt>3 · The gallery</dt><dd>One drawn body per attractor — the species this single genome can express.</dd>
+      <dt>4 · One mutation</dt><dd>Parent and child side by side, with the phenotype distance between them.</dd>
+      <dt>5 · The regime chart</dt><dd>K against p, with the sensitivity = 1 boundary drawn and the current settings marked.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="plate">
 

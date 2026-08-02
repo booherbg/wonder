@@ -248,6 +248,54 @@
   .reading ul { margin: 0 0 var(--s3); padding-left: 1.1em; }
   .reading li { margin-bottom: 6px; }
   .reading strong { font-weight: 600; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -261,6 +309,91 @@
     <em>what do twenty of them look like standing in the same field, on real ground,
     under real light?</em> Every colour below the rule was computed, including the dirt.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      Twenty plants standing in one field. Each one's colour is <em>earned</em> — hue from
+      the reagents its metabolism ended up holding, chroma from how sophisticated that
+      metabolism is, lightness from how well it is doing — which is a system with no opinion
+      whatsoever about what twenty of them look like together. This bench adds one step
+      between the earned hue and the drawn hue: pull it toward a harmonic key. Then it
+      measures whether that helps, whether it costs variety, and whether any of it survives
+      being tinted by the light.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>key</dt>
+      <dd>A set of hue anchors on the colour wheel: analogous, complementary,
+        split-complementary, triad, tetrad, or none. Six of them, comparable side by side.</dd>
+
+      <dt>root mode</dt>
+      <dd>Where the anchors are placed. <b>grounded</b> pins the first anchor to the
+        island's terrain hue, so the flora and the dirt are in the same key. <b>free</b>
+        lets the key float. This choice turns out to matter more than which key you pick.</dd>
+
+      <dt>bias</dt>
+      <dd>How hard an earned hue is pulled toward its nearest anchor. 0 leaves the roll
+        untouched; 1 squeezes every hue into a narrow arc around an anchor. The pull is
+        applied to the <em>output</em> hue, so the metabolism is unchanged — this is a
+        display transform, not a change to the chemistry.</dd>
+
+      <dt>chroma ceiling</dt>
+      <dd>The most saturated a fully earned pigment may be. Everything below scales off it,
+        so this is the dial that decides whether a tier-4 plant is a jewel or merely a
+        brighter leaf.</dd>
+
+      <dt>lightness spread</dt>
+      <dd>How far yield-over-cost is allowed to push lightness either side of mid. At 0 the
+        island flattens and every plant reads as the same health.</dd>
+
+      <dt>glow</dt>
+      <dd>A trait carried by some fraction of species. At night it is the only channel still
+        carrying pigment information, which is why its share is a dial.</dd>
+
+      <dt>light model</dt>
+      <dd>Time of day produces a multiply-and-tint applied to every colour in the scene,
+        plus depth haze toward the horizon. Both are applied in OKLCH so hue survives, but
+        the tint is exactly what erodes the differences.</dd>
+
+      <dt>separation</dt>
+      <dd>Mean perceptual distance between species colours as actually drawn. This is the
+        number that says whether earned colour is still doing its job — it is measured after
+        the light, not before.</dd>
+
+      <dt>adherence</dt>
+      <dd>How close the island's hues sit to their anchors. High adherence with low variety
+        is just monochrome, so the two are always read together.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Roll an island: a chemistry, a terrain hue, and <em>species</em> distinct
+        metabolisms, each running its chain to earn a pigment.</li>
+      <li>Place the anchors for the current key, rooted to the terrain or free.</li>
+      <li>Pull each earned hue toward its nearest anchor by the bias, and cap chroma and
+        lightness with the ceiling and spread.</li>
+      <li>Lay out the scene — ground, horizon, scattered plants at the current density — and
+        render it under the light model at the current hour.</li>
+      <li>Measure separation, adherence, collision count and variety, then sweep every key ×
+        bias combination over many islands to fill the comparison table.</li>
+      <li>Scrub the hour from dawn to dusk, re-measuring separation at each step: the light
+        survival table is that sweep.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The island</dt><dd>The scene at the current key, light and density. Every colour in it, including the dirt, is computed.</dd>
+      <dt>Palette geometry</dt><dd>The live hue wheel with anchors and the species sitting on it.</dd>
+      <dt>Six keys</dt><dd>The same island rendered under each key, for direct comparison.</dd>
+      <dt>Does bias cost variety?</dt><dd>The sweep table — the check on whether harmonising has made every island alike.</dd>
+      <dt>Does colour survive the light?</dt><dd>Separation against hour, which is where earned colour turns out to be in trouble.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="controls">
     <button class="primary" id="rollIsland" type="button">Roll a new island</button>

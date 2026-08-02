@@ -264,6 +264,54 @@
   .findings h3:first-of-type { margin-top: 0; }
   .findings p { max-width: 64ch; margin: 0 0 var(--s3); font-size: 14px; }
   .findings .num { font-family: var(--font-mono); color: var(--slate); font-variant-numeric: tabular-nums; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -278,6 +326,90 @@
     that turn a drifting population into a selected one. The question it exists to answer is
     narrow: <em>does selection visibly beat drift, and can you see it happening?</em>
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      The reagent economy from bench 0, put on a 64 × 48 grid and made to compete. The
+      ground holds a mineral field with a tiled motif. A seed lands on a tile, grows a root
+      once, runs its metabolic chain once at maturity, and from then on reproduces and dies
+      at rates set by how much surplus that chain earned. Two lines of code carry the entire
+      selection claim: reproduction is multiplied by <b>vigor</b>, and the crowding thin
+      removes the weakest of three sampled neighbours. Setting selection strength to 0
+      makes vigor exactly 1 for everyone, which is Wonder's current behaviour and the
+      control this bench is built around.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>mineral field</dt>
+      <dd>One concentration layer per base reagent over the whole grid, built by blending a
+        repeating motif with noise — <em>pattern regularity</em> is the blend weight and
+        <em>motif period</em> is the tile size. Reagents are either <b>mobile</b> (drawdown
+        spreads to neighbours) or <b>immobile</b> (drawdown stays put), which is what makes
+        root shape matter.</dd>
+
+      <dt>genome</dt>
+      <dd>Three things: an <b>affinity</b> vector over the base reagents, a set of
+        <b>root genes</b> (budget, reach, density), and a <b>hand</b> of conversion cards
+        from bench 0's deck.</dd>
+
+      <dt>root</dt>
+      <dd>Grown once at germination and then fixed. It spends its budget one cell at a time,
+        each time choosing the best of three candidate tiles sampled within its reach plus
+        the tile it last thickened — a greedy tropism. Because it <em>looks</em> at the
+        ground, it is plastic: it finds good soil without needing the soil to be
+        predictable.</dd>
+
+      <dt>uptake</dt>
+      <dd>What the root actually draws, from affinity × local availability, with diminishing
+        returns per cell. Root cells cost, so filling the map is not free.</dd>
+
+      <dt>chain</dt>
+      <dd>Run once at maturity against what the root gathered, exactly as in bench 0.
+        Produces energy, a pigment, and the body.</dd>
+
+      <dt>surplus</dt>
+      <dd><code>energy − root cost − upkeep</code>. The one number selection reads.</dd>
+
+      <dt>vigor</dt>
+      <dd><code>exp(selection × z × 0.5)</code>, where <em>z</em> is the plant's surplus in
+        standard deviations from the island mean, clamped to ±3. It multiplies into both
+        fitness lines. At selection 0 it is 1 and drift is exactly recovered.</dd>
+
+      <dt>lineage / species</dt>
+      <dd>A lineage splits off when its genome has drifted further than the speciation
+        threshold from its founder, measured over load-bearing traits only.</dd>
+
+      <dt>pollinators</dt>
+      <dd>Two swarms, each with a sensor hue. A plant whose pigment hue matches gets a
+        reproduction multiplier, and the swarm drifts toward what it is finding.</dd>
+    </dl>
+
+    <h3>Procedure — one tick</h3>
+    <ol class="proc">
+      <li><b>Field.</b> Drawdown from every root is stamped in; drawdown decays back toward
+        the base field at the regen rate; mobile reagents diffuse theirs.</li>
+      <li><b>Growth.</b> Seedlings that reach maturity grow their root, run their chain, and
+        get a pigment and a body.</li>
+      <li><b>Reproduction.</b> Each mature plant reproduces with probability proportional to
+        its vigor and its pollinator bonus, dropping a mutated child on a nearby tile.</li>
+      <li><b>Crowding.</b> Where a tile exceeds its cap, sample three plants from it and its
+        neighbours and remove the lowest vigor.</li>
+      <li><b>Bookkeeping.</b> Update lineages, the hue histogram, and the charts.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The island</dt><dd>The live grid. Each plant is drawn in its own earned pigment.</dd>
+      <dt>The specimen</dt><dd>The best living plant: its body, its chain, and its root drawn over the field it is eating.</dd>
+      <dt>Charts over time</dt><dd>Mean tier, surplus, lineage stacks, and the hue ribbon — the ribbon splitting into modes is speciation happening.</dd>
+      <dt>Selection versus drift</dt><dd>Two islands from the same seed, one with selection and one without, run side by side. This is the control that makes the rest a claim.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="transport">
     <button class="primary" id="playBtn">Pause</button>

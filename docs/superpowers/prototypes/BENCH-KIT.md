@@ -219,7 +219,24 @@ function slider(host, opts) {
 }
 ```
 
-## 4 · Voice
+## 4 · Voice and required structure
+
+`docs/WRITING-STANDARD.md` governs. Read it before writing page copy; the rules
+below are the bench-specific additions to it.
+
+**Every bench opens with a `.spec` block**, before the instrument, containing:
+
+1. `<h2>The system</h2>` and one literal paragraph — what the model computes.
+2. `<h3>Parts</h3>` — a `<dl class="defs">` defining every term the page uses,
+   with types and ranges. If a word appears in a heading, a slider label or a
+   readout, it is defined here.
+3. `<h3>Procedure</h3>` — an `<ol class="proc">` of the algorithm in execution
+   order, numbered.
+4. `<h3>What is on this page</h3>` — a `<dl class="defs">` naming each panel and
+   what it shows.
+
+Findings come last, never before the definitions. Copy the `.spec` CSS from any
+existing bench.
 
 Write the page copy the way a working scientist labels their own bench: plain,
 specific, willing to say what failed. Name the source of a mechanism where there

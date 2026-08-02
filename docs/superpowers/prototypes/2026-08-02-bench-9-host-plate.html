@@ -311,6 +311,54 @@
   .findings dt { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .findings dd { margin: 0; font-size: 13.5px; }
   .findings > p:first-child { margin-top: 0; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -327,6 +375,85 @@
     chemistry, the pigment and the grow-the-body-from-the-chain program are the ones from the
     reagent-economy bench; only the display surface is new.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      Not a simulation — a <b>rendering test</b>. It takes the reagent economy's generated
+      specimen, its earned pigment and its grow-the-body-from-the-chain program unchanged,
+      and draws them into a fixed pixel budget. Every plate on this page is rasterised at
+      its true size and then upscaled with nearest-neighbour, so what you are judging is the
+      real pixel count and never an approximation of it. The question is where in the
+      resolution ladder the picture stops improving.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>plate</dt>
+      <dd>The whole drawing surface: <em>W</em> wide, <em>H<sub>s</sub></em> of shoot above
+        the ground line, and a root pane below it sized as a percentage of the shoot. The
+        proposal under test is 30 × 50 for the shoot; the doc's full-plate proposal is
+        30 × 74.</dd>
+
+      <dt>ground line</dt>
+      <dd>The horizontal divide. Above it, stem, leaves and flowers. Below it, the roots
+        drawn over the mineral field they are drawing from — the part of a plant that is
+        otherwise entirely invisible in the game.</dd>
+
+      <dt>specimen</dt>
+      <dd>A plant from bench 0: a rolled world chemistry, a rolled hand, and the chain those
+        produce. The <em>specimen</em> dial picks a different plant from the same island
+        chemistry rather than a new world.</dd>
+
+      <dt>growth instruction</dt>
+      <dd>What each conversion in the chain emits when it fires — extend, branch, whorl of
+        leaves, swollen node, bloom. The plate is drawn by replaying those, so its structure
+        is not decorative.</dd>
+
+      <dt>insect</dt>
+      <dd>A perched pollinator drawn at the game's own ratio: <code>5 × W / 16</code> pixels
+        long. At W = 30 that is 9 px, which is the number that made the paper estimate of
+        "2–3 px" wrong by 3×.</dd>
+
+      <dt>upscale</dt>
+      <dd>Nearest-neighbour display magnification only. It changes nothing about the pixel
+        budget — it exists so you can see individual pixels without a magnifier.</dd>
+
+      <dt>ink coverage</dt>
+      <dd>The fraction of the plate that is not background. It is the measurement that
+        settles the ladder, because it <em>falls</em> as the plate grows: a bigger plate is
+        mostly bigger margins.</dd>
+
+      <dt>distinctness</dt>
+      <dd>Whether two perched insects remain separable at a given size. This is what caps a
+        plate at two pollinators regardless of resolution, and it is crowding rather than
+        legibility.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Roll the world chemistry and the plant, and run its chain — the bench-0 pipeline,
+        unmodified.</li>
+      <li>Derive the palette: pigment from the chain, leaf and highlight variants from it,
+        and a soil palette pulled toward the terrain.</li>
+      <li>Allocate the plate, draw the mineral field, then the roots over it, then the shoot
+        above the line, replaying the chain's growth instructions.</li>
+      <li>Perch the requested insects on real attachment points, at true scale.</li>
+      <li>Rasterise once per rung of the resolution ladder and upscale each for display.</li>
+      <li>Measure ink coverage, feature counts and insect distinctness on every rung.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The specimen plate</dt><dd>The current settings at full size, with the chain that produced it printed beside it.</dd>
+      <dt>The resolution ladder</dt><dd>The same specimen at five plate budgets, side by side. This is the answer to the sizing question.</dd>
+      <dt>Perched at true scale</dt><dd>An insect drawn down through the sizes, to find where it stops being an insect.</dd>
+      <dt>Measurements</dt><dd>Ink coverage, pixel cost and feature counts per rung, so the ladder is a table and not an impression.</dd>
+    </dl>
+  </section>
+
+
+
 
   <section>
     <h2>The specimen plate</h2>

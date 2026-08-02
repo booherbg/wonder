@@ -5,7 +5,7 @@
 // actually break published artifacts: script errors, horizontal overflow, blank
 // canvases, and a theme that only works in one direction.
 //
-//   node scripts/bench-qa.mjs                    # every 2026-08-* bench
+//   node scripts/bench-qa.mjs                    # every prototype in the folder
 //   node scripts/bench-qa.mjs path/to/one.html   # just one
 //
 // Screenshots land in the scratch dir printed at the end.
@@ -18,9 +18,12 @@ const PROTO = "docs/superpowers/prototypes";
 const SHOTS = process.env.BENCH_SHOTS || "/tmp/bench-qa";
 mkdirSync(SHOTS, { recursive: true });
 
+// Everything in the folder, not just the current batch: a date-prefixed filter
+// silently dropped the reagent-economy bench, which is the one page most people
+// open first. Pre-kit files are still relaxed, via `legacy` below.
 const targets = process.argv.length > 2
   ? process.argv.slice(2)
-  : readdirSync(PROTO).filter((f) => /^2026-08-.*\.html$/.test(f)).sort().map((f) => join(PROTO, f));
+  : readdirSync(PROTO).filter((f) => f.endsWith(".html")).sort().map((f) => join(PROTO, f));
 
 const wrap = (raw, theme) =>
   `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8">` +

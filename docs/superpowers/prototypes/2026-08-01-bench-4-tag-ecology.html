@@ -238,6 +238,54 @@
   .reading strong { font-weight: 600; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -253,6 +301,85 @@
     trophic layers, mimicry and arms races fall out of tag matching on their own — and whether
     any of it survives being made <em>peaceful</em>.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      Holland's ECHO, implemented whole. There are four resources, written
+      <code>a b c d</code>. Every agent carries four tag strings in that same four-letter
+      alphabet, and those four strings <em>are</em> its chromosome — so the letters an agent
+      is made of are exactly the letters it must accumulate before it can copy itself.
+      Every interaction in the model is a string comparison between two tags. Nothing in the
+      code mentions predators, prey, camouflage or trophic levels.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>resource</dt>
+      <dd>One of four letters. Each flows into a shared pool at a fixed rate, evaporates
+        slightly, and presents its own <em>appearance tag</em> to the world.</dd>
+
+      <dt>tag</dt>
+      <dd>A short string over <code>abcd</code>, 2–12 letters, whose length is itself
+        heritable. Agents carry four: <b>O</b> appearance (also the tag you attack with),
+        <b>D</b> defence, <b>M</b> mating, <b>X</b> sensor.</dd>
+
+      <dt>match(s, t)</dt>
+      <dd>The single primitive. A score in [0,1] combining letter agreement with the length
+        of the longest unbroken matching run. Every relationship in the model is this
+        function applied to a different pair of tags — which is why a monotone defence tag
+        is a real strategy: it denies a long run to any mixed attacker.</dd>
+
+      <dt>chromosome</dt>
+      <dd>The four tags concatenated. Its letter counts are the agent's build cost, and its
+        length sets upkeep, so a longer, more capable agent is genuinely more expensive to
+        be.</dd>
+
+      <dt>affinity</dt>
+      <dd>Uptake efficiency for resource <em>r</em>, computed as a steep function of
+        <code>match(X, appearance of r)</code>. This is the only route into the economy.</dd>
+
+      <dt>consent</dt>
+      <dd><code>min(match(A.X, B.O), match(B.X, A.O))</code> — how well each party reads the
+        other. High consent suppresses combat, so being recognisable is protective.</dd>
+
+      <dt>species</dt>
+      <dd>Not declared. Agents are clustered by chromosome similarity each tick and the
+        clusters are what the charts colour. Species here are an observation, not an
+        entity.</dd>
+
+      <dt>mode</dt>
+      <dd>Three regulation regimes. <b>lethal</b>: an agent that cannot pay upkeep is
+        removed, and the poorest are displaced at the cap. <b>quiet</b>: nothing starves,
+        but the poorest are still displaced. <b>rates</b>: nothing is ever removed for being
+        poor; poverty only slows reproduction. Wonder can only ship the last two.</dd>
+    </dl>
+
+    <h3>Procedure — one tick</h3>
+    <ol class="proc">
+      <li><b>Inflow.</b> Each resource pool gains its inflow and loses a fraction to
+        evaporation.</li>
+      <li><b>Uptake.</b> Every agent demands each resource in proportion to its affinity.
+        If total demand exceeds the pool, everyone is scaled down by the same share.</li>
+      <li><b>Interactions.</b> Sample <em>inter</em> random pairs. Each pair either fights —
+        with probability <code>combat × (1 − consent)</code> — or trades. In a fight the
+        higher <code>match(O, D)</code> score wins and takes a slice of the loser's
+        holdings, minus a loss fraction: that leak is what makes a food chain cost
+        something. In a trade each hands over a slice of whatever it holds most surplus
+        of.</li>
+      <li><b>Upkeep.</b> Every agent pays a per-tick cost scaled by chromosome length.</li>
+      <li><b>Reproduction.</b> An agent holding more than <em>threshold</em> × its own
+        letter counts finds a partner whose M tag matches its O tag, pays the letters, and
+        produces a mutated copy — point mutations plus insertions and deletions, so tag
+        lengths evolve.</li>
+      <li><b>Regulation.</b> Apply the current mode at the population cap.</li>
+      <li><b>Observe.</b> Re-cluster into species; recompute trophic layers from the
+        measured flow between clusters, the arms-race score, and the mimicry control.</li>
+    </ol>
+  </section>
+
+
+
 
   <div class="transport">
     <button class="primary" id="btnPlay">Pause</button>

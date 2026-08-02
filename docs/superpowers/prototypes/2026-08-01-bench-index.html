@@ -56,7 +56,7 @@
     font-size: clamp(32px, 5.5vw, 52px); line-height: 1.08;
     letter-spacing: -.018em; text-wrap: balance; margin: 0 0 var(--s4);
   }
-  .standfirst { max-width: 64ch; color: var(--muted); font-size: 16.5px; margin: 0 0 var(--s6); }
+  .standfirst { max-width: 66ch; color: var(--muted); font-size: 16.5px; margin: 0 0 var(--s6); }
   .standfirst em { color: var(--ink); font-style: italic; }
   h2 {
     font-family: var(--font-mono); font-size: 11px; font-weight: 500;
@@ -64,7 +64,31 @@
     margin: 0 0 var(--s4); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
   }
   section { margin-bottom: var(--s7); }
-  p.note { color: var(--muted); font-size: 13.5px; max-width: 64ch; margin: 0 0 var(--s4); }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 66ch; margin: 0 0 var(--s4); }
+
+  /* ---------- the summary ---------- */
+
+  .summary {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s7);
+  }
+  .summary > h2 { margin-top: 0; }
+  .summary p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .summary h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3);
+  }
+  .summary .decisions {
+    display: grid; grid-template-columns: 2.2em minmax(0, 1fr);
+    gap: var(--s2) var(--s3); margin: 0; max-width: 78ch;
+  }
+  .summary .decisions dt {
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+    padding-top: 3px; text-align: right;
+  }
+  .summary .decisions dd { margin: 0; font-size: 14px; line-height: 1.5; }
+  .summary .decisions dd b { font-weight: 600; }
 
   /* ---------- the bench cards ---------- */
 
@@ -89,18 +113,17 @@
   .bench h3 a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--rule); }
   .bench h3 a:hover { border-bottom-color: var(--slate); }
   .bench h3 a:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
-  .bench .q {
-    font-size: 14px; color: var(--muted); margin: 0 0 var(--s3);
-    max-width: 66ch;
-  }
-  .bench .finding {
-    font-size: 14.5px; margin: 0; padding: var(--s3) 0 0;
-    border-top: 1px dotted var(--rule); max-width: 68ch;
-  }
-  .bench .finding b {
+  .bench p { max-width: 68ch; }
+  .bench .sys { font-size: 14.5px; margin: var(--s2) 0 var(--s2); }
+  .bench .q { font-size: 14px; color: var(--muted); margin: 0 0 var(--s3); }
+  .bench .q b, .bench .finding b, .bench .sys b {
     font-family: var(--font-mono); font-size: 10px; font-weight: 500;
     letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
     display: block; margin-bottom: 3px;
+  }
+  .bench .finding {
+    font-size: 14.5px; margin: 0; padding: var(--s3) 0 0;
+    border-top: 1px dotted var(--rule);
   }
   .bench .pending { color: var(--muted); font-style: italic; }
   .theory {
@@ -128,6 +151,9 @@
   @media (max-width: 620px) {
     .bench { grid-template-columns: minmax(0, 1fr); }
     .bench .num { text-align: left; font-size: 22px; }
+    .summary { padding: var(--s4); }
+    .summary .decisions { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .summary .decisions dt { text-align: left; padding-top: var(--s3); }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -135,126 +161,83 @@
 <div class="wrap">
 
   <p class="eyebrow">Wonder · ecology · parameter study · 2026-08-01</p>
-  <h1>Eleven benches for a living ecology</h1>
+  <h1>Twelve benches for a living ecology</h1>
   <p class="standfirst">
-    Wonder's ecology has no fitness function, frozen fauna, and eleven of fourteen
-    plant forms outside every food web. Rebuilding it means choosing among a lot of
-    plausible mechanisms, so rather than argue, these are <em>instruments</em>: eleven
-    parameterised models, each isolating one mechanism and each answering one
-    question with a number. Every dial is live and every run is seeded, so anything
-    you see here you can get back. Benches 1&ndash;7 ask whether the mechanisms
-    <em>work</em>; benches 8&ndash;11 ask whether they <em>read</em>, which for this
-    game is the harder half.
+    Rebuilding Wonder's ecology means choosing among a lot of plausible mechanisms.
+    Rather than argue, these are <em>instruments</em>: twelve parameterised models,
+    each isolating one mechanism and each answering one question with a number.
+    Every dial is live and every run is seeded, so anything you see here you can
+    get back.
   </p>
 
+  <div class="summary">
+    <h2>Executive summary</h2>
+    <p>
+      <b>The problem.</b> Wonder has no fitness function. Reproduction is a flat constant
+      and death is a coin flip, so what looks like evolution is drift, and drift sits at
+      the population mean forever no matter how long you watch. The 2026-07-24 audit
+      found four capabilities structurally missing — <b>selection</b>, <b>niche</b>,
+      <b>origination</b> and <b>disturbance</b> — and a fifth that matters more than any
+      of them: <b>legible causation</b>. A purple flower is decoration. A purple flower
+      you can trace back three steps to a cause is the thing this game keeps reaching for
+      and has never been able to deliver.
+    </p>
+    <p>
+      <b>The proposal under test.</b> An island rolls its own chemistry: a set of
+      reagents and a deck of conversion recipes. A plant inherits a small hand of those
+      recipes and runs it once, at maturity, against what its roots drew out of the
+      ground. Energy, colour and body shape are all read off that single computation, so
+      colour is a readout of metabolism rather than a decoration, and a plant's silhouette
+      cannot lie about what it does for a living. Bench 0 is that economy standing alone;
+      every other bench either supplies a mechanism it needs or tests whether it can be
+      seen.
+    </p>
+    <p>
+      <b>What the twelve divide into.</b> Benches 1–7 ask whether the mechanisms
+      <em>work</em>: origination (1), how rugged to make the fitness landscape (2), where
+      body form comes from (3), what Holland's full tag model buys over the slice we ship
+      (4), how energy should climb the food chain (5), whether the whole thing coheres on
+      a grid (6), and whether disturbance survives being made peaceful (7). Benches 8–11
+      ask whether any of it <em>reads</em>, which for this game is the harder half:
+      surface pattern (8), how big the host plate has to be (9), colour at scene scale
+      (10), and what is left of a phenotype at five pixels (11).
+    </p>
+
+    <h3>Decisions these produced</h3>
+    <dl class="decisions">
+      <dt>1</dt><dd>Gate worldgen on <b>maxRAF ≥ 5 reactions</b>, not on "a RAF exists" — the naive test fires 3× too early. Measure the transition once for the L you ship rather than guessing a constant.</dd>
+      <dt>2</dt><dd>Set landscape ruggedness to <b>K = 3</b> (band 2–4). It does not scale with genome size, so the genome can grow later without re-tuning.</dd>
+      <dt>3</dt><dd>Boolean-network morphology at <b>N = 32, K = 2, p = 0.40</b>: 70% of mutations silent, and effect sizes bimodal — the punctuated jump the game cannot currently produce.</dd>
+      <dt>4</dt><dd>Tag ecology gives trophic layers and an arms race, but <b>not from death</b> — lethal and non-lethal runs came out bit-identical. Ship the quiet mode, not full rates-only.</dd>
+      <dt>5</dt><dd>Couple trophic levels by <b>ceiling, not funding</b>: top-level persistence 1.000 vs 0.490 over 200 paired seeds. Periodic forcing buys nothing; build the seed bank instead.</dd>
+      <dt>6</dt><dd>Selection visibly beats drift on a grid — mean tier 2.31 vs 1.07 — from two lines of code. Half of rolled worlds are duds, so the rejection sampler is not optional.</dd>
+      <dt>7</dt><dd>Disturbance does produce a diversity hump, and the <b>peaceful version beats the lethal one</b> (4.91 vs 4.52). Wonder can have this capability without shipping visible death.</dd>
+      <dt>8</dt><dd>Reaction–diffusion markings are heritable <b>only if the growth seed is inherited</b>. Safe mutation step δ ≤ 0.008.</dd>
+      <dt>9</dt><dd>Ship a <b>30 × 74</b> host plate. Bigger buys margins, not detail — and a plate holds two pollinators at any resolution, because the limit is crowding.</dd>
+      <dt>10</dt><dd>Bias island hues to a <b>split-complementary key grounded to the terrain, at 0.70</b>. Variety improves rather than suffering. Earned colour does not survive dusk without a fix.</dd>
+      <dt>11</dt><dd><b>Motion beats colour below 8.5 px</b> — 88.9% vs 58.3% at Wonder's normal zoom. Combined with bench 9's crypsis result, motion is the channel that still works.</dd>
+    </dl>
+  </div>
+
   <section>
-    <h2>Do the mechanisms work?</h2>
+    <h2>The benches, in order</h2>
+    <p class="note">
+      Every one opens standalone, carries its own definitions and procedure at the top,
+      and states its own findings at the bottom. Nothing here is wired to the game.
+    </p>
     <div class="benches" id="benches"></div>
   </section>
 
-
-  <section>
-    <h2>Do they read?</h2>
-    <p class="note">
-      The first seven benches all measured mechanism. For a game whose first pillar
-      is beauty, that was the wrong half to spend seven benches on. These four are
-      the correction.
-    </p>
-    <div class="benches">
-      <article class="bench">
-        <div class="num">8</div>
-        <div>
-          <span class="theory">Gray&ndash;Scott reaction&ndash;diffusion</span>
-          <h3><a href="https://claude.ai/code/artifact/987c784c-9a01-4942-a589-7852d1a5b9eb">Surface pattern</a></h3>
-          <p class="q">Structure grammars cannot make spots and stripes; reaction–diffusion is what does it in life. But pretty is easy — the question is whether a small genetic change gives a small pattern change, and whether anything survives being shrunk to a sprite.</p>
-          <p class="finding"><b>What it found</b>Heritable, with one mandatory change: the growth seed must be inherited. Re-roll it and a genetically identical sibling lands further from its parent than an unrelated genome does — one integer is the whole difference. Safe mutation step is δ ≤ 0.008; the cliffs sit in the tail, not the mean, because only 22% of the parameter rectangle makes a pattern at all. Crop the sprite to 2–3 field cells per pixel: a 7×7 map then carries about two features — two dots, one bar, or plain.</p>
-        </div>
-      </article>
-      <article class="bench">
-        <div class="num">9</div>
-        <div>
-          <span class="theory">the question nobody answered with pixels</span>
-          <h3><a href="https://claude.ai/code/artifact/b0722151-48d8-438a-9df0-4a1061ad4d23">The host plate</a></h3>
-          <p class="q">Blaine asked “is 30×50 big enough?” and it has only ever been answered in prose. Five resolutions side by side, insects perched at true scale, and the roots drawn over the soil they are eating.</p>
-          <p class="finding"><b>What it found</b>Yes for the shoot — ship 30×74. Going to 64×104 costs 4.4× the pixels and buys two more flowers; ink coverage actually falls as the plate grows. The insect estimate in the doc was 3× too small (9px, not 2–3), so legibility was never the constraint — crowding is. A plate holds two pollinators, three at a stretch, at any resolution. And insects come out cryptic by default, landing 5.4° of hue from their host, so value contrast rather than colour is what makes them visible.</p>
-        </div>
-      </article>
-      <article class="bench">
-        <div class="num">10</div>
-        <div>
-          <span class="theory">colour at the scene scale</span>
-          <h3><a href="https://claude.ai/code/artifact/08d56254-4f5f-4e2f-8d8e-f12038aa4d0a">Island palette and light</a></h3>
-          <p class="q">Twenty individually-justified colours can still compose into mud. Does biasing a world’s hues toward a harmonic key make islands more beautiful without making them all alike — and does earned colour survive being tinted by dusk?</p>
-          <p class="finding"><b>What it found</b>Split-complementary, grounded to the terrain, at bias 0.70 — and grounding matters more than the key. Variety improved rather than suffered, because an unbiased island has no character to differ in. But earned colour does not survive dusk: pigment separation falls from 93% to 35%, below half for over half the day. It is the tint, not the darkness, and glow currently fades on luminance when the damage peaks with tint. One-line fix, deliberately left broken so the table still shows it.</p>
-        </div>
-      </article>
-      <article class="bench">
-        <div class="num">11</div>
-        <div>
-          <span class="theory">the phenotype we forgot</span>
-          <h3><a href="https://claude.ai/code/artifact/a9abda24-c51f-4fa9-aeda-2252ae4026d1">Motion signature</a></h3>
-          <p class="q">At gameplay zoom an insect is about five pixels, so you can barely see its colour or shape. What you can see is how it moves. Is motion legible as a lineage identity, and does it work as a second camouflage axis?</p>
-          <p class="finding"><b>What it found</b>89.1% identification against a 12.5% chance level, from genomes drawn at random. At 5px motion scores 88.9% against colour’s 58.3% — the curves cross at 8.5px, and that direction holds across every swept assumption. Which composes with bench 9: if insects mostly wear their host’s colour anyway, motion is not a nice extra, it is the channel that still works. The feed-versus-be-seen trade-off is a real Pareto front that collapses to a single optimum when the predator is switched off.</p>
-        </div>
-      </article>
-    </div>
-  </section>
-
-  <section>
-    <h2>The bench these extend</h2>
-    <div class="benches">
-      <article class="bench">
-        <div class="num">0</div>
-        <div>
-          <span class="theory">Century: Spice Road · OKLCH</span>
-          <h3><a href="https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0">The reagent economy</a></h3>
-          <p class="q">
-            A world rolls its own chemistry; a plant inherits a small hand of conversion
-            cards and runs it once, at maturity. Energy, pigment and body all come out of
-            that same computation — so colour is a readout of metabolism rather than a
-            decoration, and the plant's silhouette cannot lie about what it does for a
-            living. Nine live dials, from hue spread to pigment steepness.
-          </p>
-          <p class="finding">
-            <b>What it found</b>
-            Upgrades must be generic or a random hand is dead on arrival; rung cost must
-            escalate or every plant lands on the same tier; pigment weight has to climb
-            far more steeply than energy or leftover base swamps the colour; and branching
-            must keep the parent tip alive, or every plant renders as the same broom.
-            Try seed 7 or 42 for a polychrome world — 2438 and 5150 come out tonal.
-          </p>
-        </div>
-      </article>
-    </div>
-  </section>
-
   <section class="reading">
-    <h2>Why these seven</h2>
+    <h2>Two of them are set up to fail</h2>
     <p>
-      The 2026-07-24 audit found four capabilities structurally missing —
-      <strong>selection</strong>, <strong>niche</strong>, <strong>origination</strong>
-      and <strong>disturbance</strong> — and a fifth that matters more than any of
-      them: <strong>legible causation</strong>. A purple flower is decoration; a
-      purple flower you can trace back three steps to a cause is the thing this game
-      keeps reaching for and has never been able to deliver.
-    </p>
-    <p>
-      The benches divide along that list. Bench 1 is origination, and it is the only
-      mechanism here that can put something genuinely new into a world. Bench 2 asks
-      whether adaptation is possible <em>at all</em> at a given landscape ruggedness —
-      if that answer is wrong nothing built above it will work. Bench 3 asks where
-      form comes from. Bench 4 tests whether Holland's original tag ecology gives us
-      more than the slice we already ship. Bench 5 settles two specific coupling
-      decisions with numbers. Bench 6 is the integration, and bench 7 is the one
-      capability the peaceful pillar seems to forbid.
-    </p>
-    <p>
-      Two of them are deliberately set up to fail. Bench 7 tests the intermediate
-      disturbance hypothesis rather than assuming it, because that hypothesis is
-      genuinely contested in the literature. Bench 4 tests whether tag ecology's
-      structure survives being made non-lethal, because Wonder cannot ship visible
-      death and a mechanism that only works when things die is no use to us. Negative
-      results from those two would be worth more than positive ones.
+      Bench 7 tests the intermediate disturbance hypothesis rather than assuming it,
+      because that hypothesis is genuinely contested — the hump appears in roughly 16% of
+      published studies, not in most of them. Bench 4 tests whether tag ecology's structure
+      survives being made non-lethal, because Wonder cannot ship visible death and a
+      mechanism that only works when things die is no use to us. Negative results from
+      those two would have been worth more than positive ones, and bench 4's headline
+      result is in fact a negative: it was never death doing the work.
     </p>
   </section>
 
@@ -282,61 +265,120 @@
 (function () {
   "use strict";
 
-  // Findings are filled in from the benches themselves once each has been run.
+  // One record per bench, in order. `sys` says what the model is made of;
+  // `q` says what it was built to decide; `finding` says what it measured.
   // A bench with no finding says so rather than showing an encouraging blank.
   const BENCHES = [
     {
-      n: 1, slug: "autocatalysis", title: "Autocatalysis",
+      n: 0, title: "The reagent economy",
+      url: "https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0",
+      theory: "Century: Spice Road · OKLCH",
+      sys: "A world rolls ~10 reagents, each with a tier (1–4) and a hue, plus a deck of conversion recipes: gather, upgrade, trade, catalyse. A plant is a hand of 3–5 of those recipes and a step budget. It runs the hand against its soil until nothing more can fire, and the pile it ends holding determines energy, pigment and body — one computation, cached at maturity.",
+      q: "Can colour, yield and silhouette all be readouts of the same metabolism, so none of them can lie about the others? And is a random hand of recipes actually playable?",
+      finding: "Upgrades must be generic or a random hand is dead on arrival; rung cost must escalate or every plant lands on the same tier; pigment weight has to climb far more steeply than energy or leftover base swamps the colour; and branching must keep the parent tip alive, or every plant renders as the same broom. Try seed 7 or 42 for a polychrome world — 2438 and 5150 come out tonal.",
+    },
+    {
+      n: 1, title: "Autocatalysis",
       url: "https://claude.ai/code/artifact/54f6c253-96be-4733-b448-53fb1f677e04",
       theory: "Kauffman · Hordijk & Steel RAF",
-      q: "When is a randomly-rolled chemistry actually alive? Finds the maximal self-sustaining reaction set, locates the phase transition, and computes the adjacent possible — the frontier of what a world could next invent.",
-      finding: "The naive test is a trap \u2014 with unlimited food, one reaction is formally a maximal autocatalytic set, so \u201cdoes one exist\u201d fires 3\u00d7 too early. Gate on set size instead (\u2265 5 reactions); the distribution is violently bimodal so any threshold from 3 to 50 draws the same curve. The surprise: the adjacent possible peaks near the transition and collapses to zero in rich chemistry \u2014 a \u201cmore chemistry is better\u201d gate would pick exactly the wrong islands.",
+      sys: "Molecules are binary strings up to length L; every string of length ≤ Lf is free food. Reactions are ligations a + b → ab, and each molecule catalyses each reaction with probability p. The RAF algorithm then repeatedly deletes any reaction that cannot be fed or cannot be catalysed until nothing more can be deleted — a shrinking fixed point returning the unique maximal self-sustaining set.",
+      q: "When is a randomly-rolled chemistry actually alive, where is the line, and can worldgen gate on it? Plus: what is the adjacent possible — the frontier of what a world could next invent?",
+      finding: "The naive test is a trap — with unlimited food, one reaction is formally a maximal autocatalytic set, so “does one exist” fires 3× too early. Gate on set size instead (≥ 5 reactions); the distribution is violently bimodal so any threshold from 3 to 50 draws the same curve. The surprise: the adjacent possible peaks near the transition and collapses to zero in rich chemistry — a “more chemistry is better” gate would pick exactly the wrong islands.",
     },
     {
-      n: 2, slug: "nk-landscape", title: "The ruggedness dial",
+      n: 2, title: "The ruggedness dial",
       url: "https://claude.ai/code/artifact/5624c49b-28e0-47be-a538-4005fe2353f5",
       theory: "Kauffman & Levin · NK landscapes",
-      q: "How rugged should Wonder be? Too smooth and every island converges on the same answer; too rugged and nothing adapts. Measures local optima, walk length and correlation length against K, and tests whether the complexity catastrophe bites at the genome sizes we actually use.",
-      finding: "K = 3, band 2\u20134 \u2014 and the best K does not scale with genome size (argmax stays 2\u20134 from N=10 to N=20), so the genome can grow. It buys a menu rather than a monolith: 58 local optima, the top basin taking 12.5% of lineages. K=0 reaches lower fitness than every K from 1 to 9, so smoothness is worse, not just duller. The complexity catastrophe is real but only bites around 100\u2013200 loci.",
+      sys: "A genome is N binary loci. Each locus contributes a fitness value that depends on its own bit and on K others; total fitness is the mean of those N contributions. K alone moves the landscape from a single climbable peak to white noise. Local optima, adaptive walk length and correlation length are then measured directly from the enumerated space.",
+      q: "How rugged should Wonder be? Too smooth and every island converges on the same answer; too rugged and nothing adapts. Does the complexity catastrophe bite at the genome sizes we actually use?",
+      finding: "K = 3, band 2–4 — and the best K does not scale with genome size (argmax stays 2–4 from N=10 to N=20), so the genome can grow. It buys a menu rather than a monolith: 58 local optima, the top basin taking 12.5% of lineages. K=0 reaches lower fitness than every K from 1 to 9, so smoothness is worse, not just duller. The complexity catastrophe is real but only bites around 100–200 loci.",
     },
     {
-      n: 3, slug: "regulatory-morphology", title: "Body as attractor",
+      n: 3, title: "Body as attractor",
       url: "https://claude.ai/code/artifact/d3ce6504-7b67-4b6b-a68b-687ce0cd547d",
       theory: "Kauffman · random boolean networks",
-      q: "Where does form come from? Treats the genome as a boolean network and the body as its attractor, then measures whether that gives shapes stable enough to be an identity while still able to jump.",
-      finding: "Stability is exact rather than approximate \u2014 mean activation over a cycle is a property of the cycle as a set, so 160/160 checks gave bit-identical bodies. Distinctness fails on a truncated readout (26% of pairs draw the same plant) and wants hashing all N genes. Recommended N=32, K=2, p=0.40: 70% of mutations silent, and effect sizes are bimodal in the ordered regime \u2014 which is the punctuated jump the game cannot currently produce.",
+      sys: "The genome is a random boolean network: N genes, each switched on or off each step by a truth table reading K others. Run it and it must fall into a cycle it can never leave. The phenotype is the mean activation of each gene over that cycle, mapped onto drawing parameters — so bodies are attractors, and species are the attractor repertoire of one genome.",
+      q: "Where does form come from? Does treating the body as a network attractor give shapes stable enough to be an identity while still able to jump?",
+      finding: "Stability is exact rather than approximate — mean activation over a cycle is a property of the cycle as a set, so 160/160 checks gave bit-identical bodies. Distinctness fails on a truncated readout (26% of pairs draw the same plant) and wants hashing all N genes. Recommended N=32, K=2, p=0.40: 70% of mutations silent, and effect sizes are bimodal in the ordered regime — which is the punctuated jump the game cannot currently produce.",
     },
     {
-      n: 4, slug: "tag-ecology", title: "Tag ecology",
+      n: 4, title: "Tag ecology",
       url: "https://claude.ai/code/artifact/7021b774-cbbe-402e-9003-9b76b81921ab",
       theory: "Holland · ECHO",
-      q: "Does Holland's full tag model give us trophic layers and mimicry that our one-relationship slice does not — and does any of that structure survive being made non-lethal?",
-      finding: "Trophic layers in 7/7 seeds; zero without combat. The arms race is the cleanest signal in the suite \u2014 defence tags visibly go monotone while appearance stays mixed. Mimicry did not appear at all, against an internal control. The decisive result: lethal and non-lethal runs came out bit-identical, because starvation never fired \u2014 it was never death doing the work, it was a full world. But full rates-only loses the arms race: diversity without differentiation.",
+      sys: "Four resources written as four letters. Every agent carries four tag strings in that alphabet — appearance, defence, mating, sensor — and those strings are its chromosome, so the letters it is made of are exactly the letters it must accumulate to reproduce. Every interaction is one string-match function applied to a different pair of tags. Nothing in the code mentions predators or trophic levels.",
+      q: "Does Holland's full tag model give us trophic layers, mimicry and arms races on its own — and does any of that structure survive being made non-lethal?",
+      finding: "Trophic layers in 7/7 seeds; zero without combat. The arms race is the cleanest signal in the suite — defence tags visibly go monotone while appearance stays mixed. Mimicry did not appear at all, against an internal control. The decisive result: lethal and non-lethal runs came out bit-identical, because starvation never fired — it was never death doing the work, it was a full world. But full rates-only loses the arms race: diversity without differentiation.",
     },
     {
-      n: 5, slug: "trophic-flow", title: "Trophic flow",
+      n: 5, title: "Trophic flow",
       url: "https://claude.ai/code/artifact/b437e032-2aaf-427e-9cf3-0e8a42642cd1",
       theory: "Pauly & Christensen · Swailem & Täuber",
-      q: "Fund individuals from the level below, or let the level below set a ceiling? And does periodically varying carrying capacity really widen the region where species coexist — Wonder has five periodic signals doing nothing mechanical.",
-      finding: "The ceiling model wins decisively \u2014 top-level persistence 1.000 vs 0.490 over 200 paired seeds, and it survives zero noise, because a consumer stacked two deep on funded energy simply oscillates. Periodic forcing is a negative result: it narrowed coexistence by 4.6% rather than widening it, because shared multiplicative forcing leaves every capacity ratio unchanged. If we want periodic signals to buy diversity, build the seed bank, not the wobble.",
+      sys: "One well-mixed patch holding soil → producers → pollinators → birds, with several competing producer species. The same chain is simulated two ways on identical seeds: funded, where each level is paid for out of the level below at 10% transfer efficiency, and ceiling, where the level below merely sets a capacity the level above relaxes toward. A second experiment wobbles the soil supply periodically.",
+      q: "Fund individuals from the level below, or let the level below set a ceiling? And does periodically varying capacity widen coexistence — Wonder has five periodic clocks doing nothing mechanical.",
+      finding: "The ceiling model wins decisively — top-level persistence 1.000 vs 0.490 over 200 paired seeds, and it survives zero noise, because a consumer stacked two deep on funded energy simply oscillates. Periodic forcing is a negative result: it narrowed coexistence by 4.6% rather than widening it, because shared multiplicative forcing leaves every capacity ratio unchanged. If we want periodic signals to buy diversity, build the seed bank, not the wobble.",
     },
     {
-      n: 6, slug: "island", title: "The island",
+      n: 6, title: "The island",
       url: "https://claude.ai/code/artifact/99589bf5-54bc-45c6-97ac-337fa8b932a0",
       theory: "the integration",
-      q: "Does it cohere spatially? Runs the reagent economy on a grid with real competition, and puts selection-on versus selection-off side by side so you can see whether selection actually beats drift.",
-      finding: "Selection visibly beats drift: mean tier 2.31 vs 1.07, surplus +27.2 vs \u22126.0, the hue ribbon splitting into two modes by tick 400. Without selection, inherited metabolisms rot until the island lives off the viability floor. It also falsified the \u201cpattern regularity is the master knob\u201d claim \u2014 no threshold exists, because plastic roots find good ground by looking. Half the rolled worlds are duds, so the rejection sampler is not optional.",
+      sys: "Bench 0's economy on a 64 × 48 grid with a tiled mineral field. A seed grows a root once by greedy tropism, runs its chain once at maturity, and from then on reproduces and dies at rates set by the surplus that chain earned. Two lines carry the whole selection claim: reproduction × vigor, and a crowding thin that removes the weakest of three. Selection strength 0 recovers today's drift exactly.",
+      q: "Does it cohere spatially? Does selection visibly beat drift — and can you see it happening?",
+      finding: "Selection visibly beats drift: mean tier 2.31 vs 1.07, surplus +27.2 vs −6.0, the hue ribbon splitting into two modes by tick 400. Without selection, inherited metabolisms rot until the island lives off the viability floor. It also falsified the “pattern regularity is the master knob” claim — no threshold exists, because plastic roots find good ground by looking. Half the rolled worlds are duds, so the rejection sampler is not optional.",
     },
     {
-      n: 7, slug: "disturbance", title: "Disturbance and the seed bank",
+      n: 7, title: "Disturbance and the seed bank",
       url: "https://claude.ai/code/artifact/3b4fd3e7-92eb-45c7-b346-55beed29bc70",
       theory: "contested — IDH, Fox 2013",
-      q: "Does disturbance maintain diversity, does a hump appear at all, and does the effect survive being softened into something a peaceful game could ship?",
-      finding: "A hump did appear, peaking at D \u2248 0.011 for a 2.2\u00d7 diversity gain \u2014 and the peaceful version beat the lethal one (4.91 vs 4.52), because clearing a patch subsidises colonisers while suppression makes the incumbent beatable without surrendering the space. The seed bank is narrower than claimed: it saves the high-disturbance tail only. Uncomfortably, three of four no-trade-off controls also passed the hump test while describing a dead two-species community.",
+      sys: "A 64 × 64 torus, one individual per cell. Species are strictly ranked: a better competitor displaces a worse one it reaches, and the only thing a worse one gets in exchange is a higher colonisation rate. Disturbance clears discs at random (lethal) or merely suppresses them for a recovery window (peaceful). A two-slot seed bank per cell decays with a half-life and germinates against it.",
+      q: "Does diversity actually peak at intermediate disturbance — the textbook claim, which is genuinely contested? And does the effect survive being softened into something a peaceful game could ship?",
+      finding: "A hump did appear, peaking at D ≈ 0.011 for a 2.2× diversity gain — and the peaceful version beat the lethal one (4.91 vs 4.52), because clearing a patch subsidises colonisers while suppression makes the incumbent beatable without surrendering the space. The seed bank is narrower than claimed: it saves the high-disturbance tail only. Uncomfortably, three of four no-trade-off controls also passed the hump test while describing a dead two-species community.",
+    },
+    {
+      n: 8, title: "Markings",
+      url: "https://claude.ai/code/artifact/987c784c-9a01-4942-a589-7852d1a5b9eb",
+      theory: "Gray–Scott reaction–diffusion",
+      sys: "Two chemicals diffusing at different rates on a periodic grid: V consumes U autocatalytically, U is fed in at rate F, V is removed at rate k. Those two numbers plus anisotropy are the genome. The settled field is summarised by a rotation-invariant descriptor taken from its power spectrum, so two patterns can be compared as patterns rather than pixel by pixel.",
+      q: "Structure grammars cannot make spots and stripes. Does a small genetic change give a small pattern change — and does anything survive being shrunk to a sprite?",
+      finding: "Heritable, with one mandatory change: the growth seed must be inherited. Re-roll it and a genetically identical sibling lands further from its parent than an unrelated genome does — one integer is the whole difference. Safe mutation step is δ ≤ 0.008; the cliffs sit in the tail, not the mean, because only 22% of the parameter rectangle makes a pattern at all. Crop the sprite to 2–3 field cells per pixel: a 7×7 map then carries about two features — two dots, one bar, or plain.",
+    },
+    {
+      n: 9, title: "The host plate",
+      url: "https://claude.ai/code/artifact/b0722151-48d8-438a-9df0-4a1061ad4d23",
+      theory: "a rendering test, not a simulation",
+      sys: "Bench 0's specimen, pigment and grow-from-the-chain program, rasterised into a fixed pixel budget and then upscaled with nearest-neighbour so you are always judging real pixels. Shoot above the ground line, roots below it drawn over the mineral field they are eating, and pollinators perched at the game's own size ratio of 5 × W / 16.",
+      q: "Blaine sized the host view at “30×50 or so” and it has only ever been answered in prose. How much plate does the picture actually need?",
+      finding: "Yes for the shoot — ship 30×74. Going to 64×104 costs 4.4× the pixels and buys two more flowers; ink coverage actually falls as the plate grows. The insect estimate in the doc was 3× too small (9px, not 2–3), so legibility was never the constraint — crowding is. A plate holds two pollinators, three at a stretch, at any resolution. And insects come out cryptic by default, landing 5.4° of hue from their host, so value contrast rather than colour is what makes them visible.",
+    },
+    {
+      n: 10, title: "Island palette and light",
+      url: "https://claude.ai/code/artifact/08d56254-4f5f-4e2f-8d8e-f12038aa4d0a",
+      theory: "colour at the scene scale",
+      sys: "Twenty plants standing in one field, each colour earned from its own metabolism, with one step added between the earned hue and the drawn hue: pull it toward a harmonic key whose anchors can be grounded to the terrain. A light model then multiplies and tints the whole scene by hour, and perceptual separation between species is measured after that, not before.",
+      q: "Twenty individually-justified colours can still compose into mud. Does biasing toward a key make islands beautiful without making them alike — and does earned colour survive dusk?",
+      finding: "Split-complementary, grounded to the terrain, at bias 0.70 — and grounding matters more than the key. Variety improved rather than suffered, because an unbiased island has no character to differ in. But earned colour does not survive dusk: pigment separation falls from 93% to 35%, below half for over half the day. It is the tint, not the darkness, and glow currently fades on luminance when the damage peaks with tint. One-line fix, deliberately left broken so the table still shows it.",
+    },
+    {
+      n: 11, title: "Motion signature",
+      url: "https://claude.ai/code/artifact/a9abda24-c51f-4fa9-aeda-2252ae4026d1",
+      theory: "the phenotype we forgot",
+      sys: "A seven-gene flight genome — cruise speed, dart impulse, dart rate, hover, turn sharpness, curvature bias, wind coupling — flown in a meadow with a wind field, drifting clutter and a predator that compares motion against the wind. Identification is tested twice: by you, at a sprite size you choose, and by a leave-one-out classifier on measured trajectory features.",
+      q: "At gameplay zoom an insect is about five pixels, so colour and shape are barely there. Is motion legible as a lineage identity, and does it work as a second camouflage axis?",
+      finding: "89.1% identification against a 12.5% chance level, from genomes drawn at random. At 5px motion scores 88.9% against colour’s 58.3% — the curves cross at 8.5px, and that direction holds across every swept assumption. Which composes with bench 9: if insects mostly wear their host’s colour anyway, motion is not a nice extra, it is the channel that still works. The feed-versus-be-seen trade-off is a real Pareto front that collapses to a single optimum when the predator is switched off.",
     },
   ];
 
   const host = document.getElementById("benches");
+
+  function para(cls, label, text) {
+    const p = document.createElement("p");
+    p.className = cls;
+    const b = document.createElement("b");
+    b.textContent = label;
+    p.appendChild(b);
+    p.appendChild(document.createTextNode(text));
+    return p;
+  }
+
   BENCHES.forEach(function (b) {
     const el = document.createElement("article");
     el.className = "bench";
@@ -362,24 +404,19 @@
     }
     body.appendChild(h);
 
-    const q = document.createElement("p");
-    q.className = "q"; q.textContent = b.q;
-    body.appendChild(q);
+    body.appendChild(para("sys", "The system", b.sys));
+    body.appendChild(para("q", "What it decides", b.q));
 
-    const f = document.createElement("p");
-    f.className = "finding";
-    const lab = document.createElement("b");
-    lab.textContent = b.finding ? "What it found" : "Status";
-    f.appendChild(lab);
     if (b.finding) {
-      f.appendChild(document.createTextNode(b.finding));
+      body.appendChild(para("finding", "What it found", b.finding));
     } else {
+      const f = para("finding", "Status", "");
       const s = document.createElement("span");
       s.className = "pending";
       s.textContent = "built and running — finding not yet recorded here; the bench itself carries its own numbers.";
       f.appendChild(s);
+      body.appendChild(f);
     }
-    body.appendChild(f);
 
     el.appendChild(body);
     host.appendChild(el);

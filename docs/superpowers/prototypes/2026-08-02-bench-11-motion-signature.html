@@ -273,6 +273,54 @@
   .busy { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--warn); }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -289,6 +337,91 @@
     if a predator reads movement as well as appearance, is a swarm forced to choose between moving
     like food and moving like the wind?
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      A flight model with a seven-gene genome, and three tests run against it. Insects fly
+      in a meadow with a wind field, drifting clutter and a predator; the genome decides how
+      they move and nothing else. Test one asks whether <em>you</em> can tell lineages apart
+      at gameplay scale. Test two asks the same question objectively, with a
+      nearest-neighbour classifier on measured trajectory features. Test three asks whether
+      moving in a way that feeds well and moving in a way that avoids the predator are the
+      same thing.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>genome</dt>
+      <dd>Seven continuous genes. <b>speed</b> cruise px/s · <b>dart</b> the impulse a dart
+        adds instantly · <b>rate</b> darts per second, Poisson so the spacing is irregular ·
+        <b>hover</b> seconds parked after a dart, which is what makes a track dotted ·
+        <b>turn</b> how fast heading snaps to target, high being angular and low being long
+        smooth arcs · <b>curve</b> constant rad/s added to heading, which loops the track ·
+        <b>wind</b> coupling from 0 (flies its own line) to 1 (mostly carried).</dd>
+
+      <dt>archetype</dt>
+      <dd>Eight named genomes — Skipper, Hoverfly, Drifter, Spiral, Sawtooth, Bobber,
+        Ranger, Tumbler — used as the fixed reference set so the identification test has a
+        known chance level of 1 in 8.</dd>
+
+      <dt>wind field</dt>
+      <dd>A smooth time-varying vector field over the meadow. It carries the clutter exactly,
+        which makes it the reference the predator compares everything against.</dd>
+
+      <dt>clutter</dt>
+      <dd>Drifting leaves that move exactly with the field. They dilute the predator's
+        attention, so moving like the wind is a real strategy rather than a metaphor.</dd>
+
+      <dt>hazard</dt>
+      <dd>Detection pressure on one insect: how far its motion departs from the local wind,
+        scaled by predator sensitivity and reduced by the masking the clutter provides.</dd>
+
+      <dt>forage score</dt>
+      <dd>Flowers visited per unit time under the same genome. A fast, straight flier feeds
+        well and is trivially visible; a drifter is invisible and starves.</dd>
+
+      <dt>trajectory features</dt>
+      <dd>What the classifier actually sees: speed statistics, turn-rate statistics, the
+        stop fraction, path sinuosity, and the peak of the movement's frequency spectrum.
+        Z-scored, then classified by leave-one-out k-nearest-neighbour, so the accuracy
+        number is out-of-sample.</dd>
+
+      <dt>sprite scale</dt>
+      <dd>Screen pixels across. <b>Five is Wonder's normal zoom</b>, and it is the size at
+        which the colour channel is compared against the motion channel.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Fly every lineage in the shared meadow: each insect steers toward the nearest
+        flower, darts on its Poisson schedule, hovers, and is pushed by the wind in
+        proportion to its coupling gene.</li>
+      <li><b>The human test.</b> Show an unlabelled swarm at the current sprite size and
+        record whether you name it correctly, against a 1-in-8 chance level.</li>
+      <li><b>The classifier.</b> Sample trajectories from random genomes, extract features,
+        z-score them, and measure leave-one-out accuracy. Also compute the colour channel's
+        accuracy at the same sprite size, so the two can be compared on one axis.</li>
+      <li><b>The trade-off.</b> Fly many random genomes, score each on feeding and on
+        hazard, and extract the Pareto front. Switch the predator off and watch the front
+        collapse to a single optimum — that collapse is the evidence that the trade-off is
+        what generates variety.</li>
+      <li><b>The lineage strip.</b> Mutate a genome repeatedly at the current step size and
+        draw the resulting tracks, so heritability of motion is visible directly.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The meadow</dt><dd>Every lineage flying at once, with the wind field and clutter live.</dd>
+      <dt>Traces</dt><dd>One trajectory per lineage, drawn as a path — this is what the classifier is reading.</dd>
+      <dt>The identification test</dt><dd>The human half. Unlabelled swarms at the sprite size you choose.</dd>
+      <dt>Motion versus colour</dt><dd>Accuracy of both channels against sprite size, with the crossover marked.</dd>
+      <dt>Feed versus be seen</dt><dd>The Pareto scatter, and what happens to it when the predator is switched off.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="transport">
     <button class="primary" id="btnPlay">Pause</button>

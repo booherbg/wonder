@@ -259,6 +259,54 @@
     margin: 0 0 var(--s4); max-width: 68ch;
   }
   .callout p:last-child { margin-bottom: 0; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -273,6 +321,83 @@
     effect exists survive being softened into something Wonder could ship, where nothing dies
     as a visible event and everything expresses as a rate?
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      A patch-occupancy model — Tilman's competition–colonisation trade-off made cell by
+      cell so it can be drawn. A 64 × 64 torus, one individual per cell. Species are ranked:
+      a better competitor displaces a worse one it reaches, always, with no contest. The
+      only thing a worse competitor can be given in exchange is a higher colonisation rate,
+      and the strength of that exchange is a dial. Disturbance clears or suppresses discs of
+      cells at random, and the question is what that does to diversity.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>cell</dt>
+      <dd>One site on the torus, holding at most one individual. Occupancy is the whole
+        state; there is no biomass, no age, no size.</dd>
+
+      <dt>competitive rank</dt>
+      <dd>A strict ordering. Species 0 beats everyone, species 1 beats everyone but 0, and
+        so on. Contests are decided by rank alone.</dd>
+
+      <dt>colonisation rate c</dt>
+      <dd>How fast a species throws propagules into neighbouring cells. Spans 0.02 to 0.55
+        across the species set.</dd>
+
+      <dt>trade-off strength</dt>
+      <dd>The correlation between rank and colonisation rate, from 0 to 1. <b>The set of
+        rate values is fixed</b>; only which species gets which value changes. That is what
+        makes trade-off = 0 a clean control rather than "and also slower".</dd>
+
+      <dt>disturbance</dt>
+      <dd>At rate <em>D</em> per tick, a disc of radius <em>R</em> is chosen at random.
+        <b>lethal</b> mode removes every occupant in it. <b>peaceful</b> mode leaves them
+        standing but marks the cells suppressed for a recovery window, during which a
+        suppressed occupant can be displaced by <em>anyone</em>, not just a better
+        competitor.</dd>
+
+      <dt>seed bank</dt>
+      <dd>Two slots per cell. A displaced or disturbed occupant deposits its identity there;
+        the entry decays with a half-life and germinates with a fixed probability against
+        that decayed viability. Germination is read <em>before</em> the fresh propagule rain
+        lands, or the bank becomes a mirror of the present instead of a memory of the
+        past.</dd>
+
+      <dt>Hill diversity</dt>
+      <dd>The diversity number reported throughout, rather than raw species richness — it
+        weights by abundance, so a species clinging to four cells does not count the same as
+        one holding a quarter of the island.</dd>
+    </dl>
+
+    <h3>Procedure — one tick</h3>
+    <ol class="proc">
+      <li><b>Colonisation.</b> Every occupied cell throws propagules at its neighbourhood at
+        its species' rate. An arrival takes the cell if it is empty, if it is strictly
+        better than the occupant, or if the occupant is currently suppressed.</li>
+      <li><b>Background mortality.</b> Each occupant dies with probability <em>m</em>,
+        independent of everything else. This is the baseline turnover disturbance has to
+        beat.</li>
+      <li><b>Disturbance.</b> With probability <em>D</em>, fire an event: pick a centre,
+        clear or suppress the disc, then germinate from the bank and deposit the displaced.</li>
+      <li><b>Recovery.</b> Suppression counters tick down; bank entries age.</li>
+      <li><b>Measure.</b> Richness, Hill diversity, occupancy, and the count of regionally
+        extinct species.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The live model</dt><dd>The grid, coloured by species, with disturbance events marked as they fire.</dd>
+      <dt>Diversity over time</dt><dd>Richness and Hill diversity, with the event rate underneath.</dd>
+      <dt>Succession in one patch</dt><dd>A single disturbed disc traced from the moment it is hit — who arrives first, who takes it back.</dd>
+      <dt>The curve</dt><dd>Diversity against disturbance rate, four configurations at once: lethal or peaceful × bank or no bank. The hump, if there is one, is here.</dd>
+    </dl>
+  </section>
+
+
+
 
   <section>
     <h2>The claim under test, and why it is not safe</h2>

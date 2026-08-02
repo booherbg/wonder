@@ -590,28 +590,33 @@ feels thin: it is the leftmost option on every single axis.
 
 ## 6 · The benches
 
-Six parameterised instruments, each isolating one mechanism. All are standalone
+Twelve parameterised instruments, each isolating one mechanism. All are standalone
 HTML in `docs/superpowers/prototypes/`, all share the kit in `BENCH-KIT.md`, all
-are seeded and reproducible.
+are seeded and reproducible. Every one opens with a **`.sysblock`** — what the
+model is, its parts defined with types and ranges, its procedure numbered in
+execution order, and what each panel shows — before any finding.
 
 **Index (start here):** <https://claude.ai/code/artifact/6c48a76a-4bd1-48af-888c-acb9e5248ad1>
+· live at <https://blainebooher.com/wonder/benches/>
 
 | # | Bench | The question it settles | Live |
 |---|---|---|---|
+| 0 | **The reagent economy** | Can colour, yield and silhouette all be readouts of one metabolism? Is a random hand of recipes playable? | [↗](https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0) |
 | 1 | **Autocatalysis** | When is a randomly-rolled chemistry *alive*? Where is the phase transition, and is the RAF condition usable as a worldgen gate? | [↗](https://claude.ai/code/artifact/54f6c253-96be-4733-b448-53fb1f677e04) |
 | 2 | **NK landscape** | How rugged should Wonder be? What K, and does the complexity catastrophe bite at the genome sizes we actually use? | [↗](https://claude.ai/code/artifact/5624c49b-28e0-47be-a538-4005fe2353f5) |
 | 3 | **Regulatory morphology** | Does "body = network attractor" give forms stable enough to be an identity but still able to jump? | [↗](https://claude.ai/code/artifact/d3ce6504-7b67-4b6b-a68b-687ce0cd547d) |
 | 4 | **Tag ecology** | Does Holland's full ECHO produce trophic layers and mimicry — and does any of it survive being made non-lethal? | [↗](https://claude.ai/code/artifact/7021b774-cbbe-402e-9003-9b76b81921ab) |
 | 5 | **Trophic flow** | Fund individuals or set ceilings? And does periodic forcing really widen coexistence? | [↗](https://claude.ai/code/artifact/b437e032-2aaf-427e-9cf3-0e8a42642cd1) |
 | 6 | **The island** | Does it cohere spatially, and can you *see* selection beat drift? | [↗](https://claude.ai/code/artifact/99589bf5-54bc-45c6-97ac-337fa8b932a0) |
+| 7 | **Disturbance** | Does diversity peak at intermediate disturbance, and does the effect survive being made peaceful? | [↗](https://claude.ai/code/artifact/3b4fd3e7-92eb-45c7-b346-55beed29bc70) |
+| 8 | **Markings** | Is reaction–diffusion pattern heritable in small steps, and does anything survive being shrunk to a sprite? | [↗](https://claude.ai/code/artifact/987c784c-9a01-4942-a589-7852d1a5b9eb) |
+| 9 | **The host plate** | How much plate does the picture need? Is 30×50 enough? | [↗](https://claude.ai/code/artifact/b0722151-48d8-438a-9df0-4a1061ad4d23) |
+| 10 | **Island palette and light** | Does biasing hues to a key make islands beautiful without making them alike — and does earned colour survive dusk? | [↗](https://claude.ai/code/artifact/08d56254-4f5f-4e2f-8d8e-f12038aa4d0a) |
+| 11 | **Motion signature** | Is motion legible as a lineage identity at five pixels, and does it work as a second camouflage axis? | [↗](https://claude.ai/code/artifact/a9abda24-c51f-4fa9-aeda-2252ae4026d1) |
 
-Findings from each are recorded on the benches themselves and summarised in
-[§8](#8--findings) once they land.
-
-**Prior bench:** the reagent economy
-(`2026-07-31-reagent-economy.html`, [live](https://claude.ai/code/artifact/5d1bc66c-6609-4e01-bb96-4c3b6be832c0))
-remains the chemistry/colour/morphology prototype these extend; it now carries a
-nine-dial parameter rail of its own.
+Benches 1–7 ask whether the mechanisms **work**; 8–11 ask whether they **read**.
+Findings are recorded on the benches themselves and summarised in
+[§8](#8--findings) and [§11](#11--art-bench-findings).
 
 ---
 
@@ -1496,6 +1501,72 @@ markings and noise.
    7×7 map holds about two features, and **the growth seed must be genetic.**
 8. **Cut turn sharpness** from any motion genome; hover and dart-frequency are what
    read.
+
+---
+
+## 12 · Addendum, 2026-08-02 — the pages were unreadable
+
+Blaine read the reagent-economy bench end to end and could not say how the system
+worked. That is a total failure of the artifact, and it was not a one-off: the
+same defect was in all twelve.
+
+### 12.1 What was actually wrong
+
+Not prose quality. **Structure.** Every bench opened with an evocative standfirst
+and then went straight to findings, so a reader met the results of a measurement
+before learning what had been measured. Terms were used as though already defined:
+*"what it ended holding"*, *"the hand it inherited"*, *"a hand that loops is an
+engine"*. Each of those is a soft analogy standing where a definition belongs, and
+none of them survives the question **"which part of the system is that?"**
+
+The index made it worse: bench 0 was filed at the *bottom*, under a heading that
+assumed you already knew what it extended, and the page had no summary at all —
+twelve cards, no statement of what the suite is for or what it concluded.
+
+### 12.2 The fix
+
+Every bench now opens with a **`.sysblock`**, before the instrument, in a fixed
+order:
+
+1. **The system** — one literal paragraph, no metaphor, saying what is computed.
+2. **Parts** — a definition list covering every term the page uses, with types and
+   ranges. If a word appears in a heading, a slider label or a readout, it is
+   defined here.
+3. **Procedure** — the algorithm numbered in execution order.
+4. **What is on this page** — panel by panel.
+
+Findings moved to last, always. Headings that named feelings now name objects
+(*"What it ended holding"* → *"The final pile"*). The index leads with an executive
+summary — the problem, the proposal under test, how the twelve divide, and the
+eleven decisions they produced — and the cards run 0 → 11 in order, each carrying a
+**The system** line before its question and its finding.
+
+### 12.3 The generalisation
+
+This recurs often enough to be worth a standing rule, so `docs/WRITING-STANDARD.md`
+now governs every document, prototype, report and UI string in the repo, and
+`CLAUDE.md` points at it. Its two operative tests:
+
+- **The referent test.** For every noun phrase, can the reader point to the thing —
+  a variable, a function, a panel, a number? If the answer is "it's sort of the idea
+  that…", it has no referent and must be replaced with one.
+- **The substitution test.** Replace the phrase with the literal operation. If
+  nothing is lost but length, the phrase was ornament.
+
+`BENCH-KIT.md` §4 now requires the `.sysblock` structure of every new bench.
+
+### 12.4 A harness bug this turned up
+
+`scripts/bench-qa.mjs` defaulted to `^2026-08-*`, which silently excluded the
+reagent-economy bench — the page most people open first, and the one that prompted
+all of this. It now scans every prototype in the folder: **14/14 clean**, and 14/14
+built pages verified at a 390 px viewport.
+
+A class collision also surfaced: bench 8 already used `.spec` for its spectrum
+chart, so the shared block is `.sysblock`. Injecting shared markup into twelve
+pages without checking each page's existing class names is a real failure mode; the
+CSS now carries `SYSBLOCK-CSS-START/END` sentinels so the block can be replaced
+wholesale rather than patched.
 
 ---
 

@@ -229,6 +229,54 @@
   .findings dd { margin: 0; font-size: 13.5px; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -244,6 +292,104 @@
     Steel exactly, and then asks the only question worldgen cares about:
     <em>where is the line, and can we put a gate on it?</em>
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      A chemistry is generated at random and then tested for one property: whether some
+      part of it can build and catalyse itself out of freely available food. The test is
+      Hordijk &amp; Steel's RAF algorithm, which is a shrinking fixed point — it repeatedly
+      deletes any reaction that cannot be fed or cannot be catalysed, until nothing more
+      can be deleted. What remains is the world's metabolism, or nothing.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>molecule</dt>
+      <dd>A binary string of length 1 to <em>L</em>. The molecule set is every such string,
+        so it is <code>2<sup>L+1</sup> − 2</code> molecules — 14 at L=3, 254 at L=7.</dd>
+
+      <dt>food set F</dt>
+      <dd>Every molecule of length ≤ <em>L<sub>f</sub></em>. Food is assumed present in
+        unlimited supply and free. This assumption is what makes the trivial one-reaction
+        RAF possible, and is the reason the naive test has to be rejected.</dd>
+
+      <dt>reaction</dt>
+      <dd>Ligation only: <code>a + b → ab</code>, one reaction per ordered pair whose
+        concatenation is still ≤ L. The count grows as <code>Σ(k−1)2<sup>k</sup></code> —
+        20 reactions at L=3, 1284 at L=7. Cleavage is not implemented, which makes every
+        number here a conservative floor.</dd>
+
+      <dt>catalysis</dt>
+      <dd>Independently for each (molecule, reaction) pair, that molecule catalyses that
+        reaction with probability <em>p</em>. No rates and no strengths — a molecule either
+        catalyses a reaction or it does not.</dd>
+
+      <dt>f</dt>
+      <dd><code>p × |R|</code>: the mean number of reactions a single molecule catalyses.
+        This, not <em>p</em>, is the quantity the theory is about, and it is the top axis
+        of the sweep chart.</dd>
+
+      <dt>closure(F, R)</dt>
+      <dd>Everything reachable from the food set using only reactions in R. Computed by
+        repeated application until no new molecule appears.</dd>
+
+      <dt>RA</dt>
+      <dd><em>Reflexively autocatalytic</em>: every reaction in the set is catalysed by
+        something the set touches. Says nothing about whether the set can ever start.</dd>
+
+      <dt>F-generated</dt>
+      <dd>Every reactant in the set is reachable from food. Says nothing about whether
+        anything catalyses it. Converges in a single pass.</dd>
+
+      <dt>RAF</dt>
+      <dd>Both at once, and the reason the two have to be applied in alternation: shrinking
+        the set shrinks its own catalytic support, so the conditions have to be re-checked
+        against each other until they stop changing.</dd>
+
+      <dt>adjacent possible</dt>
+      <dd>Every reaction exactly one step beyond the live metabolism's closure — reactants
+        already on hand, product not yet made. Split into <em>latent</em> (the reaction was
+        rolled, it just has not been reached) and <em>novel</em> (this world does not
+        contain that reaction at all).</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Enumerate every molecule of length ≤ L; mark those of length ≤ L<sub>f</sub> as
+        food.</li>
+      <li>Enumerate every ligation reaction. Optionally keep a random <em>sample</em> of
+        them, which thins the network without changing its shape.</li>
+      <li>Roll catalysis: each molecule catalyses each reaction with probability <em>p</em>.</li>
+      <li>Run the fixed point. Start with every reaction; delete any whose reactants are not
+        in the closure or whose catalysts are all outside it; recompute the closure; repeat
+        until stable. The result is the <em>unique maximal</em> RAF — there is no search and
+        no tuning, one answer per world.</li>
+      <li>Apply the gate: <code>|maxRAF| ≥ 5</code> reactions. The naive "does any RAF
+        exist" test is reported alongside it, dashed, so the gap is visible.</li>
+      <li>Compute the adjacent possible from the closure of the surviving set.</li>
+      <li>For the sweep: 40 values of <em>p</em> × 25 independent worlds each, plotting the
+        fraction that pass.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>The reaction network</dt>
+      <dd>Molecules columned by string length, reactions drawn between them. The maximal RAF
+        is in this world's generated hue; everything else is background.</dd>
+      <dt>The three conditions</dt>
+      <dd>Sizes of maximal-RA, maximal-F-generated, and RAF as bars, so you can see that RAF
+        is normally strictly smaller than the intersection of the other two.</dd>
+      <dt>The adjacent possible</dt>
+      <dd>Counts and the individual candidate products this world could next invent.</dd>
+      <dt>The phase transition</dt>
+      <dd>Pass fraction against <em>p</em>, with <em>f</em> on the upper axis. Two curves:
+        dashed is the naive test, solid is the ≥5-reaction gate.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="plate">
 

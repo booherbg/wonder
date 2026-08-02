@@ -220,6 +220,54 @@
   table.fnd th, table.fnd td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
   table.fnd th:first-child, table.fnd td:first-child { text-align: left; }
   table.fnd th { color: var(--muted); font-weight: 500; letter-spacing: .06em; }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
 </style>
 
 <div class="wrap">
@@ -235,6 +283,83 @@
     periodically wobbling capacity widens coexistence, that is close to free. This bench
     is a single <em>well-mixed patch</em>: no space, no geography, no dispersal.
   </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      One well-mixed patch — no space, no geography, no dispersal — holding a four-level
+      food chain: soil, several competing producer species, pollinators, birds. The same
+      chain is then simulated two ways that differ only in how energy couples one level to
+      the next, on identical seeds, so the difference in outcome is attributable to the
+      coupling and to nothing else. A second experiment wobbles the soil supply
+      periodically and counts how many species survive.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>level</dt>
+      <dd>Soil → producers → pollinators → birds. Only the producer level has multiple
+        competing species; the levels above it are aggregate.</dd>
+
+      <dt>funded coupling</dt>
+      <dd>The realistic model. Each level's growth is <em>paid for</em> out of the level
+        below at a 10% transfer efficiency, and every individual must earn back an upkeep
+        <em>m</em> each tick or the level shrinks.</dd>
+
+      <dt>ceiling coupling</dt>
+      <dd>The alternative. The level below sets a soft carrying capacity, and the level
+        above relaxes toward it at rate <em>r</em> instead of being funded by it. No energy
+        is conserved between levels; the lower level constrains rather than pays.</dd>
+
+      <dt>competition α</dt>
+      <dd>The weight a producer species places on everyone else's density relative to its
+        own. At α = 0 each species has a private niche; past about 1 the strongest
+        competitor takes everything.</dd>
+
+      <dt>demographic noise σ</dt>
+      <dd>Per-tick stochastic wobble scaling as √n, so small populations feel it hardest.
+        Set it to zero to confirm that funded-mode collapse is a limit cycle rather than
+        bad luck.</dd>
+
+      <dt>periodic forcing</dt>
+      <dd><code>S(t) = S₀ · (1 + A·sin(2πt/T))</code> on the soil supply. Wonder already has
+        five clocks — day, tide, rain, bloom, aurora — spanning roughly this range of
+        periods, none of them touching carrying capacity.</dd>
+
+      <dt>phase spread</dt>
+      <dd>Not in the base model, added as a test. At 1, each species' capacity peaks at a
+        different point in the cycle — the obvious way to build a temporal niche.</dd>
+
+      <dt>coexistence</dt>
+      <dd>The count of producer species still above an extinction floor at the end of the
+        run. Competitive exclusion is slow, so short runs flatter it.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Roll <em>nP</em> producer species, each with its own uptake efficiency from the
+        seed, so their capacities genuinely differ.</li>
+      <li>Simulate the chain for the full run length under the selected coupling, applying
+        competition, noise, and any periodic forcing each tick.</li>
+      <li><b>Decision 1.</b> Run the same seed under both couplings and compare persistence
+        of the top level across 200 paired seeds.</li>
+      <li><b>Decision 2.</b> Sweep forcing amplitude <em>A</em> against period <em>T</em>,
+        counting coexisting species in each cell, and difference it against the
+        <em>A</em> = 0 control row — the phase diagram is that difference, so a positive
+        cell means forcing actually bought something.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>One run</dt><dd>Population time series for every level and every producer species.</dd>
+      <dt>The pyramid</dt><dd>Standing biomass by level at the end of the run.</dd>
+      <dt>Decision 1</dt><dd>The same seed both ways, side by side, with the paired verdict.</dd>
+      <dt>Decision 2</dt><dd>The coexistence phase diagram and its difference from the unforced control.</dd>
+    </dl>
+  </section>
+
+
+
 
   <div class="plate">
 
