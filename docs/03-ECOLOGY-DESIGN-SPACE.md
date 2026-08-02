@@ -1568,6 +1568,44 @@ pages without checking each page's existing class names is a real failure mode; 
 CSS now carries `SYSBLOCK-CSS-START/END` sentinels so the block can be replaced
 wholesale rather than patched.
 
+### 12.5 Second pass, same day — three more defects from watching him read
+
+**Contrast.** Body copy was set in `--muted` throughout: definitions, card
+descriptions, standfirsts, notes. It cleared AA and still read as unfinished —
+grey on near-black. `--muted` is now a label colour only, raised in both themes,
+and every run of body copy is `--ink`. Added to `BENCH-KIT.md` §1.
+
+**Undefined notation.** *"What is an arrow? What is a catalyst?"* The reagent
+bench drew card rows in a notation it never defined — `UPGRADE 2 × any base → 1 ▪`
+with a `×13` in the gutter. Defining the *concepts* in the sysblock did not
+define the *notation*, and they are separate jobs. There is now a how-to-read
+list directly above the hand, and chips carry titles.
+
+**An animation with no readout.** *"When I click Watch it grow, what is supposed
+to happen?"* The specimen redrew one conversion at a time and nothing said so, so
+it looked like the plant wiggled. Each log row now records which chain steps it
+covers; the animation highlights the row currently drawing and captions the plate
+`step 7 of 36 · upgraded 2 cobalt into verdigris`. **A visualisation that does not
+name what it is showing is decoration** — the same defect as the prose, in
+pixels.
+
+Also added across all twelve: glossary tooltips sourced from each page's own
+definition list, so a term cannot drift from its definition; and a **Try this
+first** walkthrough of three concrete actions naming real controls, which is the
+difference between a bench that reads as a monograph and one that reads as a
+tutorial.
+
+### 12.6 Published copies drift
+
+Blaine was reading the *published artifacts*, which were the pre-update copies,
+while the site at `blainebooher.com/wonder/benches/` was current. The repo index
+links to artifacts and the built index links locally — `build-benches.mjs`
+rewrites them — so both paths are correct by construction, but **only the built
+one updates on push.** All thirteen artifacts were republished to match. Anything
+published outside the repo has to be re-published deliberately, or the version
+someone reads is whichever one they happened to open.
+
+
 ---
 
 *— Fable*

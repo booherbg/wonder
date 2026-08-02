@@ -111,6 +111,10 @@ footer {
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 ```
 
+**Contrast:** `--muted` is for labels, eyebrows, captions and chart axes. **Body
+copy is never set in `--muted`** — definitions, descriptions, standfirsts and
+notes are `--ink`. Grey-on-near-black reads as unfinished even when it clears AA.
+
 ## 2 · The control rail (every bench uses this)
 
 Parameters live in a persistent rail. Each control shows its **live value** and,
