@@ -383,6 +383,82 @@
     .sysblock dl.defs dd { margin: 2px 0 0; }
   }
   /* SYSBLOCK-CSS-END */
+
+  /* the growth caption: names the conversion currently being drawn */
+  .growcap {
+    font-family: var(--font-mono); font-size: 11px; line-height: 1.4;
+    color: var(--muted); min-height: 2.8em; margin: var(--s2) 0 0;
+  }
+  .growcap.live { color: var(--ink); }
+  .runlog div.now {
+    background: var(--sunk); outline: 1px solid var(--slate);
+    outline-offset: 1px; border-radius: 2px;
+  }
+
+  /* how-to-read-the-notation list, used above the hand */
+  dl.notation {
+    display: grid; grid-template-columns: minmax(7.5em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0 0 var(--s4); max-width: 76ch;
+    padding: var(--s3) var(--s4); border-left: 2px solid var(--rule);
+  }
+  dl.notation dt {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); padding-top: 2px;
+  }
+  dl.notation dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+  dl.notation dd b { font-weight: 600; }
+  @media (max-width: 620px) {
+    dl.notation { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    dl.notation dt { padding-top: var(--s3); }
+  }
+
+  /* READABILITY-START — body copy is never grey; --muted is for labels and axes */
+  :root { --muted: #555B56; }
+  @media (prefers-color-scheme: dark) { :root { --muted: #AAB2A9; } }
+  :root[data-theme="dark"]  { --muted: #AAB2A9; }
+  :root[data-theme="light"] { --muted: #555B56; }
+
+  .standfirst, p.note, .reading p, .reading li,
+  .sysblock dl.defs dd, .sysblock ol.proc li,
+  .bench .q, .bench .sys, .glossary dd, .decisions dd { color: var(--ink); }
+
+  /* ---- glossary tooltips: the definition list is the source of truth ---- */
+  .gloss {
+    border-bottom: 1px dotted var(--slate); cursor: help;
+    text-underline-offset: 2px;
+  }
+  .gloss:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; border-radius: 2px; }
+  #glosstip {
+    position: fixed; z-index: 9999; max-width: min(34ch, 88vw);
+    background: var(--panel); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3) var(--s4); font-size: 13.5px; line-height: 1.5;
+    box-shadow: 0 6px 20px var(--shadow); pointer-events: none;
+    opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;
+  }
+  #glosstip.on { opacity: 1; transform: translateY(0); }
+  #glosstip b {
+    display: block; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) { #glosstip { transition: none; } }
+
+  /* ---- the walkthrough ---- */
+  .tryit {
+    border: 1px solid var(--rule); border-left: 3px solid var(--slate);
+    border-radius: 3px; padding: var(--s4) var(--s5); margin-bottom: var(--s6);
+    background: var(--sunk);
+  }
+  .tryit h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding: 0; border: 0;
+  }
+  .tryit ol { margin: 0; padding-left: 1.5em; max-width: 74ch; }
+  .tryit li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.55; }
+  .tryit li:last-child { margin-bottom: 0; }
+  .tryit em { color: var(--ink); font-style: normal; font-weight: 600; }
+  @media (max-width: 620px) { .tryit { padding: var(--s4); } }
+  /* READABILITY-END */
 </style>
 
 <div class="wrap">
@@ -499,13 +575,22 @@
     </dl>
   </section>
 
+  <div class="tryit">
+    <h3>Try this first</h3>
+    <ol>
+      <li>Press <em>Roll a new world</em> two or three times. Each press regenerates the whole chemistry — different reagents, different hues, different recipes — so the shelf of plants at the bottom changes key entirely.</li>
+      <li>Click any plant on that shelf. Its hand, its run and its body appear above. Read the run log top to bottom: that is the plant's whole life, about ten lines long.</li>
+      <li>Drag <em>pigment steepness</em> down to 0.30. Every plant turns to mud, because the heap of leftover base now outvotes the rare stuff. Drag it to 2.00 and a single unit of essence paints an entire plant. That one dial is the argument that colour should have to be earned.</li>
+    </ol>
+  </div>
+
 
 
 
   <div class="controls">
     <button class="primary" id="rollWorld">Roll a new world</button>
     <button id="rollPlants">Reseed the flora</button>
-    <button id="regrow">Watch it grow</button>
+    <button id="regrow" title="Redraws the specimen one conversion at a time, highlighting the line of the run log that is drawing.">Watch it grow</button>
     <span class="spacer"></span>
     <label class="seedbox">seed <input id="seed" type="text" inputmode="numeric" value="2438"></label>
     <button id="applySeed">Go</button>
@@ -533,10 +618,28 @@
       <section style="margin-bottom: var(--s6);">
         <h2>The hand — this plant's genome</h2>
         <p class="note">
-          Three to five conversion cards, drawn from this world's deck. Cards are tried in
-          genome order and the chain repeats until nothing can fire — so a hand that loops
-          is an engine.
+          Three to five conversion cards, drawn from this world's deck. Cards are tried top
+          to bottom, and the whole hand is replayed from the start until either nothing can
+          fire or the step budget runs out.
         </p>
+        <dl class="notation">
+          <dt>GATHER</dt>
+          <dd>the kind of recipe. <b>gather</b> pulls a base reagent out of the ground,
+            <b>upgrade</b> trades several of one rank for one of the next, <b>trade</b> swaps
+            two named reagents for a third, <b>catalyse</b> needs a catalyst standing by.</dd>
+          <dt>left of the →</dt>
+          <dd>what firing this card <b>costs</b>: a count, then a coloured chip naming the
+            reagent. Hover any chip for its name.</dd>
+          <dt>→</dt>
+          <dd>reads <b>“becomes”</b>. One firing spends everything on the left and adds
+            everything on the right to the pile.</dd>
+          <dt>right of the →</dt>
+          <dd>what it <b>produces</b> — again a count and a chip.</dd>
+          <dt>×13</dt>
+          <dd>how many times this card actually fired during the run below. A card marked
+            <b>never fired</b> was dealt to this plant but nothing ever satisfied it: dead
+            weight in the genome, and exactly the thing selection would remove.</dd>
+        </dl>
         <div class="cards" id="cards"></div>
       </section>
 
@@ -563,6 +666,7 @@
     <aside>
       <div class="specimen">
         <canvas id="specimen" width="150" height="230"></canvas>
+        <div class="growcap" id="growcap"></div>
         <div class="binomial" id="binomial"></div>
         <div class="pigbar" id="pigbar"></div>
         <dl class="readout" id="readout"></dl>
@@ -1187,10 +1291,15 @@
       const box = document.createElement("div"); box.className = "reagents";
       world.reagents.filter((r) => r.tier === t).forEach((r) => {
         const el = document.createElement("span"); el.className = "reagent";
+        el.title = r.name + " — tier " + r.tier + " (" + TIER_NAME[r.tier] + "), worth " +
+          TIER_ENERGY[r.tier] + " energy per unit, hue " + Math.round(r.hue) + "°" +
+          (r.catalyst ? ". A catalyst: some recipes need it present but never spend it." : "");
         el.appendChild(swatch(r));
         el.appendChild(document.createTextNode(r.name));
         if (r.catalyst) {
           const c = document.createElement("span"); c.className = "cat";
+          c.title = "Recipes marked \u201cneeds " + r.name +
+            " present\u201d can only fire while this is in the pile \u2014 and they never consume it.";
           c.textContent = "CATALYST"; el.appendChild(c);
         }
         box.appendChild(el);
@@ -1261,15 +1370,20 @@
     // Collapse consecutive identical steps — an engine repeats, and reading
     // "drew 4 smalt" nine times in a row teaches nothing the ×9 doesn't.
     const logRows = [];
-    focusRun.steps.forEach((s) => {
+    focusRun.steps.forEach((s, si) => {
       const txt = lineFor(s);
       const last = logRows[logRows.length - 1];
-      if (last && last.txt === txt) last.n++;
-      else logRows.push({ txt: txt, n: 1, card: s.card });
+      // Each row remembers which chain steps it covers, so the growth animation
+      // can point at the line responsible for what is currently being drawn.
+      if (last && last.txt === txt) { last.n++; last.to = si; }
+      else logRows.push({ txt: txt, n: 1, card: s.card, from: si, to: si });
     });
+    logIndex = logRows;
+    logEls = [];
 
     logRows.forEach((row, i) => {
       const d = document.createElement("div");
+      logEls.push(d);
       const n = document.createElement("span"); n.className = "n"; n.textContent = (i + 1) + ".";
       d.appendChild(n);
       d.appendChild(document.createTextNode(row.txt));
@@ -1330,17 +1444,51 @@
   // itself — no new computation, just not doing it all in one frame. Wall-clock
   // drives the pacing only; the model never reads it.
   let growRaf = 0;
+  let logIndex = [], logEls = [];
+  // Which log row covers a given chain step, so the caption and the highlight
+  // always name the conversion that drew the pixels you are looking at.
+  function rowForStep(i) {
+    for (let k = 0; k < logIndex.length; k++) {
+      if (i >= logIndex[k].from && i <= logIndex[k].to) return k;
+    }
+    return -1;
+  }
+
+  function markStep(shown) {
+    const total = focusRun.steps.length;
+    const cap = $("growcap");
+    if (!total) { if (cap) cap.textContent = ""; return; }
+    const idx = Math.max(0, Math.min(total, shown)) - 1;
+    const k = rowForStep(idx);
+    logEls.forEach((el, j) => el.classList.toggle("now", j === k && shown < total));
+    if (!cap) return;
+    if (shown >= total) {
+      cap.textContent = "grown \u00b7 " + total + " conversion" + (total === 1 ? "" : "s");
+      cap.classList.remove("live");
+    } else {
+      cap.textContent = "step " + shown + " of " + total + " \u00b7 " +
+        (k >= 0 ? logIndex[k].txt : "");
+      cap.classList.add("live");
+    }
+  }
+
   function growSpecimen(animate) {
     const cv = $("specimen");
     const ctx = cv.getContext("2d");
-    const draw = (reveal) =>
+    const total = focusRun.steps.length;
+    const shownAt = (reveal) => Math.max(1, Math.round(Math.max(0, Math.min(1, reveal)) * total));
+    const draw = (reveal) => {
       growBody(ctx, cv.width, cv.height, world, focusRun, focusPig, 0.6, reveal);
+      markStep(reveal === undefined ? total : shownAt(reveal));
+    };
 
     cancelAnimationFrame(growRaf);
     const still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (still || animate === false) { draw(1); return; }
 
-    const DURATION = 1500;
+    // Paced so each conversion is actually readable: a 24-step chain runs about
+    // 2.6s, and a short one is held long enough to see rather than flashed.
+    const DURATION = Math.max(1600, Math.min(4200, 260 + total * 110));
     let t0 = null;
     const frame = (now) => {
       if (t0 === null) t0 = now;
@@ -1472,4 +1620,108 @@
   buildRail();
   build(2438);
 })();
+</script>
+<script>
+/* GLOSSTIP-START
+   Tooltips sourced from the page's own definition list, so a term can never
+   drift from its definition: whatever "Parts" says is what the tooltip says.
+   Wraps the first few plain-text occurrences of each defined term outside the
+   definition list itself. Hover, focus and tap all work; Escape dismisses. */
+(function () {
+  "use strict";
+  var defs = document.querySelectorAll(".sysblock dl.defs dt, dl.glossary dt");
+  if (!defs.length) return;
+
+  var terms = [];
+  defs.forEach(function (dt) {
+    var dd = dt.nextElementSibling;
+    if (!dd || dd.tagName !== "DD") return;
+    var word = dt.textContent.trim().split(/\s*[·/(]\s*/)[0].trim();
+    if (word.length < 3 || word.length > 22 || /\s\w+\s\w+\s/.test(word)) return;
+    var body = dd.textContent.replace(/\s+/g, " ").trim();
+    terms.push({ word: word, label: dt.textContent.trim(), body: body, used: 0 });
+  });
+  if (!terms.length) return;
+  terms.sort(function (a, b) { return b.word.length - a.word.length; });
+
+  var esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  var rx = new RegExp("\\b(" + terms.map(function (t) { return esc(t.word); }).join("|") + ")\\b", "i");
+  var byWord = {};
+  terms.forEach(function (t) { byWord[t.word.toLowerCase()] = t; });
+
+  var SKIP = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, H1: 1, CANVAS: 1, INPUT: 1,
+               BUTTON: 1, LABEL: 1, SELECT: 1, TEXTAREA: 1, DT: 1, OPTION: 1 };
+  var MAX_PER_TERM = 3;
+
+  var roots = document.querySelectorAll(".wrap p, .wrap li, .wrap dd, .wrap h2, .wrap h3, .wrap .caption, .wrap .note");
+  roots.forEach(function (root) {
+    if (root.closest(".sysblock dl.defs") || root.closest("#glosstip")) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentElement;
+        while (p && p !== root) { if (SKIP[p.tagName] || p.classList.contains("gloss")) return NodeFilter.FILTER_REJECT; p = p.parentElement; }
+        return rx.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var hits = [], n;
+    while ((n = walker.nextNode())) hits.push(n);
+    hits.forEach(function (node) {
+      var m = rx.exec(node.nodeValue);
+      if (!m) return;
+      var t = byWord[m[1].toLowerCase()];
+      if (!t || t.used >= MAX_PER_TERM) return;
+      t.used++;
+      var after = node.splitText(m.index);
+      after.nodeValue = after.nodeValue.slice(m[1].length);
+      var span = document.createElement("span");
+      span.className = "gloss";
+      span.tabIndex = 0;
+      span.textContent = m[1];
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", m[1] + ": " + t.body);
+      span.dataset.label = t.label;
+      span.dataset.body = t.body;
+      after.parentNode.insertBefore(span, after);
+    });
+  });
+
+  var tip = document.createElement("div");
+  tip.id = "glosstip";
+  tip.setAttribute("role", "tooltip");
+  document.body.appendChild(tip);
+  var open = null;
+
+  function show(el) {
+    open = el;
+    tip.textContent = "";
+    var b = document.createElement("b");
+    b.textContent = el.dataset.label;
+    tip.appendChild(b);
+    tip.appendChild(document.createTextNode(el.dataset.body));
+    tip.classList.add("on");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - t.width - 8);
+    var y = r.top - t.height - 8;
+    if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hide() { open = null; tip.classList.remove("on"); }
+
+  document.addEventListener("pointerover", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else if (open && !tip.contains(e.target)) hide();
+  });
+  document.addEventListener("focusin", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else hide();
+  });
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) { e.preventDefault(); (open === g ? hide : show)(g); }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hide(); });
+  window.addEventListener("scroll", function () { if (open) show(open); }, { passive: true });
+})();
+/* GLOSSTIP-END */
 </script>

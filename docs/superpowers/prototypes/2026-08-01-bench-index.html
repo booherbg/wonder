@@ -79,16 +79,28 @@
     letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
     margin: var(--s5) 0 var(--s3);
   }
-  .summary .decisions {
+  .decisions {
     display: grid; grid-template-columns: 2.2em minmax(0, 1fr);
-    gap: var(--s2) var(--s3); margin: 0; max-width: 78ch;
+    gap: var(--s3); margin: 0; max-width: 80ch;
   }
-  .summary .decisions dt {
+  .decisions dt {
     font-family: var(--font-mono); font-size: 11px; color: var(--muted);
     padding-top: 3px; text-align: right;
   }
-  .summary .decisions dd { margin: 0; font-size: 14px; line-height: 1.5; }
-  .summary .decisions dd b { font-weight: 600; }
+  .decisions dd { margin: 0; font-size: 14.5px; line-height: 1.5; }
+  .decisions dd b { font-weight: 600; }
+
+  /* ---------- the glossary ---------- */
+
+  .glossary {
+    display: grid; grid-template-columns: minmax(7em, max-content) minmax(0, 1fr);
+    gap: var(--s3) var(--s4); margin: 0; max-width: 80ch;
+  }
+  .glossary dt {
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink); padding-top: 2px;
+  }
+  .glossary dd { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--muted); }
+  .glossary dd b, .glossary dd em { color: var(--ink); }
 
   /* ---------- the bench cards ---------- */
 
@@ -152,10 +164,60 @@
     .bench { grid-template-columns: minmax(0, 1fr); }
     .bench .num { text-align: left; font-size: 22px; }
     .summary { padding: var(--s4); }
-    .summary .decisions { grid-template-columns: minmax(0, 1fr); gap: 0; }
-    .summary .decisions dt { text-align: left; padding-top: var(--s3); }
+    .decisions, .glossary { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .decisions dt, .glossary dt { text-align: left; padding-top: var(--s4); }
+    .decisions dd, .glossary dd { margin-top: 2px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* READABILITY-START — body copy is never grey; --muted is for labels and axes */
+  :root { --muted: #555B56; }
+  @media (prefers-color-scheme: dark) { :root { --muted: #AAB2A9; } }
+  :root[data-theme="dark"]  { --muted: #AAB2A9; }
+  :root[data-theme="light"] { --muted: #555B56; }
+
+  .standfirst, p.note, .reading p, .reading li,
+  .sysblock dl.defs dd, .sysblock ol.proc li,
+  .bench .q, .bench .sys, .glossary dd, .decisions dd { color: var(--ink); }
+
+  /* ---- glossary tooltips: the definition list is the source of truth ---- */
+  .gloss {
+    border-bottom: 1px dotted var(--slate); cursor: help;
+    text-underline-offset: 2px;
+  }
+  .gloss:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; border-radius: 2px; }
+  #glosstip {
+    position: fixed; z-index: 9999; max-width: min(34ch, 88vw);
+    background: var(--panel); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3) var(--s4); font-size: 13.5px; line-height: 1.5;
+    box-shadow: 0 6px 20px var(--shadow); pointer-events: none;
+    opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;
+  }
+  #glosstip.on { opacity: 1; transform: translateY(0); }
+  #glosstip b {
+    display: block; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) { #glosstip { transition: none; } }
+
+  /* ---- the walkthrough ---- */
+  .tryit {
+    border: 1px solid var(--rule); border-left: 3px solid var(--slate);
+    border-radius: 3px; padding: var(--s4) var(--s5); margin-bottom: var(--s6);
+    background: var(--sunk);
+  }
+  .tryit h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding: 0; border: 0;
+  }
+  .tryit ol { margin: 0; padding-left: 1.5em; max-width: 74ch; }
+  .tryit li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.55; }
+  .tryit li:last-child { margin-bottom: 0; }
+  .tryit em { color: var(--ink); font-style: normal; font-weight: 600; }
+  @media (max-width: 620px) { .tryit { padding: var(--s4); } }
+  /* READABILITY-END */
 </style>
 
 <div class="wrap">
@@ -163,61 +225,128 @@
   <p class="eyebrow">Wonder · ecology · parameter study · 2026-08-01</p>
   <h1>Twelve benches for a living ecology</h1>
   <p class="standfirst">
-    Rebuilding Wonder's ecology means choosing among a lot of plausible mechanisms.
-    Rather than argue, these are <em>instruments</em>: twelve parameterised models,
-    each isolating one mechanism and each answering one question with a number.
-    Every dial is live and every run is seeded, so anything you see here you can
-    get back.
+    A <em>bench</em> is a small working model of one mechanism, with every dial exposed.
+    None of these is the game. Each one exists to settle a single design question by
+    measuring it, before anything gets built on the answer.
   </p>
 
   <div class="summary">
-    <h2>Executive summary</h2>
+    <h2>What this is for</h2>
+
+    <h3>The problem, in what a player sees</h3>
     <p>
-      <b>The problem.</b> Wonder has no fitness function. Reproduction is a flat constant
-      and death is a coin flip, so what looks like evolution is drift, and drift sits at
-      the population mean forever no matter how long you watch. The 2026-07-24 audit
-      found four capabilities structurally missing — <b>selection</b>, <b>niche</b>,
-      <b>origination</b> and <b>disturbance</b> — and a fifth that matters more than any
-      of them: <b>legible causation</b>. A purple flower is decoration. A purple flower
-      you can trace back three steps to a cause is the thing this game keeps reaching for
-      and has never been able to deliver.
+      Wonder's plants change from one generation to the next, but nothing decides which
+      changes are worth keeping. A plant with a body that suits its ground has exactly the
+      same chance of having offspring as one that does not. So an island wanders instead
+      of adapting: watch it for an hour and it is different, but it is not <em>better
+      suited to anywhere</em>. Nothing new ever appears that was not in the starting deck,
+      nothing is ever cleared away to make room, and eleven of the fourteen plant forms
+      have no relationship with any animal at all.
     </p>
     <p>
-      <b>The proposal under test.</b> An island rolls its own chemistry: a set of
-      reagents and a deck of conversion recipes. A plant inherits a small hand of those
-      recipes and runs it once, at maturity, against what its roots drew out of the
-      ground. Energy, colour and body shape are all read off that single computation, so
-      colour is a readout of metabolism rather than a decoration, and a plant's silhouette
-      cannot lie about what it does for a living. Bench 0 is that economy standing alone;
-      every other bench either supplies a mechanism it needs or tests whether it can be
-      seen.
-    </p>
-    <p>
-      <b>What the twelve divide into.</b> Benches 1–7 ask whether the mechanisms
-      <em>work</em>: origination (1), how rugged to make the fitness landscape (2), where
-      body form comes from (3), what Holland's full tag model buys over the slice we ship
-      (4), how energy should climb the food chain (5), whether the whole thing coheres on
-      a grid (6), and whether disturbance survives being made peaceful (7). Benches 8–11
-      ask whether any of it <em>reads</em>, which for this game is the harder half:
-      surface pattern (8), how big the host plate has to be (9), colour at scene scale
-      (10), and what is left of a phenotype at five pixels (11).
+      Underneath that there is one missing piece with a name: a <b>fitness function</b> —
+      any rule that lets the world tell a good plant from a bad one. Without it, change is
+      random walk. With it, change accumulates in a direction, and a direction is
+      something a person can notice and follow.
     </p>
 
-    <h3>Decisions these produced</h3>
-    <dl class="decisions">
-      <dt>1</dt><dd>Gate worldgen on <b>maxRAF ≥ 5 reactions</b>, not on "a RAF exists" — the naive test fires 3× too early. Measure the transition once for the L you ship rather than guessing a constant.</dd>
-      <dt>2</dt><dd>Set landscape ruggedness to <b>K = 3</b> (band 2–4). It does not scale with genome size, so the genome can grow later without re-tuning.</dd>
-      <dt>3</dt><dd>Boolean-network morphology at <b>N = 32, K = 2, p = 0.40</b>: 70% of mutations silent, and effect sizes bimodal — the punctuated jump the game cannot currently produce.</dd>
-      <dt>4</dt><dd>Tag ecology gives trophic layers and an arms race, but <b>not from death</b> — lethal and non-lethal runs came out bit-identical. Ship the quiet mode, not full rates-only.</dd>
-      <dt>5</dt><dd>Couple trophic levels by <b>ceiling, not funding</b>: top-level persistence 1.000 vs 0.490 over 200 paired seeds. Periodic forcing buys nothing; build the seed bank instead.</dd>
-      <dt>6</dt><dd>Selection visibly beats drift on a grid — mean tier 2.31 vs 1.07 — from two lines of code. Half of rolled worlds are duds, so the rejection sampler is not optional.</dd>
-      <dt>7</dt><dd>Disturbance does produce a diversity hump, and the <b>peaceful version beats the lethal one</b> (4.91 vs 4.52). Wonder can have this capability without shipping visible death.</dd>
-      <dt>8</dt><dd>Reaction–diffusion markings are heritable <b>only if the growth seed is inherited</b>. Safe mutation step δ ≤ 0.008.</dd>
-      <dt>9</dt><dd>Ship a <b>30 × 74</b> host plate. Bigger buys margins, not detail — and a plate holds two pollinators at any resolution, because the limit is crowding.</dd>
-      <dt>10</dt><dd>Bias island hues to a <b>split-complementary key grounded to the terrain, at 0.70</b>. Variety improves rather than suffering. Earned colour does not survive dusk without a fix.</dd>
-      <dt>11</dt><dd><b>Motion beats colour below 8.5 px</b> — 88.9% vs 58.3% at Wonder's normal zoom. Combined with bench 9's crypsis result, motion is the channel that still works.</dd>
-    </dl>
+    <h3>What we actually want</h3>
+    <p>
+      Something happens on your island that you did not expect, and you can find out why
+      in about three steps. That is the whole target, and it is stricter than it sounds:
+      a purple flower is decoration, but a purple flower you can trace back to the mineral
+      seam its roots reached is a story. Everything below is in service of the second
+      thing.
+    </p>
+
+    <h3>The idea being tested</h3>
+    <p>
+      Give each island its own chemistry. The ground holds a handful of raw substances;
+      the island also rolls a set of recipes for converting cheap substances into rarer
+      ones. A plant inherits three to five of those recipes — that is its whole genome —
+      and runs them once when it matures, using whatever its roots pulled up. What it ends
+      up holding determines three things at once: how much energy it earned, what colour
+      it is, and what shape it grew. One computation, three visible consequences. That is
+      what makes a plant's appearance <em>evidence</em> rather than decoration, and it is
+      what bench 0 is.
+    </p>
+
+    <h3>What the other eleven are doing</h3>
+    <p>
+      The economy needs mechanisms it does not itself supply, and it has to survive being
+      looked at. So: <b>1–7</b> ask whether the mechanisms work — where new chemistry
+      comes from, how much difficulty a world should have, where body shape comes from,
+      what animals do to each other, how energy moves up a food chain, whether the whole
+      thing holds together on a map, and whether a peaceful game can still have weather
+      that clears ground. <b>8–11</b> ask whether any of it can be seen at the size Wonder
+      actually draws: markings, how big a plant portrait needs to be, whether twenty
+      earned colours compose or turn to mud, and what survives when an insect is five
+      pixels across.
+    </p>
+    <p class="note" style="margin-bottom:0">
+      Start with 0 if you want the core idea. Otherwise pick whichever question you care
+      about — every bench stands alone and defines its own terms at the top.
+    </p>
   </div>
+
+  <section>
+    <h2>The words that keep coming up</h2>
+    <p class="note">
+      Borrowed from biology, and used precisely below. Each has a plain meaning here.
+    </p>
+    <dl class="glossary">
+      <dt>fitness</dt>
+      <dd>Any number the world uses to rank one individual against another. Wonder has
+        none today, which is the root problem.</dd>
+      <dt>drift</dt>
+      <dd>Change with no ranking behind it. Things vary, nothing improves. This is Wonder's
+        current behaviour, and it is the control every bench compares against.</dd>
+      <dt>selection</dt>
+      <dd>The opposite: individuals that score better leave more offspring. Two lines of
+        code, and it is the difference between an island that wanders and one that
+        adapts.</dd>
+      <dt>niche</dt>
+      <dd>A way to make a living that is different from your neighbour's. Without distinct
+        niches, one strategy wins everywhere and the island goes monotone.</dd>
+      <dt>origination</dt>
+      <dd>Something genuinely new appearing that was not in the starting set. Rearranging
+        what already exists is not the same thing, and Wonder currently only rearranges.</dd>
+      <dt>disturbance</dt>
+      <dd>Anything that clears ground — fire, flood, storm. It sounds violent, and the
+        open question was whether a peaceful game can get the benefit without it.</dd>
+      <dt>reagent</dt>
+      <dd>One substance in an island's chemistry. Has a rank from 1 (common, cheap) to 4
+        (rare, valuable) and a fixed colour.</dd>
+      <dt>chain</dt>
+      <dd>A plant running its inherited recipes in order until nothing more can fire. The
+        thing it ends up holding is what its colour, energy and shape are read from.</dd>
+      <dt>legibility</dt>
+      <dd>Whether a player can actually perceive a mechanism. A mechanism nobody can see
+        is not a feature, which is why four of the twelve benches test only this.</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>What the twelve decided</h2>
+    <p class="note">
+      Each line is a decision plus the measurement behind it. The bench it came from
+      carries the full working.
+    </p>
+    <dl class="decisions">
+      <dt>0</dt><dd>Make recipe upgrades <b>generic</b> — spend any two of a rank for one of the next — or a randomly dealt hand cannot chain at all and the plant is born dead.</dd>
+      <dt>1</dt><dd>Throw away a rolled chemistry unless at least <b>five</b> of its reactions can sustain each other. Testing whether merely <em>one</em> can fires 3× too early and passes dead islands.</dd>
+      <dt>2</dt><dd>Let each gene's effect depend on about <b>three</b> others. Fewer and every island solves itself the same way; more and nothing can adapt at all.</dd>
+      <dt>3</dt><dd>Build bodies so that <b>70% of mutations change nothing visible</b> and the rest jump. That mix is what gives a species a stable look it can still break out of.</dd>
+      <dt>4</dt><dd>Animals form food chains and arms races on their own, and — the useful surprise — <b>death was never what produced them</b>. The peaceful version ran bit-for-bit identical.</dd>
+      <dt>5</dt><dd>Let each level of the food chain <b>cap</b> the one above it rather than pay for it. Paying collapses the top level in half of all runs; capping never does.</dd>
+      <dt>6</dt><dd>Selection visibly beats drift on a real map, from two lines of code — plants reach rank <b>2.31 vs 1.07</b>. Half of all rolled worlds are duds, so worlds must be re-rolled until one passes.</dd>
+      <dt>7</dt><dd>Clearing ground does raise diversity, and the <b>peaceful version beat the violent one</b>. Wonder can have weather that makes room without anything visibly dying.</dd>
+      <dt>8</dt><dd>Markings pass from parent to child <b>only if one extra number is inherited too</b> — the seed the pattern grew from. Miss it and siblings look like strangers.</dd>
+      <dt>9</dt><dd>Draw plant portraits at <b>30 × 74 pixels</b>. Bigger buys margins, not detail. And a portrait fits two insects at <em>any</em> size, so crowding is the limit, not resolution.</dd>
+      <dt>10</dt><dd>Pull every island's colours toward a shared key <b>anchored to its own dirt</b>. Islands got more distinct from each other, not less. But the colours wash out at dusk, unfixed.</dd>
+      <dt>11</dt><dd>At the size Wonder draws insects, <b>how a thing moves is more recognisable than what colour it is</b> — 89% vs 58%. Motion is the identity channel that survives the zoom.</dd>
+    </dl>
+  </section>
 
   <section>
     <h2>The benches, in order</h2>
@@ -422,4 +551,108 @@
     host.appendChild(el);
   });
 })();
+</script>
+<script>
+/* GLOSSTIP-START
+   Tooltips sourced from the page's own definition list, so a term can never
+   drift from its definition: whatever "Parts" says is what the tooltip says.
+   Wraps the first few plain-text occurrences of each defined term outside the
+   definition list itself. Hover, focus and tap all work; Escape dismisses. */
+(function () {
+  "use strict";
+  var defs = document.querySelectorAll(".sysblock dl.defs dt, dl.glossary dt");
+  if (!defs.length) return;
+
+  var terms = [];
+  defs.forEach(function (dt) {
+    var dd = dt.nextElementSibling;
+    if (!dd || dd.tagName !== "DD") return;
+    var word = dt.textContent.trim().split(/\s*[·/(]\s*/)[0].trim();
+    if (word.length < 3 || word.length > 22 || /\s\w+\s\w+\s/.test(word)) return;
+    var body = dd.textContent.replace(/\s+/g, " ").trim();
+    terms.push({ word: word, label: dt.textContent.trim(), body: body, used: 0 });
+  });
+  if (!terms.length) return;
+  terms.sort(function (a, b) { return b.word.length - a.word.length; });
+
+  var esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  var rx = new RegExp("\\b(" + terms.map(function (t) { return esc(t.word); }).join("|") + ")\\b", "i");
+  var byWord = {};
+  terms.forEach(function (t) { byWord[t.word.toLowerCase()] = t; });
+
+  var SKIP = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, H1: 1, CANVAS: 1, INPUT: 1,
+               BUTTON: 1, LABEL: 1, SELECT: 1, TEXTAREA: 1, DT: 1, OPTION: 1 };
+  var MAX_PER_TERM = 3;
+
+  var roots = document.querySelectorAll(".wrap p, .wrap li, .wrap dd, .wrap h2, .wrap h3, .wrap .caption, .wrap .note");
+  roots.forEach(function (root) {
+    if (root.closest(".sysblock dl.defs") || root.closest("#glosstip")) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentElement;
+        while (p && p !== root) { if (SKIP[p.tagName] || p.classList.contains("gloss")) return NodeFilter.FILTER_REJECT; p = p.parentElement; }
+        return rx.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var hits = [], n;
+    while ((n = walker.nextNode())) hits.push(n);
+    hits.forEach(function (node) {
+      var m = rx.exec(node.nodeValue);
+      if (!m) return;
+      var t = byWord[m[1].toLowerCase()];
+      if (!t || t.used >= MAX_PER_TERM) return;
+      t.used++;
+      var after = node.splitText(m.index);
+      after.nodeValue = after.nodeValue.slice(m[1].length);
+      var span = document.createElement("span");
+      span.className = "gloss";
+      span.tabIndex = 0;
+      span.textContent = m[1];
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", m[1] + ": " + t.body);
+      span.dataset.label = t.label;
+      span.dataset.body = t.body;
+      after.parentNode.insertBefore(span, after);
+    });
+  });
+
+  var tip = document.createElement("div");
+  tip.id = "glosstip";
+  tip.setAttribute("role", "tooltip");
+  document.body.appendChild(tip);
+  var open = null;
+
+  function show(el) {
+    open = el;
+    tip.textContent = "";
+    var b = document.createElement("b");
+    b.textContent = el.dataset.label;
+    tip.appendChild(b);
+    tip.appendChild(document.createTextNode(el.dataset.body));
+    tip.classList.add("on");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - t.width - 8);
+    var y = r.top - t.height - 8;
+    if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hide() { open = null; tip.classList.remove("on"); }
+
+  document.addEventListener("pointerover", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else if (open && !tip.contains(e.target)) hide();
+  });
+  document.addEventListener("focusin", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else hide();
+  });
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) { e.preventDefault(); (open === g ? hide : show)(g); }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hide(); });
+  window.addEventListener("scroll", function () { if (open) show(open); }, { passive: true });
+})();
+/* GLOSSTIP-END */
 </script>
