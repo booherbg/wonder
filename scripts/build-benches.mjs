@@ -32,6 +32,7 @@ const LOCAL = {
   "b0722151-48d8-438a-9df0-4a1061ad4d23": "bench-9-host-plate.html",
   "08d56254-4f5f-4e2f-8d8e-f12038aa4d0a": "bench-10-island-palette.html",
   "a9abda24-c51f-4fa9-aeda-2252ae4026d1": "bench-11-motion-signature.html",
+  "521b2f34-2c7e-4e57-bbe0-ecf443569d55": "bench-12-form-from-metabolism.html",
 };
 
 // Source file -> published filename. Anything not listed is skipped, so adding a
@@ -49,6 +50,7 @@ const PAGES = {
   "2026-08-02-bench-9-host-plate.html": "bench-9-host-plate.html",
   "2026-08-02-bench-10-island-palette.html": "bench-10-island-palette.html",
   "2026-08-02-bench-11-motion-signature.html": "bench-11-motion-signature.html",
+  "2026-08-02-bench-12-form-from-metabolism.html": "bench-12-form-from-metabolism.html",
   "2026-07-31-reagent-economy.html": "reagent-economy.html",
   "2026-07-21-identity-map-lab.html": "identity-map-lab.html",
 };

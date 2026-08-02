@@ -1,0 +1,2296 @@
+<style>
+  /* ------------------------------------------------------------------
+     Bench 12 — form from metabolism.
+     The only bench that touches the shipping game: it imports Wonder's
+     own fourteen plant drawers, unmodified, and asks whether a chain can
+     drive them instead of a habitat table.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --ground:  #E9EAE6;  --panel: #F3F4F0;  --sunk: #DFE1DB;
+    --ink:     #191E1C;  --muted: #676D68;  --rule: #CBCEC7;
+    --slate:   #3D4A56;  --shadow: rgba(25, 30, 28, .09);
+    --good:    #3F6B4A;  --warn: #8A6A2B;  --bad: #8A3B32;
+
+    --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #141817; --panel: #1C2220; --sunk: #101413;
+      --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+      --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+      --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141817; --panel: #1C2220; --sunk: #101413;
+    --ink: #E3E6E1;    --muted: #8C938B; --rule: #2D3532;
+    --slate: #92A6B7;  --shadow: rgba(0,0,0,.45);
+    --good: #7FB48C;   --warn: #C9A44E;  --bad: #D08175;
+  }
+  :root[data-theme="light"] {
+    --ground: #E9EAE6; --panel: #F3F4F0; --sunk: #DFE1DB;
+    --ink: #191E1C;    --muted: #676D68; --rule: #CBCEC7;
+    --slate: #3D4A56;  --shadow: rgba(25,30,28,.09);
+    --good: #3F6B4A;   --warn: #8A6A2B;  --bad: #8A3B32;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-ui); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s8); }
+
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 var(--s3);
+  }
+  h1 {
+    font-family: var(--font-display); font-weight: 400;
+    font-size: clamp(30px, 5vw, 46px); line-height: 1.1;
+    letter-spacing: -.015em; text-wrap: balance; margin: 0 0 var(--s3);
+  }
+  .standfirst { max-width: 66ch; color: var(--muted); font-size: 16px; margin: 0 0 var(--s5); }
+  .standfirst em { color: var(--ink); font-style: italic; }
+  h2 {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  }
+  section { margin-bottom: var(--s7); }
+  p.note { color: var(--muted); font-size: 13.5px; max-width: 68ch; margin: 0 0 var(--s4); }
+  code { font-family: var(--font-mono); font-size: .89em; background: var(--sunk); padding: 1px 4px; border-radius: 2px; }
+  a { color: var(--slate); }
+
+  button {
+    font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    color: var(--ink); background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 7px 13px; cursor: pointer;
+    transition: border-color .12s, background .12s;
+  }
+  button:hover { border-color: var(--slate); }
+  button:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+  button.primary { background: var(--slate); border-color: var(--slate); color: var(--ground); }
+  button[aria-pressed="true"] { border-color: var(--slate); background: var(--sunk); }
+
+  .plate { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: var(--s5); }
+  @media (max-width: 900px) { .plate { grid-template-columns: minmax(0, 1fr); } }
+
+  .rail {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s4); display: flex; flex-direction: column; gap: var(--s3);
+    align-self: start; position: sticky; top: var(--s4);
+  }
+  .railhead {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted);
+    padding-bottom: var(--s2); border-bottom: 1px solid var(--rule);
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s2); }
+  .ctrl label { font-size: 13px; }
+  .ctrl .val {
+    font-family: var(--font-mono); font-size: 12px; color: var(--slate);
+    font-variant-numeric: tabular-nums;
+  }
+  .ctrl .hint { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+  .ctrl input[type="range"] { width: 100%; accent-color: var(--slate); margin: 2px 0 0; }
+  .ctrl input[type="range"]:focus-visible { outline: 2px solid var(--slate); outline-offset: 3px; }
+  .seedrow { display: flex; gap: var(--s2); align-items: center; }
+  .seedrow label { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .seedrow input {
+    flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px;
+    padding: 5px 7px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--sunk); color: var(--ink);
+  }
+  .segrow { display: flex; flex-wrap: wrap; gap: var(--s1); }
+  .segrow button { padding: 5px 9px; font-size: 11.5px; }
+  .readout {
+    display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s3);
+    font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  }
+  .readout dt { color: var(--muted); }
+  .readout dd { margin: 0; text-align: right; }
+
+  /* ---- specimen shelves ---- */
+  .shelf { display: flex; flex-wrap: wrap; gap: var(--s3); }
+  .cell {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s2); display: flex; flex-direction: column; align-items: center;
+    gap: 4px; cursor: pointer;
+  }
+  .cell.on { border-color: var(--slate); box-shadow: 0 0 0 1px var(--slate); }
+  .cell canvas { image-rendering: pixelated; display: block; }
+  .cell .cap {
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .04em;
+    color: var(--muted); text-align: center; line-height: 1.3;
+  }
+  .cell .cap b { display: block; color: var(--ink); font-weight: 500; }
+
+  .compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); }
+  @media (max-width: 900px) { .compare { grid-template-columns: minmax(0, 1fr); } }
+  .col > h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s2);
+  }
+  .score {
+    display: flex; gap: var(--s5); margin: 0 0 var(--s3);
+    font-variant-numeric: tabular-nums;
+  }
+  .score div b {
+    display: block; font-family: var(--font-display); font-size: 26px; line-height: 1.1;
+  }
+  .score div i {
+    font-style: normal; font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  }
+  .score .win b { color: var(--good); }
+
+  /* ---- the feature map ---- */
+  .feats { display: grid; grid-template-columns: 7.5em 1fr 3.2em; gap: 5px var(--s3); align-items: center; }
+  .feats .fname { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink); }
+  .feats .bar { height: 9px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
+  .feats .bar i { display: block; height: 100%; background: var(--slate); }
+  .feats .fval { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-align: right; }
+
+  table.proto { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.proto th, table.proto td {
+    text-align: right; padding: 4px var(--s3); border-bottom: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+  }
+  table.proto th { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  table.proto td:first-child, table.proto th:first-child { text-align: left; font-family: var(--font-mono); }
+  table.proto tr.hit td { background: var(--sunk); }
+  table.proto tr.hit td:first-child { color: var(--good); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+
+  .figure {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s4); margin-bottom: var(--s4);
+  }
+  .caption { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: var(--s3); line-height: 1.5; }
+
+  .reading { max-width: 70ch; }
+  .reading p { margin: 0 0 var(--s3); }
+  .reading h3 { font-family: var(--font-display); font-weight: 400; font-size: 19px; margin: var(--s5) 0 var(--s2); }
+  .reading strong { font-weight: 600; }
+  .reading ul { padding-left: 1.15em; margin: 0 0 var(--s3); }
+  .reading li { margin-bottom: 6px; }
+
+  footer {
+    margin-top: var(--s7); padding-top: var(--s4); border-top: 1px solid var(--rule);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  /* SYSBLOCK-CSS-START */
+  /* ---------------------------------------------------------------
+     The system block (.sysblock — do not shorten; `.spec` collides): what this bench IS, stated before what it found.
+     Definitions first, because every term on the page is used later
+     as if it had already been defined.
+     --------------------------------------------------------------- */
+  .sysblock {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s5); margin-bottom: var(--s6);
+  }
+  .sysblock > h2 { margin-top: 0; }
+  .sysblock p { max-width: 70ch; margin: 0 0 var(--s4); font-size: 15px; }
+  .sysblock p:last-child { margin-bottom: 0; }
+  .sysblock h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s3); padding: 0; border: 0;
+  }
+  .sysblock dl.defs {
+    display: grid; grid-template-columns: minmax(9em, max-content) minmax(0, 1fr);
+    gap: var(--s2) var(--s4); margin: 0; max-width: 84ch;
+  }
+  .sysblock dl.defs dt {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.5;
+    color: var(--ink); padding-top: 2px;
+  }
+  .sysblock dl.defs dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .sysblock dl.defs dd b, .sysblock ol.proc li b { color: var(--ink); font-weight: 600; }
+  .sysblock ol.proc { margin: 0; padding-left: 1.5em; max-width: 76ch; }
+  .sysblock ol.proc li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.5; }
+  .sysblock ol.proc li:last-child { margin-bottom: 0; }
+  .sysblock ol.proc code, .sysblock dl.defs code, .sysblock p code {
+    font-family: var(--font-mono); font-size: .88em;
+    background: var(--sunk); padding: 1px 4px; border-radius: 2px;
+  }
+  .sysblock .cap {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--muted); margin-top: var(--s4); padding-top: var(--s3);
+    border-top: 1px dotted var(--rule);
+  }
+  @media (max-width: 620px) {
+    .sysblock { padding: var(--s4); }
+    .sysblock dl.defs { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    .sysblock dl.defs dt { padding-top: var(--s3); }
+    .sysblock dl.defs dd { margin: 2px 0 0; }
+  }
+  /* SYSBLOCK-CSS-END */
+
+  /* READABILITY-START — body copy is never grey; --muted is for labels and axes */
+  :root { --muted: #555B56; }
+  @media (prefers-color-scheme: dark) { :root { --muted: #AAB2A9; } }
+  :root[data-theme="dark"]  { --muted: #AAB2A9; }
+  :root[data-theme="light"] { --muted: #555B56; }
+
+  .standfirst, p.note, .reading p, .reading li,
+  .sysblock dl.defs dd, .sysblock ol.proc li,
+  .bench .q, .bench .sys, .glossary dd, .decisions dd { color: var(--ink); }
+
+  /* ---- glossary tooltips: the definition list is the source of truth ---- */
+  .gloss {
+    border-bottom: 1px dotted var(--slate); cursor: help;
+    text-underline-offset: 2px;
+  }
+  .gloss:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; border-radius: 2px; }
+  #glosstip {
+    position: fixed; z-index: 9999; max-width: min(34ch, 88vw);
+    background: var(--panel); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3) var(--s4); font-size: 13.5px; line-height: 1.5;
+    box-shadow: 0 6px 20px var(--shadow); pointer-events: none;
+    opacity: 0; transform: translateY(3px); transition: opacity .12s ease, transform .12s ease;
+  }
+  #glosstip.on { opacity: 1; transform: translateY(0); }
+  #glosstip b {
+    display: block; font-family: var(--font-mono); font-size: 10.5px;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) { #glosstip { transition: none; } }
+
+  /* ---- the walkthrough ---- */
+  .tryit {
+    border: 1px solid var(--rule); border-left: 3px solid var(--slate);
+    border-radius: 3px; padding: var(--s4) var(--s5); margin-bottom: var(--s6);
+    background: var(--sunk);
+  }
+  .tryit h3 {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: 0 0 var(--s3); padding: 0; border: 0;
+  }
+  .tryit ol { margin: 0; padding-left: 1.5em; max-width: 74ch; }
+  .tryit li { margin-bottom: var(--s2); font-size: 14.5px; line-height: 1.55; }
+  .tryit li:last-child { margin-bottom: 0; }
+  .tryit em { color: var(--ink); font-style: normal; font-weight: 600; }
+  @media (max-width: 620px) { .tryit { padding: var(--s4); } }
+  /* READABILITY-END */
+</style>
+
+<div class="wrap">
+
+  <p class="eyebrow">Wonder · ecology · bench 12 of 12</p>
+  <h1>Form from metabolism</h1>
+  <p class="standfirst">
+    Wonder already draws fourteen plant forms, by hand, and they are the best-looking
+    thing in the game. Bench 0 throws all fourteen away and grows every plant from one
+    grammar, which is why its shelf comes out samey. This bench tests the third option:
+    <em>keep the drawers, and let the chain choose which one runs and what it is set to.</em>
+    The fourteen drawers below are imported from <code>src/render/plantSprites.ts</code>
+    unmodified — this is the art the game ships today.
+  </p>
+
+  <section class="sysblock">
+    <h2>The system</h2>
+    <p class="lede">
+      Three ways to decide what a plant looks like, compared on one page. Wonder today
+      picks a <b>form</b> from a habitat table and never changes it, then drifts nine
+      numeric traits. Bench 0 has no forms at all: it replays the metabolic chain as
+      drawing instructions, one grammar for everything. The proposal here is that the
+      chain should not draw the plant — it should <b>choose the drawer and set the
+      traits</b>, leaving the fourteen hand-made forms in place and making them earned
+      rather than assigned.
+    </p>
+
+    <h3>Parts</h3>
+    <dl class="defs">
+      <dt>form</dt>
+      <dd>One of Wonder's fourteen plant archetypes — flower, shrub, tree, fungus, fern,
+        coral, succulent, reed, vine, grass, moss, bulb, sporestalk, kelp. Each is a
+        hand-written pixel drawer on a 16 × 28 sprite. In the shipping game, form is
+        picked from the tile type at birth and <em>never mutates</em>.</dd>
+
+      <dt>trait</dt>
+      <dd>The nine numbers that vary within a form: hue, accent hue, saturation, height,
+        spread, petals, leaves, lean, glow. These do drift, generation to generation.</dd>
+
+      <dt>habitat table</dt>
+      <dd>Which forms each tile type allows — kelp only in shallow water, succulents on
+        sand. This bench keeps it, because it is what stops the island reading as
+        arbitrary.</dd>
+
+      <dt>chain features</dt>
+      <dd>Four numbers in [0,1] summarising what a metabolism <em>is like</em>, computed
+        from the run: <b>climb</b> how far up the tier ladder it got, <b>branch</b> the
+        share of steps that were upgrades or trades, <b>dependence</b> the share needing a
+        catalyst, and <b>thrift</b> its yield over cost. These are the whole interface
+        between chemistry and appearance.</dd>
+
+      <dt>prototype</dt>
+      <dd>A point in that four-dimensional feature space assigned to each form — what kind
+        of metabolism that shape means. A tree is a long branching expensive chain; moss is
+        a chain that barely climbs; a fungus is one that cannot run without a catalyst
+        somebody else supplies.</dd>
+
+      <dt>variety</dt>
+      <dd>Measured two ways, so "they all look the same" stops being an opinion. <b>Distinct
+        forms</b> counts silhouettes actually used. <b>Mean pairwise difference</b> is the
+        fraction of pixels that differ between two sprites, averaged over every pair on
+        the shelf.</dd>
+    </dl>
+
+    <h3>Procedure</h3>
+    <ol class="proc">
+      <li>Roll an island chemistry and sixteen plants from it — bench 0's model, imported
+        unchanged.</li>
+      <li>Run each plant's chain and derive its pigment, exactly as bench 0 does.</li>
+      <li><b>Render it bench 0's way</b>: replay the chain as drawing instructions on a
+        16 × 28 plate. Measure variety across the shelf.</li>
+      <li><b>Compute the four chain features</b> from the same run.</li>
+      <li><b>Pick a form</b>: among the forms this habitat allows, take the one whose
+        prototype is nearest the plant's feature vector, with each axis weighted.</li>
+      <li><b>Fill the nine traits</b> from the chain's outputs — pigment hue into hue, the
+        top reagent's hue into the accent, chroma into saturation, yield into height,
+        branching into spread, blooms into petals, whorls into leaves, and tier 4 into
+        glow.</li>
+      <li><b>Render it Wonder's way</b>, through the real drawer, and measure variety
+        again on the identical set of sixteen chains.</li>
+    </ol>
+
+    <h3>What is on this page</h3>
+    <dl class="defs">
+      <dt>1 · The fourteen</dt><dd>Wonder's forms as they ship, with live trait sliders so you can see how much range each one already has.</dd>
+      <dt>2 · The comparison</dt><dd>The same sixteen chains rendered both ways, side by side, each with its variety score. This is the whole argument.</dd>
+      <dt>3 · The mapping</dt><dd>The focused plant's four features, the prototype table, and which form won.</dd>
+      <dt>4 · What a tier is worth</dt><dd>The ladder economics, computed live — the answer to whether reaching essence is worth anything.</dd>
+    </dl>
+  </section>
+
+  <div class="tryit">
+    <h3>Try this first</h3>
+    <ol>
+      <li>Look at section 2 before touching anything. Left shelf is bench 0's grammar,
+        right shelf is the same sixteen chains through Wonder's drawers. The numbers above
+        each shelf say how different the plants on it actually are.</li>
+      <li>Switch <em>matching</em> from rank to absolute and watch the right shelf collapse
+        onto two or three shapes. Absolute is the version anyone would write first, and it is
+        the one that does not work. Switch it back.</li>
+      <li>Change <em>habitat</em>. The chemistry does not change and the chains do not change
+        — only which forms are allowed — and the whole right-hand shelf re-casts itself. That
+        is form being <em>earned</em> rather than assigned.</li>
+      <li>Click any plant to focus it, then read section 3: its four chain features, and
+        which prototype they landed nearest. Then look at section 4 for why almost nothing
+        ever reaches essence.</li>
+    </ol>
+  </div>
+
+  <div class="plate">
+    <aside class="rail">
+      <div class="railhead"><span>Parameters</span><span id="islePill"></span></div>
+
+      <div class="seedrow">
+        <label for="seedInput">seed</label>
+        <input id="seedInput" type="number" inputmode="numeric" value="2438" min="0" step="1">
+        <button id="rollSeed" type="button">Roll</button>
+      </div>
+
+      <div class="ctrl">
+        <div class="row"><label>habitat</label></div>
+        <div class="segrow" id="habitatSeg"></div>
+        <div class="hint">Which forms this ground allows. Wonder's own table, unmodified.</div>
+      </div>
+
+      <div class="ctrl">
+        <div class="row"><label>matching</label></div>
+        <div class="segrow" id="matchSeg"></div>
+        <div class="hint">Absolute compares a chain's features against a universal scale.
+          Rank compares it against the other fifteen plants on this island. Absolute is the
+          obvious design and it collapses — watch the silhouette count.</div>
+      </div>
+
+      <div id="sliders"></div>
+
+      <hr style="border:0;border-top:1px solid var(--rule);margin:0">
+
+      <dl class="readout" id="readout"></dl>
+    </aside>
+
+    <div>
+      <section>
+        <h2>1 · The fourteen forms Wonder already draws</h2>
+        <p class="note">
+          Imported from <code>src/render/plantSprites.ts</code> with the TypeScript
+          annotations stripped and nothing else changed. Every sprite is 16 × 28 pixels,
+          shown at 5×. The sliders in the rail drive all fourteen at once, so you can see
+          how much variation each form carries on its own before any chemistry is involved.
+        </p>
+        <div class="shelf" id="formShelf"></div>
+      </section>
+
+      <section>
+        <h2>2 · Sixteen chains, rendered both ways</h2>
+        <p class="note">
+          Same island, same sixteen hands, same runs. Only the renderer differs. Click any
+          plant to focus it.
+        </p>
+        <div class="compare">
+          <div class="col">
+            <h3>Bench 0 — one grammar for everything</h3>
+            <div class="score" id="scoreA"></div>
+            <div class="shelf" id="shelfA"></div>
+          </div>
+          <div class="col">
+            <h3>Proposed — the chain drives Wonder's drawers</h3>
+            <div class="score" id="scoreB"></div>
+            <div class="shelf" id="shelfB"></div>
+          </div>
+        </div>
+        <p class="caption" id="cmpCaption"></p>
+      </section>
+
+      <section>
+        <h2>3 · How this plant's chain chose its form</h2>
+        <div class="figure">
+          <div class="feats" id="feats"></div>
+          <p class="caption" id="pickCaption"></p>
+        </div>
+        <div class="tablewrap">
+          <table class="proto" id="protoTable"></table>
+        </div>
+        <p class="caption">
+          Distance is weighted: dependence counts double, because needing a catalyst is
+          the most structurally distinctive thing a metabolism can be, and it is what
+          separates a fungus from a flower.
+        </p>
+      </section>
+
+      <section>
+        <h2>4 · What a tier is actually worth</h2>
+        <p class="note">
+          Computed live from the current parameters. The cost column is what one unit of
+          that tier costs in base units, following the upgrade ladder all the way down.
+        </p>
+        <div class="tablewrap">
+          <table class="proto" id="ladder"></table>
+        </div>
+        <p class="caption" id="ladderCaption"></p>
+      </section>
+    </div>
+  </div>
+
+  <section class="reading">
+    <h2>Findings</h2>
+
+    <h3>Pixel variance does not measure "they all look the same", and it nearly fooled me</h3>
+    <p>
+      I built this expecting the left shelf to score badly and it does not. Measured as
+      silhouette difference — Jaccard distance between ink masks, colour ignored — bench 0's
+      grammar scores <strong>65%</strong>, and the proposed version scores
+      <strong>65–75%</strong> depending on habitat, a mean ratio of <strong>1.09×</strong>.
+      By that number there is almost no improvement, and the first draft of this section
+      claimed a 3× gain that the instrument then refused to produce.
+    </p>
+    <p>
+      The number is right and the metric is wrong. Bench 0's plants <em>do</em> differ pixel
+      by pixel — they differ in size, in step count, in how far they lean. What they do not
+      differ in is <strong>kind</strong>. Every one is a branching stick with blobs on it.
+      Wonder's forms differ categorically: a mushroom is not a small tree, a moss cushion is
+      not a short reed. So the measure that actually tracks the complaint is the count of
+      distinct kinds on the shelf — <strong>1 for bench 0, by construction, against a mean of
+      6.0 and a maximum of 10 for the proposal.</strong> That is the finding, and the pixel
+      metric is left on the page because a metric that disagrees with your eyes is worth
+      seeing.
+    </p>
+
+    <h3>The obvious version of the mapping collapses</h3>
+    <p>
+      Matching a chain's features against a universal scale — the design anyone would write
+      first — puts nearly every plant on the same prototype. Across four habitats and eight
+      seeds it used a mean of <strong>2.9</strong> silhouettes, and silhouette variance
+      actually <em>fell</em> to 0.84× of bench 0's. The cause is that chains on one island
+      are metabolically similar: they draw from the same deck, so their branch and thrift
+      numbers cluster in one corner of the space and the nearest prototype is the same
+      corner for everybody.
+    </p>
+    <p>
+      Ranking each feature <em>within the island's own population</em> fixes it: 2.9
+      silhouettes becomes <strong>6.0</strong>, and shape variance goes from 0.84× to 1.09×.
+      The island grades on a curve. This is not a tuning detail — it is the difference
+      between the mechanism working and not, it is one function, and I would not have found
+      it by reasoning. Toggle <em>matching</em> in the rail and watch the right shelf
+      collapse.
+    </p>
+
+    <h3>Form is the third channel of legible causation, and it is nearly free</h3>
+    <p>
+      Wonder rolls form from habitat and never changes it, so a shape means nothing except
+      "this tile allows it". Under this proposal terrain still constrains — kelp stays in the
+      water — but <em>which</em> allowed form you get reads back to how the plant makes its
+      living. A chain that cannot fire without somebody else's catalyst lands on fungus or
+      coral. A long branching chain that pays for itself lands on tree. One that barely
+      climbs lands on moss. The fourteen drawers keep doing exactly what they do now; they
+      just acquire a reason.
+    </p>
+    <p>
+      It also answers the thing bench 0 got wrong. Bench 0 replaced the drawers because the
+      chain "should" produce the body. It should not: it should <em>select</em> the body.
+      Wonder's fourteen forms are hand-made and good, and a procedural grammar that reaches
+      the same quality is a much larger bet than it looked.
+    </p>
+
+    <h3>Essence is currently a punishment</h3>
+    <p>
+      Section 4 computes it live and the shape does not depend on the seed. The energy ladder
+      is <strong>exponential</strong> — 1, 3, 9, 27 — while the cost ladder is
+      <strong>factorial</strong>, because each rung spends <code>t+1</code> units of the rung
+      below: 1, 2, 6, 24 base units. Factorial always overtakes exponential. In energy
+      returned per base unit spent the rungs go
+      <strong>1.00 → 1.50 → 1.50 → 1.13</strong>. Climbing pays until compound and then stops.
+      A fifth tier would return 0.68.
+    </p>
+    <p>
+      Across 8000 plants on 400 rolled worlds only <strong>3.6%</strong> ever end holding
+      essence. Those that do show a better yield (2.46 against 2.07 for base-only), but that
+      is selection on the <em>hand</em> rather than a payoff from the tier — they are the
+      plants whose recipes happened to chain well, and they would have scored well one rung
+      lower too. What essence genuinely buys is colour: pigment per base spent keeps climbing
+      (7.50 against compound's 6.67) and mean chroma goes 0.139 → 0.206.
+    </p>
+    <p>
+      <strong>So the jewel tones are currently earned by being inefficient</strong>, which
+      under bench 6's selection means the most beautiful plants are the ones selection
+      removes. Two fixes, and I would take both.
+    </p>
+    <ul>
+      <li><strong>Stop the penalty.</strong> The intended rule is visibly
+        <code>energy = 1.5 × what it cost you</code>: it holds exactly at tiers 1, 2 and 3
+        and breaks only at 4. Setting essence to <strong>36</strong> energy instead of 27
+        restores it — one constant.</li>
+      <li><strong>Pay essence in something other than calories.</strong> Let it buy the
+        rarest form, the bulb — Wonder's hanging lantern — plus the glow trait and pollinator
+        preference. That is how expensive secondary chemistry works in real plants: it does
+        not feed you, it makes something else come to you. And it makes the answer to "is
+        there a benefit to being essence" something you can <em>see</em>, which is the point
+        of the whole project.</li>
+    </ul>
+
+    <h3>What this does not settle</h3>
+    <p>
+      The prototype table is my assignment, not a measurement: fourteen points placed by
+      argument about what each shape ought to mean metabolically. It is the obvious thing to
+      disagree with, which is why it is a live table on the page rather than buried in the
+      code. Nothing here tests whether a <em>player</em> can read form back to cause — that
+      needs a person, and it is the same untested claim the whole suite rests on. And the
+      drawers stay hand-made under this proposal: the chain chooses among fourteen, it does
+      not invent a fifteenth. Genuinely new shapes need bench 3's attractor morphology, and
+      that is a different and much larger bet.
+    </p>
+  </section>
+
+  <footer>Bench 12 · imports Wonder's real plant drawers · everything else derived from the seed · nothing here is wired to the game yet</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // Extracted verbatim from the bench, so these numbers are the bench's own.
+
+    const P = {
+      hueSpread: 0,        // 0 = roll it per world; > 0 overrides
+      baseCount: 4,        // reagents at tier 1 (higher tiers scale down from it)
+      catalysts: 0,        // 0 = roll 1 or 2
+      handSize: 0,         // 0 = roll 3..5
+      budgetMax: 36,       // steps a chain may run
+      upgradeCost: 1,      // scales the per-rung cost: cost = round((t+1) * this)
+      pigmentSteep: 1,     // exponent on the tier pigment weighting
+      chromaScale: 1,      // multiplies the chroma ramp
+      caravan: 2,          // gather headroom — how full before a gather idles
+    };
+
+    const TIER_NAME = ["", "base", "refined", "compound", "essence"];
+    const TIER_ENERGY = [0, 1, 3, 9, 27];
+    const TIER_CHROMA_BASE = [0, 0.045, 0.105, 0.17, 0.235];
+    const TIER_CHROMA = () => TIER_CHROMA_BASE.map((c) => c * P.chromaScale);
+    // Pigment weight climbs much faster than energy: one unit of essence should
+    // colour a plant that is otherwise a hundred units of mud. The scarce thing
+    // is what you see.
+    const TIER_PIGMENT_BASE = [0, 1, 7, 40, 180];
+    // Steepness is the dial that decides whether the rare thing colours the plant
+    // or whether the heap of leftover base mud does.
+    const TIER_PIGMENT = () => TIER_PIGMENT_BASE.map((w) => Math.pow(w, P.pigmentSteep));
+    const COUNTS = () => [0, P.baseCount, Math.max(1, P.baseCount - 1),
+                          Math.max(1, P.baseCount - 2), Math.max(1, P.baseCount - 3)];
+
+    /* ============================ rng ============================ */
+    // mulberry32, matching src/core/rng.ts. Warmed, because the first draw
+    // correlates across nearby seeds (a gotcha this project already learned).
+    function makeRng(seed) {
+      let a = seed >>> 0;
+      const f = function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      for (let i = 0; i < 12; i++) f();
+      return f;
+    }
+    const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
+    const range = (rng, lo, hi) => lo + rng() * (hi - lo);
+    const irange = (rng, lo, hi) => Math.floor(range(rng, lo, hi + 1 - 1e-9));
+
+    /* ======================= oklch -> sRGB ======================= */
+    // Ottosson's matrices. We convert ourselves rather than handing oklch()
+    // to the canvas so the swatches and the sprites can never disagree.
+    function oklabToLinear(L, a, b) {
+      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+      const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+      const l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
+      return [
+         4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+      ];
+    }
+    const inGamut = (v) => v.every((c) => c >= -0.0005 && c <= 1.0005);
+
+    function oklch(L, C, H) {
+      L = Math.max(0, Math.min(1, L));
+      const rad = (H * Math.PI) / 180;
+      // Walk chroma down until it fits sRGB — clipping channels instead would
+      // shift the hue, and hue is carrying information here.
+      let c = Math.max(0, C), lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+      for (let i = 0; i < 24 && !inGamut(lin); i++) {
+        c *= 0.92;
+        lin = oklabToLinear(L, c * Math.cos(rad), c * Math.sin(rad));
+      }
+      const enc = (x) => {
+        x = Math.max(0, Math.min(1, x));
+        const s = x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+        return Math.round(Math.max(0, Math.min(1, s)) * 255);
+      };
+      const [r, g, b] = lin.map(enc);
+      return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+    }
+
+    /* ========================= the world ========================= */
+
+    const NAMES = [
+      "ochre", "saline", "verdigris", "cinnabar", "lime", "orpiment", "malachite",
+      "azurite", "realgar", "gypsum", "hematite", "smalt", "vermilion", "indigo",
+      "madder", "weld", "woad", "umber", "sienna", "celadon", "minium", "litharge",
+      "bice", "saffron", "gamboge", "alum", "natron", "tincal", "galena", "mica",
+      "feldspar", "cobalt", "antimony", "quartz",
+    ];
+    // Every tunable in one place. The rail writes here and everything downstream
+    // reads it, so a slider genuinely re-rolls the model rather than restyling it.
+
+
+    const ISLE_A = ["Pol", "Kes", "Tarn", "Vel", "Mor", "Ashen", "Bramm", "Ost", "Fenn", "Lir"];
+    const ISLE_B = ["pol", "mere", "holt", "reach", "scar", "wick", "fell", "strand"];
+
+    function rollWorld(seed) {
+      const rng = makeRng(seed ^ 0x9e37);
+      const pool = NAMES.slice();
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      // A world's hue signature: an anchor and a spread. Narrow spreads come out
+      // tonal, wide ones polychrome — the single best per-world colour knob.
+      const anchor = rng() * 360;
+      const spread = P.hueSpread > 0 ? P.hueSpread : range(rng, 70, 330);
+
+      const reagents = [];
+      let cursor = 0;
+      for (let tier = 1; tier <= 4; tier++) {
+        for (let k = 0; k < COUNTS()[tier]; k++) {
+          const t = reagents.length;
+          reagents.push({
+            id: t,
+            name: pool[cursor++],
+            tier: tier,
+            hue: (anchor + spread * (rng() - 0.5)) % 360,
+            catalyst: false,
+          });
+        }
+      }
+      reagents.forEach((r) => { if (r.hue < 0) r.hue += 360; });
+
+      // One or two catalysts, in the middle tiers — the reagents worth having
+      // around rather than worth spending.
+      const mid = reagents.filter((r) => r.tier === 2 || r.tier === 3);
+      const nCat = P.catalysts > 0 ? P.catalysts : (rng() < 0.45 ? 2 : 1);
+      for (let i = 0; i < nCat && mid.length; i++) {
+        const c = mid.splice(Math.floor(rng() * mid.length), 1)[0];
+        c.catalyst = true;
+      }
+
+      const byTier = (t) => reagents.filter((r) => r.tier === t);
+      const deck = [];
+
+      // Gather — always available for every base reagent, so no world is a dud.
+      byTier(1).forEach((r) => {
+        deck.push({ kind: "gather", out: r.id, n: irange(rng, 3, 6) });
+      });
+      // Upgrade — the ladder-climbing primitive, and generic like Spice Road's:
+      // spend any two of a tier to get one of the next. Generic is what makes a
+      // random hand chainable instead of dead.
+      // Cost climbs with the rung, so the top of the ladder is genuinely hard to
+      // reach and a shelf of specimens spreads out instead of all landing together.
+      for (let t = 1; t <= 3; t++) {
+        byTier(t + 1).forEach((up) => {
+          const cost = Math.max(1, Math.round((t + 1) * P.upgradeCost));
+          deck.push({ kind: "upgrade", fromTier: t, cost: cost, out: up.id, n: 1 });
+        });
+      }
+      // Trade — Blaine's own `3 of A + 2 of B -> C`.
+      for (let i = 0; i < 5; i++) {
+        const t = irange(rng, 1, 2);
+        const a = pick(rng, byTier(t)), b = pick(rng, byTier(t));
+        const outs = byTier(Math.min(4, t + 1));
+        if (!a || !b || a.id === b.id || !outs.length) continue;
+        deck.push({
+          kind: "trade",
+          inp: [{ id: a.id, n: irange(rng, 2, 3) }, { id: b.id, n: irange(rng, 1, 2) }],
+          out: pick(rng, outs).id, n: 1,
+        });
+      }
+      // Catalyse — needs a reagent present, doesn't spend it.
+      reagents.filter((r) => r.catalyst).forEach((cat) => {
+        for (let i = 0; i < 2; i++) {
+          const t = irange(rng, 1, 3);
+          const from = pick(rng, byTier(t));
+          const outs = byTier(Math.min(4, t + 1));
+          if (!from || !outs.length) continue;
+          deck.push({
+            kind: "catalyse", needs: cat.id,
+            inp: [{ id: from.id, n: irange(rng, 1, 2) }],
+            out: pick(rng, outs).id, n: irange(rng, 1, 2),
+          });
+        }
+      });
+
+      const isle = pick(rng, ISLE_A) + pick(rng, ISLE_B);
+      // What the ground here offers: a couple of base reagents, and sometimes a
+      // trace of a catalyst — the permissive tile that unlocks a whole branch.
+      const soil = {};
+      const bases = byTier(1);
+      for (let i = 0; i < 2; i++) soil[pick(rng, bases).id] = irange(rng, 2, 4);
+      const cats = reagents.filter((r) => r.catalyst);
+      if (rng() < 0.5 && cats.length) soil[pick(rng, cats).id] = 1;
+
+      return { seed, reagents, deck, isle, anchor, spread, soil, rng };
+    }
+
+    /* ========================= the plant ========================= */
+
+    const EPITHET = [
+      "palustris", "sylvatica", "arenaria", "nivalis", "rupestris", "lucens",
+      "fusca", "gracilis", "umbrosa", "tenuis", "vernalis", "cinerea",
+      "aurata", "torquata", "patula", "serotina",
+    ];
+    const GENUS = [
+      "Calyx", "Thren", "Vesper", "Umbra", "Solen", "Astra", "Corvid",
+      "Nubila", "Ferrum", "Halcyon", "Cirrus", "Ligna",
+    ];
+
+    function rollPlant(world, salt) {
+      const rng = makeRng((world.seed ^ 0x51a7) + salt * 0x9e3779b1);
+      const size = P.handSize > 0 ? P.handSize : irange(rng, 3, 5);
+      // Always one gather (or it can never start) and at most one (two is a
+      // wasted card), then the rest drawn from everything else.
+      const hand = [pick(rng, world.deck.filter((c) => c.kind === "gather"))];
+      const rest = world.deck.filter((c) => c.kind !== "gather");
+      for (let i = 1; i < size && rest.length; i++) {
+        const c = rest.splice(Math.floor(rng() * rest.length), 1)[0];
+        hand.push(c);
+      }
+      const name = pick(rng, GENUS) + " " + pick(rng, EPITHET);
+      // A wide budget spread is what separates the shelf: some plants are simply
+      // never going to get far enough up the ladder to be interesting, and that
+      // should be visible.
+      return { hand: hand, name: name, budget: irange(rng, 8, Math.max(9, P.budgetMax)), rng: rng };
+    }
+
+    /* ========================== the run ========================== */
+
+    function has(pile, inp) { return inp.every((i) => (pile[i.id] || 0) >= i.n); }
+
+    const take = (pile, id, n) => { pile[id] -= n; if (pile[id] <= 0) delete pile[id]; };
+
+    // An upgrade spends any `cost` units held at `fromTier`, cheapest-hue-first
+    // so the choice is deterministic. Returns what it spent, or null.
+    function spendTier(world, pile, tier, cost) {
+      const held = Object.keys(pile)
+        .filter((id) => world.reagents[id].tier === tier && pile[id] > 0)
+        .sort((a, b) => pile[b] - pile[a] || a - b);
+      let need = cost;
+      const spent = [];
+      for (const id of held) {
+        if (need <= 0) break;
+        const n = Math.min(need, pile[id]);
+        spent.push({ id: +id, n: n });
+        need -= n;
+      }
+      if (need > 0) return null;
+      spent.forEach((s) => take(pile, s.id, s.n));
+      return spent;
+    }
+
+    function runChain(world, plant) {
+      const pile = Object.assign({}, world.soil);
+      const steps = [];
+      const plays = new Map();
+      let fired = true, n = 0;
+
+      while (fired && n < plant.budget) {
+        fired = false;
+        for (const card of plant.hand) {
+          if (n >= plant.budget) break;
+          let spent = null;
+
+          if (card.kind === "gather") {
+            // The caravan limit: a gather idles once there's plenty on hand, so
+            // the chain has to actually spend before it can draw again.
+            if ((pile[card.out] || 0) >= card.n + P.caravan) continue;
+          } else if (card.kind === "upgrade") {
+            spent = spendTier(world, pile, card.fromTier, card.cost);
+            if (!spent) continue;
+          } else {
+            if (!has(pile, card.inp)) continue;
+            if (card.kind === "catalyse" && (pile[card.needs] || 0) < 1) continue;
+            card.inp.forEach((i) => take(pile, i.id, i.n));
+            spent = card.inp;
+          }
+
+          pile[card.out] = (pile[card.out] || 0) + card.n;
+          plays.set(card, (plays.get(card) || 0) + 1);
+          steps.push({ card: card, spent: spent, pile: Object.assign({}, pile) });
+          fired = true; n++;
+        }
+      }
+
+      let energy = 0, top = 0;
+      for (const id in pile) {
+        const r = world.reagents[id];
+        energy += pile[id] * TIER_ENERGY[r.tier];
+        if (pile[id] > 0) top = Math.max(top, r.tier);
+      }
+      const cost = 4 + steps.length * 1.2;
+      return {
+        pile: pile, steps: steps, plays: plays,
+        energy: energy, top: top, cost: cost, ratio: energy / (4 + steps.length * 1.2),
+      };
+    }
+
+    /* ========================== pigment ========================== */
+
+    function pigment(world, run) {
+      let x = 0, y = 0, w = 0;
+      for (const id in run.pile) {
+        const r = world.reagents[id];
+        // Weight steeply by tier, so the scarce thing is what colours the plant
+        // rather than the pile of leftover base it's sitting on.
+        const k = run.pile[id] * TIER_PIGMENT()[r.tier];
+        const rad = (r.hue * Math.PI) / 180;
+        x += Math.cos(rad) * k; y += Math.sin(rad) * k; w += k;
+      }
+      let hue = w > 0 ? (Math.atan2(y, x) * 180) / Math.PI : world.anchor;
+      if (hue < 0) hue += 360;
+
+      // Chroma reads the pigment-weighted MEAN tier, not the ceiling: one stray
+      // unit of essence in a pile of base shouldn't blaze like a plant that is
+      // mostly essence. Plus a nudge for a pile whose hues agree, because a
+      // muddled pile genuinely should look muddled.
+      let tw = 0;
+      for (const id in run.pile) {
+        const r = world.reagents[id];
+        tw += run.pile[id] * TIER_PIGMENT()[r.tier] * r.tier;
+      }
+      const meanTier = w > 0 ? Math.max(1, Math.min(4, tw / w)) : 1;
+      const lo = Math.floor(meanTier), hi = Math.min(4, lo + 1);
+      const TC = TIER_CHROMA();
+      const ramp = TC[lo] + (TC[hi] - TC[lo]) * (meanTier - lo);
+      const coherence = w > 0 ? Math.sqrt(x * x + y * y) / w : 0;
+      const chroma = ramp * (0.66 + 0.34 * coherence);
+
+      const ratio = run.energy / run.cost;
+      const light = 0.46 + 0.34 * Math.max(0, Math.min(1, Math.log2(1 + ratio) / 4));
+
+      return {
+        hue: hue, chroma: chroma, light: light, coherence: coherence,
+        ratio: ratio, meanTier: meanTier,
+        hex: oklch(light, chroma, hue),
+        leaf: oklch(Math.max(0.26, light - 0.2), chroma * 0.62, hue),
+        lit: oklch(Math.min(0.93, light + 0.14), chroma * 1.05, hue),
+        iridescent: run.top >= 4,
+        shift: oklch(light, chroma, (hue + 62) % 360),
+      };
+    }
+
+
+
+  /* Wonder's own plant drawers, ported verbatim from src/render/plantSprites.ts.
+     TypeScript annotations stripped; not one drawing decision changed. This is the
+     art the game ships today, so every comparison below is against the real thing. */
+  const PLANT_SPRITE_W = 16, PLANT_SPRITE_H = 28, PLANT_ANCHOR_X = 8, PLANT_ANCHOR_Y = 26;
+  const F = { Flower:0, Shrub:1, Tree:2, Fungus:3, Fern:4, Coral:5, Succulent:6,
+              Reed:7, Vine:8, Grass:9, Moss:10, Bulb:11, Sporestalk:12, Kelp:13 };
+  const FORM_NAME = ["flower","shrub","tree","fungus","fern","coral","succulent",
+                     "reed","vine","grass","moss","bulb","sporestalk","kelp"];
+  function hsl(h, s, l) {
+    return "hsl(" + Math.round(((h % 1) + 1) % 1 * 360) + ", " +
+           Math.round(s * 100) + "%, " + Math.round(l * 100) + "%)";
+  }
+function px(ctx, x, y, color, a = 1) {
+  ctx.globalAlpha = a;
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  ctx.globalAlpha = 1;
+}
+
+function rect(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+
+// ── the shared grammar of depth ──────────────────────────────────────────────
+// The sun leans in from the upper-left (the same light the ground-shadow pass
+// believes in): every form keeps a lit cheek and a turned one, and everything
+// that stands gets a dark seat where it meets the soil.
+
+// lightness clamped into the visible band, so depth shifts never blow out
+function shade(h, s, l) {
+  return hsl(h, s, Math.max(0.06, Math.min(0.94, l)));
+}
+
+// how squarely an offset from center faces the upper-left light: 1 full sun,
+// -1 full shade
+function facing(dx, dy) {
+  const d = Math.hypot(dx, dy);
+  return d === 0 ? 0 : (-dx - dy) / (d * Math.SQRT2);
+}
+
+// the dark seat where a plant meets the soil, pooled a step to the lower
+// right — the sprite's own contact shadow, under the renderer's soft one
+function anchor(ctx, cx, w) {
+  const half = Math.max(1, Math.round(w / 2));
+  for (let i = -half; i <= half; i++) {
+    px(ctx, cx + i + 1, PLANT_ANCHOR_Y + 1, "rgb(10, 14, 10)", i === 0 ? 0.3 : 0.16);
+  }
+}
+
+// stems keep a grounding leaf-green cast pulled slightly toward the genome hue
+function stemColor(g) {
+  return hsl(0.3 + (g.hue - 0.3) * 0.25, g.sat * 0.5, 0.3);
+}
+
+function stemHueOf(g) {
+  return 0.3 + (g.hue - 0.3) * 0.25;
+}
+
+// Water flowers ride a lily pad: short stem, wide green disc at the waterline.
+function drawLily(ctx, g) {
+  const baseY = PLANT_ANCHOR_Y;
+  const padW = 6 + Math.round(g.spread * 4);
+  rect(ctx, PLANT_ANCHOR_X - padW / 2, baseY - 1, padW, 2, hsl(0.34, 0.5, 0.34));
+  rect(ctx, PLANT_ANCHOR_X - padW / 2 + 1, baseY - 2, padW - 2, 1, hsl(0.34, 0.5, 0.42));
+  px(ctx, PLANT_ANCHOR_X - padW / 2 + 1, baseY - 2, hsl(0.34, 0.55, 0.5)); // the sunward rim
+  px(ctx, PLANT_ANCHOR_X + padW / 2 - 1, baseY, hsl(0.34, 0.45, 0.26)); // the far rim, dipping
+  px(ctx, PLANT_ANCHOR_X + 2, baseY - 1, hsl(0.34, 0.5, 0.28)); // the pad's cut notch
+  const shortened = { ...g, height: g.height * 0.45, leaves: 0 };
+  drawFlower(ctx, shortened, true);
+}
+
+// Water shrubs become reeds: a stand of thin stalks with seed-head tips.
+function drawShrubReeds(ctx, g) {
+  const baseY = PLANT_ANCHOR_Y;
+  const count = 3 + Math.round(g.spread * 3);
+  for (let i = 0; i < count; i++) {
+    const x = PLANT_ANCHOR_X - count + i * 2 + (i % 2);
+    const h = Math.round(6 + g.height * 9 + ((i * 5) % 4) - 2 + g.lean * i);
+    const sun = x < PLANT_ANCHOR_X ? 0.04 : -0.03;
+    for (let s = 0; s <= h; s++) {
+      px(ctx, x, baseY - s, shade(0.28 + (g.hue - 0.28) * 0.3, g.sat * 0.6, 0.3 + (s / h) * 0.09 + sun));
+    }
+    const tl = (g.glow > 0.8 ? 0.7 : 0.5) + sun;
+    px(ctx, x, baseY - h - 1, shade(g.hue2, Math.min(1, g.sat + 0.15), tl));
+    px(ctx, x, baseY - h - 2, shade(g.hue2, Math.min(1, g.sat + 0.15), tl + 0.06));
+  }
+}
+
+function drawFlower(ctx, g, afloat = false) {
+  const stemH = 4 + g.height * 11;
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const topX = baseX + g.lean * 3;
+  const topY = baseY - stemH;
+  if (!afloat) anchor(ctx, baseX, 2 + g.spread);
+  const sh = stemHueOf(g);
+  for (let i = 0; i <= stemH; i++) {
+    // the stem climbs out of its own shade toward the light
+    px(ctx, baseX + (topX - baseX) * (i / stemH), baseY - i, shade(sh, g.sat * 0.5, 0.24 + (i / stemH) * 0.1));
+  }
+  const leaves = Math.round(g.leaves);
+  for (let i = 0; i < leaves; i++) {
+    const f = (i + 1) / (leaves + 1);
+    const ly = baseY - stemH * f;
+    const lx = baseX + (topX - baseX) * f;
+    px(ctx, lx - 1, ly, shade(sh, g.sat * 0.55, 0.37)); // the sunward leaf
+    px(ctx, lx + 1, ly, shade(sh, g.sat * 0.5, 0.22)); // its shaded twin
+    if (g.spread > 0.5) {
+      px(ctx, lx - 2, ly + 1, shade(sh, g.sat * 0.55, 0.33), 0.85);
+      px(ctx, lx + 2, ly + 1, shade(sh, g.sat * 0.5, 0.19), 0.85);
+    }
+  }
+  const r = 1.5 + g.spread * 2.5;
+  const petals = Math.round(g.petals);
+  const baseL = 0.53 + g.glow * 0.15;
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * Math.PI * 2 - Math.PI / 2;
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    const l = baseL + facing(dx, dy) * 0.09; // each petal turns its face to the light
+    px(ctx, topX + dx * r, topY + dy * r, shade(g.hue, g.sat, l));
+    if (r > 2.6) px(ctx, topX + dx * (r - 1), topY + dy * (r - 1), shade(g.hue, g.sat, l - 0.06), 0.9);
+  }
+  // the heart: a lit crown pixel over a shaded throat
+  px(ctx, topX, topY, shade(g.hue2, g.sat, 0.6));
+  px(ctx, topX + 1, topY, shade(g.hue2, g.sat, 0.5), 0.95);
+  px(ctx, topX, topY + 1, shade(g.hue2, g.sat, 0.48), 0.95);
+  px(ctx, topX + 1, topY + 1, shade(g.hue2, g.sat, 0.36), 0.95);
+  if (g.glow > 0.8) {
+    const halo = hsl(g.hue, g.sat, 0.82);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      px(ctx, topX + Math.cos(a) * (r + 1.6), topY + Math.sin(a) * (r + 1.6), halo, 0.55);
+    }
+  }
+}
+
+function drawShrub(ctx, g) {
+  const h = 4 + g.height * 8;
+  const w = 5 + g.spread * 7;
+  const baseY = PLANT_ANCHOR_Y;
+  anchor(ctx, PLANT_ANCHOR_X, w * 0.7);
+  // mounded blob: widest at the bottom, rounded top, one cheek in the sun
+  for (let row = 0; row < h; row++) {
+    const f = row / h; // 0 top .. 1 bottom
+    const rw = Math.max(2, Math.round(w * Math.sqrt(f) * (0.8 + 0.2 * Math.sin(row * 2.1))));
+    const l = f < 0.35 ? 0.47 : f < 0.7 ? 0.38 : 0.29;
+    const x0 = Math.round(PLANT_ANCHOR_X - rw / 2 + g.lean * (1 - f) * 2);
+    rect(ctx, x0, baseY - h + row, rw, 1, shade(g.hue, g.sat * 0.9, l));
+    px(ctx, x0, baseY - h + row, shade(g.hue, g.sat, l + 0.08), 0.9); // sunward cheek
+    px(ctx, x0 + rw - 1, baseY - h + row, shade(g.hue, g.sat * 0.85, l - 0.07), 0.9); // turned cheek
+  }
+  // leaf-clusters dappling the lit shoulder
+  px(ctx, PLANT_ANCHOR_X - w * 0.22 + g.lean, baseY - h + 1, shade(g.hue, g.sat, 0.55), 0.7);
+  px(ctx, PLANT_ANCHOR_X - w * 0.02 + g.lean, baseY - h + 2, shade(g.hue, g.sat, 0.52), 0.55);
+  const berries = Math.round(g.petals / 2);
+  for (let i = 0; i < berries; i++) {
+    const a = (i / berries) * Math.PI * 2 + g.hue * 7;
+    const bx = PLANT_ANCHOR_X + Math.cos(a) * (w * 0.28);
+    const by = baseY - h * (0.35 + 0.4 * ((Math.sin(a * 2) + 1) / 2));
+    const l = (g.glow > 0.8 ? 0.72 : 0.55) + facing(Math.cos(a), 0) * 0.05;
+    px(ctx, bx, by, shade(g.hue2, Math.min(1, g.sat + 0.2), l));
+    px(ctx, bx + 1, by + 1, shade(g.hue2, g.sat * 0.8, 0.2), 0.45); // each berry seats in its own shade
+  }
+}
+
+function drawTree(ctx, g) {
+  const trunkH = 5 + g.height * 9;
+  const canopyH = 7 + g.height * 9;
+  const radius = 3.5 + g.spread * 4;
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const topX = baseX + g.lean * 2;
+  anchor(ctx, baseX, radius);
+  const bark = 0.07 + g.hue * 0.04;
+  for (let i = 0; i <= trunkH; i++) {
+    px(ctx, baseX - 1, baseY - i, shade(bark, 0.35, 0.33)); // the trunk's lit flank
+    px(ctx, baseX, baseY - i, shade(bark, 0.35, 0.22)); // and its turned one
+  }
+  px(ctx, baseX - 2, baseY, shade(bark, 0.3, 0.27)); // root flare
+  px(ctx, baseX + 1, baseY, shade(bark, 0.3, 0.18));
+  const canopyBottom = baseY - trunkH;
+  px(ctx, baseX - 1, canopyBottom + 1, shade(bark, 0.35, 0.14), 0.8); // the canopy shades its own trunk
+  px(ctx, baseX, canopyBottom + 1, shade(bark, 0.35, 0.12), 0.8);
+  const rows = Math.round(canopyH); // whole rows: the old fractional top row was acos(>1) = NaN
+  for (let row = 0; row < rows; row++) {
+    const f = row / (rows - 1); // 0 = bottom of canopy, 1 = top
+    const rw = Math.max(2, Math.round(radius * 2 * Math.sin(Math.acos(2 * f - 1))));
+    const y = canopyBottom - row;
+    const l = row === 0 ? 0.2 : f > 0.72 ? 0.46 : f > 0.3 ? 0.35 : 0.26; // dark under-rim up to a lit crown
+    const x0 = Math.round(topX - rw / 2);
+    rect(ctx, x0, y, rw, 1, shade(g.hue, g.sat * 0.95, l));
+    if (rw > 2) {
+      px(ctx, x0, y, shade(g.hue, g.sat, l + 0.09), 0.9); // sunward edge
+      px(ctx, x0 + rw - 1, y, shade(g.hue, g.sat * 0.9, l - 0.07), 0.9); // far edge
+      if (f > 0.15 && f < 0.85 && rw > 4) {
+        // a leaf-clump's shadow tucked into the mass
+        const cx = x0 + 1 + Math.abs(Math.round(Math.sin(row * 2.7 + g.hue * 9) * (rw - 3)));
+        px(ctx, cx, y, shade(g.hue, g.sat, l - 0.06), 0.55);
+      }
+    }
+  }
+  // light catches the upper-left shoulder
+  const lit = shade(g.hue, g.sat, 0.58);
+  px(ctx, topX - radius * 0.6, canopyBottom - canopyH * 0.75, lit, 0.9);
+  px(ctx, topX - radius * 0.3, canopyBottom - canopyH * 0.85, lit, 0.9);
+  px(ctx, topX - radius * 0.45, canopyBottom - canopyH * 0.62, lit, 0.6);
+  if (g.petals >= 8) {
+    // a blossoming crown: sprays of bloom across the sunward half
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.7 + g.hue2 * 11;
+      const bx = topX - radius * 0.15 + Math.cos(a) * radius * 0.55;
+      const by = canopyBottom - canopyH * (0.35 + 0.4 * ((Math.sin(a * 1.3) + 1) / 2));
+      px(ctx, bx, by, shade(g.hue2, Math.min(1, g.sat + 0.15), 0.68), 0.95);
+      px(ctx, bx + 1, by, shade(g.hue2, g.sat, 0.55), 0.5);
+    }
+  } else if (g.petals > 6.5) {
+    // fruiting: bright drops hung in the shade, each with its own dark seat
+    for (let i = 0; i < 3; i++) {
+      const a = i * 2.4 + g.hue2 * 9;
+      const bx = topX + Math.cos(a) * radius * 0.55;
+      const by = canopyBottom - canopyH * (0.3 + 0.35 * ((Math.sin(a) + 1) / 2));
+      px(ctx, bx, by, shade(g.hue2, 1, 0.6));
+      px(ctx, bx, by + 1, shade(g.hue2, 0.7, 0.25), 0.5);
+    }
+  }
+}
+
+function drawFungus(ctx, g) {
+  const stemH = 2 + g.height * 6;
+  const capW = 4 + g.spread * 8;
+  const capH = 2 + g.height * 3;
+  const baseX = PLANT_ANCHOR_X + g.lean * 1.5;
+  const baseY = PLANT_ANCHOR_Y;
+  const glowing = g.glow > 0.8;
+  anchor(ctx, baseX, capW * 0.45);
+  for (let i = 0; i <= stemH; i++) {
+    px(ctx, baseX - 1, baseY - i, shade(g.hue, g.sat * 0.25, 0.74)); // the pale stalk, lit
+    px(ctx, baseX, baseY - i, shade(g.hue, g.sat * 0.3, 0.58)); // and turned away
+  }
+  px(ctx, baseX - 1, baseY - Math.round(stemH * 0.45), shade(g.hue, g.sat * 0.3, 0.5), 0.7); // the ring the veil left
+  const capTopY = baseY - stemH - capH;
+  for (let row = 0; row < capH; row++) {
+    const f = (row + 1) / capH;
+    const rw = Math.max(2, Math.round(capW * Math.sqrt(f)));
+    const x0 = Math.round(baseX - rw / 2);
+    const l = (glowing ? 0.6 : 0.48) + (1 - f) * 0.06; // the dome lightens toward its crown
+    rect(ctx, x0, capTopY + row, rw, 1, shade(g.hue, g.sat, l));
+    if (rw > 2) {
+      px(ctx, x0, capTopY + row, shade(g.hue, g.sat, l + 0.09), 0.9);
+      px(ctx, x0 + rw - 1, capTopY + row, shade(g.hue, g.sat, l - 0.09), 0.9);
+    }
+  }
+  rect(ctx, baseX - capW / 2 + 1, baseY - stemH - 1, capW - 2, 1, shade(g.hue, g.sat, 0.3)); // gills in shadow
+  const spots = Math.round(g.petals / 2);
+  for (let i = 0; i < spots; i++) {
+    const f = (i + 0.5) / spots;
+    px(ctx, baseX - capW / 2 + capW * f, capTopY + 1 + (i % 2), shade(g.hue2, g.sat * 0.7, 0.8 - f * 0.12)); // spots dim into the far side
+  }
+  if (glowing) {
+    const halo = hsl(g.hue, g.sat, 0.8);
+    px(ctx, baseX - capW / 2 - 1, capTopY + capH - 1, halo, 0.5);
+    px(ctx, baseX + capW / 2 + 1, capTopY + capH - 1, halo, 0.5);
+    px(ctx, baseX, capTopY - 1, halo, 0.5);
+  }
+}
+
+// Fronds fan out from a rootstock and droop at the tips, leaflets along
+// each rib — and nothing says a fern must be green.
+function drawFern(ctx, g) {
+  const baseX = PLANT_ANCHOR_X + g.lean;
+  const baseY = PLANT_ANCHOR_Y;
+  const fronds = Math.max(3, Math.round(g.petals * 0.8));
+  const len = 4 + g.height * 9;
+  anchor(ctx, baseX, 2 + g.spread * 2);
+  rect(ctx, Math.round(baseX) - 1, baseY - 2, 2, 3, stemColor(g)); // rootstock
+  px(ctx, baseX - 1, baseY - 2, shade(stemHueOf(g), g.sat * 0.5, 0.38)); // its lit crown
+  for (let i = 0; i < fronds; i++) {
+    const t = fronds === 1 ? 0.5 : i / (fronds - 1);
+    const a = (t - 0.5) * (1.0 + g.spread * 1.2); // fan angle from vertical
+    const sun = -Math.sin(a) * 0.07; // fronds fanned toward the light stay brighter
+    for (let s = 2; s < len; s++) {
+      const f = s / len;
+      const x = baseX + Math.sin(a) * s;
+      const y = baseY - 2 - Math.cos(a) * s + f * f * 3; // tips droop
+      const l = (f > 0.7 ? (g.glow > 0.8 ? 0.68 : 0.55) : f > 0.35 ? 0.42 : 0.3) + sun;
+      px(ctx, x, y, shade(g.hue, g.sat, l));
+      if (s % 2 === 0 && s > 3 && Math.round(g.leaves) > 0) {
+        px(ctx, x - Math.cos(a), y + Math.sin(a), shade(g.hue, g.sat, 0.46 + sun), 0.85);
+        px(ctx, x + Math.cos(a), y - Math.sin(a), shade(g.hue, g.sat, 0.37 + sun), 0.85);
+      }
+    }
+  }
+}
+
+// Coral: a colony of branching arms reaching up from a holdfast, each tipped
+// with polyps in the accent hue. Glow corals carry the biolume tide nights.
+function drawCoral(ctx, g) {
+  const baseX = PLANT_ANCHOR_X + g.lean * 1.5;
+  const baseY = PLANT_ANCHOR_Y;
+  const arms = Math.max(2, Math.round(g.petals * 0.5));
+  const len = 4 + g.height * 9;
+  const polyp = (l) => shade(g.hue2, Math.min(1, g.sat + 0.2), l);
+  rect(ctx, baseX - 2, baseY - 1, 4, 2, shade(g.hue, g.sat * 0.85, 0.26)); // holdfast on the seabed
+  px(ctx, baseX - 2, baseY - 1, shade(g.hue, g.sat * 0.85, 0.34)); // its lit corner
+  for (let i = 0; i < arms; i++) {
+    const t = arms === 1 ? 0.5 : i / (arms - 1);
+    const a = (t - 0.5) * (0.7 + g.spread * 1.1); // fan angle from vertical
+    const sun = -Math.sin(a) * 0.06; // arms reaching sunward hold more light
+    const armLen = len * (0.75 + 0.25 * Math.sin(i * 2.7 + g.hue * 9));
+    let x = baseX;
+    let y = baseY - 1;
+    for (let s = 1; s <= armLen; s++) {
+      const f = s / armLen;
+      x = baseX + Math.sin(a) * s * (0.5 + f * 0.5) + Math.sin(f * 2.2) * g.lean;
+      y = baseY - 1 - Math.cos(a * 0.6) * s;
+      const l = (f > 0.66 ? 0.56 : f > 0.33 ? 0.44 : 0.32) + sun;
+      px(ctx, x, y, shade(g.hue, g.sat, l));
+      if (f < 0.6) px(ctx, x + (a < 0 ? -1 : 1), y, shade(g.hue, g.sat * 0.9, l - 0.08), 0.55); // the arm's turned cheek
+      if (i % 2 === 0 && armLen > 6 && s === Math.floor(armLen * 0.55)) {
+        for (let q = 1; q <= 3; q++) px(ctx, x - Math.cos(a) - q * 0.6, y - q, shade(g.hue, g.sat, 0.44 + sun), 0.9);
+        px(ctx, x - Math.cos(a) - 2.4, y - 4, polyp(g.glow > 0.8 ? 0.78 : 0.62)); // side branch, tipped
+      }
+    }
+    px(ctx, x, y, polyp(g.glow > 0.8 ? 0.78 : 0.62));
+    px(ctx, x, y - 1, polyp(g.glow > 0.8 ? 0.84 : 0.68), 0.9);
+  }
+  if (g.glow > 0.8) {
+    const halo = hsl(g.hue2, 0.9, 0.8);
+    px(ctx, baseX - 3, baseY - len * 0.8, halo, 0.5);
+    px(ctx, baseX + 3, baseY - len * 0.9, halo, 0.5);
+    px(ctx, baseX, baseY - len - 2, halo, 0.5);
+  }
+}
+
+// Succulent: rings of plump leaves seen at an angle, lighter toward the
+// heart, each leaf's cheek turned to or from the sun. When the genome
+// insists (many petals or true glow) it sends up a bloom spike — in a dry
+// place, a flower is an event.
+function drawSucculent(ctx, g) {
+  const baseX = PLANT_ANCHOR_X + g.lean;
+  const baseY = PLANT_ANCHOR_Y;
+  const rings = Math.max(1, Math.round(g.leaves));
+  const maxR = 2 + g.spread * 4;
+  anchor(ctx, baseX, maxR * 1.1);
+  for (let ring = rings; ring >= 1; ring--) {
+    const r = (maxR * ring) / rings;
+    const dabs = Math.round(g.petals) + ring;
+    const base = 0.3 + 0.09 * (rings - ring);
+    for (let i = 0; i < dabs; i++) {
+      const a = (i / dabs) * Math.PI * 2 + ring * 0.4 + g.hue * 6;
+      const dx = Math.cos(a);
+      const dy = Math.sin(a) * 0.55;
+      const l = base + facing(dx, dy) * 0.06; // the rosette turns each leaf through the light
+      const x = baseX + dx * r;
+      const y = baseY - 1 + dy * r; // the rosette, foreshortened
+      px(ctx, x, y, shade(g.hue, g.sat, l));
+      px(ctx, x, y - 1, shade(g.hue, g.sat, l + 0.09), 0.9);
+    }
+  }
+  px(ctx, baseX, baseY - 2, shade(g.hue2, g.sat, 0.62)); // the heart
+  px(ctx, baseX + 1, baseY - 1, shade(g.hue, g.sat, 0.2), 0.5); // tucked in its own shade
+  if (g.petals >= 8 || g.glow > 0.8) {
+    const h = 4 + g.height * 8;
+    for (let i = 0; i < h; i++) px(ctx, baseX, baseY - 2 - i, shade(stemHueOf(g), g.sat * 0.5, 0.28 + (i / h) * 0.08));
+    const bl = g.glow > 0.8 ? 0.75 : 0.6;
+    px(ctx, baseX, baseY - 2 - h, shade(g.hue2, Math.min(1, g.sat + 0.2), bl));
+    px(ctx, baseX - 1, baseY - 1 - h, shade(g.hue2, Math.min(1, g.sat + 0.2), bl + 0.05), 0.85);
+    px(ctx, baseX + 1, baseY - 1 - h, shade(g.hue2, Math.min(1, g.sat + 0.2), bl - 0.07), 0.85);
+  }
+}
+
+// Cattails: a stand of straight stalks with arcing blades, the chosen few
+// wearing velvet seed-heads with a lit crown and a spike above.
+function drawReed(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const count = 3 + Math.round(g.spread * 3); // 3-6 stalks
+  const heads = Math.max(1, Math.min(count, Math.round(g.petals / 3)));
+  const step = Math.max(1, Math.round(count / heads));
+  anchor(ctx, baseX, count);
+  const sh = 0.26 + (g.hue - 0.26) * 0.5;
+  // two blades arc from the root, one to the light and one away
+  const bladeLen = 5 + g.height * 5;
+  for (let s = 1; s <= bladeLen; s++) {
+    const f = s / bladeLen;
+    px(ctx, baseX - 1 - s * 0.55, baseY - s + f * f * 2.5, shade(sh, g.sat * 0.6, 0.34 + f * 0.1), 0.9);
+    if (s > 1) px(ctx, baseX + 1 + s * 0.5, baseY - s * 0.9 + f * f * 2.5, shade(sh, g.sat * 0.55, 0.24 + f * 0.05), 0.9);
+  }
+  let headed = 0;
+  for (let i = 0; i < count; i++) {
+    const x = baseX - count + i * 2 + (i % 2);
+    const h = Math.round(7 + g.height * 12 + Math.sin(i * 2.6 + g.hue * 9) * 2 + g.lean * i);
+    const sun = x < baseX ? 0.05 : -0.03; // stalks on the sun side hold the light
+    for (let s = 0; s <= h; s++) {
+      px(ctx, x, baseY - s, shade(sh, g.sat * 0.6, 0.27 + (s / h) * 0.12 + sun));
+    }
+    if (i % step === 0 && headed < heads) {
+      headed++;
+      // the cattail: a velvet head over the stalk's top, a thin spike above
+      const hl = (g.glow > 0.8 ? 0.62 : 0.4) + sun;
+      px(ctx, x, baseY - h, shade(g.hue2, g.sat * 0.85, hl + 0.1)); // its lit crown
+      px(ctx, x, baseY - h + 1, shade(g.hue2, g.sat * 0.85, hl));
+      px(ctx, x, baseY - h + 2, shade(g.hue2, g.sat * 0.85, hl - 0.06));
+      if (headed === 1) px(ctx, x + 1, baseY - h + 1, shade(g.hue2, g.sat * 0.8, hl + 0.04), 0.6); // the fattest head catches sideways light
+      px(ctx, x, baseY - h - 1, shade(sh, g.sat * 0.5, 0.42), 0.9);
+      px(ctx, x, baseY - h - 2, shade(sh, g.sat * 0.5, 0.46), 0.6);
+      if (g.glow > 0.8) px(ctx, x - 1, baseY - h, shade(g.hue2, 0.9, 0.8), 0.5);
+    }
+  }
+}
+
+// A creeper climbing its own invisible trellis: the stem winds, heart
+// leaves alternate sides, trumpet blossoms open sunward, and the growing
+// tip curls on, still looking for a hold.
+function drawVine(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const len = Math.round(9 + g.height * 13);
+  const amp = 1.5 + g.spread * 2.5;
+  anchor(ctx, baseX, 2 + g.spread);
+  const sh = stemHueOf(g);
+  const wind = (s) =>
+    baseX + Math.sin(s * 0.55 + g.hue * 6.28) * amp * (0.35 + (0.65 * s) / len) + (g.lean * s * 2) / len;
+  let lx = baseX;
+  for (let s = 0; s <= len; s++) {
+    const x = wind(s);
+    const y = baseY - s;
+    px(ctx, x, y, shade(sh, g.sat * 0.55, 0.27 + (s / len) * 0.12));
+    if (Math.abs(x - lx) >= 1) px(ctx, (x + lx) / 2, y + 0.5, shade(sh, g.sat * 0.5, 0.22), 0.7); // the rope thickens where it turns
+    lx = x;
+    if (s % 3 === 1 && s > 1 && s < len - 1 && Math.round(g.leaves) > 0) {
+      const side = Math.floor(s / 3) % 2 === 0 ? -1 : 1;
+      const ll = side < 0 ? 0.38 : 0.24; // sunward leaves against shaded ones
+      px(ctx, x + side, y, shade(sh, g.sat * 0.6, ll));
+      px(ctx, x + side * 2, y + 1, shade(sh, g.sat * 0.6, ll - 0.04), 0.8);
+    }
+  }
+  // trumpet blossoms along the climb: tube, flared mouth, a lip in the
+  // light and a throat in the dark
+  const blooms = Math.max(2, Math.round(g.petals / 2) - 1);
+  for (let b = 0; b < blooms; b++) {
+    const s = Math.round(((b + 1) / (blooms + 1)) * len);
+    const x = wind(s);
+    const y = baseY - s;
+    const side = b % 2 === 0 ? -1 : 1;
+    const bl = (g.glow > 0.8 ? 0.72 : 0.56) + (side < 0 ? 0.05 : -0.04);
+    px(ctx, x + side, y, shade(g.hue, g.sat, bl - 0.08));
+    px(ctx, x + side * 2, y, shade(g.hue, g.sat, bl));
+    px(ctx, x + side * 2, y - 1, shade(g.hue, Math.min(1, g.sat + 0.1), bl + 0.06), 0.9);
+    px(ctx, x + side * 2, y + 1, shade(g.hue2, g.sat, 0.35), 0.9);
+    if (g.glow > 0.8 && b % 2 === 0) px(ctx, x + side * 3, y, shade(g.hue, 0.9, 0.82), 0.5);
+  }
+  const tx = wind(len);
+  px(ctx, tx + 1, baseY - len - 1, shade(sh, g.sat * 0.6, 0.42), 0.95); // the tip curls
+  px(ctx, tx + 2, baseY - len, shade(sh, g.sat * 0.6, 0.38), 0.8);
+}
+
+// A tussock: blades fountain from one root, banded root-dark to tip-light,
+// the sunward side brighter. High-petal kinds nod seed plumes.
+function drawGrass(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const blades = 5 + Math.round(g.spread * 4); // 5-9
+  const len = 5 + g.height * 10;
+  anchor(ctx, baseX, 2 + g.spread * 2);
+  for (let i = 0; i < blades; i++) {
+    const t = blades === 1 ? 0.5 : i / (blades - 1);
+    const a = (t - 0.5) * (0.9 + g.spread * 0.9) + g.lean * 0.35;
+    const bl = len * (0.72 + 0.28 * ((Math.sin(i * 2.3 + g.hue * 7) + 1) / 2));
+    const sun = -Math.sin(a) * 0.06; // blades bowing sunward stay lighter
+    for (let s = 1; s <= bl; s++) {
+      const f = s / bl;
+      const x = baseX + Math.sin(a) * s * (0.6 + f * 0.5);
+      const y = baseY - s + f * f * 2; // tips bow outward
+      px(ctx, x, y, shade(g.hue, g.sat * (0.7 + f * 0.3), 0.24 + f * 0.24 + sun));
+    }
+    if (g.petals >= 7 && Math.abs(t - 0.5) < 0.18) {
+      // seed plumes nod from the most upright blades
+      const pl = g.glow > 0.8 ? 0.72 : 0.55;
+      const tipX = baseX + Math.sin(a) * bl * 1.05;
+      px(ctx, tipX, baseY - bl + 1, shade(g.hue2, g.sat * 0.8, pl));
+      px(ctx, tipX + 1, baseY - bl, shade(g.hue2, g.sat * 0.8, pl - 0.06), 0.9);
+    }
+  }
+}
+
+// A cushion hugging the ground: lit from the upper-left, crusted with pale
+// lichen discs, sending up pin sporophytes — the floor's smallest lanterns.
+function drawMoss(ctx, g) {
+  const baseX = PLANT_ANCHOR_X + g.lean;
+  const baseY = PLANT_ANCHOR_Y;
+  const w = Math.round(6 + g.spread * 5); // 6-11
+  const hh = 2 + Math.round(g.height * 8); // a 2-4 px pillow
+  anchor(ctx, baseX, w * 0.6);
+  for (let row = 0; row < hh; row++) {
+    const fy = hh === 1 ? 1 : row / (hh - 1); // 0 top .. 1 bottom
+    const rw = Math.max(2, Math.round(w * Math.sqrt(0.3 + fy * 0.7)));
+    const x0 = Math.round(baseX - rw / 2);
+    const y = baseY - hh + 1 + row;
+    const l = 0.34 - fy * 0.12;
+    rect(ctx, x0, y, rw, 1, shade(g.hue, g.sat * 0.8, l));
+    px(ctx, x0, y, shade(g.hue, g.sat * 0.85, l + 0.08), 0.9);
+    px(ctx, x0 + rw - 1, y, shade(g.hue, g.sat * 0.75, l - 0.06), 0.9);
+    for (let x = x0 + 1; x < x0 + rw - 1; x++) {
+      // the nap of the moss: a sparse lit stipple on the sunward crown
+      if ((x * 3 + row * 5 + Math.round(g.hue * 24)) % 4 === 0 && fy < 0.6 && x < baseX + 1) {
+        px(ctx, x, y, shade(g.hue, g.sat * 0.9, l + 0.1), 0.7);
+      }
+    }
+  }
+  // lichen: pale discs crusting the cushion, each seated in its own shade
+  const discs = Math.max(1, Math.round(g.petals / 3));
+  for (let i = 0; i < discs; i++) {
+    const a = (i / discs) * Math.PI * 2 + g.hue2 * 8;
+    const dx = Math.cos(a) * (w * 0.3);
+    const dy = -Math.abs(Math.sin(a)) * (hh - 1);
+    px(ctx, baseX + dx, baseY - 1 + dy, shade(g.hue2, g.sat * 0.55, 0.6));
+    px(ctx, baseX + dx + 1, baseY + dy, shade(g.hue2, g.sat * 0.5, 0.3), 0.6);
+  }
+  // sporophytes: pin stalks lifting tiny capsules into the light
+  const pins = Math.round(g.leaves);
+  for (let i = 0; i < pins; i++) {
+    const xo = Math.round((i - (pins - 1) / 2) * 2.2 + Math.sin(i * 3.1 + g.hue * 9));
+    const ph = 2 + ((i * 7 + Math.round(g.petals)) % 3);
+    for (let s = 0; s < ph; s++) px(ctx, baseX + xo, baseY - hh - s, shade(g.hue, g.sat * 0.4, 0.4), 0.9);
+    px(ctx, baseX + xo, baseY - hh - ph, shade(g.hue2, g.sat * 0.8, g.glow > 0.8 ? 0.78 : 0.58));
+  }
+  if (g.glow > 0.8) {
+    px(ctx, baseX - w * 0.35, baseY - hh - 1, shade(g.hue2, 0.9, 0.8), 0.5);
+    px(ctx, baseX + w * 0.3, baseY - hh, shade(g.hue2, 0.9, 0.8), 0.5);
+  }
+}
+
+// A lantern-blossom: strap leaves at the root, a pale half-buried bulb, an
+// arched neck, and a bell hung into the air — lit kinds burn like held lamps.
+function drawBulb(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const dir = g.lean >= 0 ? 1 : -1;
+  const stemH = Math.round(6 + g.height * 11);
+  const arc = (1 + g.spread * 0.8) * dir;
+  anchor(ctx, baseX, 2 + g.spread);
+  px(ctx, baseX - 1, baseY, shade(0.09, 0.3, 0.5)); // the bulb's pale dome, half-buried
+  px(ctx, baseX, baseY, shade(0.09, 0.3, 0.36));
+  px(ctx, baseX - 1, baseY - 1, shade(0.09, 0.35, 0.56), 0.9);
+  const sh = stemHueOf(g);
+  const ll = 3 + Math.round(g.leaves);
+  for (let s = 1; s <= ll; s++) {
+    const f = s / ll;
+    px(ctx, baseX - 1 - s * 0.7, baseY - s + f * f * 1.5, shade(sh, g.sat * 0.6, 0.36 + f * 0.08), 0.95); // the sunward strap leaf
+    px(ctx, baseX + 1 + s * 0.6, baseY - s + f * f * 1.5, shade(sh, g.sat * 0.55, 0.24), 0.95); // its shaded twin
+  }
+  let tx = baseX;
+  let ty = baseY - stemH;
+  for (let i = 1; i <= stemH; i++) {
+    const f = i / stemH;
+    const x = baseX + arc * f * f * 3.5; // the neck rises, then bows over
+    px(ctx, x, baseY - i, shade(sh, g.sat * 0.5, 0.28 + f * 0.1));
+    tx = x;
+    ty = baseY - i;
+  }
+  const bellX = Math.round(tx + dir);
+  const lit = g.glow > 0.8;
+  const bl = lit ? 0.68 : 0.52;
+  px(ctx, bellX, ty, shade(g.hue, g.sat, bl + 0.08)); // the shoulder in the light
+  px(ctx, bellX + dir, ty, shade(g.hue, g.sat, bl - 0.02), 0.9);
+  px(ctx, bellX - 1, ty + 1, shade(g.hue, g.sat, bl + 0.05));
+  px(ctx, bellX, ty + 1, shade(g.hue, g.sat, bl));
+  px(ctx, bellX + 1, ty + 1, shade(g.hue, g.sat, bl - 0.07));
+  px(ctx, bellX - 1, ty + 2, shade(g.hue, g.sat, bl - 0.12), 0.95); // the mouth's rim
+  px(ctx, bellX, ty + 2, shade(g.hue2, g.sat, lit ? 0.8 : 0.42), 0.95); // the mouth itself
+  px(ctx, bellX + 1, ty + 2, shade(g.hue, g.sat, bl - 0.16), 0.95);
+  px(ctx, bellX, ty + 3, shade(g.hue2, Math.min(1, g.sat + 0.2), lit ? 0.85 : 0.6), 0.9); // the clapper
+  if (g.petals >= 8) {
+    // twin-belled kinds hang a second, smaller, lower on the neck
+    const x2 = Math.round(baseX + arc * 0.3025 * 3.5 - dir);
+    const y2 = baseY - Math.round(stemH * 0.55);
+    px(ctx, x2, y2 + 1, shade(g.hue, g.sat, bl));
+    px(ctx, x2 - dir, y2 + 1, shade(g.hue, g.sat, bl - 0.06), 0.9);
+    px(ctx, x2, y2 + 2, shade(g.hue2, g.sat, lit ? 0.78 : 0.5), 0.9);
+  }
+  if (lit) {
+    // lamplight spills downward out of the bell's mouth
+    px(ctx, bellX, ty + 4, shade(g.hue2, 0.9, 0.82), 0.5);
+    px(ctx, bellX - 1, ty + 3, shade(g.hue, 0.9, 0.8), 0.4);
+    px(ctx, bellX + 1, ty + 3, shade(g.hue, 0.9, 0.8), 0.4);
+  }
+}
+
+// Spore-stalks: slender ringed spires, each lifting a true shaded sphere —
+// lit cheek to the upper-left, dark under-curve — dusting the air with spores.
+function drawSporestalk(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const stalks = 2 + Math.round(g.spread * 2); // 2-4
+  anchor(ctx, baseX, stalks + 1);
+  const glowing = g.glow > 0.8;
+  for (let i = 0; i < stalks; i++) {
+    const xo = (i - (stalks - 1) / 2) * 3;
+    const h = Math.round(8 + g.height * 11 + Math.sin(i * 2.9 + g.hue * 8) * 2);
+    const bend = g.lean * 2 + xo * 0.25;
+    let topX = baseX;
+    for (let s = 0; s <= h; s++) {
+      const f = s / h;
+      const x = baseX + xo * (0.25 + 0.75 * f) + bend * f * f;
+      px(ctx, x, baseY - s, shade(g.hue, g.sat * 0.45, 0.3 + f * 0.08 - (s % 3 === 0 ? 0.05 : 0))); // ringed as it rises
+      topX = x;
+    }
+    const oy = baseY - h - 1;
+    const big = i === Math.floor(stalks / 2); // the middle spire carries the great orb
+    const ol = glowing ? 0.64 : 0.48;
+    px(ctx, topX - 1, oy - 1, shade(g.hue, g.sat, ol + 0.12)); // the sphere's lit cheek
+    px(ctx, topX, oy - 1, shade(g.hue, g.sat, ol + 0.03));
+    px(ctx, topX - 1, oy, shade(g.hue, g.sat, ol - 0.02));
+    px(ctx, topX, oy, shade(g.hue, g.sat, ol - 0.12)); // and its dark under-curve
+    if (big) {
+      px(ctx, topX + 1, oy - 1, shade(g.hue, g.sat, ol - 0.04), 0.95);
+      px(ctx, topX + 1, oy, shade(g.hue, g.sat, ol - 0.15), 0.95);
+      px(ctx, topX - 2, oy, shade(g.hue, g.sat, ol + 0.05), 0.9);
+      px(ctx, topX - 1, oy - 2, shade(g.hue, g.sat, ol + 0.08), 0.9);
+    }
+    px(ctx, topX + (big ? 1 : 0), oy - (big ? 2 : 1) - 0, shade(g.hue2, g.sat * 0.8, 0.7), 0.9); // a spore-window
+    // spores adrift above the orb
+    const motes = glowing ? 3 : 1;
+    for (let m = 0; m < motes; m++) {
+      const mx = topX + Math.sin(i * 5 + m * 2.4 + g.petals) * 2;
+      px(ctx, mx, oy - 3 - m - (i % 2), shade(g.hue2, 0.85, 0.75), glowing ? 0.55 : 0.3);
+    }
+  }
+}
+
+// Kelp: ribbons anchored to a holdfast, swaying wider as they rise, hung
+// with bladder-floats; the tallest tip pales toward the skin of the sea.
+function drawKelp(ctx, g) {
+  const baseX = PLANT_ANCHOR_X;
+  const baseY = PLANT_ANCHOR_Y;
+  const ribbons = 2 + (g.spread > 0.55 ? 1 : 0);
+  const len = Math.round(10 + g.height * 13);
+  rect(ctx, baseX - 2, baseY - 1, 4, 2, shade(g.hue, g.sat * 0.7, 0.22)); // the holdfast gripping the seabed
+  px(ctx, baseX - 2, baseY - 1, shade(g.hue, g.sat * 0.7, 0.3));
+  for (let r = 0; r < ribbons; r++) {
+    const xo = (r - (ribbons - 1) / 2) * 3;
+    const phase = r * 2.1 + g.hue * 6.28;
+    const rl = Math.round(len * (0.7 + 0.3 * ((Math.sin(r * 3.7 + g.hue2 * 9) + 1) / 2)));
+    const at = (s) =>
+      baseX + xo * (0.3 + (0.7 * s) / rl) + Math.sin(s * 0.38 + phase) * (0.8 + g.spread * 1.4) * (s / rl) + (g.lean * s * 2) / rl;
+    let tipX = baseX;
+    let tipY = baseY;
+    for (let s = 0; s <= rl; s++) {
+      const f = s / rl;
+      const x = at(s);
+      const y = baseY - 1 - s;
+      const l = 0.24 + f * 0.2 + Math.sin(s * 0.38 + phase + 1.1) * 0.05; // light ripples down the ribbon
+      px(ctx, x, y, shade(g.hue, g.sat, l));
+      if (f < 0.45) px(ctx, x + 1, y, shade(g.hue, g.sat * 0.9, l - 0.07), 0.7); // broad-bladed near the base
+      if (s % 4 === 2 && s > 2) {
+        const side = (Math.floor(s / 4) % 2) * 2 - 1;
+        px(ctx, x + side, y, shade(g.hue, g.sat, l + 0.04), 0.8); // side blades
+      }
+      tipX = x;
+      tipY = y;
+    }
+    const fs = Math.round(rl * 0.7);
+    px(ctx, at(fs), baseY - 1 - fs, shade(g.hue2, Math.min(1, g.sat + 0.15), g.glow > 0.8 ? 0.78 : 0.58)); // the bladder-float
+    px(ctx, tipX, tipY, shade(g.hue, g.sat, 0.55)); // the tip pales
+    if (r === 0 && g.height > 0.7) px(ctx, tipX, tipY - 1, "hsl(190, 40%, 88%)", 0.55); // breaking the skin of the sea
+  }
+  if (g.glow > 0.8) {
+    px(ctx, baseX - 3, baseY - len * 0.75, shade(g.hue2, 0.9, 0.8), 0.5);
+    px(ctx, baseX + 3, baseY - len * 0.85, shade(g.hue2, 0.9, 0.8), 0.5);
+  }
+}
+
+const DRAWERS = {
+  [F.Flower]: drawFlower,
+  [F.Shrub]: drawShrub,
+  [F.Tree]: drawTree,
+  [F.Fungus]: drawFungus,
+  [F.Fern]: drawFern,
+  [F.Coral]: drawCoral,
+  [F.Succulent]: drawSucculent,
+  [F.Reed]: drawReed,
+  [F.Vine]: drawVine,
+  [F.Grass]: drawGrass,
+  [F.Moss]: drawMoss,
+  [F.Bulb]: drawBulb,
+  [F.Sporestalk]: drawSporestalk,
+  [F.Kelp]: drawKelp,
+};
+
+  function drawWonderPlant(ctx, g, aquatic) {
+    if (aquatic && g.form === F.Flower) drawLily(ctx, g);
+    else if (aquatic && g.form === F.Shrub) drawShrubReeds(ctx, g);
+    else DRAWERS[g.form](ctx, g);
+  }
+
+
+  /* ==================== Wonder's habitat table ==================== */
+  // Copied from src/life/species.ts. Repetition is the weighting there; here
+  // only membership matters, so it is de-duplicated.
+  const HABITATS = [
+    { key: "grass",  label: "Grass",   forms: [F.Flower, F.Grass, F.Bulb, F.Shrub, F.Fungus] },
+    { key: "forest", label: "Forest",  forms: [F.Tree, F.Fungus, F.Shrub, F.Flower, F.Fern, F.Vine, F.Moss, F.Sporestalk] },
+    { key: "sand",   label: "Sand",    forms: [F.Succulent, F.Shrub, F.Flower, F.Grass] },
+    { key: "water",  label: "Shallows", forms: [F.Flower, F.Shrub, F.Coral, F.Kelp, F.Reed] },
+    { key: "rock",   label: "Rock",    forms: [F.Fungus, F.Shrub, F.Succulent, F.Moss, F.Sporestalk] },
+    { key: "marsh",  label: "Marsh",   forms: [F.Flower, F.Shrub, F.Fungus, F.Fern, F.Reed, F.Bulb, F.Vine] },
+    { key: "all",    label: "Any",     forms: [0,1,2,3,4,5,6,7,8,9,10,11,12,13] },
+  ];
+
+  // Per-form height band and glow ceiling, from src/life/species.ts FORM_RANGES.
+  const FORM_RANGES = [
+    [0.15, 0.55, 0.6], [0.20, 0.60, 0.4], [0.55, 1.00, 0.3], [0.10, 0.45, 0.9],
+    [0.20, 0.60, 0.5], [0.15, 0.60, 0.9], [0.10, 0.45, 0.7], [0.35, 0.80, 0.5],
+    [0.25, 0.70, 0.7], [0.15, 0.55, 0.4], [0.05, 0.25, 0.85], [0.20, 0.60, 0.8],
+    [0.30, 0.75, 1.0], [0.40, 0.95, 0.6],
+  ];
+
+  /* ============== what each shape means, metabolically ============== */
+  // climb · branch · dependence · thrift. My assignment, not a measurement —
+  // this is the table to argue with, which is why it is on the page.
+  const PROTO = [
+    { f: F.Flower,     v: [0.65, 0.35, 0.25, 0.60], why: "climbs high for one showy payoff" },
+    { f: F.Shrub,      v: [0.50, 0.50, 0.15, 0.55], why: "the middle of everything" },
+    { f: F.Tree,       v: [0.70, 0.75, 0.10, 0.80], why: "a long branching chain that pays for itself" },
+    { f: F.Fungus,     v: [0.25, 0.20, 0.85, 0.45], why: "cannot run without somebody else's catalyst" },
+    { f: F.Fern,       v: [0.40, 0.55, 0.20, 0.50], why: "many trades, laid out as fronds" },
+    { f: F.Coral,      v: [0.45, 0.70, 0.75, 0.40], why: "colonial and dependent at once" },
+    { f: F.Succulent,  v: [0.20, 0.10, 0.05, 0.60], why: "hoards a big pile, converts little" },
+    { f: F.Reed,       v: [0.35, 0.15, 0.10, 0.70], why: "one efficient line, barely branching" },
+    { f: F.Vine,       v: [0.45, 0.60, 0.35, 0.55], why: "lives on exchange" },
+    { f: F.Grass,      v: [0.10, 0.15, 0.05, 0.85], why: "cheap, fast, all gather" },
+    { f: F.Moss,       v: [0.05, 0.10, 0.15, 0.30], why: "barely climbs at all" },
+    { f: F.Bulb,       v: [0.90, 0.25, 0.30, 0.45], why: "reaches essence and spends everything doing it" },
+    { f: F.Sporestalk, v: [0.35, 0.15, 0.70, 0.35], why: "dependent, thin, and reaching" },
+    { f: F.Kelp,       v: [0.30, 0.35, 0.25, 0.75], why: "long, efficient, shallow-climbing" },
+  ];
+  const FEAT_NAME = ["climb", "branch", "dependence", "thrift"];
+  const FEAT_HINT = [
+    "how far up the tier ladder it got",
+    "share of steps that were upgrades or trades",
+    "share of steps that needed a catalyst present",
+    "yield over cost, squashed into 0–1",
+  ];
+  // Dependence counts double: needing a catalyst is the most structurally
+  // distinctive thing a metabolism can be.
+  const FEAT_W = [1, 1, 2, 1];
+
+  function chainFeatures(run) {
+    const steps = run.steps.length;
+    if (!steps) return [0, 0, 0, 0];
+    let branch = 0, dep = 0, tierSum = 0, held = 0;
+    run.steps.forEach((s) => {
+      if (s.card.kind === "upgrade" || s.card.kind === "trade") branch++;
+      if (s.card.kind === "catalyse") dep++;
+    });
+    for (const id in run.pile) {
+      tierSum += run.pile[id] * world.reagents[id].tier;
+      held += run.pile[id];
+    }
+    const meanTier = held > 0 ? tierSum / held : 1;
+    return [
+      Math.max(0, Math.min(1, (meanTier - 1) / 3)),
+      branch / steps,
+      dep / steps,
+      Math.max(0, Math.min(1, Math.log2(1 + run.ratio) / 3)),
+    ];
+  }
+
+  // Absolute features cluster hard: nearly every chain on an island lands in the
+  // same corner of the space, so nearly every plant picks the same prototype.
+  // Ranking each feature within the island's own population spreads them out —
+  // the island grades on a curve rather than against a universal scale.
+  function rankFeatures(list) {
+    const n = list.length;
+    if (n < 2) return list.map((f) => f.slice());
+    const out = list.map(() => [0, 0, 0, 0]);
+    for (let k = 0; k < 4; k++) {
+      const order = list.map((f, i) => [f[k], i]).sort((a, b) => a[0] - b[0]);
+      order.forEach(([, i], r) => { out[i][k] = r / (n - 1); });
+    }
+    return out;
+  }
+
+  function pickForm(feat, allowed) {
+    let best = allowed[0], bestD = Infinity, second = null, secondD = Infinity;
+    PROTO.forEach((p) => {
+      if (allowed.indexOf(p.f) < 0) return;
+      let d = 0;
+      for (let i = 0; i < 4; i++) {
+        const x = (feat[i] - p.v[i]) * FEAT_W[i];
+        d += x * x;
+      }
+      if (d < bestD) { secondD = bestD; second = best; bestD = d; best = p.f; }
+      else if (d < secondD) { secondD = d; second = p.f; }
+    });
+    return { form: best, dist: Math.sqrt(bestD), runnerUp: second, runnerUpDist: Math.sqrt(secondD) };
+  }
+
+  // The nine traits, filled from what the chain produced. Every one of these is
+  // a readout — none is rolled independently of the metabolism.
+  function traitsFrom(run, pig, form, feat, salt) {
+    const rng = makeRng((world.seed ^ 0x2f1b) + salt * 2654435761);
+    const band = FORM_RANGES[form];
+    let topHue = pig.hue, topTier = 0;
+    for (const id in run.pile) {
+      const r = world.reagents[id];
+      if (r.tier > topTier) { topTier = r.tier; topHue = r.hue; }
+    }
+    const blooms = run.steps.filter((s, i) =>
+      world.reagents[s.card.out].tier >= 2 && i / Math.max(1, run.steps.length - 1) > 0.62).length;
+    const whorls = run.steps.filter((s) => s.card.kind === "trade").length;
+    return {
+      form: form,
+      hue: ((pig.hue / 360) % 1 + 1) % 1,
+      hue2: ((topHue / 360) % 1 + 1) % 1,
+      sat: Math.max(0.3, Math.min(1, 0.3 + (pig.chroma / 0.235) * 0.7)),
+      height: band[0] + (band[1] - band[0]) * Math.max(0, Math.min(1, feat[3])),
+      spread: Math.max(0.1, Math.min(1, 0.15 + feat[1] * 1.1)),
+      petals: Math.max(3, Math.min(10, 3 + Math.round(blooms * 1.4))),
+      leaves: Math.max(0, Math.min(4, Math.round(whorls * 0.8))),
+      lean: (rng() * 2 - 1) * 0.7,
+      glow: topTier >= 4 ? band[2] : Math.min(band[2], feat[0] * 0.55),
+    };
+  }
+
+  /* ============ bench 0's grammar, on the same 16x28 plate ============ */
+  // The same four instructions the reagent bench uses — gather extends, upgrade
+  // branches, trade puts out leaves, catalyse swells a node — rasterised at
+  // sprite size so the comparison is like for like.
+  function drawChainSprite(ctx, run, pig) {
+    const baseY = PLANT_ANCHOR_Y, cx = PLANT_ANCHOR_X;
+    const steps = run.steps;
+    if (!steps.length) { px(ctx, cx, baseY, pig.leaf, 0.8); return; }
+    const vigor = Math.max(0.35, Math.min(1, Math.log2(1 + run.ratio) / 2.6));
+    const canopy = Math.round(6 + vigor * 17);
+    const seg = Math.max(1, canopy / Math.max(5, steps.length * 0.62));
+    let tips = [{ x: cx, y: baseY, ang: -Math.PI / 2, lead: true }];
+    const MAX = 5;
+    let turn = 0, bloomed = 0;
+
+    const extend = (t, len, i) => {
+      const wob = Math.sin(i * 1.1 + (t.lead ? 0 : 2.7)) * (t.lead ? 0.07 : 0.19);
+      const nx = t.x + Math.cos(t.ang + wob) * len;
+      const ny = t.y + Math.sin(t.ang + wob) * len;
+      const dx = nx - t.x, dy = ny - t.y;
+      const n = Math.max(1, Math.round(Math.hypot(dx, dy)));
+      for (let k = 1; k <= n; k++) {
+        px(ctx, t.x + (dx * k) / n, t.y + (dy * k) / n, pig.hex, t.lead ? 1 : 0.85);
+      }
+      t.x = Math.max(1, Math.min(PLANT_SPRITE_W - 2, nx));
+      t.y = Math.max(1, ny);
+      t.ang += wob * 0.3;
+    };
+
+    steps.forEach((s, i) => {
+      const card = s.card, out = world.reagents[card.out];
+      const late = i / Math.max(1, steps.length - 1);
+      if (card.kind === "gather") {
+        tips.forEach((t) => extend(t, seg * 0.72, i));
+      } else if (card.kind === "upgrade") {
+        if (tips.length < MAX) {
+          const parent = tips[turn++ % tips.length];
+          const side = turn % 2 ? 1 : -1;
+          const a2 = parent.ang + side * (0.42 + (out.hue / 360) * 0.5);
+          tips.push({ x: parent.x, y: parent.y, ang: a2 * 0.55 - Math.PI / 2 * 0.45, lead: false });
+        }
+        tips.forEach((t) => extend(t, seg * 0.55, i));
+      } else if (card.kind === "trade") {
+        tips.forEach((t) => {
+          px(ctx, t.x - 1, t.y, pig.leaf, 0.9);
+          px(ctx, t.x + 1, t.y, pig.leaf, 0.9);
+          extend(t, seg * 0.5, i);
+        });
+      } else {
+        tips.forEach((t) => { px(ctx, t.x, t.y, pig.lit, 1); extend(t, seg * 0.6, i); });
+      }
+      if (out.tier >= 2 && late > 0.62 && bloomed < 5) {
+        tips.forEach((t) => {
+          if (bloomed >= 5) return;
+          bloomed++;
+          px(ctx, t.x, t.y, pig.lit, 1);
+          px(ctx, t.x, t.y - 1, pig.hex, 0.9);
+          if (out.tier >= 3) { px(ctx, t.x - 1, t.y, pig.hex, 0.75); px(ctx, t.x + 1, t.y, pig.hex, 0.75); }
+        });
+      }
+    });
+    if (!bloomed) px(ctx, tips[0].x, tips[0].y - 1, pig.leaf, 0.9);
+  }
+
+  /* ========================== the metric ========================== */
+  // Fraction of the 16x28 plate on which two sprites disagree: either one is
+  // inked and the other is not, or both are inked in visibly different colours.
+  function maskOf(cv) {
+    const d = cv.getContext("2d").getImageData(0, 0, PLANT_SPRITE_W, PLANT_SPRITE_H).data;
+    const n = PLANT_SPRITE_W * PLANT_SPRITE_H;
+    const ink = new Uint8Array(n), q = new Uint8Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      ink[i] = d[i * 4 + 3] > 24 ? 1 : 0;
+      q[i * 3] = d[i * 4] >> 5; q[i * 3 + 1] = d[i * 4 + 1] >> 5; q[i * 3 + 2] = d[i * 4 + 2] >> 5;
+    }
+    return { ink: ink, q: q };
+  }
+  function pairDiff(a, b) {
+    let diff = 0;
+    for (let i = 0; i < a.ink.length; i++) {
+      if (a.ink[i] !== b.ink[i]) { diff++; continue; }
+      if (!a.ink[i]) continue;
+      if (a.q[i * 3] !== b.q[i * 3] || a.q[i * 3 + 1] !== b.q[i * 3 + 1] ||
+          a.q[i * 3 + 2] !== b.q[i * 3 + 2]) diff++;
+    }
+    return diff / a.ink.length;
+  }
+  // Silhouette only: Jaccard distance between the two ink masks, ignoring colour
+  // entirely. This is the metric the claim is actually about — colour variety was
+  // never in question, shape variety was.
+  function pairShape(a, b) {
+    let inter = 0, uni = 0;
+    for (let i = 0; i < a.ink.length; i++) {
+      if (a.ink[i] || b.ink[i]) uni++;
+      if (a.ink[i] && b.ink[i]) inter++;
+    }
+    return uni ? 1 - inter / uni : 0;
+  }
+  function varietyOf(canvases) {
+    const m = canvases.map(maskOf);
+    let all = 0, shape = 0, n = 0;
+    for (let i = 0; i < m.length; i++) {
+      for (let j = i + 1; j < m.length; j++) {
+        all += pairDiff(m[i], m[j]); shape += pairShape(m[i], m[j]); n++;
+      }
+    }
+    return n ? { all: all / n, shape: shape / n } : { all: 0, shape: 0 };
+  }
+
+  /* ============================== state ============================== */
+  const $ = (id) => document.getElementById(id);
+  const S = {
+    seed: 2438, habitat: 0, focus: 0, matching: "rank",
+    hue: 0.55, sat: 0.8, height: 0.6, spread: 0.5,
+    petals: 6, leaves: 2, lean: 0.1, glow: 0.35,
+  };
+  const N_PLANTS = 16;
+  let world = null, plants = [];
+
+  function slider(host, o) {
+    const w = document.createElement("div"); w.className = "ctrl";
+    const row = document.createElement("div"); row.className = "row";
+    const lab = document.createElement("label"); lab.textContent = o.label;
+    const val = document.createElement("span"); val.className = "val";
+    row.appendChild(lab); row.appendChild(val);
+    const inp = document.createElement("input");
+    inp.type = "range"; inp.min = o.min; inp.max = o.max;
+    inp.step = o.step === undefined ? 1 : o.step; inp.value = o.value;
+    inp.setAttribute("aria-label", o.label);
+    const fmt = o.fmt || ((v) => String(v));
+    val.textContent = fmt(+inp.value);
+    inp.addEventListener("input", () => { val.textContent = fmt(+inp.value); o.onInput(+inp.value); });
+    w.appendChild(row); w.appendChild(inp);
+    if (o.hint) { const h = document.createElement("div"); h.className = "hint"; h.textContent = o.hint; w.appendChild(h); }
+    host.appendChild(w);
+    return inp;
+  }
+
+  function cellFor(paint, capTop, capBot, onPick, on) {
+    const el = document.createElement("div");
+    el.className = "cell" + (on ? " on" : "");
+    el.tabIndex = 0; el.setAttribute("role", "button");
+    const cv = document.createElement("canvas");
+    cv.width = PLANT_SPRITE_W; cv.height = PLANT_SPRITE_H;
+    cv.style.width = PLANT_SPRITE_W * 5 + "px";
+    cv.style.height = PLANT_SPRITE_H * 5 + "px";
+    paint(cv.getContext("2d"));
+    el.appendChild(cv);
+    const cap = document.createElement("div"); cap.className = "cap";
+    const b = document.createElement("b"); b.textContent = capTop; cap.appendChild(b);
+    if (capBot) cap.appendChild(document.createTextNode(capBot));
+    el.appendChild(cap);
+    if (onPick) {
+      el.addEventListener("click", onPick);
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } });
+    }
+    return { el: el, cv: cv };
+  }
+
+  /* ============================ rendering ============================ */
+
+  function buildWorld() {
+    world = rollWorld(S.seed);
+    plants = [];
+    for (let i = 0; i < N_PLANTS; i++) {
+      const plant = rollPlant(world, i);
+      const run = runChain(world, plant);
+      const pig = pigment(world, run);
+      plants.push({ plant: plant, run: run, pig: pig, abs: chainFeatures(run) });
+    }
+    const ranked = rankFeatures(plants.map((p) => p.abs));
+    plants.forEach((p, i) => { p.rank = ranked[i]; });
+    S.focus = Math.min(S.focus, N_PLANTS - 1);
+  }
+
+  function paintForms() {
+    const host = $("formShelf"); host.textContent = "";
+    for (let f = 0; f < 14; f++) {
+      const band = FORM_RANGES[f];
+      const g = {
+        form: f, hue: S.hue, hue2: (S.hue + 0.5) % 1, sat: S.sat,
+        height: band[0] + (band[1] - band[0]) * S.height,
+        spread: S.spread, petals: S.petals, leaves: S.leaves,
+        lean: S.lean, glow: Math.min(band[2], S.glow),
+      };
+      const aquatic = f === F.Kelp || f === F.Coral;
+      host.appendChild(cellFor((ctx) => drawWonderPlant(ctx, g, false), FORM_NAME[f],
+        aquatic ? "shallows" : "").el);
+    }
+  }
+
+  function paintShelves() {
+    const allowed = HABITATS[S.habitat].forms;
+    const A = $("shelfA"), B = $("shelfB");
+    A.textContent = ""; B.textContent = "";
+    const cvA = [], cvB = [], forms = new Set();
+
+    plants.forEach((p, i) => {
+      p.feat = S.matching === "rank" ? p.rank : p.abs;
+      const a = cellFor((ctx) => drawChainSprite(ctx, p.run, p.pig),
+        p.run.steps.length + " steps", "tier " + p.run.top,
+        () => { S.focus = i; paintShelves(); paintMapping(); }, i === S.focus);
+      A.appendChild(a.el); cvA.push(a.cv);
+
+      const pick = pickForm(p.feat, allowed);
+      p.pick = pick;
+      p.g = traitsFrom(p.run, p.pig, pick.form, p.feat, i);
+      forms.add(pick.form);
+      const b = cellFor((ctx) => drawWonderPlant(ctx, p.g, false),
+        FORM_NAME[pick.form], "tier " + p.run.top,
+        () => { S.focus = i; paintShelves(); paintMapping(); }, i === S.focus);
+      B.appendChild(b.el); cvB.push(b.cv);
+    });
+
+    const vA = varietyOf(cvA), vB = varietyOf(cvB);
+    const score = (host, v, nForms, winShape) => {
+      host.textContent = "";
+      const mk = (val, label, isWin) => {
+        const d = document.createElement("div");
+        if (isWin) d.className = "win";
+        const b = document.createElement("b"); b.textContent = val;
+        const i2 = document.createElement("i"); i2.textContent = label;
+        d.appendChild(b); d.appendChild(i2); host.appendChild(d);
+      };
+      mk((v.shape * 100).toFixed(1) + "%", "silhouette difference", winShape);
+      mk((v.all * 100).toFixed(1) + "%", "all-pixel difference", false);
+      mk(String(nForms), nForms === 1 ? "silhouette used" : "silhouettes used", winShape);
+    };
+    score($("scoreA"), vA, 1, false);
+    score($("scoreB"), vB, forms.size, vB.shape > vA.shape);
+    $("cmpCaption").textContent =
+      "Same sixteen chains, same 16 x 28 plate, same pigments — only the renderer differs. " +
+      "Silhouette difference ignores colour entirely and compares ink masks, which is the " +
+      "measure the claim is about: the right shelf scores " +
+      (vA.shape > 0 ? (vB.shape / vA.shape).toFixed(2) : "—") + "x the left one, using " +
+      forms.size + " of the " + allowed.length + " silhouettes this habitat allows. " +
+      "All-pixel difference moves far less (" +
+      (vA.all > 0 ? (vB.all / vA.all).toFixed(2) : "—") + "x), because both shelves already " +
+      "carry the same earned colours — colour variety was never the problem.";
+  }
+
+  function paintMapping() {
+    const p = plants[S.focus];
+    const host = $("feats"); host.textContent = "";
+    p.feat.forEach((v, i) => {
+      const n = document.createElement("div"); n.className = "fname"; n.textContent = FEAT_NAME[i];
+      n.title = FEAT_HINT[i];
+      const bar = document.createElement("div"); bar.className = "bar";
+      const fill = document.createElement("i"); fill.style.width = (v * 100).toFixed(1) + "%";
+      bar.appendChild(fill);
+      const val = document.createElement("div"); val.className = "fval"; val.textContent = v.toFixed(2);
+      host.appendChild(n); host.appendChild(bar); host.appendChild(val);
+    });
+    $("pickCaption").textContent =
+      "Nearest prototype: " + FORM_NAME[p.pick.form] + " (distance " + p.pick.dist.toFixed(2) +
+      "). Runner-up: " + FORM_NAME[p.pick.runnerUp] + " at " + p.pick.runnerUpDist.toFixed(2) +
+      ". This plant ran " + p.run.steps.length + " conversions, ended holding tier " +
+      p.run.top + ", and earned " + p.run.energy.toFixed(0) + " energy against a cost of " +
+      p.run.cost.toFixed(1) + ".";
+
+    const allowed = HABITATS[S.habitat].forms;
+    const t = $("protoTable"); t.textContent = "";
+    const head = document.createElement("tr");
+    ["form", "climb", "branch", "depend", "thrift", "distance", "what it means"].forEach((h) => {
+      const th = document.createElement("th"); th.textContent = h; head.appendChild(th);
+    });
+    t.appendChild(head);
+    PROTO.slice().map((pr) => {
+      let d = 0;
+      for (let i = 0; i < 4; i++) { const x = (p.feat[i] - pr.v[i]) * FEAT_W[i]; d += x * x; }
+      return { pr: pr, d: Math.sqrt(d), ok: allowed.indexOf(pr.f) >= 0 };
+    }).sort((a, b) => a.d - b.d).forEach((r) => {
+      const tr = document.createElement("tr");
+      if (r.pr.f === p.pick.form) tr.className = "hit";
+      const cells = [FORM_NAME[r.pr.f] + (r.ok ? "" : " · not here")].concat(
+        r.pr.v.map((x) => x.toFixed(2)), [r.d.toFixed(2), r.pr.why]);
+      cells.forEach((c, i) => {
+        const td = document.createElement("td");
+        td.textContent = c;
+        if (i === 6) td.style.textAlign = "left";
+        if (!r.ok) td.style.opacity = "0.42";
+        tr.appendChild(td);
+      });
+      t.appendChild(tr);
+    });
+  }
+
+  function paintLadder() {
+    const upCost = (t) => Math.max(1, Math.round((t + 1) * P.upgradeCost));
+    const inBase = [0, 1];
+    for (let t = 1; t <= 3; t++) inBase[t + 1] = inBase[t] * upCost(t);
+    const t = $("ladder"); t.textContent = "";
+    const head = document.createElement("tr");
+    ["tier", "costs (base units)", "energy", "energy per base", "pigment weight", "pigment per base"]
+      .forEach((h) => { const th = document.createElement("th"); th.textContent = h; head.appendChild(th); });
+    t.appendChild(head);
+    const names = ["", "base", "refined", "compound", "essence"];
+    let worst = 1, worstT = 1;
+    for (let k = 1; k <= 4; k++) {
+      const epb = TIER_ENERGY[k] / inBase[k];
+      if (epb < worst) { worst = epb; worstT = k; }
+      const tr = document.createElement("tr");
+      if (k === 4) tr.className = "hit";
+      [names[k], inBase[k], TIER_ENERGY[k], epb.toFixed(2),
+       TIER_PIGMENT_BASE[k], (TIER_PIGMENT_BASE[k] / inBase[k]).toFixed(2)]
+        .forEach((c) => { const td = document.createElement("td"); td.textContent = c; tr.appendChild(td); });
+      t.appendChild(tr);
+    }
+    const fair = Math.round(inBase[4] * 1.5);
+    $("ladderCaption").textContent =
+      "Energy climbs as powers of three while cost climbs as a factorial, so the two curves " +
+      "cross and then diverge. Energy per base spent peaks at compound and falls to " +
+      (TIER_ENERGY[4] / inBase[4]).toFixed(2) + " at essence — the only rung that returns less " +
+      "than the one below it. Tiers 1 to 3 all sit at exactly 1.5x what they cost; setting " +
+      "essence to " + fair + " energy instead of " + TIER_ENERGY[4] + " would restore that rule.";
+  }
+
+  function paintReadout() {
+    const p = plants[S.focus];
+    const rows = [
+      ["island", world.isle],
+      ["reagents", world.reagents.length],
+      ["habitat", HABITATS[S.habitat].label],
+      ["matching", S.matching === "rank" ? "rank on island" : "absolute"],
+      ["forms allowed", HABITATS[S.habitat].forms.length],
+      ["focused", "#" + (S.focus + 1) + " of " + N_PLANTS],
+      ["its form", FORM_NAME[p.pick.form]],
+      ["its steps", p.run.steps.length],
+      ["its top tier", p.run.top],
+    ];
+    const host = $("readout"); host.textContent = "";
+    rows.forEach(([k, v]) => {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      host.appendChild(dt); host.appendChild(dd);
+    });
+    $("islePill").textContent = world.isle;
+  }
+
+  function repaint() {
+    paintForms();
+    paintShelves();
+    paintMapping();
+    paintLadder();
+    paintReadout();
+  }
+
+  function rebuild() { buildWorld(); repaint(); }
+
+  /* ============================== boot ============================== */
+  (function boot() {
+    const seg = $("habitatSeg");
+    HABITATS.forEach((h, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = h.label;
+      b.setAttribute("aria-pressed", i === S.habitat ? "true" : "false");
+      b.addEventListener("click", () => {
+        S.habitat = i;
+        [...seg.children].forEach((c, k) => c.setAttribute("aria-pressed", k === i ? "true" : "false"));
+        paintShelves(); paintMapping(); paintReadout();
+      });
+      seg.appendChild(b);
+    });
+
+    const mseg = $("matchSeg");
+    [["rank", "Rank on the island"], ["abs", "Absolute"]].forEach(([k, label]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = label;
+      b.setAttribute("aria-pressed", S.matching === k ? "true" : "false");
+      b.addEventListener("click", () => {
+        S.matching = k;
+        [...mseg.children].forEach((c) => c.setAttribute("aria-pressed",
+          c === b ? "true" : "false"));
+        paintShelves(); paintMapping(); paintReadout();
+      });
+      mseg.appendChild(b);
+    });
+
+    const sl = $("sliders");
+    slider(sl, { label: "hue", min: 0, max: 1, step: 0.01, value: S.hue,
+      fmt: (v) => Math.round(v * 360) + "°", hint: "Drives the fourteen reference sprites above only — the chained plants take their hue from their own pigment.",
+      onInput: (v) => { S.hue = v; paintForms(); } });
+    slider(sl, { label: "saturation", min: 0.3, max: 1, step: 0.01, value: S.sat,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.sat = v; paintForms(); } });
+    slider(sl, { label: "height", min: 0, max: 1, step: 0.01, value: S.height,
+      fmt: (v) => v.toFixed(2), hint: "Position within each form's own height band, not an absolute.",
+      onInput: (v) => { S.height = v; paintForms(); } });
+    slider(sl, { label: "spread", min: 0.1, max: 1, step: 0.01, value: S.spread,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.spread = v; paintForms(); } });
+    slider(sl, { label: "petals", min: 3, max: 10, step: 1, value: S.petals,
+      hint: "Petals on a flower, berries on a shrub, spots on a fungus — one trait, reused per form.",
+      onInput: (v) => { S.petals = v; paintForms(); } });
+    slider(sl, { label: "leaves", min: 0, max: 4, step: 1, value: S.leaves,
+      onInput: (v) => { S.leaves = v; paintForms(); } });
+    slider(sl, { label: "lean", min: -1, max: 1, step: 0.05, value: S.lean,
+      fmt: (v) => v.toFixed(2), onInput: (v) => { S.lean = v; paintForms(); } });
+    slider(sl, { label: "glow", min: 0, max: 1, step: 0.01, value: S.glow,
+      fmt: (v) => v.toFixed(2), hint: "Capped per form by Wonder's own FORM_RANGES table.",
+      onInput: (v) => { S.glow = v; paintForms(); } });
+
+    $("rollSeed").addEventListener("click", () => {
+      S.seed = (S.seed * 1103515245 + 12345) % 100000;
+      if (S.seed < 0) S.seed += 100000;
+      $("seedInput").value = S.seed;
+      rebuild();
+    });
+    $("seedInput").addEventListener("change", () => {
+      const v = parseInt($("seedInput").value, 10);
+      if (Number.isFinite(v) && v >= 0) { S.seed = v; rebuild(); }
+    });
+
+    rebuild();
+  })();
+
+})();
+</script>
+<script>
+/* GLOSSTIP-START
+   Tooltips sourced from the page's own definition list, so a term can never
+   drift from its definition: whatever "Parts" says is what the tooltip says.
+   Wraps the first few plain-text occurrences of each defined term outside the
+   definition list itself. Hover, focus and tap all work; Escape dismisses. */
+(function () {
+  "use strict";
+  var defs = document.querySelectorAll(".sysblock dl.defs dt, dl.glossary dt");
+  if (!defs.length) return;
+
+  var terms = [];
+  defs.forEach(function (dt) {
+    var dd = dt.nextElementSibling;
+    if (!dd || dd.tagName !== "DD") return;
+    var word = dt.textContent.trim().split(/\s*[·/(]\s*/)[0].trim();
+    if (word.length < 3 || word.length > 22 || /\s\w+\s\w+\s/.test(word)) return;
+    var body = dd.textContent.replace(/\s+/g, " ").trim();
+    terms.push({ word: word, label: dt.textContent.trim(), body: body, used: 0 });
+  });
+  if (!terms.length) return;
+  terms.sort(function (a, b) { return b.word.length - a.word.length; });
+
+  var esc = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
+  var rx = new RegExp("\\b(" + terms.map(function (t) { return esc(t.word); }).join("|") + ")\\b", "i");
+  var byWord = {};
+  terms.forEach(function (t) { byWord[t.word.toLowerCase()] = t; });
+
+  var SKIP = { SCRIPT: 1, STYLE: 1, CODE: 1, PRE: 1, H1: 1, CANVAS: 1, INPUT: 1,
+               BUTTON: 1, LABEL: 1, SELECT: 1, TEXTAREA: 1, DT: 1, OPTION: 1 };
+  var MAX_PER_TERM = 3;
+
+  var roots = document.querySelectorAll(".wrap p, .wrap li, .wrap dd, .wrap h2, .wrap h3, .wrap .caption, .wrap .note");
+  roots.forEach(function (root) {
+    if (root.closest(".sysblock dl.defs") || root.closest("#glosstip")) return;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentElement;
+        while (p && p !== root) { if (SKIP[p.tagName] || p.classList.contains("gloss")) return NodeFilter.FILTER_REJECT; p = p.parentElement; }
+        return rx.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var hits = [], n;
+    while ((n = walker.nextNode())) hits.push(n);
+    hits.forEach(function (node) {
+      var m = rx.exec(node.nodeValue);
+      if (!m) return;
+      var t = byWord[m[1].toLowerCase()];
+      if (!t || t.used >= MAX_PER_TERM) return;
+      t.used++;
+      var after = node.splitText(m.index);
+      after.nodeValue = after.nodeValue.slice(m[1].length);
+      var span = document.createElement("span");
+      span.className = "gloss";
+      span.tabIndex = 0;
+      span.textContent = m[1];
+      span.setAttribute("role", "button");
+      span.setAttribute("aria-label", m[1] + ": " + t.body);
+      span.dataset.label = t.label;
+      span.dataset.body = t.body;
+      after.parentNode.insertBefore(span, after);
+    });
+  });
+
+  var tip = document.createElement("div");
+  tip.id = "glosstip";
+  tip.setAttribute("role", "tooltip");
+  document.body.appendChild(tip);
+  var open = null;
+
+  function show(el) {
+    open = el;
+    tip.textContent = "";
+    var b = document.createElement("b");
+    b.textContent = el.dataset.label;
+    tip.appendChild(b);
+    tip.appendChild(document.createTextNode(el.dataset.body));
+    tip.classList.add("on");
+    var r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - t.width - 8);
+    var y = r.top - t.height - 8;
+    if (y < 8) y = r.bottom + 8;
+    tip.style.left = x + "px";
+    tip.style.top = y + "px";
+  }
+  function hide() { open = null; tip.classList.remove("on"); }
+
+  document.addEventListener("pointerover", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else if (open && !tip.contains(e.target)) hide();
+  });
+  document.addEventListener("focusin", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) show(g); else hide();
+  });
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest && e.target.closest(".gloss");
+    if (g) { e.preventDefault(); (open === g ? hide : show)(g); }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") hide(); });
+  window.addEventListener("scroll", function () { if (open) show(open); }, { passive: true });
+})();
+/* GLOSSTIP-END */
+</script>

@@ -223,7 +223,7 @@
 <div class="wrap">
 
   <p class="eyebrow">Wonder · ecology · parameter study · 2026-08-01</p>
-  <h1>Twelve benches for a living ecology</h1>
+  <h1>Thirteen benches for a living ecology</h1>
   <p class="standfirst">
     A <em>bench</em> is a small working model of one mechanism, with every dial exposed.
     None of these is the game. Each one exists to settle a single design question by
@@ -327,7 +327,7 @@
   </section>
 
   <section>
-    <h2>What the twelve decided</h2>
+    <h2>What the benches decided</h2>
     <p class="note">
       Each line is a decision plus the measurement behind it. The bench it came from
       carries the full working.
@@ -345,6 +345,7 @@
       <dt>9</dt><dd>Draw plant portraits at <b>30 × 74 pixels</b>. Bigger buys margins, not detail. And a portrait fits two insects at <em>any</em> size, so crowding is the limit, not resolution.</dd>
       <dt>10</dt><dd>Pull every island's colours toward a shared key <b>anchored to its own dirt</b>. Islands got more distinct from each other, not less. But the colours wash out at dusk, unfixed.</dd>
       <dt>11</dt><dd>At the size Wonder draws insects, <b>how a thing moves is more recognisable than what colour it is</b> — 89% vs 58%. Motion is the identity channel that survives the zoom.</dd>
+      <dt>12</dt><dd>Let a plant's chemistry <b>choose</b> one of Wonder's fourteen existing plant shapes rather than replace them — distinct silhouettes go from 1 to 6. Rank a chain against the others on its own island, not against a universal scale, or it collapses back to 3.</dd>
     </dl>
   </section>
 
@@ -493,6 +494,14 @@
       sys: "A seven-gene flight genome — cruise speed, dart impulse, dart rate, hover, turn sharpness, curvature bias, wind coupling — flown in a meadow with a wind field, drifting clutter and a predator that compares motion against the wind. Identification is tested twice: by you, at a sprite size you choose, and by a leave-one-out classifier on measured trajectory features.",
       q: "At gameplay zoom an insect is about five pixels, so colour and shape are barely there. Is motion legible as a lineage identity, and does it work as a second camouflage axis?",
       finding: "89.1% identification against a 12.5% chance level, from genomes drawn at random. At 5px motion scores 88.9% against colour’s 58.3% — the curves cross at 8.5px, and that direction holds across every swept assumption. Which composes with bench 9: if insects mostly wear their host’s colour anyway, motion is not a nice extra, it is the channel that still works. The feed-versus-be-seen trade-off is a real Pareto front that collapses to a single optimum when the predator is switched off.",
+    },
+    {
+      n: 12, title: "Form from metabolism",
+      url: "https://claude.ai/code/artifact/521b2f34-2c7e-4e57-bbe0-ecf443569d55",
+      theory: "the bridge to the shipping game",
+      sys: "Wonder's fourteen hand-drawn plant forms, imported from src/render/plantSprites.ts unmodified, next to bench 0's one-grammar-for-everything. Four numbers summarise a metabolism — how far it climbed, how much it branched, how much it needed a catalyst, how efficient it was — and each of the fourteen shapes is given a point in that space. The chain then picks the nearest shape among the ones the habitat allows, and fills the nine traits from what it produced.",
+      q: "Bench 0's plants all look alike, and Wonder's existing flora is varied and beautiful. Can the chain choose among the forms that already exist instead of replacing them?",
+      finding: "Distinct silhouettes go from 1 to a mean of 6 (max 10) on the same sixteen chains. But the obvious version — matching features against a universal scale — collapses to 2.9 shapes, because chains on one island cluster; ranking each feature within the island's own population is what makes it work. Also: pixel-difference metrics say there is no improvement (1.09×) while the page plainly looks more varied, which is a warning about the metric, not the mechanism. And essence is currently a punishment — energy climbs as 3ⁿ while cost climbs as n!, so the top rung returns 1.13 energy per base against 1.50 for the two below it.",
     },
   ];
 

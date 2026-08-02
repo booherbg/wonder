@@ -590,7 +590,7 @@ feels thin: it is the leftmost option on every single axis.
 
 ## 6 · The benches
 
-Twelve parameterised instruments, each isolating one mechanism. All are standalone
+Thirteen parameterised instruments, each isolating one mechanism. All are standalone
 HTML in `docs/superpowers/prototypes/`, all share the kit in `BENCH-KIT.md`, all
 are seeded and reproducible. Every one opens with a **`.sysblock`** — what the
 model is, its parts defined with types and ranges, its procedure numbered in
@@ -613,8 +613,9 @@ execution order, and what each panel shows — before any finding.
 | 9 | **The host plate** | How much plate does the picture need? Is 30×50 enough? | [↗](https://claude.ai/code/artifact/b0722151-48d8-438a-9df0-4a1061ad4d23) |
 | 10 | **Island palette and light** | Does biasing hues to a key make islands beautiful without making them alike — and does earned colour survive dusk? | [↗](https://claude.ai/code/artifact/08d56254-4f5f-4e2f-8d8e-f12038aa4d0a) |
 | 11 | **Motion signature** | Is motion legible as a lineage identity at five pixels, and does it work as a second camouflage axis? | [↗](https://claude.ai/code/artifact/a9abda24-c51f-4fa9-aeda-2252ae4026d1) |
+| 12 | **Form from metabolism** | Can a chain choose among Wonder's fourteen existing plant forms instead of replacing them — and is reaching essence worth anything? | [↗](https://claude.ai/code/artifact/521b2f34-2c7e-4e57-bbe0-ecf443569d55) |
 
-Benches 1–7 ask whether the mechanisms **work**; 8–11 ask whether they **read**.
+Benches 1–7 ask whether the mechanisms **work**; 8–11 ask whether they **read**; 12 is the bridge back to the shipping game.
 Findings are recorded on the benches themselves and summarised in
 [§8](#8--findings) and [§11](#11--art-bench-findings).
 
@@ -1604,6 +1605,86 @@ rewrites them — so both paths are correct by construction, but **only the buil
 one updates on push.** All thirteen artifacts were republished to match. Anything
 published outside the repo has to be re-published deliberately, or the version
 someone reads is whichever one they happened to open.
+
+
+---
+
+## 13 · Bench 12 — form from metabolism, and what a tier is worth
+
+Blaine's read of bench 0: *"most of these look about the same, the flowers are almost the
+same… the bench is missing the connection to what currently exists. Wonder's current plant
+life is quite varied and beautiful."* Correct on all counts, and the second half is the
+important one.
+
+### 13.1 Bench 0 made the wrong bet about morphology
+
+Bench 0 grows the body by replaying the chain as drawing instructions, which means it
+**replaced** Wonder's fourteen hand-drawn plant forms with one procedural grammar of four
+instructions. That grammar is not going to reach the quality of fourteen hand-made
+silhouettes, and it was never argued for — it fell out of "the chain should make the
+body" without anyone asking whether it should instead *select* the body.
+
+Bench 12 takes the third option. Four numbers summarise a metabolism — **climb**,
+**branch**, **dependence**, **thrift** — each of the fourteen forms is given a point in
+that space, and the chain picks the nearest form among the ones the habitat table already
+allows. The nine numeric traits are then filled from the chain's outputs. The drawers are
+imported from `src/render/plantSprites.ts` **unmodified**, so the comparison is against
+the real art rather than an impression of it.
+
+### 13.2 Two findings, one of which is about measurement
+
+**Distinct silhouettes go from 1 to a mean of 6, maximum 10.** That is the result. Bench 0
+has exactly one silhouette by construction; the proposal uses six of the fourteen on an
+average island.
+
+**But the pixel metric says there is no improvement, and it is wrong.** Silhouette
+difference — Jaccard distance between ink masks — scores bench 0 at 65% and the proposal
+at 65–75%, a ratio of **1.09×**. The first draft of the findings claimed 3× and the
+instrument refused to produce it. The number is right and the metric is wrong: bench 0's
+plants *do* differ pixel by pixel, in size and lean and step count. What they do not
+differ in is **kind**. Every one is a branching stick with blobs. A metric that disagrees
+with your eyes is worth keeping on the page, because the alternative is a metric that
+agrees with whatever you wanted to prove.
+
+**The obvious version of the mapping collapses.** Matching chain features against a
+universal scale — what anyone would write first — uses a mean of **2.9** silhouettes and
+*lowers* shape variance to 0.84× of bench 0's, because chains on one island draw from one
+deck and cluster in one corner of the feature space. Ranking each feature **within the
+island's own population** takes it to 6.0 and 1.09×. One function, and the difference
+between the mechanism working and not.
+
+### 13.3 Essence is a punishment, and the reason is structural
+
+Asked directly: is there any benefit to reaching essence? Measured over 8000 plants on 400
+rolled worlds:
+
+- The **energy ladder is exponential** (1, 3, 9, 27) and the **cost ladder is factorial**
+  (1, 2, 6, 24 base units), because each rung spends `t+1` units of the rung below.
+  Factorial overtakes exponential, always.
+- Energy returned per base unit spent: **1.00 → 1.50 → 1.50 → 1.13**. Climbing pays until
+  compound and then stops. A fifth tier would return 0.68.
+- Only **3.6%** of plants ever end holding essence. Those that do show a higher yield
+  (2.46 vs 2.07) but that is selection on the *hand*, not a payoff from the tier.
+- Pigment per base spent keeps climbing (7.50 vs 6.67); mean chroma goes 0.139 → 0.206.
+
+**So the jewel tones are earned by being inefficient** — and under bench 6's selection the
+most beautiful plants are the ones selection removes. Two fixes, both worth taking:
+
+1. **Stop the penalty.** The intended rule is visibly `energy = 1.5 × cost`; it holds
+   exactly at tiers 1–3 and breaks only at 4. Essence should be **36**, not 27. One
+   constant.
+2. **Pay essence in something other than calories** — the bulb form, the glow trait,
+   pollinator preference. Expensive secondary chemistry does not feed a plant; it makes
+   something else come to it. It also makes "what is essence for" a thing you can *see*.
+
+### 13.4 What bench 0 gained
+
+The reagent bench now carries an **anatomy** section: the genome written out as the literal
+list of deck indices it actually is, one card expanded field by field, every step of the run
+with the complete pile after it, and the pigment arithmetic as a table of
+`units × tier weight` vectors summing to a hue. The complaint that started this — *"what
+the genome really is, what a card really is"* — was answered nowhere on a page that
+described both at length.
 
 
 ---

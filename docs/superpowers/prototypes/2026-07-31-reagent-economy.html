@@ -384,6 +384,37 @@
   }
   /* SYSBLOCK-CSS-END */
 
+  /* the anatomy section: the literal data behind everything above */
+  .anat-h {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+    margin: var(--s5) 0 var(--s2);
+  }
+  .anat-p { font-size: 14px; max-width: 72ch; margin: 0 0 var(--s3); color: var(--ink); }
+  pre.anat {
+    font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+    background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+    padding: var(--s3) var(--s4); margin: 0 0 var(--s3);
+    overflow-x: auto; white-space: pre; color: var(--ink);
+  }
+  pre.anat b { color: var(--slate); font-weight: 500; }
+  .tablewrap { overflow-x: auto; margin-bottom: var(--s3); }
+  table.anat-t {
+    border-collapse: collapse; font-family: var(--font-mono); font-size: 11.5px;
+    width: 100%; font-variant-numeric: tabular-nums;
+  }
+  table.anat-t th {
+    text-align: left; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; padding: 4px var(--s3) 4px 0;
+    border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  table.anat-t td {
+    padding: 3px var(--s3) 3px 0; border-bottom: 1px solid var(--rule);
+    vertical-align: top; color: var(--ink);
+  }
+  table.anat-t td.num, table.anat-t th.num { text-align: right; }
+  table.anat-t td.pile { color: var(--muted); }
+
   /* the growth caption: names the conversion currently being drawn */
   .growcap {
     font-family: var(--font-mono); font-size: 11px; line-height: 1.4;
@@ -673,6 +704,46 @@
       </div>
     </aside>
   </div>
+
+  <section style="margin-top: var(--s7);">
+    <h2>Anatomy — this plant, as data</h2>
+    <p class="note">
+      Everything above, written out literally. This is the whole state a plant carries and
+      the whole computation it runs; there is nothing else behind it.
+    </p>
+
+    <h3 class="anat-h">1 · The genome</h3>
+    <p class="anat-p">
+      A plant is a list of card indices into the world's deck, plus one integer. That is
+      all. It is not a list of traits, and nothing in it mentions colour, height or shape.
+    </p>
+    <pre class="anat" id="anatGenome"></pre>
+
+    <h3 class="anat-h">2 · One card, expanded</h3>
+    <p class="anat-p">
+      A card is a small record. <code>kind</code> decides how it is read;
+      <code>inp</code> is what it spends, <code>out</code> and <code>n</code> are what it
+      makes, and <code>needs</code> only appears on catalyse cards.
+    </p>
+    <pre class="anat" id="anatCard"></pre>
+
+    <h3 class="anat-h">3 · The run, step by step</h3>
+    <p class="anat-p">
+      The pile column is the complete state after that step. Nothing else changes and
+      nothing is remembered between steps except the pile.
+    </p>
+    <div class="tablewrap"><table class="anat-t" id="anatSteps"></table></div>
+
+    <h3 class="anat-h">4 · The pile becomes a colour</h3>
+    <p class="anat-p">
+      Each reagent held contributes a vector on the hue circle whose length is
+      <code>units × tier pigment weight</code>. Hue is the angle of the sum; coherence is
+      the length of the sum over the total weight, so a pile whose hues disagree comes out
+      duller. Chroma reads the weighted mean tier, not the highest one held.
+    </p>
+    <div class="tablewrap"><table class="anat-t" id="anatPig"></table></div>
+    <pre class="anat" id="anatPigSum"></pre>
+  </section>
 
   <section style="margin-top: var(--s7);">
     <h2>A generation of this island's flora</h2>
@@ -1437,6 +1508,7 @@
     });
 
     growSpecimen();
+    renderAnatomy();
   }
 
   // Growth as animation. The body is already *produced* by running the chain, so
@@ -1470,6 +1542,150 @@
         (k >= 0 ? logIndex[k].txt : "");
       cap.classList.add("live");
     }
+  }
+
+  /* ======================== the anatomy ======================== */
+  // Everything the focused plant is, written out literally: the genome as data,
+  // one card expanded, the pile after every step, and the pigment arithmetic.
+
+  const rName = (id) => world.reagents[id].name;
+
+  function cardText(card) {
+    if (card.kind === "gather") return "gather " + card.n + " " + rName(card.out);
+    if (card.kind === "upgrade")
+      return "upgrade " + card.cost + "\u00d7 tier " + card.fromTier + " \u2192 " + rName(card.out);
+    const inp = card.inp.map((i) => i.n + " " + rName(i.id)).join(" + ");
+    return card.kind + " " + inp + " \u2192 " + card.n + " " + rName(card.out) +
+      (card.needs !== undefined ? " (needs " + rName(card.needs) + ")" : "");
+  }
+
+  function pileText(pile) {
+    const ids = Object.keys(pile).filter((id) => pile[id] > 0)
+      .sort((a, b) => world.reagents[b].tier - world.reagents[a].tier || a - b);
+    if (!ids.length) return "\u2014";
+    return ids.map((id) => pile[id] + " " + rName(id)).join(", ");
+  }
+
+  function tableInto(host, cols, rows) {
+    host.textContent = "";
+    const tr = document.createElement("tr");
+    cols.forEach((c) => {
+      const th = document.createElement("th");
+      th.textContent = c.h;
+      if (c.num) th.className = "num";
+      tr.appendChild(th);
+    });
+    host.appendChild(tr);
+    rows.forEach((r) => {
+      const row = document.createElement("tr");
+      r.forEach((v, i) => {
+        const td = document.createElement("td");
+        td.textContent = v;
+        if (cols[i].num) td.className = "num";
+        if (cols[i].dim) td.className = "pile";
+        row.appendChild(td);
+      });
+      host.appendChild(row);
+    });
+  }
+
+  function renderAnatomy() {
+    const plant = focus;
+
+    // 1 · the genome
+    const deckIndex = (card) => world.deck.indexOf(card);
+    const g = [
+      "{",
+      "  name:   \"" + plant.name + "\"",
+      "  hand:   [" + plant.hand.map(deckIndex).join(", ") + "]" +
+        "        \u2190 indices into this world's " + world.deck.length + "-card deck",
+      "  budget: " + plant.budget + "  conversions before the chain is cut off",
+      "}",
+      "",
+      "the same hand, resolved:",
+    ].concat(plant.hand.map((c, i) => "  [" + i + "] " + cardText(c)));
+    $("anatGenome").textContent = g.join("\n");
+
+    // 2 · one card — prefer one that actually fired, and prefer an interesting kind
+    const rank = { catalyse: 0, trade: 1, upgrade: 2, gather: 3 };
+    const pick = plant.hand.slice().sort((a, b) =>
+      ((focusRun.plays.get(b) || 0) > 0) - ((focusRun.plays.get(a) || 0) > 0) ||
+      rank[a.kind] - rank[b.kind])[0];
+    const parts = ["{", "  kind: \"" + pick.kind + "\""];
+    if (pick.kind === "upgrade") {
+      parts.push("  fromTier: " + pick.fromTier + "   spends any " + pick.cost +
+        " units held at that tier");
+      parts.push("  cost: " + pick.cost);
+    } else if (pick.inp) {
+      parts.push("  inp: [" + pick.inp.map((i) =>
+        "{ id: " + i.id + " /* " + rName(i.id) + " */, n: " + i.n + " }").join(", ") + "]");
+    } else {
+      parts.push("  // a gather has no inputs: it draws out of the ground");
+    }
+    if (pick.needs !== undefined)
+      parts.push("  needs: " + pick.needs + "   /* " + rName(pick.needs) +
+        " \u2014 must be present, never spent */");
+    parts.push("  out: " + pick.out + "   /* " + rName(pick.out) + ", tier " +
+      world.reagents[pick.out].tier + " */");
+    parts.push("  n: " + pick.n);
+    parts.push("}");
+    parts.push("");
+    parts.push("fired " + (focusRun.plays.get(pick) || 0) + " times in the run below");
+    $("anatCard").textContent = parts.join("\n");
+
+    // 3 · the run, one row per step
+    const start = Object.assign({}, world.soil);
+    const rows = [["0", "\u2014 the soil this tile offers \u2014", "\u2014", pileText(start)]];
+    focusRun.steps.forEach((st, i) => {
+      const spent = (st.spent || []).map((x) => x.n + " " + rName(x.id)).join(" + ") || "\u2014";
+      rows.push([
+        String(i + 1),
+        st.card.kind + "  " + cardText(st.card).replace(/^\w+ /, ""),
+        spent + "  \u2192  " + st.card.n + " " + rName(st.card.out),
+        pileText(st.pile),
+      ]);
+    });
+    tableInto($("anatSteps"),
+      [{ h: "#", num: true }, { h: "card" }, { h: "spent → made" }, { h: "pile after", dim: true }],
+      rows);
+
+    // 4 · the pile becomes a colour
+    const TP = TIER_PIGMENT();
+    let x = 0, y = 0, w = 0, tw = 0;
+    const prows = [];
+    Object.keys(focusRun.pile).sort((a, b) => world.reagents[b].tier - world.reagents[a].tier)
+      .forEach((id) => {
+        const r = world.reagents[id], units = focusRun.pile[id];
+        const k = units * TP[r.tier];
+        const rad = (r.hue * Math.PI) / 180;
+        x += Math.cos(rad) * k; y += Math.sin(rad) * k; w += k; tw += k * r.tier;
+        prows.push([r.name, String(r.tier), String(units), TP[r.tier].toFixed(0),
+                    k.toFixed(0), Math.round(r.hue) + "\u00b0",
+                    (Math.cos(rad) * k).toFixed(1), (Math.sin(rad) * k).toFixed(1)]);
+      });
+    tableInto($("anatPig"), [
+      { h: "reagent" }, { h: "tier", num: true }, { h: "units", num: true },
+      { h: "weight", num: true }, { h: "units×weight", num: true },
+      { h: "hue", num: true }, { h: "x", num: true }, { h: "y", num: true },
+    ], prows);
+
+    const meanTier = w > 0 ? Math.max(1, Math.min(4, tw / w)) : 1;
+    const coherence = w > 0 ? Math.sqrt(x * x + y * y) / w : 0;
+    $("anatPigSum").textContent = [
+      "sum        x = " + x.toFixed(1) + "   y = " + y.toFixed(1) +
+        "   total weight = " + w.toFixed(0),
+      "hue        atan2(y, x)                       = " + Math.round(focusPig.hue) + "\u00b0",
+      "mean tier  \u03a3(units\u00d7weight\u00d7tier) / \u03a3(units\u00d7weight)  = " + meanTier.toFixed(2),
+      "coherence  |sum| / total weight              = " + coherence.toFixed(2) +
+        "   (1 = every hue agrees)",
+      "chroma     ramp(mean tier) \u00d7 (0.66 + 0.34\u00d7coherence) = " + focusPig.chroma.toFixed(3),
+      "lightness  from yield " + focusRun.energy.toFixed(0) + " / cost " +
+        focusRun.cost.toFixed(1) + " = ratio " + focusPig.ratio.toFixed(2) +
+        "         = " + focusPig.light.toFixed(2),
+      "",
+      "\u2192 oklch(" + focusPig.light.toFixed(2) + ", " + focusPig.chroma.toFixed(3) + ", " +
+        Math.round(focusPig.hue) + ") = " + focusPig.hex,
+    ].join("\n");
   }
 
   function growSpecimen(animate) {
