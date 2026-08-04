@@ -28,3 +28,11 @@ test("a last island with no remembered name falls back to 'your island'", () => 
   const continueRow = rows.find((r) => r.id === "continue");
   expect(continueRow?.label).toBe("continue — your island");
 });
+
+test("continue names a Hollow as a Hollow, since the seed's name is shared", () => {
+  const hollow = titleRows({ lastSeed: 42, lastName: "Orka Cay", lastStyle: "hollow", savedCount: 1 });
+  expect(hollow[0].label).toBe("continue — Orka Cay, a Hollow");
+  // absent style reads as classic: the row is exactly what it was
+  const classic = titleRows({ lastSeed: 42, lastName: "Orka Cay", savedCount: 1 });
+  expect(classic[0].label).toBe("continue — Orka Cay");
+});

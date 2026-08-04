@@ -22,7 +22,14 @@ import { DEFAULT_TUNING, Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant
 import { Hollow, HollowEcology, hollowEcology, makeHollowAsync } from "../life/hollow";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { CHAINS_KEY, LAST_SEED_KEY, parseLastSeed, resolveChains } from "./flags";
+import {
+  CHAINS_KEY,
+  LAST_SEED_KEY,
+  LAST_STYLE_KEY,
+  parseLastSeed,
+  parseLastStyle,
+  resolveChains,
+} from "./flags";
 import {
   loadCritterJournal,
   loadJournal,
@@ -54,6 +61,7 @@ import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackO
 import {
   closePicker,
   featurePhrase,
+  IsleRef,
   isPickerOpen,
   isleRows,
   openPicker,
@@ -81,7 +89,6 @@ import { MurmurEngine, loadAnthology, markSwarmMet, swarmMetOn } from "./murmurs
 import {
   MAX_SAVED_WORLDS,
   SavedWorld,
-  WORLD_INDEX_KEY,
   packCrittersV2,
   packWorld,
   restoreCrittersV2,
@@ -145,16 +152,27 @@ let titleActive = false; // true only while the front door is up over its backdr
 // true again from outside, only right after the boot path's own backdrop load.
 let backdropLoaded = false;
 
-function readLastSeed(): number | null {
+/**
+ * The island last entered — its seed AND its style, which together name one
+ * place. Seed alone does not: the Hollow of seed 11 and the classic island of
+ * seed 11 are two islands. null when nothing has been entered yet.
+ */
+function readLastIsle(): IsleRef | null {
   try {
-    return parseLastSeed(localStorage.getItem(LAST_SEED_KEY));
+    const seed = parseLastSeed(localStorage.getItem(LAST_SEED_KEY));
+    if (seed === null) return null;
+    return { seed, style: parseLastStyle(localStorage.getItem(LAST_STYLE_KEY)) };
   } catch {
     return null;
   }
 }
-function writeLastSeed(seed: number): void {
+function writeLastIsle(seed: number, style: IslandStyle): void {
   try {
     localStorage.setItem(LAST_SEED_KEY, String(seed));
+    // removed rather than set to "classic", so a classic session leaves
+    // storage exactly as builds before the Hollow left it
+    if (style === "hollow") localStorage.setItem(LAST_STYLE_KEY, "hollow");
+    else localStorage.removeItem(LAST_STYLE_KEY);
   } catch {
     // storage off
   }
@@ -950,15 +968,12 @@ function loadWorld(
   // the map you drew of the island you're leaving keeps its ink — unless the
   // island you're leaving was the ephemeral title backdrop (backdropLoaded),
   // which nobody played and shouldn't leave a wander.explored entry behind
-  // currentStyle is still the OUTGOING island's here. A Hollow leaves no ink
-  // behind even though it now leaves a save: wander.explored is keyed by seed
-  // alone (loadExplored/saveExplored take no style), and the two styles' maps
-  // are different sizes — 140x140 for HOLLOW_CONFIG against 300x300 for
-  // DEFAULT_CONFIG — so writing a Hollow's fog map under a bare seed would
-  // overwrite the classic island's. Namespacing that key is a later task; the
-  // Hollow's fog starts fresh each sitting until then.
-  if (explored && !backdropLoaded && currentStyle !== "hollow") {
-    saveExplored(currentSeed, explored, map.width, map.height);
+  // currentStyle is still the OUTGOING island's here, and it selects the book
+  // the ink is written into: a Hollow's map goes to wander.explored.hollow,
+  // a classic island's to wander.explored, so neither style can evict the
+  // other's page for the same seed. Both styles are saved now.
+  if (explored && !backdropLoaded) {
+    saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
   }
   backdropLoaded = false; // consumed: this load's own world is real, so a LATER load leaving it saves normally
   // a seed with no viable island is nearly impossible, but the sea is
@@ -990,13 +1005,11 @@ function loadWorld(
     : hollowResume
       ? hollowResume.acceptedSeed - seed
       : 0;
-  // The backdrop is not a played session. A Hollow is, and it now resumes —
-  // but LAST_SEED_KEY stores a bare seed, which cannot say which of the two
-  // islands on that seed to open. Recording a Hollow there would make the
-  // front door's "continue" open the CLASSIC island of the same number. Until
-  // that key carries a style, the way back into a Hollow is its URL, which
-  // loadWorld writes ?style=hollow into below.
-  if (!titleActive && currentStyle === "classic") writeLastSeed(seed);
+  // The backdrop is not a played session; both styles of real island are.
+  // The seed goes to LAST_SEED_KEY exactly as before and the style beside it
+  // to LAST_STYLE_KEY, so the front door's "continue" reopens the island that
+  // was actually last walked rather than the classic one of the same number.
+  if (!titleActive) writeLastIsle(seed, currentStyle);
   census.reset(); // a new island begins its own history
   if (prebuiltLife) {
     species = prebuiltLife.species;
@@ -1125,7 +1138,7 @@ function loadWorld(
   const savedCritters = saved ? restoreCrittersV2(saved, critterSpecies, flora) : [];
   critters = savedCritters.length > 0 ? savedCritters : spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(saved?.critterRngState ?? (seed ^ 0xcafe)); // resume the stream when the save carries it, else fresh
-  trust = loadTrust(seed); // friendships made here, remembered here
+  trust = loadTrust(seed, currentStyle); // friendships made here, remembered here
   companionKind = null; // each island keeps its own friend; this one's is re-called below
   beast = generateBeast(seed, map, species);
   beastSows = [];
@@ -1186,7 +1199,7 @@ function loadWorld(
   }
   // the fog-of-war map: pick up where the ink left off, and see the ground
   // underfoot before the first step is taken
-  explored = loadExplored(seed, map.width, map.height);
+  explored = loadExplored(seed, currentStyle, map.width, map.height);
   walkTx = Math.floor(player.x / TILE_SIZE);
   walkTy = Math.floor(player.y / TILE_SIZE);
   exploredDirty = markSeen(explored, map.width, map.height, walkTx, walkTy);
@@ -1286,43 +1299,66 @@ function openAlmanac(): void {
 const isleFeatureCache = new Map<number, string | null>();
 let isleFillToken = 0;
 
-function isleLook(seed: number): { shape: string; feature: string | null } {
-  if (seed === currentSeed) {
+// What a Hollow's rows say in place of a terrain shape. Every Hollow is
+// 140x140 and mostly forest (HOLLOW_CONFIG), so a rolled shape phrase would
+// say nothing that distinguishes one from another; the style itself is the
+// description. The picker prints "a Hollow" ahead of it (placeText).
+const HOLLOW_SHAPE_PHRASE = "small and wooded";
+
+function isHere(ref: IsleRef): boolean {
+  return ref.seed === currentSeed && ref.style === currentStyle;
+}
+
+function isleLook(ref: IsleRef): { shape: string; feature: string | null } {
+  if (isHere(ref)) {
     return {
-      shape: SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"],
+      shape: ref.style === "hollow" ? HOLLOW_SHAPE_PHRASE : SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"],
       feature: featurePhrase(map),
     };
   }
+  // A far Hollow's terrain is not regenerated for the ledger: its map comes
+  // from seed + attemptOffset against HOLLOW_CONFIG, which the row would have
+  // to read out of the save to reproduce. The row stays plain instead.
+  if (ref.style === "hollow") return { shape: HOLLOW_SHAPE_PHRASE, feature: null };
   return {
-    shape: SHAPE_PHRASE[rollShape(seed)],
-    feature: isleFeatureCache.get(seed) ?? null,
+    shape: SHAPE_PHRASE[rollShape(ref.seed)],
+    feature: isleFeatureCache.get(ref.seed) ?? null,
   };
 }
 
-function savedIndex(): number[] {
+// One style's saved-worlds list, as refs. Each style keeps its own list
+// (worldIndexKey), and the two are never merged into one seed list: seed 11
+// can name a Hollow and a classic island at once, and both are offerable.
+function savedRefs(style: IslandStyle): IsleRef[] {
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
-    const index = Array.isArray(raw)
-      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0)
+    const raw: unknown = JSON.parse(localStorage.getItem(worldIndexKey(style)) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0).map((seed) => ({ seed, style }))
       : [];
-    // storage may be unavailable: the island underfoot is still a place
-    return index.includes(currentSeed) ? index : [currentSeed, ...index];
-  } catch {
-    return [currentSeed];
-  }
-}
-
-// The raw saved-worlds list — unlike savedIndex(), this never injects
-// currentSeed. savedIndex()'s "the island underfoot counts too" rule is right
-// during ordinary play but wrong for the front door: while titling,
-// currentSeed is the backdrop, which is never a played session.
-function savedSeeds(): number[] {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0) : [];
   } catch {
     return [];
   }
+}
+
+// Every saved island of either style, classic first (its list is the older
+// and usually the longer one), each style in its own last-walked order.
+function savedIsles(): IsleRef[] {
+  return [...savedRefs("classic"), ...savedRefs("hollow")];
+}
+
+function savedIndex(): IsleRef[] {
+  const index = savedIsles();
+  // storage may be unavailable: the island underfoot is still a place
+  const here = { seed: currentSeed, style: currentStyle };
+  return index.some(isHere) ? index : [here, ...index];
+}
+
+// The raw saved-worlds list — unlike savedIndex(), this never injects the
+// island underfoot. savedIndex()'s "the island underfoot counts too" rule is
+// right during ordinary play but wrong for the front door: while titling,
+// currentSeed is the backdrop, which is never a played session.
+function savedSeeds(): IsleRef[] {
+  return savedIsles();
 }
 function savedWorldCount(): number {
   return savedSeeds().length;
@@ -1334,48 +1370,72 @@ function openIslePicker(fromTitle = false): void {
   const index = fromTitle ? savedSeeds() : savedIndex();
   const rows = isleRows(
     index,
-    currentSeed,
+    { seed: currentSeed, style: currentStyle },
     Date.now(),
-    (s) => loadSave(s, "classic")?.savedAt ?? null, // the picker lists classic isles only in stage 1
+    (ref) => loadSave(ref.seed, ref.style)?.savedAt ?? null,
     isleLook,
-    (s) => {
-      const sv = loadSave(s, "classic");
+    (ref) => {
+      const sv = loadSave(ref.seed, ref.style);
       return { name: sv?.name, playMs: sv?.playMs };
     },
   );
   openPicker(
     rows,
-    (seed) => {
-      if (!fromTitle) persist(); // from the title: don't save the backdrop (titleActive is already false, so loadWorld still records lastSeed)
-      loadWorld(seed);
-      renderer.setMap(map);
+    (ref) => {
+      if (!fromTitle) persist(); // from the title: don't save the backdrop (titleActive is already false, so loadWorld still records the last isle)
+      sailTo(ref);
     },
-    (seed) => {
-      // forget a world: drop its save and its ledger row, then re-open the panel
-      localStorage.removeItem(worldKey(seed, "classic"));
+    (ref) => {
+      // forget a world: drop its save and its style's ledger row, then re-open
+      localStorage.removeItem(worldKey(ref.seed, ref.style));
       localStorage.setItem(
-        WORLD_INDEX_KEY,
-        JSON.stringify((fromTitle ? savedSeeds() : savedIndex()).filter((s) => s !== seed)),
+        worldIndexKey(ref.style),
+        JSON.stringify(
+          savedRefs(ref.style)
+            .filter((r) => r.seed !== ref.seed)
+            .map((r) => r.seed),
+        ),
       );
       openIslePicker(fromTitle);
     },
   );
   // far islands learn their standout feature one per beat, never all at once
   const token = ++isleFillToken;
-  const missing = index.filter((s) => s !== currentSeed && !isleFeatureCache.has(s));
+  const missing = index.filter(
+    (ref) => ref.style === "classic" && !isHere(ref) && !isleFeatureCache.has(ref.seed),
+  );
   const fill = (): void => {
     if (token !== isleFillToken || !isPickerOpen()) return;
-    const s = missing.shift();
-    if (s === undefined) return;
+    const ref = missing.shift();
+    if (ref === undefined) return;
     try {
-      isleFeatureCache.set(s, featurePhrase(generate(s, DEFAULT_CONFIG)));
+      isleFeatureCache.set(ref.seed, featurePhrase(generate(ref.seed, DEFAULT_CONFIG)));
     } catch {
-      isleFeatureCache.set(s, null); // a seed the sea reclaimed — its row stays plain
+      isleFeatureCache.set(ref.seed, null); // a seed the sea reclaimed — its row stays plain
     }
-    setIsleFeature(s, isleFeatureCache.get(s) ?? null);
+    setIsleFeature(ref, isleFeatureCache.get(ref.seed) ?? null);
     setTimeout(fill, 30);
   };
   if (missing.length > 0) setTimeout(fill, 30);
+}
+
+/**
+ * Sail to a saved island of either style.
+ *
+ * Classic loads in place. A Hollow goes through generateHollow, which finds
+ * its save and rebuilds the map from seed + attemptOffset in one generate()
+ * call (25 ms measured, task 14) rather than re-running the 400-generation
+ * burn-in — and which grows a fresh Hollow if the save has since been
+ * evicted, so the row is never a dead end.
+ */
+function sailTo(ref: IsleRef): void {
+  if (ref.style === "hollow") {
+    const { seed, gen } = forgeArgs({ ...defaultForgeState(ref.seed), style: "hollow" });
+    void generateHollow(seed, gen);
+    return;
+  }
+  loadWorld(ref.seed);
+  renderer.setMap(map);
 }
 
 // the panel follows the wanderer while it's open — re-rendered as they move,
@@ -1585,7 +1645,7 @@ function openInspectAtPlayer(record = true): void {
       if (!took) return "nothing it favors";
       bar = took[0];
       trust.set(sp.id, raiseTrust(trust.get(sp.id) ?? 0));
-      saveTrust(currentSeed, trust);
+      saveTrust(currentSeed, currentStyle, trust);
       let friend: Critter | null = null;
       let best = Infinity;
       for (const c of critters) {
@@ -1738,10 +1798,11 @@ async function previewForge(state: ForgeState): Promise<void> {
 // and how many isles are saved (the picker's size). Read fresh at mount and
 // at every re-mount, so a world entered mid-session shows up next time.
 function currentTitleState(): TitleState {
-  const last = readLastSeed();
+  const last = readLastIsle();
   return {
-    lastSeed: last,
-    lastName: last === null ? null : islandName(last),
+    lastSeed: last === null ? null : last.seed,
+    lastName: last === null ? null : islandName(last.seed),
+    lastStyle: last?.style,
     savedCount: savedWorldCount(),
   };
 }
@@ -1777,13 +1838,12 @@ function onChoose(id: TitleRowId): void {
     return;
   }
   if (id === "new") { openForgeFromTitle(); return; }
-  leaveTitle(); // continue: a real session now — loadWorld records lastSeed, the camera follows the player
+  leaveTitle(); // continue: a real session now — loadWorld records the last isle, the camera follows the player
   if (id === "continue") {
-    const s = readLastSeed();
-    if (s !== null) {
-      loadWorld(s);
-      renderer.setMap(map);
-    }
+    // the island last walked, of either style — sailTo routes a Hollow back
+    // through its save rather than to the classic island of the same seed
+    const last = readLastIsle();
+    if (last !== null) sailTo(last);
   }
 }
 
@@ -2452,7 +2512,7 @@ canvas.addEventListener("click", (e) => {
 });
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {
-  if (!titleActive && explored) saveExplored(currentSeed, explored, map.width, map.height);
+  if (!titleActive && explored) saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
 });
 
 function input(): InputState {
@@ -2887,7 +2947,7 @@ function frame(now: number): void {
     // the walked map is written only when fresh ground was seen
     if (explored && exploredDirty) {
       exploredDirty = false;
-      if (!titleActive) saveExplored(currentSeed, explored, map.width, map.height);
+      if (!titleActive) saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
     }
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);

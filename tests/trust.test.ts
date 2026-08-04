@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   Palate,
+  HOLLOW_TRUST_KEY,
   TRUST_KEY,
   TRUST_STEP,
   bestOffering,
@@ -55,17 +56,37 @@ test("the offered seed is the palate's best match, or none if nothing tempts", (
 
 test("a friendship is kept per island and survives a reload", () => {
   const kv = fakeKV();
-  saveTrust(7, new Map([[0, 0.45], [2, 0.9]]), kv);
-  saveTrust(42, new Map([[0, 0.3]]), kv); // a different island shares the one book
-  const back = loadTrust(7, kv);
+  saveTrust(7, "classic", new Map([[0, 0.45], [2, 0.9]]), kv);
+  saveTrust(42, "classic", new Map([[0, 0.3]]), kv); // a different island shares the one book
+  const back = loadTrust(7, "classic", kv);
   expect(back.get(0)).toBeCloseTo(0.45, 6);
   expect(back.get(2)).toBeCloseTo(0.9, 6);
   expect(back.has(1)).toBe(false); // a kind never fed stays absent
-  expect(loadTrust(42, kv).get(0)).toBeCloseTo(0.3, 6); // island 7's book didn't disturb island 42's
+  expect(loadTrust(42, "classic", kv).get(0)).toBeCloseTo(0.3, 6); // island 7's book didn't disturb island 42's
 });
 
 test("unreadable trust storage simply starts every kind wary again", () => {
   const kv = fakeKV();
   kv.map.set(TRUST_KEY, "{ not json ]");
-  expect(loadTrust(7, kv).size).toBe(0);
+  expect(loadTrust(7, "classic", kv).size).toBe(0);
+});
+
+test("the two styles keep separate trust books at one seed", () => {
+  const kv = fakeKV();
+  saveTrust(11, "classic", new Map([[0, 0.6]]), kv);
+  saveTrust(11, "hollow", new Map([[0, 0.15]]), kv);
+  // species id 0 names a different animal on each island: neither bond moved
+  expect(loadTrust(11, "classic", kv).get(0)).toBeCloseTo(0.6, 6);
+  expect(loadTrust(11, "hollow", kv).get(0)).toBeCloseTo(0.15, 6);
+  // classic keeps the key and entry shape every earlier build wrote
+  expect(JSON.parse(kv.map.get(TRUST_KEY)!)).toEqual({ "11:0": 0.6 });
+  expect(JSON.parse(kv.map.get(HOLLOW_TRUST_KEY)!)).toEqual({ "11:0": 0.15 });
+});
+
+test("bonds written before the Hollow existed still load", () => {
+  const kv = fakeKV();
+  kv.map.set(TRUST_KEY, JSON.stringify({ "7:0": 0.45, "7:2": 0.9 }));
+  const back = loadTrust(7, "classic", kv);
+  expect(back.get(0)).toBeCloseTo(0.45, 6);
+  expect(back.get(2)).toBeCloseTo(0.9, 6);
 });

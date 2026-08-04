@@ -1,3 +1,4 @@
+import { IslandStyle } from "../world/config";
 import { islandName } from "../world/name";
 
 // The isles you've known: a quiet ledger of the saved islands, one row a
@@ -6,8 +7,24 @@ import { islandName } from "../world/name";
 // white water) asks for a full regeneration, so far islands may learn
 // theirs a beat after the panel opens; the line simply completes itself.
 
+/**
+ * One saved island, named the only way that is unambiguous: seed AND style.
+ * A Hollow at seed 11 and a classic island at seed 11 are different places,
+ * saved under different keys, and both can be offered at once.
+ */
+export interface IsleRef {
+  seed: number;
+  style: IslandStyle;
+}
+
+/** The ledger key for a row — "hollow:11" / "classic:11". */
+export function isleKey(ref: IsleRef): string {
+  return `${ref.style}:${ref.seed}`;
+}
+
 export interface IsleRow {
   seed: number;
+  style: IslandStyle; // which of the two islands on this seed the row names
   name: string; // "Toralei Isle"
   given?: string; // a name the wanderer gave this world, shown ahead of the isle's own
   shape: string; // "a highland isle"
@@ -53,27 +70,30 @@ export function featurePhrase(m: IsleFeatures): string | null {
 
 // the ledger, assembled: index order is the order (latest sailing first)
 export function isleRows(
-  index: readonly number[],
-  currentSeed: number,
+  index: readonly IsleRef[],
+  current: IsleRef,
   now: number,
-  savedAtOf: (seed: number) => number | null,
-  lookOf: (seed: number) => { shape: string; feature: string | null },
-  metaOf: (seed: number) => { name?: string; playMs?: number } = () => ({}),
+  savedAtOf: (ref: IsleRef) => number | null,
+  lookOf: (ref: IsleRef) => { shape: string; feature: string | null },
+  metaOf: (ref: IsleRef) => { name?: string; playMs?: number } = () => ({}),
 ): IsleRow[] {
-  return index.map((seed) => {
-    const look = lookOf(seed);
-    const savedAt = savedAtOf(seed);
-    const meta = metaOf(seed);
+  return index.map((ref) => {
+    const { seed, style } = ref;
+    const look = lookOf(ref);
+    const savedAt = savedAtOf(ref);
+    const meta = metaOf(ref);
+    const isHere = seed === current.seed && style === current.style;
     return {
       seed,
+      style,
       name: islandName(seed),
       given: meta.name,
       shape: look.shape,
       feature: look.feature,
       playMs: meta.playMs,
-      current: seed === currentSeed,
+      current: isHere,
       lastSeen:
-        seed === currentSeed
+        isHere
           ? "you are here now"
           : savedAt === null
             ? "last seen long ago" // its save has gone; its name remains
@@ -97,16 +117,21 @@ export function isPickerOpen(): boolean {
   return panel().style.display === "block";
 }
 
-// rows still waiting on a feature keep a handle to their place line
-const placeLines = new Map<number, { el: HTMLElement; row: IsleRow }>();
+// rows still waiting on a feature keep a handle to their place line, filed
+// under isleKey — seed alone would collide the two styles' rows
+const placeLines = new Map<string, { el: HTMLElement; row: IsleRow }>();
 
 export function closePicker(): void {
   panel().style.display = "none";
   placeLines.clear();
 }
 
+// The place line: what kind of island, what stands out, and its seed. A
+// Hollow says so first — it is the one thing about the row a wanderer must be
+// able to read at a glance, because the seed beside it may be a classic
+// island's seed too.
 function placeText(row: IsleRow): string {
-  const bits = [row.shape];
+  const bits = row.style === "hollow" ? ["a Hollow", row.shape] : [row.shape];
   if (row.feature) bits.push(row.feature);
   bits.push(`seed ${row.seed}`);
   return bits.join(" · ");
@@ -114,8 +139,8 @@ function placeText(row: IsleRow): string {
 
 // a far island learns its standout feature after the panel is already
 // open — its line completes itself in place; nothing moves
-export function setIsleFeature(seed: number, feature: string | null): void {
-  const kept = placeLines.get(seed);
+export function setIsleFeature(ref: IsleRef, feature: string | null): void {
+  const kept = placeLines.get(isleKey(ref));
   if (!kept || feature === null) return;
   kept.row.feature = feature;
   kept.el.textContent = placeText(kept.row);
@@ -125,8 +150,8 @@ export function setIsleFeature(seed: number, feature: string | null): void {
 // underfoot marked, the rest a click from underfoot again.
 export function openPicker(
   rows: IsleRow[],
-  sail: (seed: number) => void,
-  remove: (seed: number) => void,
+  sail: (ref: IsleRef) => void,
+  remove: (ref: IsleRef) => void,
 ): void {
   const el = panel();
   el.innerHTML = "";
@@ -151,7 +176,7 @@ export function openPicker(
     place.className = "isle-place";
     place.textContent = placeText(row);
     r.appendChild(place);
-    placeLines.set(row.seed, { el: place, row });
+    placeLines.set(isleKey(row), { el: place, row });
     const when = document.createElement("div");
     when.className = "isle-when";
     const here = hereFor(row.playMs);
@@ -163,7 +188,7 @@ export function openPicker(
     } else {
       r.addEventListener("click", () => {
         closePicker();
-        sail(row.seed);
+        sail({ seed: row.seed, style: row.style });
       });
       // a small way to let a world go — forget it from the ledger
       const forget = document.createElement("button");
@@ -172,7 +197,7 @@ export function openPicker(
       forget.title = "delete this saved world";
       forget.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        remove(row.seed);
+        remove({ seed: row.seed, style: row.style });
       });
       r.appendChild(forget);
     }

@@ -1,6 +1,7 @@
 // The front door (title screen): the rows are data (this file, testable),
 // the screen is DOM (below, Task 3) — the split menu.ts uses.
 
+import { IslandStyle } from "../world/config";
 import { formatStamp } from "../version";
 
 export type TitleRowId = "continue" | "new" | "isles" | "sim" | "guide";
@@ -13,6 +14,13 @@ export interface TitleRow {
 export interface TitleState {
   lastSeed: number | null; // the island last entered, if any
   lastName: string | null; // its name, for the continue row
+  /**
+   * Which style that island was. Absent reads as classic — the only style a
+   * stored last-island could have been before the Hollow existed. A Hollow
+   * says so on the row, because its name is the same name the classic island
+   * of the same seed carries.
+   */
+  lastStyle?: IslandStyle;
   savedCount: number; // how many isles are saved (the picker's size)
 }
 
@@ -21,7 +29,11 @@ export interface TitleState {
 export function titleRows(state: TitleState): TitleRow[] {
   const rows: TitleRow[] = [];
   if (state.lastSeed !== null) {
-    rows.push({ id: "continue", label: `continue — ${state.lastName ?? "your island"}` });
+    const where = state.lastName ?? "your island";
+    rows.push({
+      id: "continue",
+      label: state.lastStyle === "hollow" ? `continue — ${where}, a Hollow` : `continue — ${where}`,
+    });
   }
   rows.push({ id: "new", label: "a new island" });
   if (state.savedCount > 0) rows.push({ id: "isles", label: "the isles you've known" });
