@@ -1,8 +1,10 @@
-import { WorldConfig, DEFAULT_CONFIG } from "../world/config";
+import { WorldConfig, DEFAULT_CONFIG, IslandStyle, configForStyle } from "../world/config";
 import { IslandShape, IslandRelief } from "../world/generate";
 
 export interface GenArgs {
   config: WorldConfig;
+  /** Which island the forge is building. "classic" is every island shipped before the Hollow. */
+  style: IslandStyle;
   shape?: IslandShape;
   relief?: IslandRelief;
   warm: number;
@@ -12,6 +14,7 @@ export interface GenArgs {
 
 export interface ForgeState {
   seed: number;
+  style: IslandStyle;
   shape: IslandShape | "roll";
   relief: IslandRelief | "roll";
   width: number;
@@ -101,6 +104,7 @@ function clampBound(field: string, v: number): number {
 export function defaultForgeState(seed: number): ForgeState {
   return {
     seed,
+    style: "classic", // an unchanged forge builds the island it always did
     shape: "roll",
     relief: "roll",
     width: DEFAULT_CONFIG.width,
@@ -112,6 +116,22 @@ export function defaultForgeState(seed: number): ForgeState {
 }
 
 export function forgeArgs(state: ForgeState): { seed: number; gen: GenArgs } {
+  const style = state.style ?? "classic";
+  // The Hollow builds its own terrain: makeHollow generates from HOLLOW_CONFIG
+  // and nothing else, so returning a config edited by the size/fine-grain
+  // knobs here would describe a map that was never built. Hand back the exact
+  // config the map WILL be generated from instead.
+  if (style === "hollow") {
+    return {
+      seed: state.seed,
+      gen: {
+        config: configForStyle("hollow"),
+        style,
+        warm: clampBound("warm", state.warm),
+        life: clampBound("life", state.life),
+      },
+    };
+  }
   const cfg: WorldConfig = { ...DEFAULT_CONFIG };
   cfg.width = clampBound("width", state.width);
   cfg.height = clampBound("height", state.height);
@@ -122,6 +142,7 @@ export function forgeArgs(state: ForgeState): { seed: number; gen: GenArgs } {
     seed: state.seed,
     gen: {
       config: cfg,
+      style,
       shape: state.shape === "roll" ? undefined : state.shape,
       relief: state.relief === "roll" ? undefined : state.relief,
       warm: clampBound("warm", state.warm),

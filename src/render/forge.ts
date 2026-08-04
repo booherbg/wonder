@@ -7,7 +7,13 @@
 
 import { ForgeState, FORGE_BOUNDS, RANDOMIZE_RANGES, INTEGER_FIELDS } from "./forgeArgs";
 import { IslandRelief, IslandShape, RELIEF_PHRASE, RELIEFS, SHAPE_PHRASE, SHAPES } from "../world/generate";
-import { DEFAULT_CONFIG, WorldConfig } from "../world/config";
+import { DEFAULT_CONFIG, IslandStyle, WorldConfig } from "../world/config";
+
+/** The two styles stage 1 ships, in the order the select offers them. */
+const STYLE_OPTIONS: readonly (readonly [IslandStyle, string])[] = [
+  ["classic", "classic"],
+  ["hollow", "the Hollow"],
+];
 
 export interface ForgeHandlers {
   preview: (state: ForgeState) => void | Promise<void>;
@@ -32,16 +38,25 @@ export function forgeNotice(msg: string): void {
 }
 
 // Live progress over the preview canvas. Pass null (or omit) to clear.
-// pct is 0..1 — shown as a whole percent. "shaping…" alone at 0.
-export function forgeProgress(pct: number | null): void {
+// pct is 0..1 — shown as a whole percent, "shaping…" alone at 0. `text`, when
+// given, replaces the whole line instead: the two things a caller waits on are
+// different work, and different work deserves different words. Classic is
+// searching for a viable map, so a percent of the attempt budget is all there
+// is to say; the Hollow is running an ecology forward, and the generation
+// count is the more informative number.
+export function forgeProgress(pct: number | null, text?: string): void {
   if (!progressEl) return;
   if (pct === null) {
     progressEl.hidden = true;
     progressEl.textContent = "";
     return;
   }
-  const n = Math.max(0, Math.min(100, Math.round(pct * 100)));
   progressEl.hidden = false;
+  if (text !== undefined) {
+    progressEl.textContent = text;
+    return;
+  }
+  const n = Math.max(0, Math.min(100, Math.round(pct * 100)));
   progressEl.textContent = n <= 0 ? "shaping…" : `shaping… ${n}%`;
 }
 
@@ -246,6 +261,38 @@ function render(): void {
     });
     group.append(input, reroll);
     r.appendChild(group);
+  }
+
+  // island — which style is built. Classic is every island shipped before the
+  // Hollow. The Hollow generates from its own fixed config and arrives with
+  // 400 generations of ecology already run, so the terrain knobs below (size,
+  // shape, relief, fine grain) do not reach it; the hint under the select says
+  // so rather than leaving a dead knob looking live.
+  {
+    const r = row(head);
+    label(r, "island");
+    const select = document.createElement("select");
+    select.className = "forge-select forge-style";
+    for (const [value, text] of STYLE_OPTIONS) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = text;
+      select.appendChild(opt);
+    }
+    select.value = state.style;
+    select.addEventListener("change", () => {
+      state.style = select.value as IslandStyle;
+      render(); // the style note and the knobs it disables both change
+      schedulePreview();
+    });
+    r.appendChild(select);
+  }
+  if (state.style === "hollow") {
+    const note = document.createElement("div");
+    note.className = "forge-style-note";
+    note.textContent =
+      "the Hollow sets its own terrain, and grows 400 generations before you land — the knobs below do not apply.";
+    head.appendChild(note);
   }
 
   // shape

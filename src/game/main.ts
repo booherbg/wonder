@@ -18,7 +18,8 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
-import { Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
+import { DEFAULT_TUNING, Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
+import { Hollow, makeHollowAsync } from "../life/hollow";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { CHAINS_KEY, LAST_SEED_KEY, parseLastSeed, resolveChains } from "./flags";
@@ -95,7 +96,7 @@ const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
-import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
+import { DEFAULT_CONFIG, IslandStyle, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, generateAsync, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
 import { closeForge, forgeNotice, forgeProgress, isForgeOpen, openForge, setForgeBusy } from "../render/forge";
@@ -792,6 +793,9 @@ let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
+// Which style built the island now loaded. Stage 1 persists classic worlds
+// only — see persist() for why a Hollow is not written to a save slot.
+let currentStyle: IslandStyle = "classic";
 let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
@@ -828,6 +832,18 @@ const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
 function persist(): void {
   if (titleActive) return; // never autosave the title backdrop
+  // Stage 1 does not persist the Hollow. A save slot is keyed by seed alone,
+  // and a saved world is restored by regenerating the map from that seed with
+  // DEFAULT_CONFIG and replanting the saved plants onto it. Neither step can
+  // reproduce a Hollow: its map comes from HOLLOW_CONFIG (140x140, not
+  // 300x300) and its plants are the survivors of a 400-generation burn-in.
+  // Measured, before this guard: playing seed 11 as a Hollow and then forging
+  // seed 11 as a Classic restored the Hollow's plants onto the classic map,
+  // and 43 of 8,337 survived the habitat check — an island with essentially
+  // nothing growing on it. Resuming a Hollow is its own task; until then a
+  // Hollow is a session you play now, and writing nothing is what keeps a
+  // later Classic on the same seed correct.
+  if (currentStyle === "hollow") return;
   try {
     const s = packWorld(
       currentSeed,
@@ -885,11 +901,32 @@ function loadSave(seed: number): SavedWorld | null {
   }
 }
 
-function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
+/**
+ * A population built before loadWorld was called, handed in whole rather than
+ * generated here. The Hollow's flora is the only producer: it is the SURVIVOR
+ * set of a 400-generation burn-in, so regenerating it from the seed inside
+ * loadWorld would throw away the entire point of the style. `species` is the
+ * list that Flora was built on, daughters founded during burn-in included.
+ */
+interface PrebuiltLife {
+  flora: Flora;
+  species: PlantSpecies[];
+}
+
+function loadWorld(
+  seed: number,
+  gen?: GenArgs,
+  prebuilt?: WorldMap,
+  prebuiltLife?: PrebuiltLife,
+): void {
   // the map you drew of the island you're leaving keeps its ink — unless the
   // island you're leaving was the ephemeral title backdrop (backdropLoaded),
   // which nobody played and shouldn't leave a wander.explored entry behind
-  if (explored && !backdropLoaded) saveExplored(currentSeed, explored, map.width, map.height);
+  // currentStyle is still the OUTGOING island's here — a Hollow leaves no ink
+  // behind for the same reason it leaves no save (persist()).
+  if (explored && !backdropLoaded && currentStyle !== "hollow") {
+    saveExplored(currentSeed, explored, map.width, map.height);
+  }
   backdropLoaded = false; // consumed: this load's own world is real, so a LATER load leaving it saves normally
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
@@ -914,11 +951,24 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     }
   }
   currentSeed = seed;
-  if (!titleActive) writeLastSeed(seed); // the backdrop is not a played session
+  currentStyle = prebuiltLife ? "hollow" : (gen?.style ?? "classic");
+  // The backdrop is not a played session, and neither is a stage-1 Hollow: it
+  // cannot be resumed (see persist()), so recording it as the island to
+  // "continue" would offer a door that opens onto a different island.
+  if (!titleActive && currentStyle !== "hollow") writeLastSeed(seed);
   census.reset(); // a new island begins its own history
-  species = generatePlantSpecies(seed);
-  if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
-  baseSpeciesCount = species.length;
+  if (prebuiltLife) {
+    species = prebuiltLife.species;
+    // Burn-in may found daughter species, and they arose before the wanderer
+    // landed rather than during play, so they belong below the base line —
+    // baseSpeciesCount indexes "arose during play" (main.ts:840). Count the
+    // founders (no parent) instead of the whole list.
+    baseSpeciesCount = species.filter((s) => s.parent === undefined).length;
+  } else {
+    species = generatePlantSpecies(seed);
+    if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
+    baseSpeciesCount = species.length;
+  }
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
     chains: CHAINS, // the A/B toggle threads into both new Flora sites below
@@ -927,7 +977,12 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
       ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
       : {}),
   };
-  const saved = loadSave(seed);
+  // A prebuilt population is a freshly forged island, so any save filed under
+  // this seed describes a different world's plants and must not be restored
+  // over it. Ignoring the save wholesale (not just its flora) keeps the camp,
+  // inventory and player position from being reattached to an island they were
+  // never set down on.
+  const saved = prebuiltLife ? null : loadSave(seed);
   worldName = saved?.name ?? null;
   worldPlayMs = saved?.playMs ?? 0;
   memories = saved?.memories ? [...saved.memories] : [];
@@ -966,6 +1021,15 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     }
     home = saved.home ? { x: saved.home[0], y: saved.home[1] } : null;
     if (home) flora.setHome(home.x, home.y);
+  } else if (prebuiltLife) {
+    flora = prebuiltLife.flora;
+    // Burn-in ran at simBudget BURN_IN_SIM_BUDGET (10000) so every plant was
+    // examined every tick — correct with no frame to fit in, and far too
+    // expensive with one: the burned-in Hollow carries about 8,300 plants
+    // (measured, seeds 2026 and 11: 8255 and 8311), each examination running
+    // the selection callback. Hand it back to the play budget of 480.
+    flora.tuning.simBudget = DEFAULT_TUNING.simBudget;
+    home = null;
   } else {
     flora = new Flora(map, species, seed, floraTuning);
     home = null;
@@ -1631,6 +1695,45 @@ function openForgeFromTitle(): void {
     rerollSeed: newIslandSeed,
   });
 }
+/**
+ * Build a Hollow behind the forge's progress readout and enter it.
+ *
+ * The whole makeHollow call costs 6.2-7.0 s (measured, five seeds; 6.4 s on
+ * seed 2026 and 6.8 s on seed 11 in this repo's test run). Run synchronously
+ * from the generate click that is 6-7 s with the tab painting nothing, so the
+ * async form is not a nicety — it is what makes the progress line visible at
+ * all. burnInAsync yields to a paint every 20 generations, giving 20 readout
+ * steps over the 400.
+ *
+ * Assumes the caller has already set the forge busy and cleared its notice;
+ * clears both on every exit path, as the classic branch does.
+ */
+async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
+  let hollow: Hollow;
+  try {
+    forgeProgress(0, "growing the Hollow…");
+    hollow = await makeHollowAsync(seed, (done, total) => {
+      forgeProgress(done / total, `growing the Hollow — ${done} of ${total} generations`);
+    });
+  } catch {
+    forgeProgress(null);
+    setForgeBusy(false);
+    forgeNotice("the Hollow would not take here — try another seed");
+    return; // stay in the forge; the title/backdrop are untouched
+  }
+  forgeProgress(null);
+  setForgeBusy(false);
+  closeForge();
+  leaveTitle();
+  loadWorld(seed, gen, hollow.map, { flora: hollow.flora, species: hollow.species });
+  renderer.setMap(map);
+  if (hollow.report.floorHit) {
+    // Never silent: pickAttempt returns the last attempt even after it has run
+    // out of rerolls, so a thin island reaches the player rather than throwing.
+    flashHud(`the Hollow came up thin — ${hollow.report.species} species took`);
+  }
+}
+
 async function onForgeGenerate(state: ForgeState): Promise<void> {
   const { seed, gen } = forgeArgs(state);
   // Drop any in-flight / queued preview so it can't paint over sail progress.
@@ -1639,6 +1742,10 @@ async function onForgeGenerate(state: ForgeState): Promise<void> {
   setForgeBusy(true);
   forgeNotice("");
   forgeProgress(0);
+  if (gen.style === "hollow") {
+    await generateHollow(seed, gen);
+    return;
+  }
   let m: WorldMap;
   try {
     // Pre-validate BEFORE tearing down the title: a throw here must leave the
