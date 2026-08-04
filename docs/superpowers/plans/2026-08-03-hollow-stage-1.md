@@ -111,13 +111,35 @@ describe("MineralField", () => {
     for (const x of f.sample(tx, ty)) expect(x).toBeGreaterThanOrEqual(0);
   });
 
-  it("deposit returns minerals and never exceeds 1", () => {
+  it("deposit clamps an overshoot back to the untouched sample", () => {
     const map = generate(5, DEFAULT_CONFIG);
     const f = mineralFieldFor(map, 5);
     const { tx, ty } = land(map);
-    const vec = new Float32Array(MINERAL_COUNT).fill(1);
-    f.deposit(tx, ty, vec, 10);
-    for (const x of f.sample(tx, ty)) expect(x).toBeLessThanOrEqual(1);
+    const untouched = Array.from(f.sample(tx, ty));
+    // Draw first, so a delta entry exists — without this, deposit early-returns
+    // and the assertions below pass whatever deposit does.
+    const demand = new Float32Array(MINERAL_COUNT).fill(1);
+    f.draw(tx, ty, demand, 0.5);
+    expect(f.totalAt(tx, ty)).toBeLessThan(untouched.reduce((s, v) => s + v, 0));
+    // Put back far more than was taken: the tile must return to its untouched
+    // values and stop there, never climbing past them.
+    f.deposit(tx, ty, new Float32Array(MINERAL_COUNT).fill(1), 10);
+    const after = f.sample(tx, ty);
+    for (let m = 0; m < MINERAL_COUNT; m++) {
+      expect(after[m]).toBeLessThanOrEqual(1);
+      expect(after[m]).toBeCloseTo(untouched[m], 5);
+    }
+  });
+
+  it("depositing onto a never-drawn tile is a no-op", () => {
+    // Intentional: deposit only repays what was taken. Pinned deliberately so
+    // a future change cannot start creating minerals from nothing unnoticed.
+    const map = generate(6, DEFAULT_CONFIG);
+    const f = mineralFieldFor(map, 6);
+    const { tx, ty } = land(map);
+    const before = Array.from(f.sample(tx, ty));
+    f.deposit(tx, ty, new Float32Array(MINERAL_COUNT).fill(1), 10);
+    expect(Array.from(f.sample(tx, ty))).toEqual(before);
   });
 });
 ```
