@@ -60,7 +60,16 @@ import { pruneMapKeys } from "../core/lru";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { TitleRowId, TitleState, hideTitle, isTitleOpen, showTitle } from "../render/title";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
-import { MOTES_MAX, SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
+import {
+  MOTES_MAX,
+  SwarmLayer,
+  buildPollen,
+  courtingSwarm,
+  eventInView,
+  hollowSwarmFactory,
+  sowKey,
+  swarmPalette,
+} from "./swarms";
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
@@ -922,6 +931,10 @@ function persist(): void {
         critterRngState: critterRng.state?.(),
         style: currentStyle,
         attemptOffset: currentAttemptOffset,
+        // The Hollow's pollinators are a burn-in RESULT, like its plant
+        // genomes — the seed cannot regrow them. packWorld drops this on a
+        // classic island, whose swarms do regenerate from the seed.
+        swarms: currentStyle === "hollow" ? swarmLayer.snapshot() : undefined,
       },
     );
     localStorage.setItem(worldKey(currentSeed, currentStyle), JSON.stringify(s));
@@ -975,6 +988,14 @@ interface PrebuiltLife {
   minerals: MineralField;
   landscape: FitnessLandscape;
   canopy: CanopyField;
+  /**
+   * The insect layer that lived through the same 400 generations as `flora`,
+   * handed over whole. loadWorld ADOPTS it instead of constructing a fresh one:
+   * a rebuilt layer would be seeded against these flowers with an unselected
+   * sensor map, which is the entire co-evolution thrown away and invisible from
+   * the outside. Null only if burn-in produced no layer at all.
+   */
+  swarms: SwarmLayer | null;
 }
 
 /**
@@ -1201,11 +1222,43 @@ function loadWorld(
   // the insect swarms: a bounded set scattered near the island's blooms, each
   // homing on its nearest flowering plant and adapting its colour toward it.
   // Purely additive — its own salted Rng, so the world/flora/critters above are
-  // byte-identical with or without it; regenerated from seed each load.
-  swarmLayer = new SwarmLayer(currentSeed, species, flora, {
-    x: (map.spawn.x + 0.5) * TILE_SIZE,
-    y: (map.spawn.y + 0.5) * TILE_SIZE,
-  });
+  // byte-identical with or without it.
+  //
+  // Three sources, in the order they are checked:
+  //   1. A freshly burned-in Hollow hands over the layer that lived its 400
+  //      generations. It is ADOPTED, never rebuilt: a rebuild would seed fresh
+  //      swarms with unselected sensor maps against flowers they had no part in
+  //      shaping, discarding the co-evolution with no visible symptom.
+  //   2. A RESUMED Hollow restores that layer from its save (SavedSwarmLayer),
+  //      for the same reason. If the save has no swarm block it is named in the
+  //      HUD and the console rather than silently reseeded — the island would
+  //      look right and its pollinators would be strangers to it.
+  //   3. Every classic island, and a Hollow whose save predates this field,
+  //      constructs the layer from the seed exactly as before.
+  if (prebuiltLife?.swarms) {
+    swarmLayer = prebuiltLife.swarms;
+  } else if (hollowResume && saved?.swarms) {
+    // The burned-in layer was built at the ACCEPTED seed (hollow.ts's setUp
+    // passes the attempt's seed), so restoring it under any other number would
+    // rebuild the per-species flower maps off the wrong salt.
+    swarmLayer = new SwarmLayer(hollowResume.acceptedSeed, species, flora, undefined, {
+      autoSpawn: false,
+    });
+    swarmLayer.restore(saved.swarms);
+  } else {
+    if (hollowResume) {
+      // Never silent: this Hollow's pollinators are NOT the ones that burned in.
+      console.warn(
+        "wonder: this Hollow's save carries no swarm layer — its insects are being " +
+          "reseeded fresh, so their match to the island's flowers is unearned.",
+      );
+      flashHud("the Hollow's insects did not come back with it — a new swarm has settled");
+    }
+    swarmLayer = new SwarmLayer(currentSeed, species, flora, {
+      x: (map.spawn.x + 0.5) * TILE_SIZE,
+      y: (map.spawn.y + 0.5) * TILE_SIZE,
+    });
+  }
   // let the swarms live the tail of a ?warm fast-forward too (the flora warm
   // above ran before they existed), so a well-matched cloud's pollination has
   // had time to thicken the flowers it works before the wanderer arrives —
@@ -2004,12 +2057,20 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
     renderer.setMap(map);
     return;
   }
-  let hollow: Hollow;
+  let hollow: Hollow<SwarmLayer>;
   try {
     forgeProgress(0, "growing the Hollow…");
-    hollow = await makeHollowAsync(seed, (done, total) => {
-      forgeProgress(done / total, `growing the Hollow — ${done} of ${total} generations`);
-    });
+    // The third argument is what puts insects INTO the burn-in: the layer it
+    // builds is ticked once per generation alongside the flora, so the swarms
+    // handed back below were selected against these flowers over the same 400
+    // generations, and the flowers they pollinated spread.
+    hollow = await makeHollowAsync(
+      seed,
+      (done, total) => {
+        forgeProgress(done / total, `growing the Hollow — ${done} of ${total} generations`);
+      },
+      hollowSwarmFactory(),
+    );
   } catch {
     forgeProgress(null);
     setForgeBusy(false);
@@ -2027,6 +2088,7 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
     minerals: hollow.minerals,
     landscape: hollow.landscape,
     canopy: hollow.canopy,
+    swarms: hollow.swarms,
   });
   renderer.setMap(map);
   if (hollow.report.floorHit) {

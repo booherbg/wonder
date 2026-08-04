@@ -13,6 +13,21 @@ import { Flora } from "./flora";
 //   - The island knows its own history and can be asked about it.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The one method burn-in needs from an insect layer: advance the pollinators
+ * one island heartbeat against this Flora.
+ *
+ * Declared here as a structural type rather than imported, because the only
+ * implementation (`SwarmLayer`) lives in `src/game/` and `src/life/` must not
+ * depend on `src/game/`. The caller constructs the layer and injects it.
+ *
+ * The implementation must be deterministic given its own seeded Rng, and it
+ * may mutate `flora` (SwarmLayer pollinates through `flora.pollinateSpread`).
+ */
+export interface SwarmTicker {
+  tick(flora: Flora): void;
+}
+
 /** Generations run before the first frame. Spec band: 300-600. */
 export const BURN_IN_GENERATIONS = 400;
 
@@ -79,16 +94,28 @@ function reportFor(flora: Flora, generations: number, startedMs: number): BurnIn
   };
 }
 
+/**
+ * `swarms`, when given, is ticked once after every `flora.simTick()`, so the
+ * pollinators live the same generations the plants do: a swarm's colour is
+ * selected against the flowers standing at that generation, and the flowers it
+ * pollinates spread. Omit it and burn-in behaves exactly as it did before
+ * insects took part — plants competing alone.
+ *
+ * Order matters and is fixed: plants first, then insects. The swarm layer reads
+ * the population the tick just produced.
+ */
 export function burnIn(
   flora: Flora,
   generations: number = BURN_IN_GENERATIONS,
   onProgress?: (done: number, total: number) => void,
+  swarms?: SwarmTicker,
 ): BurnInReport {
   requireFullCoverage(flora);
   const started = Date.now();
   const every = Math.max(1, Math.floor(generations / PROGRESS_STEPS));
   for (let i = 1; i <= generations; i++) {
     flora.simTick();
+    swarms?.tick(flora);
     if (onProgress && (i % every === 0 || i === generations)) onProgress(i, generations);
   }
   return reportFor(flora, generations, started);
@@ -130,6 +157,7 @@ export async function burnInAsync(
   generations: number = BURN_IN_GENERATIONS,
   onProgress?: (done: number, total: number) => void,
   yieldEvery: number = BURN_IN_YIELD_EVERY,
+  swarms?: SwarmTicker,
 ): Promise<BurnInReport> {
   requireFullCoverage(flora);
   const started = Date.now();
@@ -137,7 +165,10 @@ export async function burnInAsync(
   let done = 0;
   while (done < generations) {
     const upTo = Math.min(generations, done + chunk);
-    for (; done < upTo; done++) flora.simTick();
+    for (; done < upTo; done++) {
+      flora.simTick();
+      swarms?.tick(flora);
+    }
     onProgress?.(done, generations);
     if (done < generations) await yieldToPaint();
   }

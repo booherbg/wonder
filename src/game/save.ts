@@ -4,6 +4,7 @@ import { Genome, NUMERIC_TRAITS, PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { IslandStyle } from "../world/config";
 import { Inventory } from "./inventory";
+import type { SavedSwarmLayer } from "./swarms";
 
 // A world is worth keeping because of what it has BECOME: the drifted
 // genomes. Everything else regrows from the seed. Compact format: traits
@@ -43,6 +44,16 @@ export interface SavedWorld {
    * Hollow.attemptOffset for why the seed by itself is not enough.
    */
   attemptOffset?: number;
+  /**
+   * Hollow only: the insect layer, snapshotted. A Hollow's swarms live through
+   * the same 400-generation burn-in as its plants, so their sensor maps are a
+   * result of that island's history and cannot be regenerated from the seed —
+   * exactly as the drifted plant genomes cannot. Absent for classic worlds,
+   * whose swarms ARE regenerated from the seed each load, and absent in Hollow
+   * saves written before insects took part in burn-in; loadWorld says so aloud
+   * rather than reseeding in silence.
+   */
+  swarms?: SavedSwarmLayer;
 }
 
 export interface SavedCamp {
@@ -110,6 +121,7 @@ export function packWorld(
     critterRngState?: number;
     style?: IslandStyle;
     attemptOffset?: number;
+    swarms?: SavedSwarmLayer;
   } = {},
 ): SavedWorld {
   return {
@@ -121,6 +133,10 @@ export function packWorld(
     // written before the Hollow existed
     style: extra.style === "hollow" ? "hollow" : undefined,
     attemptOffset: extra.style === "hollow" ? extra.attemptOffset : undefined,
+    // Hollow only, for the same reason `style` and `attemptOffset` are: a
+    // classic save must stay byte-identical to the ones written before the
+    // Hollow existed, and a classic island's swarms regenerate from the seed.
+    swarms: extra.style === "hollow" ? extra.swarms : undefined,
     name: extra.name,
     playMs: extra.playMs,
     soil: extra.soil && extra.soil.length > 0 ? [...extra.soil] : undefined,

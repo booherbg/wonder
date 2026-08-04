@@ -4,7 +4,9 @@ import { Tile, WorldMap, tileAt } from "../world/types";
 import {
   BURN_IN_GENERATIONS,
   BURN_IN_SIM_BUDGET,
+  BURN_IN_YIELD_EVERY,
   BurnInReport,
+  SwarmTicker,
   burnIn,
   burnInAsync,
 } from "./burnin";
@@ -25,7 +27,28 @@ import { applyHueKey } from "./huekey";
 /** Reroll attempts before a Hollow is returned despite missing the floor. */
 const MAX_ATTEMPTS = 8;
 
-export interface Hollow {
+/**
+ * Builds the insect layer a Hollow burns in with, given the island the burn-in
+ * is about to run on. Injected by the caller: `SwarmLayer` lives in
+ * `src/game/`, and `src/life/` must not import from there.
+ *
+ * Called once per ATTEMPT, after the Flora exists and before the first
+ * generation, so every reroll gets its own layer and a discarded attempt's
+ * insects are discarded with it. Must be deterministic in `seed` — the seed
+ * passed is the attempt's seed (`makeHollow`'s seed plus its offset), the same
+ * number the map, species and mineral field were built from.
+ *
+ * `S` is the concrete layer type so the caller gets its own class back out of
+ * `Hollow.swarms` rather than the `tick`-only view burn-in needs.
+ */
+export type HollowSwarmFactory<S extends SwarmTicker> = (
+  seed: number,
+  species: PlantSpecies[],
+  flora: Flora,
+  map: WorldMap,
+) => S;
+
+export interface Hollow<S extends SwarmTicker = SwarmTicker> {
   map: WorldMap;
   flora: Flora;
   /**
@@ -49,10 +72,20 @@ export interface Hollow {
    * 400-generation burn-in, measured at 6.2-7.0 s across five seeds.
    */
   attemptOffset: number;
+  /**
+   * The insect layer that lived through this island's burn-in — the same
+   * object, so the pollinators the player meets are the ones whose colour was
+   * selected against these flowers. Null when no factory was passed, which is
+   * every caller that wants the pre-insect burn-in (plants competing alone).
+   *
+   * A caller that rebuilds its own layer from the seed instead of adopting
+   * this one throws the co-evolution away and gets fresh, unselected swarms.
+   */
+  swarms: S | null;
 }
 
 /** One Hollow attempt, before the reroll loop has said which one it is. */
-type HollowAttempt = Omit<Hollow, "attemptOffset">;
+type HollowAttempt<S extends SwarmTicker> = Omit<Hollow<S>, "attemptOffset">;
 
 /**
  * How much light reaches the ground from the terrain alone, 0 (deep shade) to
@@ -91,13 +124,14 @@ export function terrainLight(map: WorldMap, tx: number, ty: number): number {
 }
 
 /** Everything a Hollow attempt needs built, with burn-in not yet run. */
-interface Unburned {
+interface Unburned<S extends SwarmTicker> {
   map: WorldMap;
   flora: Flora;
   species: PlantSpecies[];
   minerals: MineralField;
   landscape: FitnessLandscape;
   canopy: CanopyField;
+  swarms: S | null;
 }
 
 /**
@@ -179,13 +213,30 @@ export function hollowEcology(map: WorldMap, seed: number, getFlora: () => Flora
  * every rng draw here happens in the same order either way, so the two produce
  * the same island from the same seed.
  */
-function setUp(seed: number): Unburned {
+function setUp<S extends SwarmTicker>(
+  seed: number,
+  makeSwarms?: HollowSwarmFactory<S>,
+): Unburned<S> {
   const map = generate(seed, HOLLOW_CONFIG);
   let flora!: Flora;
   const eco = hollowEcology(map, seed, () => flora);
   const species = applyHueKey(generatePlantSpecies(seed), seed);
   flora = new Flora(map, species, seed, eco.tuning);
-  return { map, flora, species, minerals: eco.minerals, landscape: eco.landscape, canopy: eco.canopy };
+  // Built AFTER the Flora and BEFORE the first generation, so the swarms are
+  // seeded on the founder plants and then selected against everything the
+  // burn-in does to them. The factory draws only from its own salted Rng, so
+  // the map, species list, mineral field and landscape above are unchanged by
+  // its presence — an island burned in without insects has the same terrain.
+  const swarms = makeSwarms ? makeSwarms(seed, species, flora, map) : null;
+  return {
+    map,
+    flora,
+    species,
+    minerals: eco.minerals,
+    landscape: eco.landscape,
+    canopy: eco.canopy,
+    swarms,
+  };
 }
 
 /**
@@ -193,22 +244,36 @@ function setUp(seed: number): Unburned {
  * the population that is actually returned, not with whichever refresh tick
  * burn-in happened to stop after.
  */
-function finish(u: Unburned, report: BurnInReport): HollowAttempt {
+function finish<S extends SwarmTicker>(u: Unburned<S>, report: BurnInReport): HollowAttempt<S> {
   u.canopy.refresh(u.flora);
   return { ...u, report };
 }
 
-function attempt(seed: number, onProgress?: (d: number, t: number) => void): HollowAttempt {
-  const u = setUp(seed);
-  return finish(u, burnIn(u.flora, BURN_IN_GENERATIONS, onProgress));
-}
-
-async function attemptAsync(
+function attempt<S extends SwarmTicker>(
   seed: number,
   onProgress?: (d: number, t: number) => void,
-): Promise<HollowAttempt> {
-  const u = setUp(seed);
-  return finish(u, await burnInAsync(u.flora, BURN_IN_GENERATIONS, onProgress));
+  makeSwarms?: HollowSwarmFactory<S>,
+): HollowAttempt<S> {
+  const u = setUp(seed, makeSwarms);
+  return finish(u, burnIn(u.flora, BURN_IN_GENERATIONS, onProgress, u.swarms ?? undefined));
+}
+
+async function attemptAsync<S extends SwarmTicker>(
+  seed: number,
+  onProgress?: (d: number, t: number) => void,
+  makeSwarms?: HollowSwarmFactory<S>,
+): Promise<HollowAttempt<S>> {
+  const u = setUp(seed, makeSwarms);
+  return finish(
+    u,
+    await burnInAsync(
+      u.flora,
+      BURN_IN_GENERATIONS,
+      onProgress,
+      BURN_IN_YIELD_EVERY,
+      u.swarms ?? undefined,
+    ),
+  );
 }
 
 /**
@@ -245,11 +310,15 @@ export function pickAttempt<T extends { report: { floorHit: boolean } }>(
  * species, the way worldgen already rerolls past an island with too little
  * land. See pickAttempt for the retry rule.
  */
-export function makeHollow(
+export function makeHollow<S extends SwarmTicker>(
   seed: number,
   onProgress?: (done: number, total: number) => void,
-): Hollow {
-  return pickAttempt(seed, (s, offset) => ({ ...attempt(s, onProgress), attemptOffset: offset }));
+  makeSwarms?: HollowSwarmFactory<S>,
+): Hollow<S> {
+  return pickAttempt(seed, (s, offset) => ({
+    ...attempt(s, onProgress, makeSwarms),
+    attemptOffset: offset,
+  }));
 }
 
 /** pickAttempt's rule, awaiting each attempt. Same seeds, same order. */
@@ -272,12 +341,13 @@ export async function pickAttemptAsync<T extends { report: { floorHit: boolean }
  * `onProgress(done, total)` reports generations within the CURRENT attempt, so
  * a reroll restarts the count at 0 of 400.
  */
-export async function makeHollowAsync(
+export async function makeHollowAsync<S extends SwarmTicker>(
   seed: number,
   onProgress?: (done: number, total: number) => void,
-): Promise<Hollow> {
+  makeSwarms?: HollowSwarmFactory<S>,
+): Promise<Hollow<S>> {
   return pickAttemptAsync(seed, async (s, offset) => ({
-    ...(await attemptAsync(s, onProgress)),
+    ...(await attemptAsync(s, onProgress, makeSwarms)),
     attemptOffset: offset,
   }));
 }

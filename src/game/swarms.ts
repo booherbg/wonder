@@ -34,6 +34,8 @@ import { Flora, Plant } from "../life/flora";
 import { PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
 import { TILE_SIZE } from "../world/config";
+import type { WorldMap } from "../world/types";
+import type { HollowSwarmFactory } from "../life/hollow";
 import { isBloom } from "../render/ambient";
 
 // separate salts — never a stream flora/critters/worldgen use, so nothing shifts
@@ -1311,4 +1313,55 @@ export function tint(color: string, alpha: number): string {
   const r = color.match(/rgb\(([^)]+)\)/);
   if (r) return `rgba(${r[1]}, ${alpha})`;
   return color;
+}
+
+// ── the Hollow's burn-in ─────────────────────────────────────────────────────
+
+/**
+ * The factory `makeHollow`/`makeHollowAsync` use to build the insect layer that
+ * lives through burn-in, so pollinators are selected by the same 400
+ * generations of mineral- and light-constrained competition that shape the
+ * plants. Without it a Hollow burns in with no insects at all and the swarms
+ * the player meets are seeded fresh against flowers they never adapted to.
+ *
+ * The layer is constructed exactly as the game's own is — autoSpawn on,
+ * island-wide predation at WORLD_PREDATION (0.6), swarms gathering near the
+ * arrival tile — so what burn-in hands over is the same kind of object the
+ * classic path builds, only older.
+ *
+ * Determinism: `SwarmLayer` draws only from its own SWARM_SALT-salted Rng, so
+ * introducing it does not shift worldgen, the species list, the mineral field
+ * or the fitness landscape. It DOES change the surviving plants, because
+ * pollination calls `flora.pollinateSpread` — which is the point.
+ */
+export function hollowSwarmFactory(): HollowSwarmFactory<SwarmLayer> {
+  return (seed: number, species: PlantSpecies[], flora: Flora, map: WorldMap) =>
+    new SwarmLayer(seed, species, flora, {
+      x: (map.spawn.x + 0.5) * TILE_SIZE,
+      y: (map.spawn.y + 0.5) * TILE_SIZE,
+    });
+}
+
+/**
+ * How well the layer's swarms suit the flowers they are actually working:
+ * `metabolicEfficiency` (0..1 — a swarm's sensor IdMap scored against its
+ * host's flower signature and accent) averaged over every swarm that HAS a
+ * host, plus the sample size.
+ *
+ * `n` is the number of swarms counted, not the number in the layer: a swarm
+ * with no home, or one homed on a species with no flower map, contributes
+ * nothing and is excluded rather than counted as a zero — averaging in a
+ * homeless cloud measures homelessness, not matching. `mean` is 0 when n is 0.
+ */
+export function meanHostMatch(layer: SwarmLayer): { mean: number; n: number } {
+  let total = 0;
+  let n = 0;
+  for (const ent of layer.swarms) {
+    if (!ent.home) continue;
+    const flower = layer.flowerFor(ent.home.species);
+    if (!flower) continue;
+    total += metabolicEfficiency(ent.sw.sensor, flower.map, flower.accent);
+    n++;
+  }
+  return { mean: n > 0 ? total / n : 0, n };
 }
