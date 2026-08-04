@@ -1815,3 +1815,275 @@ Named so no implementer improvises them:
 **Known gap, stated rather than hidden:** the spec's grounded split-complementary palette at bias 0.70 has no task in this plan. It touches `src/render/palette.ts`, which stage 1 otherwise does not modify, and it changes the appearance of *every* island rather than only the Hollow — which conflicts with the byte-identical constraint that Task 11 enforces. It needs its own decision: either scope it to the Hollow only, or accept that it changes the classic island's colours. That decision was not made during design, so it is flagged here rather than guessed at.
 
 **Type consistency:** `SelectionContext.fitness(g, tx, ty)` is used identically in Tasks 3, 9 and 11. `MineralVec` is `Float32Array` throughout. `RUGGEDNESS_K` is never written as bare `K`. `BurnInReport.floorHit` is read in Tasks 4, 9 and 10.
+
+---
+
+## Task 13: The Hollow's palette key — grounded split-complementary, bias 0.70
+
+**Added after the plan's first draft**, resolving the gap named in Self-review. Decision: **Hollow only.** The classic island's colours are untouched, so Task 11's guarantee stands in full.
+
+The key does **not** touch `src/render/palette.ts` — that file holds terrain constants. Plant colour comes from `genome.hue` through `hsl()` (`src/life/genome.ts:125`), so the key constrains which hues the Hollow's species are rolled with, and nothing else.
+
+**Execution order:** after Task 9, before Task 10.
+
+**Files:**
+- Create: `src/life/huekey.ts`
+- Modify: `src/life/hollow.ts` (apply the key to the rolled species)
+- Test: `tests/huekey.test.ts`
+
+**Interfaces:**
+- Consumes: `hash2d`; `PlantSpecies` from `src/life/species.ts`; `clampTrait` from `src/life/genome.ts`.
+- Produces:
+  - `const SPLIT_COMPLEMENTARY_OFFSETS = [0, 150, 210]` (degrees)
+  - `const HUE_BIAS = 0.70`
+  - `const TERRAIN_GREEN_HUE = 0.286` — the hue of `PALETTE.grassBase` (#68a557), which is what "grounded" anchors to
+  - `function hueKeyFor(seed: number): number[]` — three anchor hues in `[0, 1)`
+  - `function groundHue(hue: number, anchors: number[], bias: number): number` — pull a hue toward its nearest anchor
+  - `function applyHueKey(species: PlantSpecies[], seed: number): PlantSpecies[]` — returns a new array; does not mutate
+
+- [ ] **Step 1: Write the failing test**
+
+```ts
+// tests/huekey.test.ts
+import { describe, expect, it } from "vitest";
+import {
+  HUE_BIAS,
+  SPLIT_COMPLEMENTARY_OFFSETS,
+  TERRAIN_GREEN_HUE,
+  applyHueKey,
+  groundHue,
+  hueKeyFor,
+} from "../src/life/huekey";
+import { generatePlantSpecies } from "../src/life/species";
+
+function hueGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % 1;
+  return d > 0.5 ? 1 - d : d;
+}
+
+describe("the Hollow's hue key", () => {
+  it("ships bench 10's recommended constants", () => {
+    expect(SPLIT_COMPLEMENTARY_OFFSETS).toEqual([0, 150, 210]);
+    expect(HUE_BIAS).toBe(0.7);
+  });
+
+  it("grounds one anchor on the terrain green", () => {
+    const anchors = hueKeyFor(42);
+    expect(anchors.some((a) => hueGap(a, TERRAIN_GREEN_HUE) < 0.001)).toBe(true);
+  });
+
+  it("gives three anchors, all in [0,1)", () => {
+    const anchors = hueKeyFor(7);
+    expect(anchors.length).toBe(3);
+    for (const a of anchors) {
+      expect(a).toBeGreaterThanOrEqual(0);
+      expect(a).toBeLessThan(1);
+    }
+  });
+
+  // Bench 10 declined the best-scoring keys because tetradic and triadic
+  // offsets are closed under their own rotation, so grounding them yields one
+  // identical anchor set for every island. Split-complementary's 0/150/210 are
+  // not rotation-symmetric, so distinct islands must still produce distinct
+  // chords. This is the property that choice was made for.
+  it("produces different chords on different islands", () => {
+    const seen = new Set<string>();
+    for (let s = 1; s <= 12; s++) {
+      seen.add(hueKeyFor(s).map((h) => h.toFixed(4)).sort().join(","));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it("pulls a hue toward its nearest anchor without collapsing onto it", () => {
+    const anchors = [0.0, 0.25, 0.5];
+    const moved = groundHue(0.2, anchors, HUE_BIAS);
+    expect(hueGap(moved, 0.25)).toBeLessThan(hueGap(0.2, 0.25));
+    expect(hueGap(moved, 0.25)).toBeGreaterThan(0);
+  });
+
+  it("leaves 78% of the wheel reachable at bias 0.70", () => {
+    // Bias 1.0 would pin every hue onto three anchors: 39% of the wheel.
+    // 0.70 is arithmetic about arc width, not taste — 78% stays reachable.
+    const anchors = hueKeyFor(3);
+    const reached = new Set<number>();
+    for (let i = 0; i < 360; i++) {
+      reached.add(Math.round(groundHue(i / 360, anchors, HUE_BIAS) * 360));
+    }
+    expect(reached.size / 360).toBeGreaterThan(0.6);
+  });
+
+  it("returns a new species array and does not mutate the input", () => {
+    const base = generatePlantSpecies(11);
+    const before = base.map((s) => s.genome.hue);
+    const keyed = applyHueKey(base, 11);
+    expect(keyed).not.toBe(base);
+    expect(base.map((s) => s.genome.hue)).toEqual(before);
+  });
+
+  it("moves species hues toward the key", () => {
+    const base = generatePlantSpecies(5);
+    const keyed = applyHueKey(base, 5);
+    const anchors = hueKeyFor(5);
+    const near = (list: typeof base) =>
+      list.reduce((sum, s) => sum + Math.min(...anchors.map((a) => hueGap(s.genome.hue, a))), 0) /
+      list.length;
+    expect(near(keyed)).toBeLessThan(near(base));
+  });
+
+  it("is deterministic for a seed", () => {
+    expect(applyHueKey(generatePlantSpecies(8), 8).map((s) => s.genome.hue)).toEqual(
+      applyHueKey(generatePlantSpecies(8), 8).map((s) => s.genome.hue),
+    );
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx vitest run tests/huekey.test.ts`
+Expected: FAIL — `Cannot find module '../src/life/huekey'`
+
+- [ ] **Step 3: Write minimal implementation**
+
+```ts
+// src/life/huekey.ts
+import { hash2d } from "../core/rng";
+import { PlantSpecies } from "./species";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Hollow's palette key: grounded split-complementary at bias 0.70.
+//
+// Bench 10's recommendation, and the only setting in its sweep where every
+// measure improved at once over 14 islands per configuration: scene discord
+// 26.1% -> 19.5%, flora discord 23.5% -> 18.8%, island difference
+// 0.302 -> 0.380, character spread 10.4 -> 11.2 degrees.
+//
+// Two of that bench's findings decide the details here:
+//
+//   Grounding beats the choice of key. A key touching only the flora barely
+//   moves the scene number — the plants agree with each other and go on
+//   disagreeing with the dirt. Anchoring one hue to the terrain green took
+//   grounded tetradic to 9.6% flora discord, a 63% reduction.
+//
+//   Split-complementary despite not scoring best, because tetradic and triadic
+//   offsets are closed under their own rotation: grounding those yields ONE
+//   identical anchor set for every island in the game, and the island
+//   difference statistic is blind to that. 0/150/210 are not rotation
+//   symmetric, so grounding still produces distinct chords per island.
+//
+// Bias 0.70 rather than 1.0 is arithmetic about arc width: 78% of the hue
+// wheel stays reachable at 0.70, only 39% at 1.0. Variety improves under the
+// constraint rather than suffering — island difference rises 0.302 -> 0.514,
+// because an unbiased island has no character to differ in.
+//
+// This module applies ONLY to the Hollow. The classic island's colours are
+// untouched, which is what keeps the byte-identical guarantee whole.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Degrees around the wheel. Not rotation-symmetric — that is the point. */
+export const SPLIT_COMPLEMENTARY_OFFSETS = [0, 150, 210] as const;
+
+/** How hard a hue is pulled toward its anchor. 0.70 keeps 78% of the wheel. */
+export const HUE_BIAS = 0.7;
+
+/** The hue of PALETTE.grassBase (#68a557) — what "grounded" anchors to. */
+export const TERRAIN_GREEN_HUE = 0.286;
+
+/** Distance between two hues around the wheel, 0..0.5. */
+function hueGap(a: number, b: number): number {
+  const d = Math.abs(a - b) % 1;
+  return d > 0.5 ? 1 - d : d;
+}
+
+/**
+ * Three anchor hues for an island. One is always the terrain green — that is
+ * the grounding — and the chord is rotated per island so islands differ.
+ */
+export function hueKeyFor(seed: number): number[] {
+  // Which of the three offsets lands on the ground colour varies per island,
+  // which is what makes grounding produce distinct chords rather than one.
+  const rootIndex = Math.floor(hash2d(seed, 1, 0x68a557) * 3) % 3;
+  const root = TERRAIN_GREEN_HUE - SPLIT_COMPLEMENTARY_OFFSETS[rootIndex] / 360;
+  return SPLIT_COMPLEMENTARY_OFFSETS.map((deg) => {
+    const h = root + deg / 360;
+    return ((h % 1) + 1) % 1;
+  });
+}
+
+/** Pull a hue toward its nearest anchor by `bias` of the remaining distance. */
+export function groundHue(hue: number, anchors: number[], bias: number): number {
+  let best = anchors[0];
+  let bestGap = hueGap(hue, anchors[0]);
+  for (const a of anchors) {
+    const g = hueGap(hue, a);
+    if (g < bestGap) {
+      best = a;
+      bestGap = g;
+    }
+  }
+  // Move along the short way around the wheel.
+  let delta = best - hue;
+  if (delta > 0.5) delta -= 1;
+  if (delta < -0.5) delta += 1;
+  const moved = hue + delta * bias;
+  return ((moved % 1) + 1) % 1;
+}
+
+/**
+ * Roll the Hollow's species onto its key. Returns a new array; the input is
+ * left alone so a caller can compare keyed against unkeyed.
+ */
+export function applyHueKey(species: PlantSpecies[], seed: number): PlantSpecies[] {
+  const anchors = hueKeyFor(seed);
+  return species.map((sp) => ({
+    ...sp,
+    genome: {
+      ...sp.genome,
+      hue: groundHue(sp.genome.hue, anchors, HUE_BIAS),
+      // The accent rides the key too, at half strength, so a flower's core
+      // stays distinguishable from its petals rather than collapsing onto it.
+      hue2: groundHue(sp.genome.hue2, anchors, HUE_BIAS * 0.5),
+    },
+  }));
+}
+```
+
+- [ ] **Step 4: Apply it in the Hollow only**
+
+In `src/life/hollow.ts`, change the species roll inside `attempt`:
+
+```ts
+  const flora = new Flora(map, generatePlantSpecies(seed), seed, {
+```
+
+to:
+
+```ts
+  const flora = new Flora(map, applyHueKey(generatePlantSpecies(seed), seed), seed, {
+```
+
+and add the import:
+
+```ts
+import { applyHueKey } from "./huekey";
+```
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `npx vitest run tests/huekey.test.ts tests/hollow.test.ts tests/hollow-determinism.test.ts && npm test && npm run check`
+Expected: 9 passed in the new file; `hollow-determinism` still green — that is the proof the classic island did not move.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/life/huekey.ts src/life/hollow.ts tests/huekey.test.ts
+git commit -m "feat(life): the Hollow's palette key — grounded split-complementary
+
+Bench 10's recommendation, applied to the Hollow's rolled species only,
+so the classic island's colours do not move and the byte-identical test
+stays green. Split-complementary rather than the better-scoring tetradic
+because tetradic offsets are closed under their own rotation: grounding
+them would give every island in the game one identical anchor set.
+
+Bias 0.70 keeps 78% of the hue wheel reachable against 1.0's 39%."
+```
