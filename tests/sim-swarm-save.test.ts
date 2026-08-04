@@ -81,6 +81,37 @@ test("SwarmLayer snapshot/restore round-trips cloud state", () => {
   expect(restored.snapshot().ticks).toBe(before.ticks);
 });
 
+test("swarm ids stay unique across a save/restore cycle even after a death shrinks the array", () => {
+  const { kernel, layer } = bench(1234);
+  // Two clouds, then remove the first — swarms.length drops back to 1 while
+  // ids 0 and 1 have both already been handed out.
+  const a = layer.placeCloud(kernel.flora, 4 * TILE_SIZE, 4 * TILE_SIZE);
+  const b = layer.placeCloud(kernel.flora, 6 * TILE_SIZE, 6 * TILE_SIZE);
+  expect(a.id).toBe(0);
+  expect(b.id).toBe(1);
+  const tx = Math.floor(a.x / TILE_SIZE);
+  const ty = Math.floor(a.y / TILE_SIZE);
+  layer.removeCloudsInTiles([{ x: tx, y: ty }]);
+  expect(layer.swarms).toHaveLength(1);
+  expect(layer.swarms[0].id).toBe(1);
+
+  const saved = JSON.parse(JSON.stringify(layer.snapshot()));
+  const restored = new SwarmLayer(1234, kernel.plantSpecies, kernel.flora, undefined, {
+    perPlantNectar: true,
+    autoSpawn: false,
+    predation: 0,
+  });
+  restored.restore(saved);
+
+  // A naive `swarms.length`-based allocator would hand out id 1 again here
+  // (restored.swarms.length === 1), colliding with the surviving swarm.
+  const c = restored.placeCloud(kernel.flora, 8 * TILE_SIZE, 8 * TILE_SIZE);
+  const ids = restored.swarms.map((s) => s.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(c.id).not.toBe(restored.swarms[0].id);
+  expect(c.id).toBeGreaterThanOrEqual(2);
+});
+
 test("custom setFlower map survives snapshot/restore", () => {
   const { kernel, layer, flowerSp } = bench(7);
   placeBloom(kernel, flowerSp.id, 4, 4);

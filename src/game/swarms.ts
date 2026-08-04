@@ -194,6 +194,9 @@ export interface SavedSwarmLayer {
   swarms: SavedWorldSwarm[];
   flowers: { speciesId: number; flower: SavedFlower }[];
   plantNectar?: { idx: number; nectar: number }[];
+  // The id allocator's next value. Optional: older saves predate it, so
+  // restore() falls back to one past the highest id already on the layer.
+  nextSwarmId?: number;
 }
 
 function packMap(m: IdMap): number[] {
@@ -489,6 +492,12 @@ export class SwarmLayer {
   private readonly seed: number;
   private readonly species: readonly PlantSpecies[]; // the SHARED list — grows as daughters speciate
   private ticks = 0; // sim heartbeats elapsed (drives the divergence cadence)
+  // Monotonic — never reused within this layer's lifetime, even after a swarm
+  // dies. `this.swarms.length` looked like an id but is really just "how many
+  // are alive right now": deaths and cousin-budding could hand the same
+  // number to two different swarms. Carried through snapshot/restore below so
+  // a resumed save keeps allocating past what it already used.
+  private nextSwarmId = 0;
 
   constructor(
     seed: number,
@@ -572,7 +581,7 @@ export class SwarmLayer {
       );
     }
     const ang = this.rng() * Math.PI * 2;
-    const id = this.swarms.length;
+    const id = this.nextSwarmId++;
     const ent: WorldSwarm = {
       sw,
       id,
@@ -1102,6 +1111,7 @@ export class SwarmLayer {
       })),
       flowers,
       plantNectar: plantNectar.length ? plantNectar : undefined,
+      nextSwarmId: this.nextSwarmId,
     };
   }
 
@@ -1137,6 +1147,9 @@ export class SwarmLayer {
       };
       this.swarms.push(ent);
     }
+    this.nextSwarmId =
+      snapshot.nextSwarmId ??
+      snapshot.swarms.reduce((max, s) => Math.max(max, s.id + 1), 0);
   }
 }
 
