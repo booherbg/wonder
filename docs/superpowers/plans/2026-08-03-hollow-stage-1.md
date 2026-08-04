@@ -18,6 +18,7 @@
 - **The original island style must be byte-identical.** Any new field defaults to `undefined`/`null`/`false` and draws zero additional RNG when absent.
 - **Two different Ks exist in this project.** The NK-landscape ruggedness K (3) and the regulatory-network K (2, stage 2). Name them `RUGGEDNESS_K` and `REGULATORY_K` — never bare `K`.
 - **Writing standard** (`docs/WRITING-STANDARD.md`) governs comments and commit messages: define before use, no soft analogies, numbers not adjectives.
+- **The repo's tsc runs `noUnusedLocals`.** An unused import in a test file fails `npm run check`. Drop unused imports rather than weakening a test.
 - **Every task ends with `npm run check && npm test` passing** before its commit.
 
 ---
