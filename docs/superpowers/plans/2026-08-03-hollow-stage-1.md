@@ -1748,6 +1748,7 @@ The spec's hardest constraint is that the original island style is unaffected. T
 
 ```ts
 // tests/hollow-determinism.test.ts
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG } from "../src/world/config";
 import { generate } from "../src/world/generate";
@@ -1761,12 +1762,28 @@ import { generatePlantSpecies } from "../src/life/species";
 describe("the classic island is unchanged by the Hollow", () => {
   const SEEDS = [1, 7, 42, 1234, 2026];
 
-  it("worldgen produces the same tiles", () => {
+  // GOLDEN FINGERPRINTS, captured from `master` — the code as it stood before
+  // any Hollow work. Comparing generate(seed) against generate(seed) would only
+  // prove worldgen is deterministic, which it would be even if every island had
+  // changed. These hashes are the only thing that proves the classic island is
+  // the SAME island it was, and `findSpawn` was modified during Task 5, so this
+  // is the guard on that change.
+  //
+  // If one of these fails, do not update the constant to match. A change here
+  // means every existing save now loads a different island.
+  const CLASSIC_FINGERPRINTS: Record<number, string> = {
+    1: "1d5a05f5691879d8:78,191",
+    7: "d95633357116d07b:226,214",
+    42: "4e52868adab49b4e:71,106",
+    1234: "e504608011512bd9:98,185",
+    2026: "a57d70a2f329def5:122,211",
+  };
+
+  it("worldgen produces the same islands it did before the Hollow", () => {
     for (const s of SEEDS) {
-      const a = generate(s, DEFAULT_CONFIG);
-      const b = generate(s, DEFAULT_CONFIG);
-      expect(a.tiles).toEqual(b.tiles);
-      expect(a.spawn).toEqual(b.spawn);
+      const m = generate(s, DEFAULT_CONFIG);
+      const hash = createHash("sha256").update(Buffer.from(m.tiles)).digest("hex").slice(0, 16);
+      expect(`${hash}:${m.spawn.x},${m.spawn.y}`).toBe(CLASSIC_FINGERPRINTS[s]);
     }
   });
 
