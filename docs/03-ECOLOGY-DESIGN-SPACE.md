@@ -1782,3 +1782,28 @@ Recorded because each one passed every signal available — green tests, plausib
 - The palette key leaves **30.8%** of the hue wheel reachable, not the 78% the spec claimed; reachability under a linear pull is exactly `1 − bias`.
 - Critter motion rhythms are verified by measurement and code inspection, not by watching them. A static frame cannot show rhythm.
 - Legibility has still never been tested with a person. Every claim about what a player would notice remains a hypothesis.
+
+### 12.6 · The island does not settle when burn-in ends
+
+*Measured 2026-08-04, while building the species timelapse (`src/life/timelapse.ts`). The question was whether a burned-in Hollow is static — whether a timelapse of the island's life would have anything to show past generation 400.*
+
+**Definitions.** *Count churn* is Σ|count(s, t) − count(s, 400)| over species, as a percentage of the plant total at tick 400 — how many individuals' worth of population moved between kinds. *Composition shift* is half the sum of absolute differences in each species' SHARE of the population, so it is not inflated by the population total changing. *Cells changed* is the fraction of occupied 4×4-tile squares (35×35 grid over the 140×140 map) whose dominant species differs from its dominant at tick 400.
+
+A burned-in Hollow, insects included, stepped on at the play budget (`simBudget` 480, which is what the game runs after landing):
+
+| seed | ticks past burn-in | plants | count churn | composition shift | arose | lost | kinds | cells changed |
+|---|---|---|---|---|---|---|---|---|
+| 9 | +2,000 | 8,199 | 23.3% | 11.4% | 2 | 0 | 27 → 29 | 47.1% |
+| 9 | +5,000 | 8,179 | 36.0% | 18.1% | 2 | 1 | 27 → 28 | 51.3% |
+| 9 | +10,000 | 8,140 | 55.8% | 28.2% | 6 | 3 | 27 → 30 | 55.4% |
+| 2026 | +2,000 | 8,022 | 29.2% | 14.8% | 0 | 0 | 18 → 18 | 38.4% |
+| 2026 | +5,000 | 8,067 | 38.4% | 19.6% | 0 | 1 | 18 → 17 | 41.7% |
+| 2026 | +10,000 | 8,045 | 51.4% | 26.2% | 0 | 3 | 18 → 15 | 51.0% |
+
+A third run on seed 11 (26 kinds at tick 400) reached 42.9% count churn by +17,000 ticks, with richness rising 26 → 37 and the leading lineage changing hands — species 5 at 3,283 plants leading at tick 400, species 7 at 3,107 against its 2,334 by +17,000.
+
+**The finding.** Composition keeps moving and does not level off within 17,000 ticks. The plant total stays within 2.5% of 8,200 throughout, so this is turnover between kinds rather than growth or collapse. Speciation is live during play: 6 kinds arose on seed 9 and 11 on seed 11 after burn-in ended. Roughly half the map's 4×4-tile squares are held by a different kind by +10,000 ticks.
+
+**What it changed.** The species timelapse was scoped to record burn-in AND play, rather than burn-in only, and its UI says "over the island's life" instead of naming the first 400 generations. The arithmetic behind it: burn-in runs at `simBudget` 10,000 against ~8,200 plants, so 400 ticks are 400 generations; play runs at 480, about 6% of the island per tick, so 10,000 play ticks are about 36 reproductions per plant — MORE generational turnover than the whole burn-in, spread thinner.
+
+**What it does not say.** All of the above is composition. It is not evidence that any individual plant fits its own spot; §12.3's null on the within-species light gradient stands.
