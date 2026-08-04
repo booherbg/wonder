@@ -7,6 +7,7 @@ import { Flora } from "./flora";
 import { MineralField, mineralFieldFor } from "./minerals";
 import { generatePlantSpecies } from "./species";
 import { CANOPY_REFRESH_TICKS, CanopyField } from "./canopy";
+import { applyHueKey } from "./huekey";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Hollow, assembled: a small forested island whose ecology has already run
@@ -75,7 +76,7 @@ function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hol
   // plant examined in a refresh tick rebuilds it, the other 8,000 read it.
   // `Flora.tick` is deterministic, so which tick triggers a refresh is too.
   let refreshedAt = -1;
-  flora = new Flora(map, generatePlantSpecies(seed), seed, {
+  flora = new Flora(map, applyHueKey(generatePlantSpecies(seed), seed), seed, {
     // Burn-in examines every living plant each tick. The default simBudget of
     // 480 against a population near 8000 reaches 6% of the island per tick,
     // which turns 400 ticks into about 1.4 reproductions per plant instead of
