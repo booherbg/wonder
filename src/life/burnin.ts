@@ -56,6 +56,18 @@ export function burnIn(
   generations: number = BURN_IN_GENERATIONS,
   onProgress?: (done: number, total: number) => void,
 ): BurnInReport {
+  // A capped simBudget makes burn-in a very expensive no-op: at 480 against a
+  // population near 8000 a tick reaches 6% of the island, and 400 ticks yields
+  // about 1.4 reproductions per plant rather than about 24. Measured: 62.7% of
+  // the population born during burn-in at 480, 100% at full coverage. This is
+  // a configuration error the caller cannot see in the result, so refuse it.
+  if (flora.tuning.simBudget < flora.all.length) {
+    throw new Error(
+      `burnIn requires simBudget >= population to examine every plant each tick; ` +
+        `got simBudget=${flora.tuning.simBudget} against ${flora.all.length} plants. ` +
+        `Construct the Flora with simBudget: BURN_IN_SIM_BUDGET.`,
+    );
+  }
   const started = Date.now();
   const every = Math.max(1, Math.floor(generations / PROGRESS_STEPS));
   for (let i = 1; i <= generations; i++) {

@@ -5,10 +5,14 @@ import { generate } from "../src/world/generate";
 import { DEFAULT_CONFIG } from "../src/world/config";
 import { generatePlantSpecies } from "../src/life/species";
 
+// Every Flora burnIn is actually asked to burn in must carry a simBudget
+// covering its population, or burnIn refuses to run (see the guard tests
+// below). fresh() always builds one correctly configured.
 function fresh(seed = 1) {
   const map = generate(seed, DEFAULT_CONFIG);
   return new Flora(map, generatePlantSpecies(seed), seed, {
     selection: { fitness: (g) => g.height },
+    simBudget: BURN_IN_SIM_BUDGET,
   });
 }
 
@@ -34,6 +38,7 @@ describe("burnIn", () => {
     // rest, which is the failure mode the floor exists to surface.
     const f = new Flora(map, generatePlantSpecies(4), 4, {
       selection: { fitness: (g) => (g.height > 0.97 ? 1 : 0) },
+      simBudget: BURN_IN_SIM_BUDGET,
     });
     const r = burnIn(f, 400);
     // Note: Flora's selection multiplier (death-scale 0.4-1.6x, repro 0.35-1.65x)
@@ -88,13 +93,28 @@ describe("burnIn", () => {
     expect(BURN_IN_GENERATIONS).toBeLessThanOrEqual(600);
   });
 
-  it("records the cost of a full-size burn-in", () => {
+  it("refuses to run under-budgeted rather than silently burning in one generation", () => {
+    // Default simBudget (480) against a scattered starting population well
+    // above that is exactly the mistake this guard exists to catch: burnIn
+    // would otherwise return a plausible-looking report while touching only
+    // a small fraction of the island each tick.
     const map = generate(2026, DEFAULT_CONFIG);
     const f = new Flora(map, generatePlantSpecies(2026), 2026, {
       selection: { fitness: (g) => g.height },
-      simBudget: BURN_IN_SIM_BUDGET,
+      // simBudget omitted → DEFAULT_TUNING's 480
     });
-    const r = burnIn(f, BURN_IN_GENERATIONS);
+    expect(f.tuning.simBudget).toBeLessThan(f.all.length);
+    expect(() => burnIn(f, BURN_IN_GENERATIONS)).toThrow(/simBudget/);
+  });
+
+  it("proceeds when simBudget covers the population", () => {
+    const f = fresh(2026); // fresh() sets simBudget: BURN_IN_SIM_BUDGET
+    expect(f.tuning.simBudget).toBeGreaterThanOrEqual(f.all.length);
+    expect(() => burnIn(f, 10)).not.toThrow();
+  });
+
+  it("records the cost of a full-size burn-in", () => {
+    const r = burnIn(fresh(2026), BURN_IN_GENERATIONS);
     // Not an assertion about speed — a measurement printed for the spec.
     console.log(`burn-in: ${BURN_IN_GENERATIONS} generations in ${r.elapsedMs}ms, ` +
       `${r.plants} plants, ${r.species} species`);
@@ -104,13 +124,18 @@ describe("burnIn", () => {
   it("actually turns the population over when simBudget covers it, not just when generations is high", () => {
     // At the default simBudget (480), a tick only reaches a small fraction of
     // a population near 8000, so 400 ticks barely replace anyone — one
-    // generation of turnover, not hundreds. burnIn documents that callers
-    // must raise simBudget to BURN_IN_SIM_BUDGET; this proves the knob is
-    // what moves the needle, not generation count alone.
-    const fLow = fresh(2026); // default simBudget: 480
-    const rLow = burnIn(fLow, BURN_IN_GENERATIONS);
+    // generation of turnover, not hundreds. burnIn now refuses to run in that
+    // configuration (see the guard test above), so the low-budget half of
+    // this comparison is measured by stepping simTick directly rather than
+    // through burnIn.
+    const mapLow = generate(2026, DEFAULT_CONFIG);
+    const fLow = new Flora(mapLow, generatePlantSpecies(2026), 2026, {
+      selection: { fitness: (g) => g.height },
+      // simBudget omitted → DEFAULT_TUNING's 480
+    });
+    for (let i = 0; i < BURN_IN_GENERATIONS; i++) fLow.simTick();
     const bornDuringLow = fLow.all.filter((p) => p.born >= 0).length;
-    const fractionLow = bornDuringLow / rLow.plants;
+    const fractionLow = bornDuringLow / fLow.all.length;
 
     const map = generate(2026, DEFAULT_CONFIG);
     const fFull = new Flora(map, generatePlantSpecies(2026), 2026, {
