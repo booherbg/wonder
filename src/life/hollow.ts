@@ -1,7 +1,14 @@
 import { HOLLOW_CONFIG } from "../world/config";
 import { generate } from "../world/generate";
 import { Tile, WorldMap, tileAt } from "../world/types";
-import { BURN_IN_GENERATIONS, BURN_IN_SIM_BUDGET, BurnInReport, burnIn } from "./burnin";
+import {
+  BURN_IN_GENERATIONS,
+  BURN_IN_SIM_BUDGET,
+  BurnInReport,
+  burnIn,
+  burnInAsync,
+} from "./burnin";
+import { PlantSpecies } from "./species";
 import { FitnessLandscape, landscapeFor } from "./fitness";
 import { Flora } from "./flora";
 import { MineralField, mineralFieldFor } from "./minerals";
@@ -21,6 +28,13 @@ const MAX_ATTEMPTS = 8;
 export interface Hollow {
   map: WorldMap;
   flora: Flora;
+  /**
+   * The species list `flora` was built on — the same array object Flora holds,
+   * so any daughter species founded during burn-in is already in it. A caller
+   * that hands this Flora to a game needs this list: Flora keeps its own copy
+   * private, and rebuilding it from the seed would miss the daughters.
+   */
+  species: PlantSpecies[];
   minerals: MineralField;
   landscape: FitnessLandscape;
   canopy: CanopyField;
@@ -63,7 +77,23 @@ export function terrainLight(map: WorldMap, tx: number, ty: number): number {
   }
 }
 
-function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hollow {
+/** Everything a Hollow attempt needs built, with burn-in not yet run. */
+interface Unburned {
+  map: WorldMap;
+  flora: Flora;
+  species: PlantSpecies[];
+  minerals: MineralField;
+  landscape: FitnessLandscape;
+  canopy: CanopyField;
+}
+
+/**
+ * Build one candidate island and its ecology, up to but not including burn-in.
+ * Split out so the synchronous and chunked-async paths run identical setup —
+ * every rng draw here happens in the same order either way, so the two produce
+ * the same island from the same seed.
+ */
+function setUp(seed: number): Unburned {
   const map = generate(seed, HOLLOW_CONFIG);
   const minerals = mineralFieldFor(map, seed);
   const landscape = landscapeFor(seed);
@@ -76,7 +106,8 @@ function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hol
   // plant examined in a refresh tick rebuilds it, the other 8,000 read it.
   // `Flora.tick` is deterministic, so which tick triggers a refresh is too.
   let refreshedAt = -1;
-  flora = new Flora(map, applyHueKey(generatePlantSpecies(seed), seed), seed, {
+  const species = applyHueKey(generatePlantSpecies(seed), seed);
+  flora = new Flora(map, species, seed, {
     // Burn-in examines every living plant each tick. The default simBudget of
     // 480 against a population near 8000 reaches 6% of the island per tick,
     // which turns 400 ticks into about 1.4 reproductions per plant instead of
@@ -106,11 +137,30 @@ function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hol
       },
     },
   });
-  const report = burnIn(flora, BURN_IN_GENERATIONS, onProgress);
-  // Leave the canopy consistent with the population that is actually returned,
-  // not with whichever refresh tick burn-in happened to stop after.
-  canopy.refresh(flora);
-  return { map, flora, minerals, landscape, canopy, report };
+  return { map, flora, species, minerals, landscape, canopy };
+}
+
+/**
+ * Finish an attempt once burn-in has run. Leaves the canopy consistent with
+ * the population that is actually returned, not with whichever refresh tick
+ * burn-in happened to stop after.
+ */
+function finish(u: Unburned, report: BurnInReport): Hollow {
+  u.canopy.refresh(u.flora);
+  return { ...u, report };
+}
+
+function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hollow {
+  const u = setUp(seed);
+  return finish(u, burnIn(u.flora, BURN_IN_GENERATIONS, onProgress));
+}
+
+async function attemptAsync(
+  seed: number,
+  onProgress?: (d: number, t: number) => void,
+): Promise<Hollow> {
+  const u = setUp(seed);
+  return finish(u, await burnInAsync(u.flora, BURN_IN_GENERATIONS, onProgress));
 }
 
 /**
@@ -148,4 +198,31 @@ export function makeHollow(
   onProgress?: (done: number, total: number) => void,
 ): Hollow {
   return pickAttempt(seed, (s) => attempt(s, onProgress));
+}
+
+/** pickAttempt's rule, awaiting each attempt. Same seeds, same order. */
+export async function pickAttemptAsync<T extends { report: { floorHit: boolean } }>(
+  seed: number,
+  build: (s: number) => Promise<T>,
+): Promise<T> {
+  let last = await build(seed);
+  for (let i = 1; i < MAX_ATTEMPTS && last.report.floorHit; i++) last = await build(seed + i);
+  return last;
+}
+
+/**
+ * makeHollow for interactive callers: the same island from the same seed, but
+ * burn-in runs in chunks that hand the thread back so the browser can paint
+ * between them. Use this anywhere a click is waiting on the result — the whole
+ * call costs 6.2-7.0 s (measured, five seeds), which run synchronously freezes
+ * the tab for that entire span and paints no progress at all.
+ *
+ * `onProgress(done, total)` reports generations within the CURRENT attempt, so
+ * a reroll restarts the count at 0 of 400.
+ */
+export async function makeHollowAsync(
+  seed: number,
+  onProgress?: (done: number, total: number) => void,
+): Promise<Hollow> {
+  return pickAttemptAsync(seed, (s) => attemptAsync(s, onProgress));
 }

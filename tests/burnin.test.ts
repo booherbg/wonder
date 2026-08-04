@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BURN_IN_GENERATIONS, BURN_IN_SIM_BUDGET, BURN_IN_SPECIES_FLOOR, burnIn } from "../src/life/burnin";
+import { BURN_IN_GENERATIONS, BURN_IN_SIM_BUDGET, BURN_IN_SPECIES_FLOOR, burnIn, burnInAsync } from "../src/life/burnin";
 import { Flora } from "../src/life/flora";
 import { generate } from "../src/world/generate";
 import { DEFAULT_CONFIG } from "../src/world/config";
@@ -155,5 +155,68 @@ describe("burnIn", () => {
     // if turnover regresses back toward "one generation."
     expect(fractionFull).toBeGreaterThan(0.85);
     expect(fractionFull).toBeGreaterThan(fractionLow);
+  });
+});
+
+// burnInAsync exists because the whole makeHollow call costs 6.2-7.0 s
+// (measured, five seeds). Run in one synchronous loop from a click handler,
+// that is 6-7 s in which the browser paints no frame at all, so the progress
+// callback updates a screen nobody ever sees. The async form runs a fixed
+// number of generations, then awaits a yield the renderer can paint under.
+describe("burnInAsync", () => {
+  it("produces the same island as the synchronous path from the same seed", async () => {
+    const sync = fresh(3);
+    const async = fresh(3);
+    const a = burnIn(sync, 60);
+    const b = await burnInAsync(async, 60);
+    expect(b.generations).toBe(a.generations);
+    expect(b.plants).toBe(a.plants);
+    expect(b.species).toBe(a.species);
+    expect(b.floorHit).toBe(a.floorHit);
+    expect(async.tick).toBe(sync.tick);
+    expect(async.all.map((p) => [p.x, p.y, p.species])).toEqual(
+      sync.all.map((p) => [p.x, p.y, p.species]),
+    );
+  });
+
+  it("reports progress once per chunk, ending on the last generation", async () => {
+    const seen: [number, number][] = [];
+    await burnInAsync(fresh(4), 100, (done, total) => seen.push([done, total]), 20);
+    expect(seen).toEqual([
+      [20, 100],
+      [40, 100],
+      [60, 100],
+      [80, 100],
+      [100, 100],
+    ]);
+  });
+
+  it("finishes a chunk count that does not divide the generations evenly", async () => {
+    const seen: number[] = [];
+    const f = fresh(5);
+    const r = await burnInAsync(f, 25, (done) => seen.push(done), 10);
+    expect(seen).toEqual([10, 20, 25]);
+    expect(r.generations).toBe(25);
+    expect(f.tick).toBe(25);
+  });
+
+  it("refuses an under-budgeted flora, exactly as the synchronous path does", async () => {
+    const map = generate(1, DEFAULT_CONFIG);
+    const f = new Flora(map, generatePlantSpecies(1), 1, { simBudget: 1 });
+    await expect(burnInAsync(f, 10)).rejects.toThrow(/simBudget/);
+  });
+
+  it("yields between chunks, so other work can run while it burns in", async () => {
+    // A macrotask queued before the burn-in must get a turn BEFORE the burn-in
+    // finishes. Under a synchronous loop it could not: nothing else runs until
+    // the loop returns. This is the property that keeps the tab responsive.
+    let ranDuring = false;
+    let finished = false;
+    setTimeout(() => {
+      if (!finished) ranDuring = true;
+    }, 0);
+    await burnInAsync(fresh(6), 40, undefined, 10);
+    finished = true;
+    expect(ranDuring).toBe(true);
   });
 });

@@ -51,16 +51,13 @@ export interface BurnInReport {
   floorHit: boolean;
 }
 
-export function burnIn(
-  flora: Flora,
-  generations: number = BURN_IN_GENERATIONS,
-  onProgress?: (done: number, total: number) => void,
-): BurnInReport {
-  // A capped simBudget makes burn-in a very expensive no-op: at 480 against a
-  // population near 8000 a tick reaches 6% of the island, and 400 ticks yields
-  // about 1.4 reproductions per plant rather than about 24. Measured: 62.7% of
-  // the population born during burn-in at 480, 100% at full coverage. This is
-  // a configuration error the caller cannot see in the result, so refuse it.
+// A capped simBudget makes burn-in a very expensive no-op: at 480 against a
+// population near 8000 a tick reaches 6% of the island, and 400 ticks yields
+// about 1.4 reproductions per plant rather than about 24. Measured: 62.7% of
+// the population born during burn-in at 480, 100% at full coverage. This is
+// a configuration error the caller cannot see in the result, so refuse it.
+// Both burnIn and burnInAsync call this, so neither can drift off the rule.
+function requireFullCoverage(flora: Flora): void {
   if (flora.tuning.simBudget < flora.all.length) {
     throw new Error(
       `burnIn requires simBudget >= population to examine every plant each tick; ` +
@@ -68,19 +65,81 @@ export function burnIn(
         `Construct the Flora with simBudget: BURN_IN_SIM_BUDGET.`,
     );
   }
-  const started = Date.now();
-  const every = Math.max(1, Math.floor(generations / PROGRESS_STEPS));
-  for (let i = 1; i <= generations; i++) {
-    flora.simTick();
-    if (onProgress && (i % every === 0 || i === generations)) onProgress(i, generations);
-  }
+}
+
+function reportFor(flora: Flora, generations: number, startedMs: number): BurnInReport {
   let species = 0;
   for (const count of flora.speciesCounts.values()) if (count > 0) species++;
   return {
     generations,
     species,
     plants: flora.all.length,
-    elapsedMs: Date.now() - started,
+    elapsedMs: Date.now() - startedMs,
     floorHit: species < BURN_IN_SPECIES_FLOOR,
   };
+}
+
+export function burnIn(
+  flora: Flora,
+  generations: number = BURN_IN_GENERATIONS,
+  onProgress?: (done: number, total: number) => void,
+): BurnInReport {
+  requireFullCoverage(flora);
+  const started = Date.now();
+  const every = Math.max(1, Math.floor(generations / PROGRESS_STEPS));
+  for (let i = 1; i <= generations; i++) {
+    flora.simTick();
+    if (onProgress && (i % every === 0 || i === generations)) onProgress(i, generations);
+  }
+  return reportFor(flora, generations, started);
+}
+
+/** Generations run per chunk before burnInAsync hands the thread back. */
+export const BURN_IN_YIELD_EVERY = 20;
+
+/**
+ * Hand the thread back to the browser long enough for it to PAINT one frame,
+ * then resume. `await Promise.resolve()` is not enough — a microtask drains
+ * before the renderer ever runs, so a progress readout written under it never
+ * reaches the screen. requestAnimationFrame resolves after the next paint;
+ * setTimeout(0) is the fallback under Node, where there is no rAF and tests
+ * only need the macrotask boundary.
+ */
+function yieldToPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 0);
+  });
+}
+
+/**
+ * burnIn, chunked so a browser tab stays responsive while it runs.
+ *
+ * Measured: a whole makeHollow call costs 6.2-7.0 s across five seeds. Run
+ * synchronously from a click handler that is 6-7 s with no paint at all — the
+ * progress callback would update a screen nobody ever sees, and the tab can
+ * raise an unresponsive-page warning. This runs `yieldEvery` generations, then
+ * awaits a paint, so the readout advances about `generations / yieldEvery`
+ * times (400 / 20 = 20 visible steps) and input keeps being handled.
+ *
+ * Identical arithmetic to burnIn: the same ticks in the same order on the same
+ * Flora, so the resulting island is byte-identical to the synchronous path.
+ */
+export async function burnInAsync(
+  flora: Flora,
+  generations: number = BURN_IN_GENERATIONS,
+  onProgress?: (done: number, total: number) => void,
+  yieldEvery: number = BURN_IN_YIELD_EVERY,
+): Promise<BurnInReport> {
+  requireFullCoverage(flora);
+  const started = Date.now();
+  const chunk = Math.max(1, Math.floor(yieldEvery));
+  let done = 0;
+  while (done < generations) {
+    const upTo = Math.min(generations, done + chunk);
+    for (; done < upTo; done++) flora.simTick();
+    onProgress?.(done, generations);
+    if (done < generations) await yieldToPaint();
+  }
+  return reportFor(flora, generations, started);
 }
