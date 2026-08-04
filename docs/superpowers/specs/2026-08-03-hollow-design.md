@@ -206,15 +206,23 @@ Tune *near* the transition rather than rich. The adjacent possible peaks at 32.5
 
 ## Risks and open questions
 
-**Burn-in compute budget.** Running selection over a population for 300–600 generations at worldgen will cost seconds, not milliseconds. Bodies cache at birth (bench 3's hard requirement, met), so morphology is cheap, but the forge's generate button must not hang. Mitigation: a loading screen with something to watch. The generation count in §Definitions is a target, not a measured figure — stage 1 must measure actual cost and may revise it downward.
+**RESOLVED — burn-in compute budget.** `burnIn` alone over 400 generations costs 964 ms. The whole `makeHollow` path costs 6.2–7.0 s across five seeds, which is the figure that matters: called synchronously it froze the browser tab, so burn-in now yields between chunks and the forge paints progress. Verified in a real browser — 39 frames painted and 4 pointer events handled during a 4,890 ms generation. Resume costs 25 ms.
 
-**Two different Ks.** Ruggedness K = 3 and regulatory K = 2 are different quantities from different models. The code must name them distinctly to prevent them being pooled.
+**RESOLVED — two different Ks.** Named `RUGGEDNESS_K` (3) and, when stage 2 arrives, the regulatory K (2). Never a bare `K`.
 
-**Extinction during burn-in could empty the Hollow.** If selection plus scarcity is too sharp, a burn-in can terminate with too few species to make a forest. Stage 1 needs a floor condition and a re-roll, and the floor should be reported rather than silent.
+**RESOLVED — extinction during burn-in.** `BURN_IN_SPECIES_FLOOR = 4`, reported in `BurnInReport.floorHit` rather than silently, with deterministic rerolls past a burn-in that empties the island. Across 25 seeds none exhausted its attempts.
 
-**The 8.5px crossing is soft.** Motion beats colour below it, but the sweep put the crossing anywhere from 5.2 to 11.2px. If the Hollow's default zoom lands near that band, the identity channel is ambiguous. The zoom decision and the sprite-size decision must be made together and checked against this number.
+**RESOLVED — the 8.5px crossing.** Gait amplitude at default zoom is 5.7–15.4 screen px peak-to-peak against a 3 px rounding quantum, so motion is above the ambiguity band rather than inside it. Measured separability is 100% against a 12.5% chance level.
 
-**Legibility is unmeasured.** §9.5 item 5 — the ten-minute claim, tested with an actual person — has never been run. Every claim in this document about what a player will notice is a hypothesis. Stage 1 is the first opportunity to test it, and it should be tested before stage 3 builds an entire lens on the assumption.
+**FAILED — the within-species light gradient.** §Layer 5's promise, that a player forms a hunch on foot and confirms it by leaning in, rests on individuals being legible. They are not. Three rounds of work fixed two real defects — `score()` selecting on the same trait `CanopyField` casts shade from, and reverse causation in the island-wide measure — without producing the effect; a dispersal sweep then refuted its own hypothesis, since within-species light standard deviation *falls* as seeds travel further. Root cause: light varies by sd 0.05–0.12 against a 0.27–0.9 range, because canopy shade is smoothed over `CANOPY_RADIUS = 2`. Selection can only act on variation and there is nearly none. Full record in `docs/03-ECOLOGY-DESIGN-SPACE.md` §12.3.
+
+What is true instead: the Hollow's **composition** was earned. These species outcompeted others here. What cannot be claimed is that an individual plant is readable.
+
+**OPEN — legibility has still never been tested with a person.** §9.5 item 5 remains unrun. Every claim in this document about what a player will notice is a hypothesis, and stage 1 did not change that.
+
+**OPEN — some Hollows are not forests.** Forest fraction runs 7.1%–62.5% across seeds 1–12 (mean 55.3%). The low tail undermines the premise for those seeds.
+
+**OPEN — the palette claim was wrong.** This spec said bias 0.70 leaves 78% of the hue wheel reachable. Under a linear pull, reachability is exactly `1 − bias`: 30.8% at 0.70, not 78%. The key ships at 0.70 and the resulting palette is tight; whether that reads as character or as monotony is unresolved.
 
 ---
 
