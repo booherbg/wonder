@@ -1085,8 +1085,9 @@ function loadWorld(
     baseSpeciesCount = species.length;
   }
   // A resumed Hollow is scored by the same mineral/light selection context
-  // that built it — without it the island would DRIFT instead of select, which
-  // is the whole difference between a Hollow and a classic island.
+  // that built it — without it the island's genomes would DRIFT rather than be
+  // scored against the mineral field and the canopy, so the composition the
+  // 400-generation burn-in produced would start coming apart on resume.
   //
   // KNOWN LOSS, deliberate: MineralField holds its depletion (every draw() the
   // burn-in and the played session made) in memory only, and nothing in
@@ -1115,7 +1116,10 @@ function loadWorld(
   }
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
-    chains: CHAINS, // the A/B toggle threads into both new Flora sites below
+    // The A/B toggle threads into both new Flora sites below — except on a
+    // resumed Hollow, where eco.tuning is spread after this line and carries
+    // `chains: false`, matching the fresh Hollow that hollowEcology built.
+    chains: CHAINS,
     ...(eco ? eco.tuning : {}),
     ...(gen ? { scatterLife: gen.life } : {}),
     ...(new URL(location.href).searchParams.has("split")

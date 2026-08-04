@@ -136,14 +136,14 @@ interface Unburned<S extends SwarmTicker> {
 
 /**
  * The three fields a Hollow's flora is scored against, plus the Flora tuning
- * that reads them. `simBudget` is BURN_IN_SIM_BUDGET (10000) and `selection`
- * is the mineral-and-light fitness callback.
+ * that reads them. `simBudget` is BURN_IN_SIM_BUDGET (10000), `selection` is
+ * the mineral-and-light fitness callback, and `chains` is false (see below).
  */
 export interface HollowEcology {
   minerals: MineralField;
   landscape: FitnessLandscape;
   canopy: CanopyField;
-  tuning: Pick<FloraTuning, "simBudget" | "selection">;
+  tuning: Pick<FloraTuning, "simBudget" | "selection" | "chains">;
 }
 
 /**
@@ -181,6 +181,20 @@ export function hollowEcology(map: WorldMap, seed: number, getFlora: () => Flora
       // against 100% at full coverage. burnIn throws if this is left at the
       // default, because the resulting island looks correct and is not.
       simBudget: BURN_IN_SIM_BUDGET,
+      // Byproduct chains (`Flora.substrates`: emitted substrates that later
+      // germinate) are OFF on a Hollow, on both the fresh and the resumed
+      // path, and this field is what states it in one place — `hollowEcology`
+      // is the tuning both paths use, so neither can pick a different answer.
+      //
+      // Chosen off, not inherited: every number in §12 of
+      // docs/03-ECOLOGY-DESIGN-SPACE.md — the 400-generation burn-in, the
+      // selection-beats-drift margin, the reroll floor — was measured with
+      // chains off, and a Hollow's substrates are not serialised, so a resumed
+      // island with chains on would start with an empty substrate list against
+      // a population that had been emitting for 400 generations. Turning them
+      // on is a stage-2 change that has to be re-measured and saved, not a
+      // default to fall into.
+      chains: false,
       selection: {
         fitness(g, tx, ty) {
           const flora = getFlora();
