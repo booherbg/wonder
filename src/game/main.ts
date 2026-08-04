@@ -96,6 +96,7 @@ const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
+const FORCE_HOLLOW = new URL(location.href).searchParams.has("hollow"); // dev aid: boot straight into a Hollow, bypassing the forge
 import { DEFAULT_CONFIG, IslandStyle, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, generateAsync, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
@@ -1586,6 +1587,13 @@ if (NOMENU) {
   if (new URL(location.href).searchParams.has("journal")) openAlmanac();
   // dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
   if (new URL(location.href).searchParams.has("isles")) openIslePicker();
+  // dev aid: ?hollow (with optional &seed=N) generates a Hollow directly on
+  // load, bypassing the forge — the only way to reach a Hollow from a URL
+  if (FORCE_HOLLOW) {
+    const hollowSeed = seedFromUrl() ?? newIslandSeed();
+    const { seed: hSeed, gen: hGen } = forgeArgs({ ...defaultForgeState(hollowSeed), style: "hollow" });
+    void generateHollow(hSeed, hGen);
+  }
 } else {
   for (let i = 0; i < BACKDROP_WARM; i++) flora.simTick(); // greet the wanderer already alive
   showTitle(currentTitleState(), { choose: onChoose });
