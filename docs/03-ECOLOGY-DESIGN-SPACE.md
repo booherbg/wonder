@@ -1690,3 +1690,78 @@ described both at length.
 ---
 
 *— Fable*
+
+---
+
+## 12 · Stage 1 findings — the Hollow, built and measured
+
+*Written 2026-08-04, after building stage 1 of the Hollow (`docs/superpowers/specs/2026-08-03-hollow-design.md`). Every number here was measured during the build, not carried over from a bench. Where a claim from the spec failed, it is recorded as failed.*
+
+### 12.1 What shipped
+
+A second island style, selectable in the forge or via `?hollow`. 140×140 against the classic 300×300, mostly forest, with a mineral field, an NK fitness landscape, a canopy that casts shade from the plants standing under it, and 400 generations of selection run before the player's first frame.
+
+### 12.2 The measurements the spec asked for
+
+**Ruggedness is real and K = 3 earns its place.** Counting true local optima by exhaustive enumeration over a 512-genotype binary subspace (each of the 9 numeric traits at its bound minimum or maximum), at a fixed niche on seed 21: **K = 0 gives 1 local optimum, K = 3 gives 14.** K = 0 collapsing to a single global answer is bench 2's "one answer, always, on every island", reproduced in the shipped code.
+
+Enumeration matters here. The first two attempts to measure this sampled hill climbs and could not discriminate: keyed on score values, K = 0 scored 22 "peaks" against K = 3's 18; keyed on genotype, both saturated at 40 of 40 walks, because 9 traits at 8 quantisation levels is about 1.3 × 10⁸ genotypes and 40 walks never collide. Bench 2 enumerated 65,536 genotypes to find its 58 optima; sampling was never going to work.
+
+**Selection beats drift.** A burned-in population scored against a pristine mineral field, seed 9: **0.4309 selected (n = 8,275) against 0.4057 for a drift control (n = 8,398).** Measured against a paired twin on an identical seed rather than against a before/after on one run — mean height rises +0.0006 under drift alone, so a before/after comparison passes with selection switched off.
+
+**Burn-in cost, and a correction to it.** `burnIn` alone over 400 generations: **964 ms**. The whole `makeHollow` path including worldgen and reroll attempts: **6.2–7.0 s across five seeds.** The spec's 300–600 generation band was a target, not a measurement; 400 generations is right, but the cost figure that matters is the second one.
+
+**Burn-in reaches complete generational turnover** — 100% of the final population born during burn-in, against 62.7% before the simBudget fix (below).
+
+**Resume costs 25 ms against 4,816 ms for a fresh generation** — 193×, by storing the accepted reroll offset so the map rebuilds deterministically instead of re-running burn-in.
+
+**Motion separability: 100.0% against a 12.5% chance level** (8 species × 24 simulated flights, n = 192), classified on raw trajectory statistics. Gait amplitude at default zoom is **5.7–15.4 screen px peak-to-peak** against a 3 px rounding quantum, so the motion is visible rather than sub-pixel.
+
+**Glow now fires at dusk.** At 12% into dusk (tint 0.152, darkness 0.0311), the pre-fix build draws zero halos and the fixed build draws nine.
+
+**The classic island is unchanged.** sha256 of `map.tiles` plus spawn coordinates, ten seeds, master against this branch: identical on all ten.
+
+### 12.3 The claim that failed, and why
+
+> **The Hollow does not produce a within-species light gradient. Two plants of the same kind, one in a gap and one under canopy, are not visibly different.**
+
+This was the spec's central legibility promise — the correlation a player notices on foot and confirms by leaning in. It is not there. Three rounds of work, each fixing a real defect, did not produce it:
+
+| what was tried | result |
+|---|---|
+| light from tile type | mean within-species r ≈ 0 |
+| canopy-derived light, shade cast by real plants | island-wide composition moves; within-species r still ≈ 0 |
+| widen `lightFit` from [0.75, 1] to [0, 1], raise its coefficient | no stable effect |
+| select on `spread` rather than `height`, breaking the circularity | +0.022, +0.073, **−0.089** across three seeds — sign flips |
+| disperse seeds further (`reseedRadius` 3 → 8 → 16 → 24) | refuted the hypothesis: within-species light **sd falls**, 0.087 → 0.053 |
+
+Two genuine defects were found and fixed along the way, and neither was the binding constraint:
+
+**The circularity.** `score()` selected on `height` while `CanopyField` cast shade from `height`. The trait light selected on was the trait that created the light, so a tall plant darkened its own ground, the darkness penalised tallness, and the target chased itself. Now light selects on `spread`, which casts no shade.
+
+**Reverse causation in the island-wide measure.** The dark-versus-bright height gap is large and negative because tall plants *are* the shade. What the light term actually earns is the 0.089 it closes against that, not the gap itself.
+
+**The root cause, measured.** Light has almost no variance at the scale a species occupies: **sd 0.05–0.12 against a range of 0.27–0.9**, because canopy shade is smoothed over `CANOPY_RADIUS = 2` into a gentle gradient. Selection can only act on variation, and there is nearly none to act on. Widening dispersal makes this *worse*, not better, which is why the dispersal hypothesis is refuted rather than merely unconfirmed.
+
+**What the next attempt should do:** make light vary at *short* range — a smaller canopy radius, individual deep shadows, or gaps that open and close — or let species span light regimes instead of being pinned to a habitat tile. Tuning the light term is exhausted; `LIGHT_WEIGHT` was reduced from 0.85 to 0.25 because 85% of a fitness axis with no stable population-level effect misdescribes the model.
+
+**What is true instead:** the Hollow's *composition* was earned. These species outcompeted others here, and the island-wide separation of `spread` between dark and bright quartiles is real (0.279). What cannot yet be claimed is that an individual plant is legible.
+
+### 12.4 Defects found that would have shipped looking correct
+
+Recorded because each one passed every signal available — green tests, plausible output, sensible cost — and was caught only by deliberately disabling the feature and checking whether anything noticed.
+
+**Burn-in accomplished about one generation, not four hundred.** `simTick` examines `simBudget: 480` plants of ~8,764 — 6% of the island per tick — and `reproChance` is 0.06, so 400 ticks gave roughly 1.4 reproductions per plant. Measured: 62.7% of the population born during burn-in, 37.3% still originals. `burnIn` now throws when `simBudget < population`, because the failure returns a plausible report for an island that quietly did not happen.
+
+**A save-key collision put one island's plants on another's map.** `worldKey(seed)` ignored island style, so a Hollow and a classic island at the same seed shared a slot — 43 of 8,337 plants survived the transplant. Keys are now namespaced by style, with classic keys byte-identical so existing saves keep loading.
+
+**Eight tests would have passed with the feature switched off.** Among them: a `deposit` test whose function returned early on its first line; a "byte-identical" guard that compared `generate(seed)` to `generate(seed)`, which is self-determinism and would pass if every island had changed; a species-floor test asserting `typeof floorHit === "boolean"`. The practice that caught them — stub the function, re-run, report what still passes — is worth more than any single fix in this document.
+
+### 12.5 Known limitations at the end of stage 1
+
+- Mineral depletion is not saved; a resumed island's soil returns at full strength.
+- Forest fraction across seeds 1–12 runs **7.1%–62.5%** (mean 55.3%). The low tail means some Hollows are not forests.
+- Plant form variety is low — the 14 local optima in genotype space do not yet cash out as visibly different plants. That is stage 2's attractor bodies.
+- The palette key leaves **30.8%** of the hue wheel reachable, not the 78% the spec claimed; reachability under a linear pull is exactly `1 − bias`.
+- Critter motion rhythms are verified by measurement and code inspection, not by watching them. A static frame cannot show rhythm.
+- Legibility has still never been tested with a person. Every claim about what a player would notice remains a hypothesis.
