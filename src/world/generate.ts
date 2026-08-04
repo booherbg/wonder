@@ -999,9 +999,10 @@ function findSpawn(
   }
   if (bestLabel === -1 || bestSize < cfg.minWalkableRegion) return null;
 
+  const spawnable = cfg.spawnTiles ?? [Tile.Grass];
   let best = -1;
   for (let i = 0; i < tiles.length; i++) {
-    if (labels[i] === bestLabel && tiles[i] === Tile.Grass) {
+    if (labels[i] === bestLabel && spawnable.includes(tiles[i] as Tile)) {
       if (best === -1 || elevation[i] < elevation[best]) best = i;
     }
   }

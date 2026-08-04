@@ -1,3 +1,5 @@
+import { Tile } from "./types";
+
 export const TILE_SIZE = 16; // pixels per tile (art + collision + camera all use this)
 
 export interface WorldConfig {
@@ -25,6 +27,9 @@ export interface WorldConfig {
   minLandFraction: number; // reroll islands with less land than this
   minWalkableRegion: number; // reroll if the largest walkable region is smaller (tiles)
   maxGenerationAttempts: number; // deterministic rerolls (seed+1, seed+2, ...)
+  /** Tiles the wanderer may start on. Omitted ⇒ [Tile.Grass], which is what
+   *  every island generated before the Hollow used. */
+  spawnTiles?: readonly Tile[];
 }
 
 export const DEFAULT_CONFIG: WorldConfig = {
@@ -71,7 +76,16 @@ export const HOLLOW_CONFIG: WorldConfig = {
   riverCount: 3,
   fallMaxCount: 1,
   craterChance: 0, // the Hollow's shape is a bowl of trees, not a caldera
-  minWalkableRegion: 700, // scaled from 3000 by the ~4.6x drop in tile count
+  // scaled from 3000 by the ~4.6x drop in tile count: 700/19600 (3.6%) tracks
+  // classic's 3000/90000 (3.3%). Measured across 25 seeds (1-25): accepted
+  // islands' largest walkable region was min 3853 / median 6538 / max 9142 —
+  // this gate never fired. That is expected of a fragmentation floor on
+  // healthy islands; do not raise it toward the observed minimum, or it
+  // starts rejecting good islands for no reason.
+  minWalkableRegion: 700,
+  // A mostly-forested island has little grass; without this the wanderer
+  // could not spawn under the Hollow's own canopy.
+  spawnTiles: [Tile.Grass, Tile.Forest],
 };
 
 export function configForStyle(style: IslandStyle): WorldConfig {

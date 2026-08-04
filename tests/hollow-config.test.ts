@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, HOLLOW_CONFIG, configForStyle } from "../src/world/config";
 import { generate } from "../src/world/generate";
+import { Tile } from "../src/world/types";
 
 describe("the Hollow's island style", () => {
   it("leaves the classic config untouched", () => {
@@ -26,5 +27,21 @@ describe("the Hollow's island style", () => {
       expect(map.spawn.x).toBeGreaterThanOrEqual(0);
       expect(map.spawn.y).toBeGreaterThanOrEqual(0);
     }
+  });
+
+  it("allows the wanderer to spawn under the canopy, not just on grass", () => {
+    expect(HOLLOW_CONFIG.spawnTiles).toEqual([Tile.Grass, Tile.Forest]);
+    for (let s = 1; s <= 12; s++) {
+      const map = generate(s, HOLLOW_CONFIG);
+      const spawnTile = map.tiles[map.spawn.y * map.width + map.spawn.x] as Tile;
+      expect([Tile.Grass, Tile.Forest]).toContain(spawnTile);
+    }
+  });
+
+  it("leaves the classic island's spawn tile as grass-only (no spawnTiles set)", () => {
+    expect(DEFAULT_CONFIG.spawnTiles).toBeUndefined();
+    const map = generate(1, DEFAULT_CONFIG);
+    const spawnTile = map.tiles[map.spawn.y * map.width + map.spawn.x] as Tile;
+    expect(spawnTile).toBe(Tile.Grass);
   });
 });
