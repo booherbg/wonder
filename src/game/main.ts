@@ -2848,6 +2848,7 @@ function frame(now: number): void {
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
       tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
       overlay: overlayOn, swarms: swarmLayer,
+      floraTick: flora.tick, matureAge: flora.tuning.matureAge,
     },
     sky,
   );

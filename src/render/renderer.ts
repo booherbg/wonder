@@ -18,6 +18,7 @@ import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from 
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
+import { growthScale } from "./growth";
 import { PALETTE } from "./palette";
 import {
   GLOW_R,
@@ -59,6 +60,8 @@ export interface Scene {
   /** the working view (W, bench-only): the pollination economy drawn into
    *  the world — hunger, pollen aboard, readiness to spread, host nectar */
   working?: WorkingReading[] | null;
+  floraTick?: number; // the flora clock, for growth animation; absent ⇒ no growth easing
+  matureAge?: number; // ticks to full size; absent ⇒ 20
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -699,6 +702,17 @@ export class Renderer {
             const jx = Math.round((hash2d(gx, gy, 0x31f7) - 0.5) * 3);
             const dx = Math.round(p.x - PLANT_ANCHOR_X - camX) + sway + jx;
             const dy = Math.round(p.y - PLANT_ANCHOR_Y - camY);
+            const grow = scene.floraTick === undefined
+              ? 1
+              : growthScale(scene.floraTick - p.born, scene.matureAge ?? 20);
+            if (grow < 1) {
+              ctx.save();
+              // Scale about the plant's base so it rises out of the ground
+              // rather than swelling out of its own centre.
+              ctx.translate(dx + sprite.width / 2, dy + sprite.height);
+              ctx.scale(grow, grow);
+              ctx.translate(-(dx + sprite.width / 2), -(dy + sprite.height));
+            }
             if (hash2d(gx, gy, 0x5eed1) < 0.42) {
               ctx.save();
               ctx.translate(dx + sprite.width, dy);
@@ -708,6 +722,7 @@ export class Renderer {
             } else {
               ctx.drawImage(sprite, dx, dy);
             }
+            if (grow < 1) ctx.restore();
             if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
               glowers.push({ x: p.x, y: p.y, hue: p.genome.hue, genome: p.genome });
             }
