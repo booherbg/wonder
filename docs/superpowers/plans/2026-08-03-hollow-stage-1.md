@@ -1790,9 +1790,12 @@ describe("the classic island is unchanged by the Hollow", () => {
   it("flora with default tuning draws no selection rng", () => {
     for (const s of SEEDS) {
       const map = generate(s, DEFAULT_CONFIG);
-      const sp = generatePlantSpecies(s);
-      const a = new Flora(map, sp, s);
-      const b = new Flora(map, sp, s, { selection: null });
+      // Each Flora gets its OWN species array. Flora stores the list by
+      // reference and pushes daughter species onto it in place on speciation
+      // (flora.ts:704-705), so sharing one array lets two "independent"
+      // instances contaminate each other's species indices.
+      const a = new Flora(map, generatePlantSpecies(s), s);
+      const b = new Flora(map, generatePlantSpecies(s), s, { selection: null });
       for (let i = 0; i < 400; i++) { a.simTick(); b.simTick(); }
       expect(a.all.length).toBe(b.all.length);
       expect(a.tick).toBe(b.tick);
