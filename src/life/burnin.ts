@@ -16,6 +16,26 @@ import { Flora } from "./flora";
 /** Generations run before the first frame. Spec band: 300-600. */
 export const BURN_IN_GENERATIONS = 400;
 
+// `Flora.tuning.simBudget` (default 480) bounds how many plants a tick
+// examines. That bound exists to cap per-frame cost during play, where a
+// frame must actually fit in a frame. Burn-in has no frame — capping it
+// there is not a saving, it is a silent loss of the thing being paid for.
+//
+// The arithmetic: at simBudget 480 against a population near 8000 plants, a
+// tick reaches 480/8000 ≈ 6% of the island. With reproChance 0.06, the
+// expected reproductions per plant per tick is 0.06 × 0.06 ≈ 0.0036, so 400
+// ticks yield about 1.4 reproductions per plant — one generation of
+// turnover, not hundreds. At full coverage (simBudget ≥ population) the same
+// 400 ticks examine every plant every tick, yielding about 400 × 0.06 ≈ 24
+// reproductions per plant.
+//
+// Callers MUST construct the Flora passed to burnIn with
+// `simBudget: BURN_IN_SIM_BUDGET` (or otherwise ≥ the expected population),
+// or the "generations" burnIn reports will not correspond to real
+// generational turnover.
+/** simBudget to use on any Flora that will be burned in, matching maxPlants so every living plant is examined each tick. */
+export const BURN_IN_SIM_BUDGET = 10000;
+
 /** Below this many surviving species, the burn-in is reported as failed. */
 export const BURN_IN_SPECIES_FLOOR = 4;
 

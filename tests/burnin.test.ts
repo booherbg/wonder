@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BURN_IN_GENERATIONS, BURN_IN_SPECIES_FLOOR, burnIn } from "../src/life/burnin";
+import { BURN_IN_GENERATIONS, BURN_IN_SIM_BUDGET, BURN_IN_SPECIES_FLOOR, burnIn } from "../src/life/burnin";
 import { Flora } from "../src/life/flora";
 import { generate } from "../src/world/generate";
 import { DEFAULT_CONFIG } from "../src/world/config";
@@ -89,10 +89,46 @@ describe("burnIn", () => {
   });
 
   it("records the cost of a full-size burn-in", () => {
-    const r = burnIn(fresh(2026), BURN_IN_GENERATIONS);
+    const map = generate(2026, DEFAULT_CONFIG);
+    const f = new Flora(map, generatePlantSpecies(2026), 2026, {
+      selection: { fitness: (g) => g.height },
+      simBudget: BURN_IN_SIM_BUDGET,
+    });
+    const r = burnIn(f, BURN_IN_GENERATIONS);
     // Not an assertion about speed — a measurement printed for the spec.
     console.log(`burn-in: ${BURN_IN_GENERATIONS} generations in ${r.elapsedMs}ms, ` +
       `${r.plants} plants, ${r.species} species`);
     expect(r.generations).toBe(BURN_IN_GENERATIONS);
+  });
+
+  it("actually turns the population over when simBudget covers it, not just when generations is high", () => {
+    // At the default simBudget (480), a tick only reaches a small fraction of
+    // a population near 8000, so 400 ticks barely replace anyone — one
+    // generation of turnover, not hundreds. burnIn documents that callers
+    // must raise simBudget to BURN_IN_SIM_BUDGET; this proves the knob is
+    // what moves the needle, not generation count alone.
+    const fLow = fresh(2026); // default simBudget: 480
+    const rLow = burnIn(fLow, BURN_IN_GENERATIONS);
+    const bornDuringLow = fLow.all.filter((p) => p.born >= 0).length;
+    const fractionLow = bornDuringLow / rLow.plants;
+
+    const map = generate(2026, DEFAULT_CONFIG);
+    const fFull = new Flora(map, generatePlantSpecies(2026), 2026, {
+      selection: { fitness: (g) => g.height },
+      simBudget: BURN_IN_SIM_BUDGET,
+    });
+    const rFull = burnIn(fFull, BURN_IN_GENERATIONS);
+    const bornDuringFull = fFull.all.filter((p) => p.born >= 0).length;
+    const fractionFull = bornDuringFull / rFull.plants;
+
+    console.log(
+      `turnover: low-budget ${(fractionLow * 100).toFixed(1)}% vs full-budget ${(fractionFull * 100).toFixed(1)}% born during burn-in`,
+    );
+
+    // Measured full-budget turnover comes in well above 90%; assert a
+    // threshold clearly below that so the test has margin but still fails
+    // if turnover regresses back toward "one generation."
+    expect(fractionFull).toBeGreaterThan(0.85);
+    expect(fractionFull).toBeGreaterThan(fractionLow);
   });
 });
