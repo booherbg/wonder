@@ -1732,7 +1732,7 @@ This was the spec's central legibility promise — the correlation a player noti
 | light from tile type | mean within-species r ≈ 0 |
 | canopy-derived light, shade cast by real plants | island-wide composition moves; within-species r still ≈ 0 |
 | widen `lightFit` from [0.75, 1] to [0, 1], raise its coefficient | no stable effect |
-| select on `spread` rather than `height`, breaking the circularity | +0.022, +0.073, **−0.089** across three seeds — sign flips |
+| select on `spread` rather than `height`, breaking the circularity | within-species r moves +0.0246, +0.0420, +0.0293 against a constant-light control and +0.0219, +0.0727, **−0.0386** against a `LIGHT_WEIGHT` 0 control (seeds 2026, 11, 5) — every value under 0.073, none player-legible |
 | disperse seeds further (`reseedRadius` 3 → 8 → 16 → 24) | refuted the hypothesis: within-species light **sd falls**, 0.087 → 0.053 |
 
 Two genuine defects were found and fixed along the way, and neither was the binding constraint:
@@ -1741,11 +1741,28 @@ Two genuine defects were found and fixed along the way, and neither was the bind
 
 **Reverse causation in the island-wide measure.** The dark-versus-bright height gap is large and negative because tall plants *are* the shade. What the light term actually earns is the 0.089 it closes against that, not the gap itself.
 
-**The root cause, measured.** Light has almost no variance at the scale a species occupies: **sd 0.05–0.12 against a range of 0.27–0.9**, because canopy shade is smoothed over `CANOPY_RADIUS = 2` into a gentle gradient. Selection can only act on variation, and there is nearly none to act on. Widening dispersal makes this *worse*, not better, which is why the dispersal hypothesis is refuted rather than merely unconfirmed.
+**The shape of the `spread`-selection result, stated exactly.** The row above compares the shipped island against two controls, and they do not agree. Measured within-species r(shade, `spread`) at 400 generations, ~8,000 plants and 12–17 species per seed:
+
+| seed | derived light | constant-0.5 control | `LIGHT_WEIGHT` 0 control | Δ vs constant | Δ vs `LIGHT_WEIGHT` 0 |
+|---|---|---|---|---|---|
+| 2026 | 0.0342 | 0.0096 | 0.0123 | +0.0246 | +0.0219 |
+| 11 | 0.0665 | 0.0245 | −0.0062 | +0.0420 | +0.0727 |
+| 5 | −0.0190 | −0.0483 | 0.0196 | +0.0293 | −0.0386 |
+
+Those nine values were measured before insects took part in burn-in. Re-measured on the shipped build (seed 2026, `tests/hollow.test.ts`): derived 0.0294 against 0.0157 on the constant-light control, Δ +0.0137 — smaller still, same null.
+
+So the light term moves within-species r in the same direction on all three seeds against the constant-light control, and flips sign on one seed (5) against the `LIGHT_WEIGHT` 0 control. "Sign flips across seeds" is true of one control, not both. **The null conclusion is unchanged:** the largest of the six deltas is +0.0727, every value is far below the 0.09 band the claim needed, and none of it is legible to a player standing in front of a plant. What was wrong was the failure's shape, not its verdict. (An earlier version of this row printed "+0.022, +0.073, −0.089"; −0.089 is a seed-5 *separation* delta — a different quantity, see below — and does not belong in a within-species row.)
+
+**The root cause, measured, and the distinction that matters.** Two different variances have been quoted as one number, so both are given here:
+
+- **Island-wide**, the canopy light field is *not* flat: sd **0.253** over 8,407 land tiles (mean 0.685, p05 0.283, p95 0.999; Forest tiles only, sd 0.182). There is real canopy structure — dark stands and bright gaps.
+- **Within the tiles one species occupies**, light sd is only **0.05–0.12**, because `PlantSpecies.habitat` pins a species to one tile type and canopy shade is smoothed over `CANOPY_RADIUS = 2` into a gentle gradient at that scale.
+
+Selection can only act on variation a species' own population is exposed to, and that is the small figure. The island has structure; a single species' patch does not. Widening dispersal makes the small figure *worse*, not better (sd 0.087 → 0.053), which is why the dispersal hypothesis is refuted rather than merely unconfirmed — and it is the island-wide/within-patch gap that points at the fix: shorter-range shadows, not more mixing.
 
 **What the next attempt should do:** make light vary at *short* range — a smaller canopy radius, individual deep shadows, or gaps that open and close — or let species span light regimes instead of being pinned to a habitat tile. Tuning the light term is exhausted; `LIGHT_WEIGHT` was reduced from 0.85 to 0.25 because 85% of a fitness axis with no stable population-level effect misdescribes the model.
 
-**What is true instead:** the Hollow's *composition* was earned. These species outcompeted others here, and the island-wide separation of `spread` between dark and bright quartiles is real (0.279). What cannot yet be claimed is that an individual plant is legible.
+**What is true instead:** the Hollow's *composition* was earned. These species outcompeted others here, and the island-wide separation of `spread` between dark and bright quartiles is real (shipped build, seed 2026, quartiles of 2,064 plants each: mean `spread` 0.676 dark against 0.375 bright, separation **0.301**) — though it is mostly the island's composition rather than the light term, because the constant-light control separates by **0.267** on the same seed (0.675 against 0.408). The separation was 0.279 before insects took part in burn-in; quote it with its control or not at all. What cannot yet be claimed is that an individual plant is legible.
 
 ### 12.4 Defects found that would have shipped looking correct
 

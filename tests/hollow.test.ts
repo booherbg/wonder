@@ -401,8 +401,11 @@ describe("light and breadth", () => {
   //   seed   11     0.0665         0.0245         -0.0062
   //   seed    5    -0.0190        -0.0483          0.0196
   //
-  // Every value is under 0.07, and the sign of derived-minus-control flips
-  // across seeds (+0.022, +0.073, -0.039 against the LIGHT_WEIGHT 0 control).
+  // Every value is under 0.07, and the two controls disagree on the shape of
+  // the null. Derived minus constant-0.5: +0.0246, +0.0420, +0.0293 — same
+  // sign on all three seeds. Derived minus LIGHT_WEIGHT 0: +0.0219, +0.0727,
+  // -0.0386 — sign flips on seed 5 alone. Either way the largest magnitude is
+  // 0.0727, far below the 0.09 the legibility claim needed.
   // Nor is it a matter of time: at seed 2026 the correlation is 0.0342 at 400
   // generations, -0.0237 at 1200 and 0.0344 at 2400 — flat over a sixfold
   // increase, so it is blocked rather than slow. No assertion is made on it;
@@ -441,7 +444,7 @@ describe("light and breadth", () => {
   });
 
   it("leaves the shaded quartile broader than the sunlit one", () => {
-    // 0.655 against 0.376 measured at seed 2026, and 0.675 against 0.408 on
+    // 0.676 against 0.375 measured at seed 2026, and 0.675 against 0.408 on
     // the constant-light control — so this is the island's shape, NOT an
     // effect of the light term, and the threshold is set where both sides
     // clear it. What it pins is that the measurement is being taken at all
@@ -454,7 +457,7 @@ describe("light and breadth", () => {
     // Pinned as a null, not as a success: if a later change to habitat
     // pinning or to dispersal makes individuals sort by breadth, this case
     // fails and the numbers in the comment above must be re-measured. At
-    // LIGHT_WEIGHT 0.25, seed 2026: -0.0769 derived against +0.0157 on the
+    // LIGHT_WEIGHT 0.25, seed 2026: +0.0294 derived against +0.0157 on the
     // constant-light control. The bound is set well above the largest
     // magnitude seen anywhere in the sweeps (0.144), so the null is asserted
     // rather than any exact value.
