@@ -57,6 +57,7 @@ describe("MineralField", () => {
     const f = mineralFieldFor(map, 5);
     const { tx, ty } = land(map);
     const original = f.totalAt(tx, ty);
+    const untouched = Array.from(f.sample(tx, ty));
 
     // Draw a known amount first, so a delta entry exists to deposit against.
     const demand = new Float32Array(MINERAL_COUNT).fill(1);
@@ -68,8 +69,11 @@ describe("MineralField", () => {
     // in MineralField.deposit exists to enforce.
     const vec = new Float32Array(MINERAL_COUNT).fill(1);
     f.deposit(tx, ty, vec, 10);
-    for (const x of f.sample(tx, ty)) expect(x).toBeLessThanOrEqual(1);
-    expect(f.totalAt(tx, ty)).toBeLessThanOrEqual(original);
+    const after = f.sample(tx, ty);
+    for (let m = 0; m < MINERAL_COUNT; m++) {
+      expect(after[m]).toBeLessThanOrEqual(1);
+      expect(after[m]).toBeCloseTo(untouched[m], 5);
+    }
   });
 
   it("deposit on a never-drawn tile is a no-op", () => {
