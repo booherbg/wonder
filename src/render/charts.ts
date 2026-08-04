@@ -8,6 +8,12 @@ import {
   ticksForWindow,
 } from "./chartWindow";
 import { downsample } from "../life/census";
+import {
+  TimelapseHandle,
+  TimelapseView,
+  mountTimelapse,
+  timelapseSectionHtml,
+} from "./timelapse";
 
 // The island's ledger: the census and food-web data the sim already computes,
 // promoted from tiny debug sparklines into real charts — population over
@@ -22,6 +28,14 @@ export interface ChartSeries {
   sat: number;
   counts: number[]; // population, oldest → newest
   peak: number;
+  /**
+   * True when this species was FOUNDED by a split during the island's life
+   * (`PlantSpecies.parent !== undefined`) rather than being one of the founders
+   * generated from the seed. A daughter's archetype is its founding plant's
+   * drifted genome, so its hue can sit within a few degrees of its parent's;
+   * `speciesColor` lightens it so the two lines are not one colour.
+   */
+  daughter?: boolean;
 }
 
 export interface ChartsView {
@@ -45,10 +59,26 @@ export interface ChartsView {
   // newest), one series per swarm in its own live genome colour — adaptation,
   // the pollinators' real story (total population just sits at the cap)
   swarmSeries: { name: string; color: string; matches: number[] }[];
+  /**
+   * The species timelapse for this island, or null when there is none — every
+   * classic island, and any Hollow built without recording. Null renders one
+   * line saying so rather than an empty player.
+   */
+  timelapse?: TimelapseView | null;
 }
 
 let chartWindow: ChartWindowId = "all";
 let lastChartsView: ChartsView | null = null;
+// The running timelapse animation, if the panel is showing one. Held at module
+// scope because every path that replaces the panel's innerHTML has to stop it
+// first — a requestAnimationFrame loop over detached elements otherwise keeps
+// running for the rest of the session.
+let timelapseHandle: TimelapseHandle | null = null;
+
+function stopTimelapse(): void {
+  timelapseHandle?.stop();
+  timelapseHandle = null;
+}
 
 /** Decimate a series for SVG path drawing — keep storage full, draw ~plot-wide. */
 export function seriesForChartPath(counts: readonly number[], plotW: number): number[] {
@@ -105,10 +135,24 @@ function axisSvg(
     .join("");
 }
 
-// genome hue → a legible line colour (mid-light, saturated enough to read on the
-// dark codex ground)
-function lineColor(hue: number, sat: number): string {
-  return `hsl(${Math.round(hue * 360)}, ${Math.round(Math.max(0.45, sat) * 78)}%, 62%)`;
+/**
+ * Genome hue (0..1) and saturation (0..1) → the one colour that identifies a
+ * plant species everywhere in the UI: mid-light and saturated enough to read on
+ * the dark codex ground.
+ *
+ * `daughter` lightens the result from 62% to 76%. A species founded by a split
+ * inherits its parent's genome plus drift, so parent and daughter hues can be
+ * within a few degrees of each other; without the step a succession between
+ * them draws as one colour. Exported so the population chart and the species
+ * timelapse cannot pick different colours for the same lineage.
+ */
+export function speciesColor(hue: number, sat: number, daughter = false): string {
+  const light = daughter ? 76 : 62;
+  return `hsl(${Math.round(hue * 360)}, ${Math.round(Math.max(0.45, sat) * 78)}%, ${light}%)`;
+}
+
+function lineColor(hue: number, sat: number, daughter = false): string {
+  return speciesColor(hue, sat, daughter);
 }
 
 const NB = " ";
@@ -174,7 +218,7 @@ function populationChart(v: ChartsView): string {
   const items = pathSeries
     .map((s) => {
       const li = s.draw.length - 1;
-      return { s, col: lineColor(s.hue, s.sat), endX: x(li), endY: y(s.draw[li]), labelY: 0 };
+      return { s, col: lineColor(s.hue, s.sat, s.daughter), endX: x(li), endY: y(s.draw[li]), labelY: 0 };
     })
     .sort((a, b) => a.endY - b.endY);
   let prev = padT - minGap;
@@ -212,7 +256,7 @@ function seriesLegend(v: ChartSeries[]): string {
   const items = v
     .map((s) => {
       const now = s.counts[s.counts.length - 1] ?? 0;
-      return `<span class="ch-sl"><i style="background:${lineColor(s.hue, s.sat)}"></i>${escapeText(s.name)} <b>${now.toLocaleString()}</b></span>`;
+      return `<span class="ch-sl"><i style="background:${lineColor(s.hue, s.sat, s.daughter)}"></i>${escapeText(s.name)} <b>${now.toLocaleString()}</b></span>`;
     })
     .join("");
   return `<div class="ch-serieslegend">${items}</div>`;
@@ -361,6 +405,7 @@ export function isChartsOpen(): boolean {
 }
 
 export function closeCharts(): void {
+  stopTimelapse();
   panel().style.display = "none";
   lastChartsView = null;
 }
@@ -376,6 +421,7 @@ function windowRow(active: ChartWindowId): string {
 function renderChartsPanel(full: ChartsView): void {
   const v = viewForWindow(full, chartWindow);
   const el = panel();
+  stopTimelapse();
   el.innerHTML = `
     <div class="ch-head">
       <span class="ch-title">ledger · census + web</span>
@@ -388,6 +434,7 @@ function renderChartsPanel(full: ChartsView): void {
     ${seriesLegend(v.series)}
     <div class="ch-section">pollinators</div>
     ${swarmChart(v)}
+    ${v.timelapse ? timelapseSectionHtml(v.timelapse) : ""}
     <div class="ch-section">biomes</div>
     ${biomeBar(v)}
     <div class="ch-section">food web</div>
@@ -395,6 +442,7 @@ function renderChartsPanel(full: ChartsView): void {
     <div class="ch-hint">G or Esc to close</div>
   `;
   el.style.display = "block";
+  if (v.timelapse) timelapseHandle = mountTimelapse(el, v.timelapse);
   for (const btn of el.querySelectorAll<HTMLButtonElement>("button.ch-win")) {
     btn.addEventListener("click", () => {
       const id = btn.dataset.win as ChartWindowId | undefined;

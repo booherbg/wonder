@@ -73,6 +73,8 @@ import {
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
+import { SpeciesTimelapse } from "../life/timelapse";
+import { TimelapseSpecies, TimelapseView } from "../render/timelapse";
 import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
 import {
   closePicker,
@@ -604,6 +606,47 @@ function padLeft(counts: number[], len: number): number[] {
     : [...new Array(len - counts.length).fill(0), ...counts];
 }
 
+// The island's history, sampled: the census counts and, when this island is
+// recording one, a species-timelapse frame. One function so a tick the census
+// logged is a tick the timelapse saw — the six call sites below cannot drift
+// apart. Neither call draws from an Rng or mutates the flora.
+function sampleHistory(): void {
+  census.sample(flora.tick, flora.speciesCounts);
+  timelapse?.capturePlay(flora, flora.tick);
+}
+
+/**
+ * The timelapse view the ledger draws, or null when this island has no
+ * recording — every classic island, and any Hollow loaded from a save (the
+ * frames are not serialised). Null renders no timelapse section at all rather
+ * than an empty player.
+ */
+function buildTimelapseView(): TimelapseView | null {
+  if (!timelapse || timelapse.frames.length === 0) return null;
+  const byId = new Map<number, TimelapseSpecies>();
+  for (const id of timelapse.speciesSeen()) {
+    const sp = species[id];
+    if (!sp) continue;
+    byId.set(id, {
+      id,
+      name: sp.name,
+      hue: sp.archetype.hue,
+      sat: sp.archetype.sat,
+      daughter: sp.parent !== undefined,
+    });
+  }
+  return {
+    frames: timelapse.frames,
+    cells: timelapse.cells,
+    tiles: map.tiles,
+    mapWidth: map.width,
+    mapHeight: map.height,
+    species: byId,
+    playInterval: timelapse.playInterval,
+    burnInCount: timelapse.burnInCount,
+  };
+}
+
 function buildChartsView(): ChartsView {
   const traces = census.list();
   const maxLen = Math.max(2, ...traces.map((t) => t.counts.length));
@@ -618,6 +661,7 @@ function buildChartsView(): ChartsView {
       sat: species[tr.id].archetype.sat,
       counts: padLeft(tr.counts, maxLen),
       peak: tr.peak,
+      daughter: species[tr.id].parent !== undefined,
     }));
   const sum = census.summary();
   const { plants: livePlants, critters: liveCritters } = liveSpeciesForWeb();
@@ -657,6 +701,7 @@ function buildChartsView(): ChartsView {
     germinations: flora.germinations,
     pollinators: { swarms: pol.cloudsTotal, population: pol.population, species: pol.species },
     swarmSeries,
+    timelapse: buildTimelapseView(),
   };
 }
 
@@ -710,7 +755,7 @@ async function runMidWarm(raw: number): Promise<void> {
     },
     step: () => {
       flora.simTick();
-      census.sample(flora.tick, flora.speciesCounts);
+      sampleHistory();
       swarmLayer.tick(flora);
       sampleSwarms();
     },
@@ -813,6 +858,14 @@ let map!: WorldMap;
 let player!: Player;
 let species!: PlantSpecies[];
 let flora!: Flora;
+/**
+ * This island's species-timelapse recorder, or null when it has none. Set from
+ * `PrebuiltLife` on a freshly grown Hollow and cleared on every other load: a
+ * classic island never records one, and a Hollow restored from a save cannot —
+ * the frames are not serialised, and the burn-in that produced them is not
+ * re-run on resume (25 ms restore against 4,816 ms regrowth, §12.2).
+ */
+let timelapse: SpeciesTimelapse | null = null;
 let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
@@ -977,6 +1030,16 @@ function loadSave(seed: number, style: IslandStyle): SavedWorld | null {
 interface PrebuiltLife {
   flora: Flora;
   species: PlantSpecies[];
+  /**
+   * The colonisation record made during this island's burn-in — 101 frames of
+   * "which species holds each 4×4-tile square", one per 4 generations. Null on
+   * any island that did not record one. Play keeps adding to it (see
+   * `sampleHistory`), because composition does not settle when burn-in ends:
+   * measured on seeds 9 and 2026, per-species population churn against the
+   * tick-400 composition reaches 55.8% and 51.4% by +10,000 ticks, with 6
+   * species arising and 3 lost on seed 9.
+   */
+  timelapse: SpeciesTimelapse | null;
   /** Hollow.attemptOffset — the reroll this island was accepted at, 0-7. */
   attemptOffset: number;
   /**
@@ -1062,6 +1125,9 @@ function loadWorld(
   // was actually last walked rather than the classic one of the same number.
   if (!titleActive) writeLastIsle(seed, currentStyle);
   census.reset(); // a new island begins its own history
+  // Adopted from the burn-in that made this island, or cleared. Set before the
+  // warm-up and catch-up loops below, which sample through `sampleHistory`.
+  timelapse = prebuiltLife?.timelapse ?? null;
   if (prebuiltLife) {
     species = prebuiltLife.species;
     // Burn-in may found daughter species, and they arose before the wanderer
@@ -1170,7 +1236,7 @@ function loadWorld(
     );
     for (let i = 0; i < catchUp; i++) {
       flora.simTick();
-      census.sample(flora.tick, flora.speciesCounts);
+      sampleHistory();
     }
     const awayEvents = flora.takeEvents();
     if (awayEvents.length > 0) awayBorn = awayEvents[awayEvents.length - 1].name;
@@ -1209,7 +1275,7 @@ function loadWorld(
     : Math.min(50000, Number(new URL(location.href).searchParams.get("warm") ?? 0) || 0);
   for (let i = 0; i < warm; i++) {
     flora.simTick();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   // the animals, restored where you left them if this world was saved;
@@ -1273,7 +1339,7 @@ function loadWorld(
   for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) {
     swarmLayer.tick(flora);
     sampleSwarms();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   swarmLayer.takeEvents(); // moments from before the wanderer arrived went unwitnessed
   // has this island already pointed at its clouds? remembered across sittings
@@ -1365,7 +1431,7 @@ function sleepToDawn(sky: number): void {
   const ticks = Math.min(MAX_CATCHUP_TICKS, Math.floor(skipped / SIM_MS));
   for (let i = 0; i < ticks; i++) {
     flora.simTick();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   simAcc = 0;
   const born = flora.takeEvents();
@@ -2085,6 +2151,7 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
         forgeProgress(done / total, `growing the Hollow — ${done} of ${total} generations`);
       },
       hollowSwarmFactory(),
+      true, // record the species timelapse through burn-in
     );
   } catch {
     forgeProgress(null);
@@ -2104,6 +2171,7 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
     landscape: hollow.landscape,
     canopy: hollow.canopy,
     swarms: hollow.swarms,
+    timelapse: hollow.timelapse,
   });
   renderer.setMap(map);
   if (hollow.report.floorHit) {
@@ -3144,7 +3212,7 @@ function frame(now: number): void {
     });
     swarmLayer.tick(flora); // each heartbeat, every swarm feeds + adapts on its nearest bloom
     sampleSwarms(); // and the pollinators' history keeps pace with the census
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
     simAcc -= SIM_MS;
     heartbeat = true;
   }

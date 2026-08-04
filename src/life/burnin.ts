@@ -33,6 +33,18 @@ export interface SwarmTicker {
   tick(flora: Flora): void;
 }
 
+/**
+ * An observer of burn-in, called once per generation with the generation just
+ * completed (1..generations), plus once with 0 before the first tick so the
+ * founder population is on the record.
+ *
+ * Contract: it may READ `flora` and it must not mutate it or draw from any Rng.
+ * `burnIn` gives it no other guarantee — an island burned in with an observer
+ * and one burned in without are the same island, and
+ * `tests/hollow-determinism.test.ts` is what holds that.
+ */
+export type BurnInObserver = (flora: Flora, generation: number) => void;
+
 /** Generations run before the first frame. Spec band: 300-600. */
 export const BURN_IN_GENERATIONS = 400;
 
@@ -114,13 +126,16 @@ export function burnIn(
   generations: number = BURN_IN_GENERATIONS,
   onProgress?: (done: number, total: number) => void,
   swarms?: SwarmTicker,
+  observe?: BurnInObserver,
 ): BurnInReport {
   requireFullCoverage(flora);
   const started = Date.now();
   const every = Math.max(1, Math.floor(generations / PROGRESS_STEPS));
+  observe?.(flora, 0);
   for (let i = 1; i <= generations; i++) {
     flora.simTick();
     swarms?.tick(flora);
+    observe?.(flora, i);
     if (onProgress && (i % every === 0 || i === generations)) onProgress(i, generations);
   }
   return reportFor(flora, generations, started);
@@ -163,16 +178,19 @@ export async function burnInAsync(
   onProgress?: (done: number, total: number) => void,
   yieldEvery: number = BURN_IN_YIELD_EVERY,
   swarms?: SwarmTicker,
+  observe?: BurnInObserver,
 ): Promise<BurnInReport> {
   requireFullCoverage(flora);
   const started = Date.now();
   const chunk = Math.max(1, Math.floor(yieldEvery));
   let done = 0;
+  observe?.(flora, 0);
   while (done < generations) {
     const upTo = Math.min(generations, done + chunk);
     for (; done < upTo; done++) {
       flora.simTick();
       swarms?.tick(flora);
+      observe?.(flora, done + 1);
     }
     onProgress?.(done, generations);
     if (done < generations) await yieldToPaint();

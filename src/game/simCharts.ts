@@ -100,6 +100,7 @@ export function buildLabChartsView(input: LabChartsInput): ChartsView {
       sat: plantSpecies[tr.id].archetype.sat,
       counts: padLeft(tr.counts, maxLen),
       peak: tr.peak,
+      daughter: plantSpecies[tr.id].parent !== undefined,
     }));
   const sum = census.summary();
   // Richness from living kinds only — latent defs on an empty construct read sparse.

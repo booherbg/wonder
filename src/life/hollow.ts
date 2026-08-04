@@ -17,6 +17,7 @@ import { MineralField, mineralFieldFor } from "./minerals";
 import { generatePlantSpecies } from "./species";
 import { CANOPY_REFRESH_TICKS, CanopyField } from "./canopy";
 import { applyHueKey } from "./huekey";
+import { SpeciesTimelapse } from "./timelapse";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The Hollow, assembled: a small forested island whose ecology has already run
@@ -82,6 +83,16 @@ export interface Hollow<S extends SwarmTicker = SwarmTicker> {
    * this one throws the co-evolution away and gets fresh, unselected swarms.
    */
   swarms: S | null;
+  /**
+   * The colonisation of this island, recorded: one coarse grid of dominant
+   * species per sampled burn-in generation (see `src/life/timelapse.ts`). Null
+   * unless the caller asked for it — `makeHollow`'s `record` argument — so
+   * every existing caller and test allocates nothing.
+   *
+   * Carries only the ACCEPTED attempt's frames. A rerolled attempt records into
+   * its own recorder, which is discarded with the island it described.
+   */
+  timelapse: SpeciesTimelapse | null;
 }
 
 /** One Hollow attempt, before the reroll loop has said which one it is. */
@@ -132,6 +143,7 @@ interface Unburned<S extends SwarmTicker> {
   landscape: FitnessLandscape;
   canopy: CanopyField;
   swarms: S | null;
+  timelapse: SpeciesTimelapse | null;
 }
 
 /**
@@ -230,6 +242,7 @@ export function hollowEcology(map: WorldMap, seed: number, getFlora: () => Flora
 function setUp<S extends SwarmTicker>(
   seed: number,
   makeSwarms?: HollowSwarmFactory<S>,
+  record = false,
 ): Unburned<S> {
   const map = generate(seed, HOLLOW_CONFIG);
   let flora!: Flora;
@@ -242,6 +255,10 @@ function setUp<S extends SwarmTicker>(
   // the map, species list, mineral field and landscape above are unchanged by
   // its presence — an island burned in without insects has the same terrain.
   const swarms = makeSwarms ? makeSwarms(seed, species, flora, map) : null;
+  // Built per ATTEMPT, like the swarm layer above, so a rerolled island's
+  // frames are dropped with it. Draws no Rng and never touches `flora`, so its
+  // presence cannot move the island (see src/life/timelapse.ts).
+  const timelapse = record ? new SpeciesTimelapse(map.width, map.height) : null;
   return {
     map,
     flora,
@@ -250,6 +267,7 @@ function setUp<S extends SwarmTicker>(
     landscape: eco.landscape,
     canopy: eco.canopy,
     swarms,
+    timelapse,
   };
 }
 
@@ -267,17 +285,30 @@ function attempt<S extends SwarmTicker>(
   seed: number,
   onProgress?: (d: number, t: number) => void,
   makeSwarms?: HollowSwarmFactory<S>,
+  record = false,
 ): HollowAttempt<S> {
-  const u = setUp(seed, makeSwarms);
-  return finish(u, burnIn(u.flora, BURN_IN_GENERATIONS, onProgress, u.swarms ?? undefined));
+  const u = setUp(seed, makeSwarms, record);
+  const tl = u.timelapse;
+  return finish(
+    u,
+    burnIn(
+      u.flora,
+      BURN_IN_GENERATIONS,
+      onProgress,
+      u.swarms ?? undefined,
+      tl ? (f, g) => tl.captureBurnIn(f, g) : undefined,
+    ),
+  );
 }
 
 async function attemptAsync<S extends SwarmTicker>(
   seed: number,
   onProgress?: (d: number, t: number) => void,
   makeSwarms?: HollowSwarmFactory<S>,
+  record = false,
 ): Promise<HollowAttempt<S>> {
-  const u = setUp(seed, makeSwarms);
+  const u = setUp(seed, makeSwarms, record);
+  const tl = u.timelapse;
   return finish(
     u,
     await burnInAsync(
@@ -286,6 +317,7 @@ async function attemptAsync<S extends SwarmTicker>(
       onProgress,
       BURN_IN_YIELD_EVERY,
       u.swarms ?? undefined,
+      tl ? (f, g) => tl.captureBurnIn(f, g) : undefined,
     ),
   );
 }
@@ -328,9 +360,10 @@ export function makeHollow<S extends SwarmTicker>(
   seed: number,
   onProgress?: (done: number, total: number) => void,
   makeSwarms?: HollowSwarmFactory<S>,
+  record = false,
 ): Hollow<S> {
   return pickAttempt(seed, (s, offset) => ({
-    ...attempt(s, onProgress, makeSwarms),
+    ...attempt(s, onProgress, makeSwarms, record),
     attemptOffset: offset,
   }));
 }
@@ -359,9 +392,10 @@ export async function makeHollowAsync<S extends SwarmTicker>(
   seed: number,
   onProgress?: (done: number, total: number) => void,
   makeSwarms?: HollowSwarmFactory<S>,
+  record = false,
 ): Promise<Hollow<S>> {
   return pickAttemptAsync(seed, async (s, offset) => ({
-    ...(await attemptAsync(s, onProgress, makeSwarms)),
+    ...(await attemptAsync(s, onProgress, makeSwarms, record)),
     attemptOffset: offset,
   }));
 }

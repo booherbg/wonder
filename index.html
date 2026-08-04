@@ -443,6 +443,20 @@
       #charts .ch-chain.muted { color: rgba(228, 236, 242, 0.45); }
       #charts .ch-loop { font: 10px ui-monospace, Menlo, monospace; color: rgb(var(--firefly)); letter-spacing: 0.08em; }
       #charts .ch-hint { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.4); text-align: center; margin-top: 16px; }
+      /* the species timelapse — the recorded island, played back */
+      #charts .tl-note { font: 11px ui-monospace, Menlo, monospace; line-height: 1.55; color: rgba(228, 236, 242, 0.5); margin-bottom: 10px; }
+      #charts .tl-wrap { display: flex; justify-content: center; }
+      #charts .tl-canvas { width: 100%; max-width: 420px; height: auto; display: block; image-rendering: pixelated;
+        border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(var(--lumen), 0.16); background: #05080c; }
+      #charts .tl-controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+      #charts .tl-play { flex: 0 0 auto; min-width: 88px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+        font: 11px ui-monospace, Menlo, monospace; letter-spacing: 0.06em;
+        background: rgba(var(--lumen), 0.08); color: var(--ink-bright); border: 1px solid rgba(var(--lumen), 0.22); }
+      #charts .tl-play:hover { border-color: rgba(var(--firefly), 0.45); color: rgb(var(--firefly)); }
+      #charts .tl-scrub { flex: 1 1 auto; min-width: 0; accent-color: rgb(var(--firefly)); }
+      #charts .tl-readout { font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.7); margin-top: 8px; font-variant-numeric: tabular-nums; }
+      #charts .tl-legend { display: flex; flex-wrap: wrap; gap: 5px 16px; margin-top: 6px; font: 11px ui-monospace, Menlo, monospace; color: rgba(228, 236, 242, 0.62); }
+      #charts .tl-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
       /* the backpack (B) — a JRPG inventory screen: browse & load the seed bank */
       #backpack {
         display: none;
