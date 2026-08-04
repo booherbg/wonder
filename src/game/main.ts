@@ -19,7 +19,7 @@ import {
 } from "../life/fauna";
 import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
 import { DEFAULT_TUNING, Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
-import { Hollow, makeHollowAsync } from "../life/hollow";
+import { Hollow, HollowEcology, hollowEcology, makeHollowAsync } from "../life/hollow";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import { CHAINS_KEY, LAST_SEED_KEY, parseLastSeed, resolveChains } from "./flags";
@@ -35,6 +35,7 @@ import {
   swarmCueDue,
 } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
+import { applyHueKey } from "../life/huekey";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache, critterSpriteCacheStats } from "../render/critterSprites";
@@ -87,6 +88,7 @@ import {
   restoreDaughters,
   restoreInventory,
   restorePlants,
+  worldIndexKey,
   worldKey,
 } from "./save";
 
@@ -97,7 +99,11 @@ const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
 const FORCE_HOLLOW = new URL(location.href).searchParams.has("hollow"); // dev aid: boot straight into a Hollow, bypassing the forge
-import { DEFAULT_CONFIG, IslandStyle, TILE_SIZE } from "../world/config";
+// Written into the URL by loadWorld for every Hollow, so a reload knows which
+// of the two islands on this seed it was showing — not a dev aid, the resume
+// route. See loadWorld's history.replaceState.
+const URL_STYLE_HOLLOW = new URL(location.href).searchParams.get("style") === "hollow";
+import { DEFAULT_CONFIG, HOLLOW_CONFIG, IslandStyle, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, generateAsync, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
 import { closeForge, forgeNotice, forgeProgress, isForgeOpen, openForge, setForgeBusy } from "../render/forge";
@@ -794,9 +800,14 @@ let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
-// Which style built the island now loaded. Stage 1 persists classic worlds
-// only — see persist() for why a Hollow is not written to a save slot.
+// Which style built the island now loaded. It selects the save namespace:
+// worldKey(seed, style), so seed N as a Classic and seed N as a Hollow are two
+// separate slots that cannot overwrite or restore into each other.
 let currentStyle: IslandStyle = "classic";
+// Hollow only: the reroll offset the loaded island was accepted at, 0-7. The
+// map came from generate(currentSeed + currentAttemptOffset, HOLLOW_CONFIG).
+// Always 0 for a classic world, whose map comes from the seed alone.
+let currentAttemptOffset = 0;
 let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
@@ -833,18 +844,11 @@ const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
 function persist(): void {
   if (titleActive) return; // never autosave the title backdrop
-  // Stage 1 does not persist the Hollow. A save slot is keyed by seed alone,
-  // and a saved world is restored by regenerating the map from that seed with
-  // DEFAULT_CONFIG and replanting the saved plants onto it. Neither step can
-  // reproduce a Hollow: its map comes from HOLLOW_CONFIG (140x140, not
-  // 300x300) and its plants are the survivors of a 400-generation burn-in.
-  // Measured, before this guard: playing seed 11 as a Hollow and then forging
-  // seed 11 as a Classic restored the Hollow's plants onto the classic map,
-  // and 43 of 8,337 survived the habitat check — an island with essentially
-  // nothing growing on it. Resuming a Hollow is its own task; until then a
-  // Hollow is a session you play now, and writing nothing is what keeps a
-  // later Classic on the same seed correct.
-  if (currentStyle === "hollow") return;
+  // The Hollow IS persisted now, in its own namespace. Two things made that
+  // possible: worldKey takes the style, so a Hollow can never be restored onto
+  // a classic map (the 43-of-8,337-plants corruption); and attemptOffset says
+  // which reroll was accepted, so the map is rebuilt with one generate() call
+  // instead of a 6.2-7.0 s burn-in.
   try {
     const s = packWorld(
       currentSeed,
@@ -877,26 +881,35 @@ function persist(): void {
         soil: flora.soilTileKeys(),
         crittersV2: packCrittersV2(critters, flora),
         critterRngState: critterRng.state?.(),
+        style: currentStyle,
+        attemptOffset: currentAttemptOffset,
       },
     );
-    localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
-    const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
+    localStorage.setItem(worldKey(currentSeed, currentStyle), JSON.stringify(s));
+    const indexKey = worldIndexKey(currentStyle);
+    const index: number[] = JSON.parse(localStorage.getItem(indexKey) ?? "[]");
     const next = [currentSeed, ...index.filter((x) => x !== currentSeed)];
     for (const evicted of next.slice(MAX_SAVED_WORLDS)) {
-      localStorage.removeItem(worldKey(evicted));
+      localStorage.removeItem(worldKey(evicted, currentStyle));
     }
-    localStorage.setItem(WORLD_INDEX_KEY, JSON.stringify(next.slice(0, MAX_SAVED_WORLDS)));
+    localStorage.setItem(indexKey, JSON.stringify(next.slice(0, MAX_SAVED_WORLDS)));
   } catch {
     // storage full or unavailable: the world still lives, just unsaved
   }
 }
 
-function loadSave(seed: number): SavedWorld | null {
+// Read the save filed under this seed AND style. `style` is explicit at every
+// call site: reading the classic slot for a Hollow (or the reverse) is the
+// exact bug the namespace split exists to prevent, so it is never defaulted.
+// A save that names a different style than the namespace it was found in is
+// refused — storage that was hand-edited or written by a future build.
+function loadSave(seed: number, style: IslandStyle): SavedWorld | null {
   try {
-    const raw = localStorage.getItem(worldKey(seed));
+    const raw = localStorage.getItem(worldKey(seed, style));
     if (!raw) return null;
     const s = JSON.parse(raw) as SavedWorld;
-    return s.v === 1 && s.seed === seed ? s : null;
+    if (s.v !== 1 || s.seed !== seed) return null;
+    return (s.style ?? "classic") === style ? s : null; // absent style ⇒ classic (pre-Hollow saves)
   } catch {
     return null;
   }
@@ -912,6 +925,19 @@ function loadSave(seed: number): SavedWorld | null {
 interface PrebuiltLife {
   flora: Flora;
   species: PlantSpecies[];
+  /** Hollow.attemptOffset — the reroll this island was accepted at, 0-7. */
+  attemptOffset: number;
+}
+
+/**
+ * A Hollow being rebuilt from its save rather than burned in again.
+ * `acceptedSeed` is `seed + SavedWorld.attemptOffset`: the seed the map,
+ * species list, mineral field and fitness landscape were all generated from.
+ * Passing this puts loadWorld on the ordinary saved-world restore path (the
+ * same RestoredFlora path a classic world uses) with the Hollow's ecology.
+ */
+interface HollowResume {
+  acceptedSeed: number;
 }
 
 function loadWorld(
@@ -919,12 +945,18 @@ function loadWorld(
   gen?: GenArgs,
   prebuilt?: WorldMap,
   prebuiltLife?: PrebuiltLife,
+  hollowResume?: HollowResume,
 ): void {
   // the map you drew of the island you're leaving keeps its ink — unless the
   // island you're leaving was the ephemeral title backdrop (backdropLoaded),
   // which nobody played and shouldn't leave a wander.explored entry behind
-  // currentStyle is still the OUTGOING island's here — a Hollow leaves no ink
-  // behind for the same reason it leaves no save (persist()).
+  // currentStyle is still the OUTGOING island's here. A Hollow leaves no ink
+  // behind even though it now leaves a save: wander.explored is keyed by seed
+  // alone (loadExplored/saveExplored take no style), and the two styles' maps
+  // are different sizes — 140x140 for HOLLOW_CONFIG against 300x300 for
+  // DEFAULT_CONFIG — so writing a Hollow's fog map under a bare seed would
+  // overwrite the classic island's. Namespacing that key is a later task; the
+  // Hollow's fog starts fresh each sitting until then.
   if (explored && !backdropLoaded && currentStyle !== "hollow") {
     saveExplored(currentSeed, explored, map.width, map.height);
   }
@@ -952,11 +984,19 @@ function loadWorld(
     }
   }
   currentSeed = seed;
-  currentStyle = prebuiltLife ? "hollow" : (gen?.style ?? "classic");
-  // The backdrop is not a played session, and neither is a stage-1 Hollow: it
-  // cannot be resumed (see persist()), so recording it as the island to
-  // "continue" would offer a door that opens onto a different island.
-  if (!titleActive && currentStyle !== "hollow") writeLastSeed(seed);
+  currentStyle = prebuiltLife || hollowResume ? "hollow" : (gen?.style ?? "classic");
+  currentAttemptOffset = prebuiltLife
+    ? prebuiltLife.attemptOffset
+    : hollowResume
+      ? hollowResume.acceptedSeed - seed
+      : 0;
+  // The backdrop is not a played session. A Hollow is, and it now resumes —
+  // but LAST_SEED_KEY stores a bare seed, which cannot say which of the two
+  // islands on that seed to open. Recording a Hollow there would make the
+  // front door's "continue" open the CLASSIC island of the same number. Until
+  // that key carries a style, the way back into a Hollow is its URL, which
+  // loadWorld writes ?style=hollow into below.
+  if (!titleActive && currentStyle === "classic") writeLastSeed(seed);
   census.reset(); // a new island begins its own history
   if (prebuiltLife) {
     species = prebuiltLife.species;
@@ -965,14 +1005,39 @@ function loadWorld(
     // baseSpeciesCount indexes "arose during play" (main.ts:840). Count the
     // founders (no parent) instead of the whole list.
     baseSpeciesCount = species.filter((s) => s.parent === undefined).length;
+  } else if (hollowResume) {
+    // The Hollow's founder species, rebuilt exactly as hollow.ts's setUp built
+    // them: from the ACCEPTED seed, hue-keyed. Daughters founded during
+    // burn-in are appended below by restoreDaughters, in saved order, so plant
+    // rows resolve to the same species indices they were packed with.
+    species = applyHueKey(
+      generatePlantSpecies(hollowResume.acceptedSeed),
+      hollowResume.acceptedSeed,
+    );
+    baseSpeciesCount = species.length; // the founders; matches the prebuilt branch's count
   } else {
     species = generatePlantSpecies(seed);
     if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
     baseSpeciesCount = species.length;
   }
+  // A resumed Hollow is scored by the same mineral/light selection context
+  // that built it — without it the island would DRIFT instead of select, which
+  // is the whole difference between a Hollow and a classic island.
+  //
+  // KNOWN LOSS, deliberate: MineralField holds its depletion (every draw() the
+  // burn-in and the played session made) in memory only, and nothing in
+  // SavedWorld records it. mineralFieldFor rebuilds the field at FULL strength
+  // here, so a resumed Hollow starts with its minerals unspent. Acceptable for
+  // stage 1 — the island is already burned in and its species composition is
+  // set, which is what the player came back to — but it is a loss, not a bug,
+  // and depletion does NOT persist. Serializing the field is a later task.
+  const eco: HollowEcology | null = hollowResume
+    ? hollowEcology(map, hollowResume.acceptedSeed, () => flora)
+    : null;
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
     chains: CHAINS, // the A/B toggle threads into both new Flora sites below
+    ...(eco ? eco.tuning : {}),
     ...(gen ? { scatterLife: gen.life } : {}),
     ...(new URL(location.href).searchParams.has("split")
       ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
@@ -983,7 +1048,7 @@ function loadWorld(
   // over it. Ignoring the save wholesale (not just its flora) keeps the camp,
   // inventory and player position from being reattached to an island they were
   // never set down on.
-  const saved = prebuiltLife ? null : loadSave(seed);
+  const saved = prebuiltLife ? null : loadSave(seed, currentStyle);
   worldName = saved?.name ?? null;
   worldPlayMs = saved?.playMs ?? 0;
   memories = saved?.memories ? [...saved.memories] : [];
@@ -1006,6 +1071,15 @@ function loadWorld(
       plants: restorePlants(saved, species),
       soil: saved.soil,
     });
+    // A Hollow was CONSTRUCTED at simBudget BURN_IN_SIM_BUDGET (10000, from
+    // eco.tuning above) so burn-in examined every plant every tick, then handed
+    // back to the play budget of 480 the moment the wanderer landed — see the
+    // prebuiltLife branch below. A resume repeats both steps in that order, so
+    // the tuning matches what the island was built with and the budget matches
+    // what it was played at. Done BEFORE the catch-up ticks: at 10000 against
+    // the Hollow's ~8,300 plants, catch-up would run the selection callback
+    // about 17x more per tick than play ever does.
+    if (eco) flora.tuning.simBudget = DEFAULT_TUNING.simBudget;
     // the island lived while you were away
     catchUp = Math.min(
       MAX_CATCHUP_TICKS,
@@ -1120,6 +1194,12 @@ function loadWorld(
   closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
+  // ?style=hollow is how a reload finds its way back into a Hollow: the front
+  // door's "continue" reads a bare seed and cannot tell the two islands apart
+  // (see writeLastSeed above), so the URL carries the style instead. Deleted
+  // for a classic world, so a classic URL is exactly what it was before.
+  if (currentStyle === "hollow") url.searchParams.set("style", "hollow");
+  else url.searchParams.delete("style");
   history.replaceState(null, "", url);
   renderSeedLabel();
   murmurs.setPlace(islandName(seed));
@@ -1256,10 +1336,10 @@ function openIslePicker(fromTitle = false): void {
     index,
     currentSeed,
     Date.now(),
-    (s) => loadSave(s)?.savedAt ?? null,
+    (s) => loadSave(s, "classic")?.savedAt ?? null, // the picker lists classic isles only in stage 1
     isleLook,
     (s) => {
-      const sv = loadSave(s);
+      const sv = loadSave(s, "classic");
       return { name: sv?.name, playMs: sv?.playMs };
     },
   );
@@ -1272,7 +1352,7 @@ function openIslePicker(fromTitle = false): void {
     },
     (seed) => {
       // forget a world: drop its save and its ledger row, then re-open the panel
-      localStorage.removeItem(worldKey(seed));
+      localStorage.removeItem(worldKey(seed, "classic"));
       localStorage.setItem(
         WORLD_INDEX_KEY,
         JSON.stringify((fromTitle ? savedSeeds() : savedIndex()).filter((s) => s !== seed)),
@@ -1588,12 +1668,24 @@ if (NOMENU) {
   // dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
   if (new URL(location.href).searchParams.has("isles")) openIslePicker();
   // dev aid: ?hollow (with optional &seed=N) generates a Hollow directly on
-  // load, bypassing the forge — the only way to reach a Hollow from a URL
-  if (FORCE_HOLLOW) {
+  // load, bypassing the forge. ?style=hollow is the same route by a different
+  // door: loadWorld writes it into the URL of every Hollow, so a RELOAD lands
+  // back in the Hollow it was showing — and generateHollow resumes it from its
+  // save rather than growing it again.
+  if (FORCE_HOLLOW || URL_STYLE_HOLLOW) {
     const hollowSeed = seedFromUrl() ?? newIslandSeed();
     const { seed: hSeed, gen: hGen } = forgeArgs({ ...defaultForgeState(hollowSeed), style: "hollow" });
     void generateHollow(hSeed, hGen);
   }
+} else if (URL_STYLE_HOLLOW) {
+  // A reload of a Hollow's own URL goes straight back to that island rather
+  // than to the front door — the same deep-link behavior ?nomenu has, for the
+  // one style the front door cannot offer (writeLastSeed stores a bare seed).
+  // generateHollow resumes from the save; the backdrop loaded above is
+  // discarded unplayed, exactly as it is when the forge builds a world.
+  const hollowSeed = seedFromUrl() ?? newIslandSeed();
+  const { seed: hSeed, gen: hGen } = forgeArgs({ ...defaultForgeState(hollowSeed), style: "hollow" });
+  void generateHollow(hSeed, hGen);
 } else {
   for (let i = 0; i < BACKDROP_WARM; i++) flora.simTick(); // greet the wanderer already alive
   showTitle(currentTitleState(), { choose: onChoose });
@@ -1704,6 +1796,30 @@ function openForgeFromTitle(): void {
   });
 }
 /**
+ * The saved Hollow for this seed, rebuilt to the point of a map — or null if
+ * there is none, or if its map no longer generates.
+ *
+ * `SavedWorld.attemptOffset` is what makes this possible: makeHollow rerolls
+ * on the BURN-IN OUTCOME, so `seed` alone does not say which island was
+ * accepted, but `seed + attemptOffset` does, and `generate` is deterministic.
+ * A missing offset reads as 0 — the first attempt, which is the only offset a
+ * save written before this field existed could have described.
+ */
+function resumeHollow(seed: number): { acceptedSeed: number; map: WorldMap } | null {
+  const saved = loadSave(seed, "hollow");
+  if (!saved) return null;
+  const acceptedSeed = seed + (saved.attemptOffset ?? 0);
+  try {
+    return { acceptedSeed, map: generate(acceptedSeed, HOLLOW_CONFIG) };
+  } catch {
+    // This seed produced an island once, and generate is deterministic, so
+    // reaching here means the save is foreign or the generator's rules moved.
+    // Fall through to growing a fresh Hollow rather than failing to load.
+    return null;
+  }
+}
+
+/**
  * Build a Hollow behind the forge's progress readout and enter it.
  *
  * The whole makeHollow call costs 6.2-7.0 s (measured, five seeds; 6.4 s on
@@ -1717,6 +1833,24 @@ function openForgeFromTitle(): void {
  * clears both on every exit path, as the classic branch does.
  */
 async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
+  // A Hollow already played on this seed comes back from its save instead of
+  // being grown again: one generate() call against HOLLOW_CONFIG at the
+  // ACCEPTED seed, then the ordinary RestoredFlora path. No burn-in, so this
+  // returns in map-generation time rather than the 6.2-7.0 s a fresh Hollow
+  // costs. `warm: 0` because a resumed island has already lived — re-running
+  // the forge's warm-up ticks on every reload would fast-forward it each time.
+  const resume = resumeHollow(seed);
+  if (resume) {
+    forgeProgress(null);
+    setForgeBusy(false);
+    closeForge();
+    leaveTitle();
+    loadWorld(seed, { ...gen, warm: 0 }, resume.map, undefined, {
+      acceptedSeed: resume.acceptedSeed,
+    });
+    renderer.setMap(map);
+    return;
+  }
   let hollow: Hollow;
   try {
     forgeProgress(0, "growing the Hollow…");
@@ -1733,7 +1867,11 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
   setForgeBusy(false);
   closeForge();
   leaveTitle();
-  loadWorld(seed, gen, hollow.map, { flora: hollow.flora, species: hollow.species });
+  loadWorld(seed, gen, hollow.map, {
+    flora: hollow.flora,
+    species: hollow.species,
+    attemptOffset: hollow.attemptOffset,
+  });
   renderer.setMap(map);
   if (hollow.report.floorHit) {
     // Never silent: pickAttempt returns the last attempt even after it has run

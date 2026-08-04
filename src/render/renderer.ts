@@ -754,6 +754,14 @@ export class Renderer {
           // Per-individual phase in [0,1), keyed to the critter's index in the
           // scene array (fixed at spawn — nothing is added or removed), so a
           // group of one kind does not sway as one block.
+          //
+          // DEPENDENCY, for whoever unfreezes fauna: `ci` is a position in
+          // scene.critters, not an identity. That array is stable today only
+          // because critters can neither be born nor die, so nothing is ever
+          // spliced out of it. The moment one can die, every critter after the
+          // gap shifts index and its gait phase jumps — a whole herd visibly
+          // re-syncing because one animal elsewhere was removed. Key this off
+          // a per-critter id assigned at birth when that day comes.
           const phase = hash2d(ci, c.species, 0x6a17);
           const gm = motionOffset(gait, timeMs, phase);
           const hopping = Math.sin(c.hopPhase) > 0;

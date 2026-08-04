@@ -10,7 +10,7 @@ import {
 } from "./burnin";
 import { PlantSpecies } from "./species";
 import { FitnessLandscape, landscapeFor } from "./fitness";
-import { Flora } from "./flora";
+import { Flora, FloraTuning } from "./flora";
 import { MineralField, mineralFieldFor } from "./minerals";
 import { generatePlantSpecies } from "./species";
 import { CANOPY_REFRESH_TICKS, CanopyField } from "./canopy";
@@ -39,7 +39,20 @@ export interface Hollow {
   landscape: FitnessLandscape;
   canopy: CanopyField;
   report: BurnInReport;
+  /**
+   * Which reroll produced this island: 0 for the first attempt, 1 for the
+   * second, up to MAX_ATTEMPTS - 1. The accepted map, species list, mineral
+   * field and landscape were all built from `seed + attemptOffset`, never from
+   * `seed` itself unless this is 0. Recorded because the reroll is driven by
+   * the BURN-IN OUTCOME (see pickAttempt), so the seed alone does not say which
+   * island you got — rebuilding it without this number means re-running a
+   * 400-generation burn-in, measured at 6.2-7.0 s across five seeds.
+   */
+  attemptOffset: number;
 }
+
+/** One Hollow attempt, before the reroll loop has said which one it is. */
+type HollowAttempt = Omit<Hollow, "attemptOffset">;
 
 /**
  * How much light reaches the ground from the terrain alone, 0 (deep shade) to
@@ -88,6 +101,79 @@ interface Unburned {
 }
 
 /**
+ * The three fields a Hollow's flora is scored against, plus the Flora tuning
+ * that reads them. `simBudget` is BURN_IN_SIM_BUDGET (10000) and `selection`
+ * is the mineral-and-light fitness callback.
+ */
+export interface HollowEcology {
+  minerals: MineralField;
+  landscape: FitnessLandscape;
+  canopy: CanopyField;
+  tuning: Pick<FloraTuning, "simBudget" | "selection">;
+}
+
+/**
+ * Build the mineral field, fitness landscape and canopy for a Hollow map, and
+ * the Flora tuning that scores plants against them.
+ *
+ * `getFlora` returns the Flora the tuning will be handed to. It is a getter
+ * because the selection callback must name a Flora that does not exist until
+ * the constructor it is passed to returns; the callback cannot run before
+ * then, so the deferred read is safe.
+ *
+ * Exported so a Hollow RESTORED from a save is scored by the same selection
+ * context that built it. Rebuilding a Hollow's Flora with the default tuning
+ * (selection: null) would make the island drift instead of select — the same
+ * plants, no longer under the pressure that shaped them.
+ */
+export function hollowEcology(map: WorldMap, seed: number, getFlora: () => Flora): HollowEcology {
+  const minerals = mineralFieldFor(map, seed);
+  const landscape = landscapeFor(seed);
+  const canopy = new CanopyField(map.width, map.height);
+  // Refresh bookkeeping. The canopy is rebuilt from the whole population, so
+  // it is refreshed on a tick boundary rather than per examination: the first
+  // plant examined in a refresh tick rebuilds it, the other 8,000 read it.
+  // `Flora.tick` is deterministic, so which tick triggers a refresh is too.
+  let refreshedAt = -1;
+  return {
+    minerals,
+    landscape,
+    canopy,
+    tuning: {
+      // Burn-in examines every living plant each tick. The default simBudget of
+      // 480 against a population near 8000 reaches 6% of the island per tick,
+      // which turns 400 ticks into about 1.4 reproductions per plant instead of
+      // about 24 — measured, 62.7% of the population born during burn-in at 480
+      // against 100% at full coverage. burnIn throws if this is left at the
+      // default, because the resulting island looks correct and is not.
+      simBudget: BURN_IN_SIM_BUDGET,
+      selection: {
+        fitness(g, tx, ty) {
+          const flora = getFlora();
+          if (flora.tick - refreshedAt >= CANOPY_REFRESH_TICKS) {
+            canopy.refresh(flora);
+            refreshedAt = flora.tick;
+          }
+          const supply = minerals.sample(tx, ty);
+          // The plant's own shade is excluded: it is not standing in its own
+          // shadow, and leaving it in makes the light it is scored against a
+          // function of its own height.
+          const light =
+            terrainLight(map, tx, ty) *
+            canopy.lightExcluding(tx, ty, CanopyField.shadeOfGenome(g));
+          const f = landscape.score(g, { minerals: supply, light });
+          // Growing costs what it draws. A plant that cannot get what it demands
+          // has already been scored down; drawing it down is what makes the next
+          // plant's shortage real.
+          minerals.draw(tx, ty, landscape.demandOf(g), 0.002);
+          return f;
+        },
+      },
+    },
+  };
+}
+
+/**
  * Build one candidate island and its ecology, up to but not including burn-in.
  * Split out so the synchronous and chunked-async paths run identical setup —
  * every rng draw here happens in the same order either way, so the two produce
@@ -95,49 +181,11 @@ interface Unburned {
  */
 function setUp(seed: number): Unburned {
   const map = generate(seed, HOLLOW_CONFIG);
-  const minerals = mineralFieldFor(map, seed);
-  const landscape = landscapeFor(seed);
-  const canopy = new CanopyField(map.width, map.height);
-  // `flora` is read by the selection callback below, which cannot run before
-  // the constructor returns, so the deferred binding is safe.
   let flora!: Flora;
-  // Refresh bookkeeping. The canopy is rebuilt from the whole population, so
-  // it is refreshed on a tick boundary rather than per examination: the first
-  // plant examined in a refresh tick rebuilds it, the other 8,000 read it.
-  // `Flora.tick` is deterministic, so which tick triggers a refresh is too.
-  let refreshedAt = -1;
+  const eco = hollowEcology(map, seed, () => flora);
   const species = applyHueKey(generatePlantSpecies(seed), seed);
-  flora = new Flora(map, species, seed, {
-    // Burn-in examines every living plant each tick. The default simBudget of
-    // 480 against a population near 8000 reaches 6% of the island per tick,
-    // which turns 400 ticks into about 1.4 reproductions per plant instead of
-    // about 24 — measured, 62.7% of the population born during burn-in at 480
-    // against 100% at full coverage. burnIn throws if this is left at the
-    // default, because the resulting island looks correct and is not.
-    simBudget: BURN_IN_SIM_BUDGET,
-    selection: {
-      fitness(g, tx, ty) {
-        if (flora.tick - refreshedAt >= CANOPY_REFRESH_TICKS) {
-          canopy.refresh(flora);
-          refreshedAt = flora.tick;
-        }
-        const supply = minerals.sample(tx, ty);
-        // The plant's own shade is excluded: it is not standing in its own
-        // shadow, and leaving it in makes the light it is scored against a
-        // function of its own height.
-        const light =
-          terrainLight(map, tx, ty) *
-          canopy.lightExcluding(tx, ty, CanopyField.shadeOfGenome(g));
-        const f = landscape.score(g, { minerals: supply, light });
-        // Growing costs what it draws. A plant that cannot get what it demands
-        // has already been scored down; drawing it down is what makes the next
-        // plant's shortage real.
-        minerals.draw(tx, ty, landscape.demandOf(g), 0.002);
-        return f;
-      },
-    },
-  });
-  return { map, flora, species, minerals, landscape, canopy };
+  flora = new Flora(map, species, seed, eco.tuning);
+  return { map, flora, species, minerals: eco.minerals, landscape: eco.landscape, canopy: eco.canopy };
 }
 
 /**
@@ -145,12 +193,12 @@ function setUp(seed: number): Unburned {
  * the population that is actually returned, not with whichever refresh tick
  * burn-in happened to stop after.
  */
-function finish(u: Unburned, report: BurnInReport): Hollow {
+function finish(u: Unburned, report: BurnInReport): HollowAttempt {
   u.canopy.refresh(u.flora);
   return { ...u, report };
 }
 
-function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hollow {
+function attempt(seed: number, onProgress?: (d: number, t: number) => void): HollowAttempt {
   const u = setUp(seed);
   return finish(u, burnIn(u.flora, BURN_IN_GENERATIONS, onProgress));
 }
@@ -158,7 +206,7 @@ function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hol
 async function attemptAsync(
   seed: number,
   onProgress?: (d: number, t: number) => void,
-): Promise<Hollow> {
+): Promise<HollowAttempt> {
   const u = setUp(seed);
   return finish(u, await burnInAsync(u.flora, BURN_IN_GENERATIONS, onProgress));
 }
@@ -178,13 +226,17 @@ export function hollowLightAt(h: Hollow, tx: number, ty: number, ownShade = 0): 
  * the last result either way: after MAX_ATTEMPTS it is returned with floorHit
  * still set rather than throwing, so a caller that wants to refuse can read
  * the report.
+ *
+ * `build` receives the offset as well as the seed, so the caller can record
+ * WHICH attempt was accepted — the one number a save needs to rebuild this
+ * island without re-running burn-in (see Hollow.attemptOffset).
  */
 export function pickAttempt<T extends { report: { floorHit: boolean } }>(
   seed: number,
-  build: (s: number) => T,
+  build: (s: number, offset: number) => T,
 ): T {
-  let last = build(seed);
-  for (let i = 1; i < MAX_ATTEMPTS && last.report.floorHit; i++) last = build(seed + i);
+  let last = build(seed, 0);
+  for (let i = 1; i < MAX_ATTEMPTS && last.report.floorHit; i++) last = build(seed + i, i);
   return last;
 }
 
@@ -197,16 +249,16 @@ export function makeHollow(
   seed: number,
   onProgress?: (done: number, total: number) => void,
 ): Hollow {
-  return pickAttempt(seed, (s) => attempt(s, onProgress));
+  return pickAttempt(seed, (s, offset) => ({ ...attempt(s, onProgress), attemptOffset: offset }));
 }
 
 /** pickAttempt's rule, awaiting each attempt. Same seeds, same order. */
 export async function pickAttemptAsync<T extends { report: { floorHit: boolean } }>(
   seed: number,
-  build: (s: number) => Promise<T>,
+  build: (s: number, offset: number) => Promise<T>,
 ): Promise<T> {
-  let last = await build(seed);
-  for (let i = 1; i < MAX_ATTEMPTS && last.report.floorHit; i++) last = await build(seed + i);
+  let last = await build(seed, 0);
+  for (let i = 1; i < MAX_ATTEMPTS && last.report.floorHit; i++) last = await build(seed + i, i);
   return last;
 }
 
@@ -224,5 +276,8 @@ export async function makeHollowAsync(
   seed: number,
   onProgress?: (done: number, total: number) => void,
 ): Promise<Hollow> {
-  return pickAttemptAsync(seed, (s) => attemptAsync(s, onProgress));
+  return pickAttemptAsync(seed, async (s, offset) => ({
+    ...(await attemptAsync(s, onProgress)),
+    attemptOffset: offset,
+  }));
 }

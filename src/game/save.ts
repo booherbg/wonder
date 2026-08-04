@@ -2,6 +2,7 @@ import { Critter, CritterMood, CritterSpecies, CritterState } from "../life/faun
 import { Flora, Plant } from "../life/flora";
 import { Genome, NUMERIC_TRAITS, PlantForm } from "../life/genome";
 import { PlantSpecies } from "../life/species";
+import { IslandStyle } from "../world/config";
 import { Inventory } from "./inventory";
 
 // A world is worth keeping because of what it has BECOME: the drifted
@@ -27,6 +28,21 @@ export interface SavedWorld {
   memories?: string[]; // weather memory: rare events this island has witnessed
   camp?: SavedCamp; // the wanderer's camp: materials carried, nodes taken, fire built
   soil?: number[]; // tiles the wanderer tilled with soil (row-major keys); absent before digging
+  /**
+   * Which island style this save describes. Absent in every save written
+   * before the Hollow could be resumed, and absent means "classic" — the only
+   * style those saves could have been. Redundant with the key it is filed
+   * under (worldKey), and kept anyway so a save read back can be checked
+   * against the namespace it came from.
+   */
+  style?: IslandStyle;
+  /**
+   * Hollow only: the reroll offset that produced this island, 0-7. The map is
+   * rebuilt with `generate(seed + attemptOffset, HOLLOW_CONFIG)`. Absent for
+   * classic worlds, whose map comes from the seed alone. See
+   * Hollow.attemptOffset for why the seed by itself is not enough.
+   */
+  attemptOffset?: number;
 }
 
 export interface SavedCamp {
@@ -92,6 +108,8 @@ export function packWorld(
     soil?: number[];
     crittersV2?: SavedCritterV2[];
     critterRngState?: number;
+    style?: IslandStyle;
+    attemptOffset?: number;
   } = {},
 ): SavedWorld {
   return {
@@ -99,6 +117,10 @@ export function packWorld(
     seed,
     tick,
     savedAt,
+    // omitted for classic, so a classic save is byte-identical to the ones
+    // written before the Hollow existed
+    style: extra.style === "hollow" ? "hollow" : undefined,
+    attemptOffset: extra.style === "hollow" ? extra.attemptOffset : undefined,
     name: extra.name,
     playMs: extra.playMs,
     soil: extra.soil && extra.soil.length > 0 ? [...extra.soil] : undefined,
@@ -323,9 +345,35 @@ export function restoreInventory(saved: SavedWorld, species: PlantSpecies[]): In
   };
 }
 
-export function worldKey(seed: number): string {
-  return `wander.world.${seed}`;
+/**
+ * The localStorage key a world's save is filed under, per island style.
+ *
+ * Classic keeps `wander.world.${seed}` byte-for-byte: those keys hold every
+ * save written before the Hollow existed, and they must keep loading. The
+ * Hollow gets its own namespace, because a save slot keyed by seed alone is
+ * WRONG once two styles exist — measured, before this split: playing seed 11
+ * as a Hollow and then forging seed 11 as a Classic restored the Hollow's
+ * plants onto the classic map, where 43 of 8,337 survived the habitat check.
+ *
+ * `style` is required rather than defaulted, so no caller can forget it and
+ * silently write a Hollow into the classic namespace again.
+ */
+export function worldKey(seed: number, style: IslandStyle): string {
+  return style === "hollow" ? `wander.world.hollow.${seed}` : `wander.world.${seed}`;
 }
 
 export const WORLD_INDEX_KEY = "wander.worlds";
+/**
+ * The Hollow's own saved-worlds list, parallel to WORLD_INDEX_KEY. Separate
+ * because the index is a list of SEEDS, and one seed can now name two islands:
+ * merging them would make eviction and "forget this isle" ambiguous. Not shown
+ * in the isle picker in stage 1 — it exists so Hollow saves are evicted at the
+ * same MAX_SAVED_WORLDS bound as classic ones rather than accreting forever.
+ */
+export const HOLLOW_INDEX_KEY = "wander.worlds.hollow";
+
+export function worldIndexKey(style: IslandStyle): string {
+  return style === "hollow" ? HOLLOW_INDEX_KEY : WORLD_INDEX_KEY;
+}
+
 export const MAX_SAVED_WORLDS = 8;
