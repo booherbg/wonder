@@ -53,3 +53,27 @@ export const DEFAULT_CONFIG: WorldConfig = {
   minWalkableRegion: 3000,
   maxGenerationAttempts: 16,
 };
+
+/** Which island the forge builds. "classic" is every island shipped before the Hollow. */
+export type IslandStyle = "classic" | "hollow";
+
+// The Hollow: small, dense, enclosed. Enclosure comes from not being able to
+// see far, which is a zoom and occlusion question rather than a camera one —
+// the config's part is a smaller island with most of its land under forest.
+export const HOLLOW_CONFIG: WorldConfig = {
+  ...DEFAULT_CONFIG,
+  width: 140,
+  height: 140,
+  elevationScale: 44, // broader landforms would flatten a map this size
+  falloffSharpness: 2.0, // a softer rim: more interior, less beach
+  forestMoisture: 0.34, // most of the land is forest, not meadow
+  marshMoisture: 0.58,
+  riverCount: 3,
+  fallMaxCount: 1,
+  craterChance: 0, // the Hollow's shape is a bowl of trees, not a caldera
+  minWalkableRegion: 700, // scaled from 3000 by the ~4.6x drop in tile count
+};
+
+export function configForStyle(style: IslandStyle): WorldConfig {
+  return style === "hollow" ? HOLLOW_CONFIG : DEFAULT_CONFIG;
+}
