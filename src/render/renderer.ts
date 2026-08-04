@@ -5,7 +5,8 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
-import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
+import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade, tintStrength } from "../game/daynight";
+import { Gait, gaitFor, motionOffset } from "../life/motion";
 import { TidePool, exposureAt } from "../game/tide";
 import { resemblance } from "../life/idmap";
 import { conspicuousness } from "../life/swarm";
@@ -101,6 +102,9 @@ export class Renderer {
   private prints: { x: number; y: number; at: number }[] = [];
   private lastPrintX = -999;
   private lastPrintY = -999;
+  // One Gait per critter species id, built once. gaitFor hashes six times, so
+  // it must not run per critter per frame.
+  private gaits = new Map<number, Gait>();
   private zoomLevel = 1; // the focus lens: 1 = the wide world, 2 = leaned in close, <1 = pulled back (the World-Lab's fit-to-window)
 
   constructor(
@@ -672,6 +676,8 @@ export class Renderer {
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
     const darkness = scene.darkness ?? 0;
+    // Glow keys off the sky's colour cast, not its darkness — see tintStrength.
+    const tintNow = tintStrength(timeMs);
     const glowers: { x: number; y: number; hue: number; genome: Parameters<typeof getPlantSprite>[0] }[] = [];
     for (let ty = y0; ty <= Math.min(map.height - 1, y1 + yPad); ty++) {
       if (scene.critterSpecies) {
@@ -723,7 +729,7 @@ export class Renderer {
               ctx.drawImage(sprite, dx, dy);
             }
             if (grow < 1) ctx.restore();
-            if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
+            if (tintNow > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
               glowers.push({ x: p.x, y: p.y, hue: p.genome.hue, genome: p.genome });
             }
           }
@@ -735,7 +741,21 @@ export class Renderer {
           if (Math.floor(c.y / TILE_SIZE) !== ty) continue;
           const cx = c.x - camX;
           if (cx < -16 || cx > this.viewWidth + 16) continue;
-          const set = getCritterSprites(scene.critterSpecies[c.species]);
+          const sp = scene.critterSpecies[c.species];
+          const set = getCritterSprites(sp);
+          // The species' motion signature, in art px. Purely a drawing offset:
+          // it never touches c.x/c.y, so pathing, collision and the ecology
+          // read the same numbers they would with this line deleted.
+          let gait = this.gaits.get(sp.id);
+          if (!gait) {
+            gait = gaitFor(sp.id);
+            this.gaits.set(sp.id, gait);
+          }
+          // Per-individual phase in [0,1), keyed to the critter's index in the
+          // scene array (fixed at spawn — nothing is added or removed), so a
+          // group of one kind does not sway as one block.
+          const phase = hash2d(ci, c.species, 0x6a17);
+          const gm = motionOffset(gait, timeMs, phase);
           const hopping = Math.sin(c.hopPhase) > 0;
           const blinking = !hopping && (Math.floor(timeMs / 130) + ci * 7) % 41 === 0;
           const sprite =
@@ -743,7 +763,11 @@ export class Renderer {
               ? blinking ? set.blink : hopping ? set.hop : set.rest
               : blinking ? set.blinkFlip : hopping ? set.hopFlip : set.restFlip;
           const bounce = Math.round(Math.abs(Math.sin(c.hopPhase)) * 2);
-          ctx.drawImage(sprite, Math.round(cx - 8), Math.round(c.y - 14 - camY - bounce));
+          ctx.drawImage(
+            sprite,
+            Math.round(cx - 8 + gm.dx),
+            Math.round(c.y - 14 - camY - bounce + gm.dy),
+          );
         }
       }
       if (scene.beast && Math.floor(scene.beast.y / TILE_SIZE) === ty) {
@@ -848,7 +872,10 @@ export class Renderer {
       timeMs,
     );
 
-    if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
+    // Driven by the tint so glow rises with the dusk cast rather than lagging
+    // it — the lag is what cost dusk two-thirds of its pigment separation.
+    const glowDrive = Math.max(darkness, tintNow);
+    if (glowDrive > 0.01) this.nightPass(camX, camY, scene, glowDrive, glowers, timeMs);
 
     // rain: the world darkens a shade, then silver streaks lean with the wind
     const rain = scene.rain ?? 0;
