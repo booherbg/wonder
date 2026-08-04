@@ -30,7 +30,10 @@ describe("the Hollow's island style", () => {
   });
 
   it("allows the wanderer to spawn under the canopy, not just on grass", () => {
-    expect(HOLLOW_CONFIG.spawnTiles).toEqual([Tile.Grass, Tile.Forest]);
+    // Forest first: it is the primary spawn ground. Grass is the fallback,
+    // kept because it matters on grassier seeds, but the Hollow carries only
+    // 0-109 grass tiles out of 19,600 across seeds 1-12 (0 on five of them).
+    expect(HOLLOW_CONFIG.spawnTiles).toEqual([Tile.Forest, Tile.Grass]);
     for (let s = 1; s <= 12; s++) {
       const map = generate(s, HOLLOW_CONFIG);
       const spawnTile = map.tiles[map.spawn.y * map.width + map.spawn.x] as Tile;

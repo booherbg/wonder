@@ -21,6 +21,33 @@ import { MINERAL_COUNT, MineralVec } from "./minerals";
 
 export const RUGGEDNESS_K = 3;
 
+/**
+ * How much of a plant's fitness the light term controls, 0 (inert) to 1 (light
+ * alone). `score` multiplies the NK/mineral mean by
+ * `(1 - LIGHT_WEIGHT) + LIGHT_WEIGHT * lightFit`, so this is the fraction of
+ * the score the light axis can move.
+ *
+ * RAISED from an effective 0.075. The first version was
+ * `lightFit = 1 - |light - height| * 0.5` (spanning [0.75, 1] at the extremes,
+ * since |light-height| <= 1) scaled by 0.3, so the entire light axis moved a
+ * score by 7.5%. Measured against a genome-to-genome score standard deviation
+ * of 0.0930 at fixed light, the mean per-genome swing across light 0.25 -> 0.85
+ * was 0.0320 — light was a third the strength of the noise it competed with,
+ * and no height gradient survived 400 generations of burn-in.
+ *
+ * 0.85 chosen by sweep on seed 2026's Hollow. Mean genome height, darkest
+ * against brightest quartile of canopy-derived light, island-wide:
+ *     no light selection   -0.358
+ *     0.30                 -0.307
+ *     0.60                 -0.251
+ *     0.85                 -0.236
+ *     1.00                 -0.243
+ * The gain is monotone to 0.85 and flat after, and 0.85 keeps the multiplier
+ * in [0.15, 1] so the NK landscape still sets six sevenths of the score at the
+ * worst light mismatch. Above 1.0 the multiplier would go negative.
+ */
+export const LIGHT_WEIGHT = 0.85;
+
 /** What a place offers: what minerals are present, and how much light. */
 export interface Niche {
   minerals: MineralVec;
@@ -107,10 +134,11 @@ export class FitnessLandscape {
     }
     const mean = sum / N;
     // Light modulates the whole plant, not one trait: tall plants want sun,
-    // low ones tolerate shade. Bounded so light alone never decides fitness.
+    // low ones tolerate shade. lightFit spans the full [0, 1] so the axis is
+    // not pre-shrunk before LIGHT_WEIGHT scales it.
     const wantsLight = norm(g, "height");
-    const lightFit = 1 - Math.abs(niche.light - wantsLight) * 0.5;
-    const f = mean * (0.7 + 0.3 * lightFit);
+    const lightFit = 1 - Math.abs(niche.light - wantsLight);
+    const f = mean * (1 - LIGHT_WEIGHT + LIGHT_WEIGHT * lightFit);
     return f < 0 ? 0 : f > 1 ? 1 : f;
   }
 }

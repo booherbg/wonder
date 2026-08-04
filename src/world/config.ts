@@ -83,9 +83,12 @@ export const HOLLOW_CONFIG: WorldConfig = {
   // healthy islands; do not raise it toward the observed minimum, or it
   // starts rejecting good islands for no reason.
   minWalkableRegion: 700,
-  // A mostly-forested island has little grass; without this the wanderer
-  // could not spawn under the Hollow's own canopy.
-  spawnTiles: [Tile.Grass, Tile.Forest],
+  // Forest first: it is the Hollow's primary spawn ground. Grass is kept
+  // because it costs nothing and matters on the grassier seeds, but it is the
+  // fallback, not the default — counted over seeds 1-12 the Hollow carries 0
+  // to 109 grass tiles out of 19,600 (0 on five of those twelve seeds), so
+  // without Forest here the wanderer would have nowhere to stand.
+  spawnTiles: [Tile.Forest, Tile.Grass],
 };
 
 export function configForStyle(style: IslandStyle): WorldConfig {
