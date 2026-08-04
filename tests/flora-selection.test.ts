@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { Flora, SelectionContext } from "../src/life/flora";
 import { generate } from "../src/world/generate";
@@ -11,24 +12,40 @@ function build(sel: SelectionContext | null) {
 }
 
 describe("Flora selection", () => {
-  it("with no selection context, is byte-identical to today", () => {
+  // GOLDEN FINGERPRINT of seed 2026 at 200 ticks with default tuning, captured
+  // from master (2cfb693) before any selection work: sha256 over
+  // `species:x:y` per plant in list order, positions rounded to 2 decimals,
+  // plus the population count. The old version of this test compared
+  // `build(null)` to `build(null)` — the same construction twice, which proves
+  // determinism and would pass if selection had changed every plant.
+  const MASTER_2026_200 = "e6f2211933754378:8765";
+
+  it("with no selection context, is byte-identical to master", () => {
     const a = build(null);
-    const b = build(null);
-    for (let i = 0; i < 200; i++) { a.simTick(); b.simTick(); }
-    expect(a.all.length).toBe(b.all.length);
-    expect(a.all.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join("|"))
-      .toBe(b.all.map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`).join("|"));
+    for (let i = 0; i < 200; i++) a.simTick();
+    const body = a.all.map((p) => `${p.species}:${p.x.toFixed(2)}:${p.y.toFixed(2)}`).join("|");
+    expect(`${createHash("sha256").update(body).digest("hex").slice(0, 16)}:${a.all.length}`)
+      .toBe(MASTER_2026_200);
   });
 
   it("draws no extra rng when selection is null", () => {
     // Two Floras, one constructed with an explicit null selection and one with
     // the field omitted entirely, must agree tick for tick.
+    // A fresh species array each: Flora holds the list by reference and pushes
+    // daughter species onto it in place on speciation (src/life/flora.ts:705).
     const map = generate(77, DEFAULT_CONFIG);
-    const species = generatePlantSpecies(77);
-    const a = new Flora(map, species, 77, {});
-    const b = new Flora(map, species, 77, { selection: null });
+    const a = new Flora(map, generatePlantSpecies(77), 77, {});
+    const b = new Flora(map, generatePlantSpecies(77), 77, { selection: null });
     for (let i = 0; i < 150; i++) { a.simTick(); b.simTick(); }
     expect(a.all.length).toBe(b.all.length);
+    // …and both must still be master's population, not merely each other's:
+    // golden fingerprint, seed 77 at 150 ticks, captured from master 2cfb693.
+    const fp = (f: Flora) => {
+      const body = f.all.map((p) => `${p.species}:${p.x.toFixed(2)}:${p.y.toFixed(2)}`).join("|");
+      return `${createHash("sha256").update(body).digest("hex").slice(0, 16)}:${f.all.length}`;
+    };
+    expect(fp(a)).toBe("176ca5907810090d:8728");
+    expect(fp(b)).toBe("176ca5907810090d:8728");
   });
 
   it("with selection on, high-fitness genomes come to outnumber low ones", () => {

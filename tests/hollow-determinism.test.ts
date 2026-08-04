@@ -37,14 +37,47 @@ describe("the classic island is unchanged by the Hollow", () => {
     }
   });
 
-  it("flora with default tuning draws no selection rng", () => {
+  // GOLDEN PLANT FINGERPRINTS, captured the same way as CLASSIC_FINGERPRINTS
+  // above: master (2cfb693, before any Hollow work) checked out in a worktree,
+  // `new Flora(map, generatePlantSpecies(s), s)` with default tuning, 400
+  // `simTick()` calls, then sha256 over `species:x:y` per plant in list order
+  // (positions rounded to 2 decimals) plus the population count.
+  //
+  // The previous version of this test compared default tuning to
+  // `{selection: null}`, which is the SAME resolved tuning (flora.ts's
+  // DEFAULT_TUNING already has selection null) — it proved Flora is
+  // deterministic, which it would be even if every classic island's plants had
+  // changed. This is the same defect §12.4 records for worldgen. These
+  // constants are what makes the classic flora guard real.
+  //
+  // If one fails, do not update the constant. It means the plants on every
+  // existing classic save have moved.
+  const CLASSIC_FLORA_FINGERPRINTS: Record<number, string> = {
+    1: "ebab36f7d3944d74:8752",
+    7: "e414bb5fca332ba9:8732",
+    42: "d56db9d4b62e5655:8802",
+    1234: "935e69d2d25675f5:8752",
+    2026: "f66bec0cf72da2ea:8783",
+  };
+
+  it("classic flora produces the plants it did before the Hollow", () => {
     for (const s of SEEDS) {
       const map = generate(s, DEFAULT_CONFIG);
-      // Two independently-generated species arrays, not one shared array: Flora
-      // stores its species-list param by reference and pushes new species onto
-      // it in-place on speciation (src/life/flora.ts:705), so sharing one array
-      // between two live Flora instances cross-contaminates their species
-      // indices and produces a false failure unrelated to the selection hook.
+      // A fresh species array per Flora: Flora stores its species-list param by
+      // reference and pushes daughter species onto it in place on speciation
+      // (src/life/flora.ts:705), so one array shared between instances
+      // cross-contaminates their species indices.
+      const f = new Flora(map, generatePlantSpecies(s), s);
+      for (let i = 0; i < 400; i++) f.simTick();
+      const body = f.all.map((p) => `${p.species}:${p.x.toFixed(2)}:${p.y.toFixed(2)}`).join("|");
+      const hash = createHash("sha256").update(body).digest("hex").slice(0, 16);
+      expect(`${hash}:${f.all.length}`).toBe(CLASSIC_FLORA_FINGERPRINTS[s]);
+    }
+  });
+
+  it("an explicit null selection is the same tuning as the default", () => {
+    for (const s of SEEDS) {
+      const map = generate(s, DEFAULT_CONFIG);
       const a = new Flora(map, generatePlantSpecies(s), s);
       const b = new Flora(map, generatePlantSpecies(s), s, { selection: null });
       for (let i = 0; i < 400; i++) { a.simTick(); b.simTick(); }
