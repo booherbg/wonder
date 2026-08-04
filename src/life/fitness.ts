@@ -39,25 +39,30 @@ function norm(g: Genome, t: NumericTrait): number {
 }
 
 export class FitnessLandscape {
-  // partners[i] = the K trait indices trait i's contribution also depends on.
+  // partners[i] = the k trait indices trait i's contribution also depends on.
   private readonly partners: Uint8Array;
+  private readonly k: number;
 
-  constructor(private readonly seed: number) {
-    this.partners = new Uint8Array(N * RUGGEDNESS_K);
+  // `k` defaults to RUGGEDNESS_K and is injectable only so tests can compare
+  // ruggedness levels directly; every shipped landscape uses the default via
+  // landscapeFor. Do not call this constructor with a non-default k outside tests.
+  constructor(private readonly seed: number, k: number = RUGGEDNESS_K) {
+    this.k = k;
+    this.partners = new Uint8Array(N * this.k);
     for (let i = 0; i < N; i++) {
       // Deterministic, distinct partners: walk forward by seeded strides,
       // skipping i itself. Fixed wiring per island.
       let picked = 0;
       let probe = 1;
-      while (picked < RUGGEDNESS_K && probe < N * 4) {
+      while (picked < this.k && probe < N * 4) {
         const j = (i + 1 + Math.floor(hash2d(i, probe, seed) * (N - 1))) % N;
         let dup = j === i;
-        for (let q = 0; q < picked; q++) if (this.partners[i * RUGGEDNESS_K + q] === j) dup = true;
-        if (!dup) this.partners[i * RUGGEDNESS_K + picked++] = j;
+        for (let q = 0; q < picked; q++) if (this.partners[i * this.k + q] === j) dup = true;
+        if (!dup) this.partners[i * this.k + picked++] = j;
         probe++;
       }
       // Degenerate fallback for tiny genomes: pad with the next index along.
-      while (picked < RUGGEDNESS_K) this.partners[i * RUGGEDNESS_K + picked++] = (i + 1) % N;
+      while (picked < this.k) this.partners[i * this.k + picked++] = (i + 1) % N;
     }
   }
 
@@ -86,8 +91,8 @@ export class FitnessLandscape {
       // Quantise the trait and its partners into a lookup coordinate. 8 levels
       // per trait keeps the table implicit (hashed) rather than allocated.
       let coord = Math.min(7, Math.floor(norm(g, TRAITS[i]) * 8));
-      for (let k = 0; k < RUGGEDNESS_K; k++) {
-        const j = this.partners[i * RUGGEDNESS_K + k];
+      for (let k = 0; k < this.k; k++) {
+        const j = this.partners[i * this.k + k];
         coord = coord * 8 + Math.min(7, Math.floor(norm(g, TRAITS[j]) * 8));
       }
       // The landscape value for this trait-and-partners combination.
@@ -112,4 +117,14 @@ export class FitnessLandscape {
 
 export function landscapeFor(seed: number): FitnessLandscape {
   return new FitnessLandscape(seed ^ 0x4e4b3300);
+}
+
+/**
+ * Test-only: build a landscape at an explicit ruggedness k, bypassing
+ * RUGGEDNESS_K. Used to compare K=3 against K=0 and pin the claim that the
+ * NK wiring, not the mineral/light terms alone, produces the multi-peak
+ * behavior. Never call from shipped island generation — use landscapeFor.
+ */
+export function landscapeForK(seed: number, k: number): FitnessLandscape {
+  return new FitnessLandscape(seed ^ 0x4e4b3300, k);
 }
