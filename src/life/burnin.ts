@@ -3,10 +3,15 @@ import { Flora } from "./flora";
 // ─────────────────────────────────────────────────────────────────────────────
 // Burn-in. The Hollow runs its own ecology headless before the player's first
 // frame, so what they walk into is the survivor set rather than a starting
-// state. Three things this buys, all load-bearing:
+// state. Three things this buys:
 //
-//   - Correlations are earned. A broad leaf stands in shade because narrow
-//     leaved competitors lost there, not because a generator placed it.
+//   - The island's COMPOSITION is earned: which species are common where is
+//     the outcome of 400 generations of scoring against the mineral field and
+//     the canopy, not a placement a generator wrote down. Measured, seed 9:
+//     mean fitness 0.4309 selected (n = 8,275) against 0.4057 for a paired
+//     drift control (n = 8,398). This does NOT mean an individual plant fits
+//     its own spot — the within-species light correlation is r ≈ 0 and is
+//     recorded as a failed claim in §12.3 of docs/03-ECOLOGY-DESIGN-SPACE.md.
 //   - Loss is already complete. Everything that could crash crashed off
 //     screen, so the island is peaceful because it is old rather than because
 //     it is protected.

@@ -12,10 +12,18 @@ import { TILE_SIZE } from "../world/config";
 // selection to sort along. Mean genome height on Tile.Forest at 400
 // generations moved by -0.012 to +0.003 across three seeds, sign unstable.
 //
-// Shade cast by neighbours varies inside a habitat: a dense stand of tall
-// trees is dark, a gap in the same forest is bright. That is the gradient, and
-// it is also the forest-gap dynamic — clearings that fill in, tall plants
-// shading out their own seedlings.
+// Shade cast by neighbours varies ISLAND-WIDE: on a burned-in Hollow the
+// light field has sd 0.253 over 8,407 land tiles (mean 0.685, p05 0.283,
+// p95 0.999), so a dense stand of tall trees really is dark and open sand
+// really is bright. That is what the canopy earns — the island's composition,
+// which species are common where.
+//
+// It is NOT a gradient an individual plant is sorted along. Within the tiles
+// one species occupies the light sd is only 0.05-0.12 (Forest-only, all
+// species pooled: 0.182), so there is little variation for selection to act
+// on inside a habitat, and the measured within-species light/`spread`
+// correlation is r ≈ 0. That claim is recorded as FAILED in §12.3 of
+// docs/03-ECOLOGY-DESIGN-SPACE.md; do not restate it here as fact.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Tiles out from a plant that its shade reaches. */
@@ -56,8 +64,9 @@ const FORM_SHADE: Record<PlantForm, number> = {
 
 /**
  * Shade summed over a tile is divided by this before the light curve is
- * applied. Calibrated at seed 2026 so the burned-in island spans a usable
- * range rather than saturating: see CanopyField.lightAt.
+ * applied. Hand-set at 6, checked once at seed 2026 for a light field that
+ * spans a usable range rather than saturating: see CanopyField.lightAt. No
+ * sweep was run, so this is a chosen value, not a fitted one.
  */
 const SHADE_NORM = 6;
 
@@ -136,9 +145,14 @@ export class CanopyField {
    * first. A plant is not shaded by itself, and leaving its own contribution
    * in makes the light it is scored against a function of its own height —
    * which turns the light term into a tax on being tall rather than a
-   * gradient to sort along. Measured at seed 2026, LIGHT_WEIGHT 0.85: the
-   * dark-versus-bright quartile height gap is -0.236 with self-shade left in
-   * and -0.193 with it removed, against a -0.358 no-light-selection baseline.
+   * gradient to sort along.
+   *
+   * No measurement is quoted for the size of that effect. The figures that
+   * used to stand here were taken at LIGHT_WEIGHT 0.85 (shipped value: 0.25)
+   * and were framed as a dark-versus-bright HEIGHT gap, which §12.3 of
+   * docs/03-ECOLOGY-DESIGN-SPACE.md identifies as reverse causation — tall
+   * plants are what cast the shade, so that gap measures the canopy's cause,
+   * not the light term's effect. The exclusion is kept on the argument above.
    */
   lightExcluding(tx: number, ty: number, ownShade: number): number {
     const others = Math.max(0, this.shadeAt(tx, ty) - ownShade);
