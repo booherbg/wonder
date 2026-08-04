@@ -73,7 +73,11 @@ export class FitnessLandscape {
   // `k` defaults to RUGGEDNESS_K and is injectable only so tests can compare
   // ruggedness levels directly; every shipped landscape uses the default via
   // landscapeFor. Do not call this constructor with a non-default k outside tests.
-  constructor(private readonly seed: number, k: number = RUGGEDNESS_K) {
+  constructor(
+    private readonly seed: number,
+    k: number = RUGGEDNESS_K,
+    private readonly lightWeight: number = LIGHT_WEIGHT,
+  ) {
     this.k = k;
     this.partners = new Uint8Array(N * this.k);
     for (let i = 0; i < N; i++) {
@@ -133,12 +137,22 @@ export class FitnessLandscape {
       sum += base * (0.35 + 0.65 * afford);
     }
     const mean = sum / N;
-    // Light modulates the whole plant, not one trait: tall plants want sun,
-    // low ones tolerate shade. lightFit spans the full [0, 1] so the axis is
-    // not pre-shrunk before LIGHT_WEIGHT scales it.
-    const wantsLight = norm(g, "height");
-    const lightFit = 1 - Math.abs(niche.light - wantsLight);
-    const f = mean * (1 - LIGHT_WEIGHT + LIGHT_WEIGHT * lightFit);
+    // Light selects on how broad a plant is, NOT on how tall.
+    //
+    // `height` is what CASTS shade in CanopyField, so selecting on height too
+    // made the target chase itself: a tall plant darkens its own ground, the
+    // dark ground penalises tallness, the plant dies, the ground brightens,
+    // tallness is favoured again. Measured, that negative feedback held the
+    // within-species height-versus-light gradient at zero (-0.0003, +0.0115,
+    // -0.0088 across seeds 2026, 11 and 5) at every LIGHT_WEIGHT tried.
+    //
+    // `spread` casts no shade in CanopyField, so it is free to sort along the
+    // light gradient, and it is the real adaptation: a broad flat leaf gathers
+    // scarce light, a narrow one sheds strong sun. High spread suits deep
+    // shade, so the target is inverted light.
+    const wantsShade = norm(g, "spread"); // 1 = broad, suits deep shade
+    const lightFit = 1 - Math.abs(1 - niche.light - wantsShade);
+    const f = mean * (1 - this.lightWeight + this.lightWeight * lightFit);
     return f < 0 ? 0 : f > 1 ? 1 : f;
   }
 }
@@ -155,4 +169,14 @@ export function landscapeFor(seed: number): FitnessLandscape {
  */
 export function landscapeForK(seed: number, k: number): FitnessLandscape {
   return new FitnessLandscape(seed ^ 0x4e4b3300, k);
+}
+
+/**
+ * Test-only: build a landscape at an explicit light weight, bypassing
+ * LIGHT_WEIGHT. Used to run a burn-in with the light term switched off
+ * entirely (weight 0) as the control for the breadth-versus-light gradient.
+ * Never call from shipped island generation — use landscapeFor.
+ */
+export function landscapeForLightWeight(seed: number, w: number): FitnessLandscape {
+  return new FitnessLandscape(seed ^ 0x4e4b3300, RUGGEDNESS_K, w);
 }
