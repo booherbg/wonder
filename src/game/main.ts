@@ -19,7 +19,14 @@ import {
 } from "../life/fauna";
 import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
 import { DEFAULT_TUNING, Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
-import { Hollow, HollowEcology, hollowEcology, makeHollowAsync } from "../life/hollow";
+import { Hollow, HollowEcology, hollowEcology, makeHollowAsync, terrainLight } from "../life/hollow";
+import { CanopyField } from "../life/canopy";
+import { FitnessLandscape } from "../life/fitness";
+import { MINERAL_COUNT, MineralField } from "../life/minerals";
+import { BURN_IN_GENERATIONS } from "../life/burnin";
+import { MINERAL_HUES, MINERAL_LABELS, dominantMineral, ladderCaption, ladderOf, rung } from "../render/fields";
+import type { FieldWash } from "../render/renderer";
+import type { GroundReading } from "../render/inspect";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
 import {
@@ -826,6 +833,20 @@ let currentStyle: IslandStyle = "classic";
 // map came from generate(currentSeed + currentAttemptOffset, HOLLOW_CONFIG).
 // Always 0 for a classic world, whose map comes from the seed alone.
 let currentAttemptOffset = 0;
+/**
+ * The three fields a Hollow's plants are scored against — the mineral field,
+ * the NK fitness landscape and the canopy — or null on a classic island, which
+ * has none of them. Set by loadWorld for both Hollow paths (freshly burned in,
+ * and restored from a save). Read by the V overlay's light and mineral modes
+ * and by the lean-in panel's ground reading; nothing here feeds the simulation,
+ * which holds its own references through the Flora tuning.
+ */
+let currentEco: { minerals: MineralField; landscape: FitnessLandscape; canopy: CanopyField } | null =
+  null;
+type OverlayMode = "off" | "ecology" | "light" | "minerals";
+let overlayMode: OverlayMode = "off";
+/** The island-wide {lo, hi} of whichever field is drawn, rebuilt on entry. */
+let fieldLadder = { lo: 0, hi: 1 };
 let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
@@ -945,6 +966,15 @@ interface PrebuiltLife {
   species: PlantSpecies[];
   /** Hollow.attemptOffset — the reroll this island was accepted at, 0-7. */
   attemptOffset: number;
+  /**
+   * The mineral field, fitness landscape and canopy this population was
+   * selected against — the same object graph, not a rebuild, so the mineral
+   * depletion burn-in caused is still in it. Kept for the V overlay's light
+   * and mineral modes and the lean-in ground reading.
+   */
+  minerals: MineralField;
+  landscape: FitnessLandscape;
+  canopy: CanopyField;
 }
 
 /**
@@ -1047,6 +1077,21 @@ function loadWorld(
   const eco: HollowEcology | null = hollowResume
     ? hollowEcology(map, hollowResume.acceptedSeed, () => flora)
     : null;
+  // The three fields the overlay and the lean-in read. A fresh Hollow hands
+  // over the very objects burn-in used; a resumed one gets the rebuilt set
+  // above; a classic island has none.
+  // An island with no mineral field cannot show the light or mineral mode; if
+  // V was left on one of them, step back to the plain ecology overlay rather
+  // than leaving a legend up for a field that is not there.
+  currentEco = prebuiltLife
+    ? { minerals: prebuiltLife.minerals, landscape: prebuiltLife.landscape, canopy: prebuiltLife.canopy }
+    : eco
+      ? { minerals: eco.minerals, landscape: eco.landscape, canopy: eco.canopy }
+      : null;
+  if (!currentEco && (overlayMode === "light" || overlayMode === "minerals")) {
+    overlayMode = "ecology";
+    renderOverlayLegend();
+  }
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
     chains: CHAINS, // the A/B toggle threads into both new Flora sites below
@@ -1122,6 +1167,15 @@ function loadWorld(
     flora = new Flora(map, species, seed, floraTuning);
     home = null;
   }
+  // A RESUMED Hollow's CanopyField is constructed empty — hollowEcology builds
+  // a new one, and nothing has stood in it yet — so before this line every
+  // tile on a resumed island read as open sun: shade 0, light 1. That is wrong
+  // twice over: the selection callback scored plants against light the island
+  // does not have, and the V light overlay would have drawn a flat field.
+  // Filling it from the restored population is one pass over the plants,
+  // measured at 0.6 ms for 8,234 plants over 19,600 tiles (canopy.ts).
+  if (eco) eco.canopy.refresh(flora);
+
   // dev aid + a seed of the "run N generations first" control: ?warm=3000
   // fast-forwards the island's life before you arrive (bounded, so a typo
   // can't hang the load)
@@ -1618,6 +1672,44 @@ function openInspectAtPlayer(record = true): void {
   // menu all agree (campViewAtHome is shared with the Tab menu)
   const camp: CampView | undefined = campViewAtHome() ?? undefined;
 
+  // The Hollow only: what this ground gives the plant on the card. Four
+  // numbers, each read from the same objects burn-in selected against —
+  // FitnessLandscape.score for the fit, terrain times canopy for the light,
+  // FitnessLandscape.demandOf against MineralField.sample for the shortfall,
+  // and PlantSpecies.bornTick for how old the kind is. Null on a classic
+  // island, where none of those fields exist, and the card then reads exactly
+  // as it always has.
+  const readGround = currentEco
+    ? (group: { plant: Plant }): GroundReading | null => {
+        const eco = currentEco;
+        if (!eco) return null;
+        const p = group.plant;
+        const tx = Math.floor(p.x / TILE_SIZE);
+        const ty = Math.floor(p.y / TILE_SIZE);
+        const supply = eco.minerals.sample(tx, ty);
+        // its own shade left out, as the selection callback leaves it out: a
+        // plant does not stand in its own shadow
+        const light =
+          terrainLight(map, tx, ty) *
+          eco.canopy.lightExcluding(tx, ty, CanopyField.shadeOfGenome(p.genome));
+        const demand = eco.landscape.demandOf(p.genome);
+        // the largest single demand, and what this tile actually holds of it:
+        // the gap between the two is the pressure the plant is under here
+        let worst = 0;
+        for (let m = 1; m < MINERAL_COUNT; m++) if (demand[m] > demand[worst]) worst = m;
+        const sp = species[p.species];
+        return {
+          fitness: eco.landscape.score(p.genome, { minerals: supply, light }),
+          light,
+          demand: demand[worst],
+          supply: supply[worst],
+          mineral: MINERAL_LABELS[worst],
+          generation: sp.bornTick,
+          generationsTotal: sp.bornTick === undefined ? undefined : BURN_IN_GENERATIONS,
+        };
+      }
+    : undefined;
+
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(
@@ -1692,6 +1784,7 @@ function openInspectAtPlayer(record = true): void {
     },
     companionKind,
     swarmViews,
+    readGround,
   );
   lastInspectX = player.x;
   lastInspectY = player.y;
@@ -1931,6 +2024,9 @@ async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
     flora: hollow.flora,
     species: hollow.species,
     attemptOffset: hollow.attemptOffset,
+    minerals: hollow.minerals,
+    landscape: hollow.landscape,
+    canopy: hollow.canopy,
   });
   renderer.setMap(map);
   if (hollow.report.floorHit) {
@@ -2391,10 +2487,8 @@ window.addEventListener("keydown", (e) => {
       openIslandMap();
     }
   } else if (k === "v") {
-    // the ecology overlay: each critter ringed in its drive, the chains glowing
-    overlayOn = !overlayOn;
-    renderOverlayLegend();
-    flashHud(overlayOn ? "ecology overlay on — drives ringed, chain hotspots aglow" : "ecology overlay off");
+    // the overlay cycle: drives + chains, then the Hollow's two hidden fields
+    cycleOverlay();
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -2555,27 +2649,114 @@ function drawOverview(): void {
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
 }
 
-let overlayOn = false; // the ecology overlay (V): critter drives + chain hotspots
+// ── the V overlay: one key, several readings ────────────────────────────
+//
+// V cycles rather than toggles, because the key alphabet stays small. The
+// modes, in cycle order:
+//
+//   "off"      the world as it plays
+//   "ecology"  critter drives ringed + chain hotspots (what V always did)
+//   "light"    the canopy light field, per tile
+//   "minerals" the mineral field, per tile
+//
+// "light" and "minerals" read fields only a Hollow has (currentEco), so on a
+// classic island they are left OUT of the cycle entirely: V there runs
+// off → ecology → off, exactly as it did before. A mode that draws nothing
+// and says "not here" would be two dead steps on every press.
+function overlayCycle(): OverlayMode[] {
+  return currentEco ? ["off", "ecology", "light", "minerals"] : ["off", "ecology"];
+}
 
-// show or hide the ecology overlay's legend (a small DOM card, top-left)
+/** Light reaching a tile: terrain shade times canopy shade, 0 to 1. */
+function lightOnTile(tx: number, ty: number): number {
+  if (!currentEco) return 1;
+  return terrainLight(map, tx, ty) * currentEco.canopy.lightAt(tx, ty);
+}
+
+/** Total mineral held by a tile: the six quantities summed, 0 to 6. */
+function mineralTotalOnTile(tx: number, ty: number): number {
+  return currentEco ? currentEco.minerals.totalAt(tx, ty) : 0;
+}
+
+/** Step V on, rebuilding the value ladder whenever a field mode is entered. */
+function cycleOverlay(): void {
+  const cycle = overlayCycle();
+  const at = cycle.indexOf(overlayMode);
+  overlayMode = cycle[(at + 1) % cycle.length] ?? "off";
+  if (overlayMode === "light") {
+    fieldLadder = ladderOf(map.width, map.height, lightOnTile);
+  } else if (overlayMode === "minerals") {
+    fieldLadder = ladderOf(map.width, map.height, mineralTotalOnTile);
+  }
+  renderOverlayLegend();
+  flashHud(OVERLAY_HUD[overlayMode]);
+}
+
+const OVERLAY_HUD: Record<OverlayMode, string> = {
+  off: "overlay off",
+  ecology: "ecology overlay — drives ringed, chain hotspots aglow",
+  light: "light overlay — the canopy light field, dark under a dense stand",
+  minerals: "mineral overlay — total held per tile, tinted by the largest of the six",
+};
+
+/**
+ * The per-tile wash the renderer paints for the light and mineral modes, or
+ * null in the other two. Value carries the quantity and hue only names which
+ * mineral is largest — see render/fields.ts for why round that way.
+ */
+function fieldWash(): FieldWash | null {
+  if (!currentEco) return null;
+  if (overlayMode === "light") {
+    return { rungAt: (tx, ty) => rung(lightOnTile(tx, ty), fieldLadder), alpha: 0.82 };
+  }
+  if (overlayMode === "minerals") {
+    const eco = currentEco;
+    return {
+      rungAt: (tx, ty) => rung(mineralTotalOnTile(tx, ty), fieldLadder),
+      hueAt: (tx, ty) => MINERAL_HUES[dominantMineral(eco.minerals.sample(tx, ty)).index],
+      alpha: 0.82,
+    };
+  }
+  return null;
+}
+
+// show or hide the V overlay's legend (a small DOM card, top-left)
 function renderOverlayLegend(): void {
   const el = document.getElementById("ovlegend")!;
-  if (!overlayOn) {
+  if (overlayMode === "off") {
     el.style.display = "none";
     return;
   }
-  const rows: [string, string][] = [
-    ["#7fe0c4", "content"],
-    ["#f4a94c", "hungry"],
-    ["#8a9fe0", "drowsy"],
-    ["#b092c4", "weary"],
-    ["#f4c979", "curious"],
-    ["#e79aa2", "wary"],
-    ["#b4dcff", "chain hotspot"],
-  ];
-  el.innerHTML =
-    `<div class="ovl-title">ecology overlay</div>` +
-    rows.map(([c, l]) => `<div class="ovl-row"><i style="color:${c};background:${c}"></i>${l}</div>`).join("");
+  const swatch = (c: string, l: string): string =>
+    `<div class="ovl-row"><i style="color:${c};background:${c}"></i>${l}</div>`;
+  const note = (t: string): string => `<div class="ovl-note">${t}</div>`;
+  if (overlayMode === "ecology") {
+    const rows: [string, string][] = [
+      ["#7fe0c4", "content"],
+      ["#f4a94c", "hungry"],
+      ["#8a9fe0", "drowsy"],
+      ["#b092c4", "weary"],
+      ["#f4c979", "curious"],
+      ["#e79aa2", "wary"],
+      ["#b4dcff", "chain hotspot"],
+    ];
+    el.innerHTML =
+      `<div class="ovl-title">ecology overlay</div>` + rows.map(([c, l]) => swatch(c, l)).join("");
+  } else if (overlayMode === "light") {
+    el.innerHTML =
+      `<div class="ovl-title">canopy light</div>` +
+      swatch("hsl(48,26%,86%)", "most light on this island") +
+      swatch("hsl(48,26%,16%)", "least light on this island") +
+      note(`${ladderCaption(fieldLadder)} · share of open sun`) +
+      note("the ramp is stretched to this island's own range, so two islands' washes are not comparable") +
+      note("light shapes WHICH KINDS hold which ground; it does not sort individuals within a kind");
+  } else {
+    el.innerHTML =
+      `<div class="ovl-title">minerals</div>` +
+      note(`brightness: total of six, ${ladderCaption(fieldLadder)} of 6`) +
+      note("tint: the largest of the six here") +
+      MINERAL_LABELS.map((l, m) => swatch(`hsl(${MINERAL_HUES[m]},62%,58%)`, l)).join("");
+  }
   el.style.display = "block";
 }
 
@@ -3053,7 +3234,7 @@ function frame(now: number): void {
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
       tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
-      overlay: overlayOn, swarms: swarmLayer,
+      overlay: overlayMode === "ecology", field: fieldWash(), swarms: swarmLayer,
       floraTick: flora.tick, matureAge: flora.tuning.matureAge,
     },
     sky,

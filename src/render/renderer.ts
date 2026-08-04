@@ -20,6 +20,7 @@ import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
 import { growthScale } from "./growth";
+import { washColor } from "./fields";
 import { PALETTE } from "./palette";
 import {
   GLOW_R,
@@ -57,12 +58,28 @@ export interface Scene {
   pools?: TidePool[]; // small gardens the low tide bares along the sand
   sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
   overlay?: boolean; // the ecology overlay (V): critter drives + chain hotspots, drawn spatially
+  /** a per-tile field wash (V's light and mineral modes); null ⇒ no wash */
+  field?: FieldWash | null;
   swarms?: SwarmLayer | null; // the insect swarms homing on the island's flowering plants
   /** the working view (W, bench-only): the pollination economy drawn into
    *  the world — hunger, pollen aboard, readiness to spread, host nectar */
   working?: WorkingReading[] | null;
   floraTick?: number; // the flora clock, for growth animation; absent ⇒ no growth easing
   matureAge?: number; // ticks to full size; absent ⇒ 20
+}
+
+/**
+ * One tile of a field wash, already reduced to what the renderer needs.
+ * `rungAt` is the tile's place on the island's own value ladder, 0 at the
+ * island's smallest value and 1 at its largest (see render/fields.ts).
+ * `hueAt` returns a colour-wheel degree naming a CATEGORY — which mineral is
+ * largest here — or null for the single-hue value ramp the light field uses.
+ */
+export interface FieldWash {
+  rungAt(tx: number, ty: number): number;
+  hueAt?(tx: number, ty: number): number | null;
+  /** opacity of the wash, 0 (invisible) to 1 (the scene fully covered) */
+  alpha: number;
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -919,6 +936,13 @@ export class Renderer {
       drawWorking(ctx, scene.working, camX, camY, this.viewWidth, this.viewHeight, SCALE * this.zoomLevel);
     }
 
+    // a field wash, if one of the field overlay modes is up: the canopy light
+    // field or the mineral field, drawn per tile OVER the scene. Above the
+    // sprites deliberately — the light field's darkest tiles are exactly the
+    // ones a dense stand of trees would otherwise hide — and below the motes
+    // and the lens, which are atmosphere rather than readout.
+    if (scene.field) this.drawFieldWash(scene.field, camX, camY);
+
     // depth pass: the nearest air — drifting fluff with true parallax — and
     // then the lens itself, its edges easing dark
     drawForegroundMotes(ctx, camX, camY, this.viewWidth, this.viewHeight, darkness, rain, timeMs);
@@ -1010,6 +1034,33 @@ export class Renderer {
           ctx.restore();
         }
         blitInsect(ctx, sprites, ix, iy, pose.frame, pose.heading);
+      }
+    }
+  }
+
+  /**
+   * Paint one filled rectangle per visible tile from a FieldWash. Only the
+   * tiles inside the camera are sampled, so the cost is the on-screen tile
+   * count (about 40 x 24 at default zoom) rather than the island's 19,600.
+   */
+  private drawFieldWash(field: FieldWash, camX: number, camY: number): void {
+    const { ctx, map } = this;
+    const x0 = Math.max(0, Math.floor(camX / TILE_SIZE));
+    const y0 = Math.max(0, Math.floor(camY / TILE_SIZE));
+    const x1 = Math.min(map.width - 1, Math.ceil((camX + this.viewWidth) / TILE_SIZE));
+    const y1 = Math.min(map.height - 1, Math.ceil((camY + this.viewHeight) / TILE_SIZE));
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const hue = field.hueAt ? field.hueAt(tx, ty) : null;
+        ctx.fillStyle = washColor(field.rungAt(tx, ty), hue, field.alpha);
+        // +1 on the size so neighbouring tiles never leave a seam when the
+        // camera sits on a fractional pixel
+        ctx.fillRect(
+          Math.round(tx * TILE_SIZE - camX),
+          Math.round(ty * TILE_SIZE - camY),
+          TILE_SIZE + 1,
+          TILE_SIZE + 1,
+        );
       }
     }
   }
