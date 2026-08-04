@@ -364,27 +364,49 @@ describe("FitnessLandscape", () => {
     for (const x of d) expect(x).toBeGreaterThanOrEqual(0);
   });
 
-  // The finding this whole layer exists to reproduce: a hill climb at K=3
-  // lands on a menu of optima, not one answer and not noise. Bench 2 measured
-  // 4.0 distinct peaks per population run; this asserts only the direction
-  // (more than one, far fewer than the number of walks) so it is not brittle.
-  it("produces multiple local optima rather than one", () => {
-    const L = landscapeFor(21);
-    const n = niche(0.6);
-    const peaks = new Set<string>();
-    for (let w = 0; w < 40; w++) {
-      const rng = makeRng(w + 1);
-      let best = mutate(G, rng, 0.5);
-      let bestScore = L.score(best, n);
-      for (let step = 0; step < 60; step++) {
-        const cand = mutate(best, rng, 0.05);
-        const s = L.score(cand, n);
-        if (s > bestScore) { best = cand; bestScore = s; }
-      }
-      peaks.add(bestScore.toFixed(2));
+  // Ruggedness must be measured by EXHAUSTIVE ENUMERATION, not by sampling
+  // hill climbs. A sampled climb over 9 traits at 8 quantisation levels
+  // (8^9 ~= 1.3e8 genotypes) never collides across 40 walks at any K, so it
+  // returns 40 distinct peaks whatever the wiring does and cannot
+  // discriminate. Bench 2 did not sample either — it enumerated 65,536
+  // genotypes to find its 58 optima.
+  //
+  // Reduce each of the 9 numeric traits to two levels (its bound minimum and
+  // maximum) for 2^9 = 512 genotypes, then count true local optima: a
+  // genotype where no single-bit flip scores higher.
+  function genomeForBits(bits: number): Genome {
+    const g: Genome = { ...G };
+    NUMERIC_TRAITS.forEach((t, i) => {
+      const [lo, hi] = GENOME_BOUNDS[t];
+      (g as unknown as Record<string, number>)[t] = (bits >> i) & 1 ? hi : lo;
+    });
+    return g;
+  }
+
+  function countLocalOptima(
+    L: ReturnType<typeof landscapeForK>,
+    n: { minerals: Float32Array; light: number },
+  ): number {
+    const score = new Float64Array(512);
+    for (let b = 0; b < 512; b++) score[b] = L.score(genomeForBits(b), n);
+    let optima = 0;
+    for (let b = 0; b < 512; b++) {
+      let best = true;
+      for (let i = 0; i < 9; i++) if (score[b ^ (1 << i)] > score[b]) { best = false; break; }
+      if (best) optima++;
     }
-    expect(peaks.size).toBeGreaterThan(1);
-    expect(peaks.size).toBeLessThan(40);
+    return optima;
+  }
+
+  // Measured on this landscape: k=0 -> 1 local optimum, k=3 -> 14, at a fixed
+  // niche on seed 21. k=0 collapsing to a single peak is the pre-NK baseline
+  // the layer exists to move past — bench 2's "one answer, always, on every
+  // island". The k3 > k0*2 threshold sits well under the measured 14x gap.
+  it("K=3 produces clearly more local optima than K=0 (exhaustive 512-genotype enumeration)", () => {
+    const n = niche(0.6);
+    const optimaAtK0 = countLocalOptima(landscapeForK(21, 0), n);
+    const optimaAtK3 = countLocalOptima(landscapeForK(21, RUGGEDNESS_K), n);
+    expect(optimaAtK3).toBeGreaterThan(optimaAtK0 * 2);
   });
 });
 ```
