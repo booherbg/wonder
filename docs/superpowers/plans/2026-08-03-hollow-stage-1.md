@@ -609,17 +609,29 @@ describe("Flora selection", () => {
   });
 
   it("with selection on, high-fitness genomes come to outnumber low ones", () => {
-    // A selection context that rewards tall plants outright. After enough
-    // ticks the mean height must rise; under drift alone it would not.
+    // A PAIRED CONTROL, not a before/after on one run. Mean height rises
+    // slightly under drift alone (measured +0.0006), so "after > before" can
+    // pass with selection entirely disabled on a favourable seed — assert the
+    // gap against a twin instead.
+    //
+    // Measured on this seed, 1500 ticks: real selection gives
+    // Δ(selected − drift) ≈ +0.353; with both selection channels disabled the
+    // two populations are identical and Δ is exactly 0. 0.1 sits far above the
+    // noise floor and far below the observed effect.
+    const meanHeight = (f: Flora) =>
+      f.all.reduce((s, p) => s + p.genome.height, 0) / f.all.length;
+
     const map = generate(31, DEFAULT_CONFIG);
     const species = generatePlantSpecies(31);
-    const f = new Flora(map, species, 31, {
+    const selected = new Flora(map, species, 31, {
       selection: { fitness: (g) => g.height },
     });
-    const before = f.all.reduce((s, p) => s + p.genome.height, 0) / f.all.length;
-    for (let i = 0; i < 1500; i++) f.simTick();
-    const after = f.all.reduce((s, p) => s + p.genome.height, 0) / f.all.length;
-    expect(after).toBeGreaterThan(before);
+    const drift = new Flora(map, species, 31, { selection: null });
+    for (let i = 0; i < 1500; i++) {
+      selected.simTick();
+      drift.simTick();
+    }
+    expect(meanHeight(selected) - meanHeight(drift)).toBeGreaterThan(0.1);
   });
 
   it("selection is deterministic for a seed", () => {
