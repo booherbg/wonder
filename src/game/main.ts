@@ -1761,8 +1761,19 @@ function openInspectAtPlayer(record = true): void {
           demand: demand[worst],
           supply: supply[worst],
           mineral: MINERAL_LABELS[worst],
-          generation: sp.bornTick,
-          generationsTotal: sp.bornTick === undefined ? undefined : BURN_IN_GENERATIONS,
+          // bornTick keeps counting once the wanderer lands, so a species
+          // that split during play can carry a tick far past BURN_IN_GENERATIONS.
+          // Gate on the tick itself (not the species index against
+          // baseSpeciesCount): baseSpeciesCount only marks the FOUNDERS
+          // (main.ts:1071, 1081, 1085), so a daughter species budded during
+          // burn-in sits above that line too and would be misread as
+          // "arose during play" by an index check.
+          generation: sp.bornTick !== undefined && sp.bornTick <= BURN_IN_GENERATIONS ? sp.bornTick : undefined,
+          generationsTotal:
+            sp.bornTick !== undefined && sp.bornTick <= BURN_IN_GENERATIONS
+              ? BURN_IN_GENERATIONS
+              : undefined,
+          bornDuringPlay: sp.bornTick !== undefined && sp.bornTick > BURN_IN_GENERATIONS,
         };
       }
     : undefined;

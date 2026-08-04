@@ -267,7 +267,10 @@ function noteSection(el: HTMLElement, title: string, lines: string[]): void {
 // the plant's largest single entry in FitnessLandscape.demandOf, 0 to 1, and
 // `supply` is how much of THAT mineral the tile holds, 0 to 1. `generation` is
 // the burn-in generation a species that arose during burn-in was founded at,
-// out of BURN_IN_GENERATIONS; absent for a founding species.
+// out of BURN_IN_GENERATIONS; absent for a founding species. `bornDuringPlay`
+// marks a species whose split happened after burn-in ended — the flora clock
+// keeps counting once the wanderer arrives, so its founding tick is not a
+// generation out of BURN_IN_GENERATIONS and is never rendered as one.
 //
 // These lines say what a plant IS DOING here and what it NEEDS. They do NOT
 // claim the plant has adapted to this spot: measured, the Hollow produces no
@@ -282,6 +285,7 @@ export interface GroundReading {
   mineral: string; // the label of the mineral `demand` and `supply` are about
   generation?: number;
   generationsTotal?: number;
+  bornDuringPlay?: boolean;
 }
 
 function lightWord(light: number): string {
@@ -309,7 +313,9 @@ export function groundLines(r: GroundReading): string[] {
       ? `draws ${r.demand.toFixed(2)} of ${r.mineral}; this tile holds ${r.supply.toFixed(2)} — short by ${short.toFixed(2)}`
       : `draws ${r.demand.toFixed(2)} of ${r.mineral}; this tile holds ${r.supply.toFixed(2)} — enough`,
   );
-  if (r.generation !== undefined && r.generationsTotal !== undefined) {
+  if (r.bornDuringPlay) {
+    lines.push("its kind split off since you arrived");
+  } else if (r.generation !== undefined && r.generationsTotal !== undefined) {
     lines.push(`its kind arose in generation ${r.generation} of ${r.generationsTotal}`);
   } else {
     lines.push("a founding kind — here from the first generation");

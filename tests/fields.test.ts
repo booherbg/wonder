@@ -112,6 +112,13 @@ describe("the ground reading", () => {
     expect(groundLines(base)[3]).toBe("a founding kind — here from the first generation");
   });
 
+  it("never renders a generation count for a kind that split during play", () => {
+    const line = groundLines({ ...base, bornDuringPlay: true })[3];
+    expect(line).toBe("its kind split off since you arrived");
+    expect(line).not.toContain("of 400");
+    expect(line).not.toMatch(/\d/);
+  });
+
   it("never claims an individual has adapted to its light", () => {
     // §12.3: there is no within-species light gradient. The panel must not
     // imply one, so no line may use the language of individual adaptation.
