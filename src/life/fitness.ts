@@ -27,26 +27,20 @@ export const RUGGEDNESS_K = 3;
  * `(1 - LIGHT_WEIGHT) + LIGHT_WEIGHT * lightFit`, so this is the fraction of
  * the score the light axis can move.
  *
- * RAISED from an effective 0.075. The first version was
- * `lightFit = 1 - |light - height| * 0.5` (spanning [0.75, 1] at the extremes,
- * since |light-height| <= 1) scaled by 0.3, so the entire light axis moved a
- * score by 7.5%. Measured against a genome-to-genome score standard deviation
- * of 0.0930 at fixed light, the mean per-genome swing across light 0.25 -> 0.85
- * was 0.0320 — light was a third the strength of the noise it competed with,
- * and no height gradient survived 400 generations of burn-in.
+ * 0.25, LOWERED from 0.85 after the light term was shown not to sort
+ * individuals at any weight. 0.85 was tuned to maximise an island-wide height
+ * gradient that later turned out to be light fighting its own feedback loop;
+ * once the loop was removed by selecting on `spread`, no population-level
+ * measurement separated 0.85 from 0 with a stable sign across seeds. Carrying
+ * 85% of a fitness axis for an effect that cannot be measured misstates what
+ * the model does.
  *
- * 0.85 chosen by sweep on seed 2026's Hollow. Mean genome height, darkest
- * against brightest quartile of canopy-derived light, island-wide:
- *     no light selection   -0.358
- *     0.30                 -0.307
- *     0.60                 -0.251
- *     0.85                 -0.236
- *     1.00                 -0.243
- * The gain is monotone to 0.85 and flat after, and 0.85 keeps the multiplier
- * in [0.15, 1] so the NK landscape still sets six sevenths of the score at the
- * worst light mismatch. Above 1.0 the multiplier would go negative.
+ * At 0.25 the light term still shapes composition — which species holds which
+ * ground, an island-wide separation in mean normalised `spread` of 0.338 dark
+ * against bright at seed 2026 — without claiming to sort individuals within a
+ * species. See the task 9 report for the full null result.
  */
-export const LIGHT_WEIGHT = 0.85;
+export const LIGHT_WEIGHT = 0.25;
 
 /** What a place offers: what minerals are present, and how much light. */
 export interface Niche {

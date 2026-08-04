@@ -36,7 +36,10 @@ const normHeight = (g: Genome) => (g.height - H_LO) / (H_HI - H_LO);
 const normSpread = (g: Genome) => (g.spread - S_LO) / (S_HI - S_LO);
 
 let sharedHollow: Hollow | null = null;
-const hollow = () => (sharedHollow ??= makeHollow(SEED));
+/** Every (done, total) pair the shared build reported, for the wiring case. */
+const progressSeen: [number, number][] = [];
+const hollow = () =>
+  (sharedHollow ??= makeHollow(SEED, (done, total) => progressSeen.push([done, total])));
 
 /**
  * The Hollow of SEED rebuilt with `light` held at 0.5 and everything else —
@@ -177,6 +180,20 @@ describe("makeHollow", () => {
     expect(again.canopy.shadeAt(70, 70)).toBe(h.canopy.shadeAt(70, 70));
   }, BUILD_MS);
 
+  it("reports progress a caller can drive a loading screen from", () => {
+    // makeHollow is 6.2-7.0s measured across five seeds, far past the ~3s a
+    // button press can hide, so the forge will need a progress screen and
+    // this is the callback it will read. burnIn reports at most 20 times.
+    expect(progressSeen.length).toBe(20);
+    expect(progressSeen[0]).toEqual([20, 400]);
+    expect(progressSeen[progressSeen.length - 1]).toEqual([400, 400]);
+    for (const [done, total] of progressSeen) {
+      expect(total).toBe(400);
+      expect(done).toBeGreaterThan(0);
+      expect(done).toBeLessThanOrEqual(total);
+    }
+  });
+
   it("leaves the canopy consistent with the population it returns", () => {
     // burnIn stops on an arbitrary tick, which may not be a refresh tick, so
     // `attempt` refreshes once more before returning. Rebuilding from the
@@ -294,7 +311,7 @@ describe("CanopyField", () => {
     // The whole point of the canopy layer: shade must differ between two
     // Forest tiles, or a species pinned to Forest by PlantSpecies.habitat has
     // no gradient to sort along. Measured at seed 2026 over the Hollow's
-    // 1,999 forest tiles: p05 0.255, p95 0.523, a spread of 0.268. (The
+    // 1,999 forest tiles: p05 0.269, p95 0.495, a spread of 0.226. (The
     // plant-weighted spread quoted elsewhere is wider, 0.309 to 0.791,
     // because plants sit where the light is, not uniformly over tiles.)
     const lights: number[] = [];
@@ -309,7 +326,7 @@ describe("CanopyField", () => {
     console.log(
       `forest-tile light: p05 ${p05.toFixed(3)} p95 ${p95.toFixed(3)} over ${lights.length} tiles`,
     );
-    expect(p95 - p05).toBeGreaterThan(0.15); // 0.268 measured
+    expect(p95 - p05).toBeGreaterThan(0.15); // 0.226 measured
   });
 });
 
@@ -424,7 +441,7 @@ describe("light and breadth", () => {
   });
 
   it("leaves the shaded quartile broader than the sunlit one", () => {
-    // 0.692 against 0.354 measured at seed 2026, and 0.655 against 0.400 on
+    // 0.655 against 0.376 measured at seed 2026, and 0.675 against 0.408 on
     // the constant-light control — so this is the island's shape, NOT an
     // effect of the light term, and the threshold is set where both sides
     // clear it. What it pins is that the measurement is being taken at all
@@ -436,9 +453,11 @@ describe("light and breadth", () => {
   it("records a within-species correlation that has not risen above noise", () => {
     // Pinned as a null, not as a success: if a later change to habitat
     // pinning or to dispersal makes individuals sort by breadth, this case
-    // fails and the number in the comment above must be re-measured. 0.0342
-    // measured at seed 2026; the bound is set well above it so the null is
-    // asserted rather than the exact value.
+    // fails and the numbers in the comment above must be re-measured. At
+    // LIGHT_WEIGHT 0.25, seed 2026: -0.0769 derived against +0.0157 on the
+    // constant-light control. The bound is set well above the largest
+    // magnitude seen anywhere in the sweeps (0.144), so the null is asserted
+    // rather than any exact value.
     expect(Math.abs(derived.withinSpecies)).toBeLessThan(0.15);
   });
 
@@ -447,8 +466,8 @@ describe("light and breadth", () => {
     // canopy for a constant, because the island-wide separation is
     // composition either way. This can: the two burn-ins differ in nothing
     // but `light`, so any difference in the population they leave is the
-    // light term and nothing else. Measured: 8,236 plants with derived
-    // light, 8,233 with the constant.
+    // light term and nothing else. Measured: 8,240 plants with derived
+    // light, 8,248 with the constant.
     console.log(`population: derived light ${derivedPop}, constant light ${constantPop}`);
     expect(derivedPop).not.toBe(constantPop);
   });
@@ -456,9 +475,9 @@ describe("light and breadth", () => {
 
 describe("LIGHT_WEIGHT", () => {
   it("leaves the NK landscape in control at the worst light mismatch", () => {
-    // score multiplies the NK/mineral mean by (1-W) + W*lightFit. At W = 0.85
-    // and lightFit = 0 that floor is 0.15, so a total light mismatch costs a
-    // plant 85% of its score but never all of it, and score stays in [0, 1].
+    // score multiplies the NK/mineral mean by (1-W) + W*lightFit. At W = 0.25
+    // and lightFit = 0 that floor is 0.75, so a total light mismatch costs a
+    // plant a quarter of its score, and score stays in [0, 1].
     expect(LIGHT_WEIGHT).toBeGreaterThan(0);
     expect(LIGHT_WEIGHT).toBeLessThanOrEqual(1);
     const L = landscapeFor(21);
