@@ -1548,7 +1548,7 @@ import { HOLLOW_CONFIG } from "../world/config";
 import { generate } from "../world/generate";
 import { WorldMap } from "../world/types";
 import { TILE_SIZE } from "../world/config";
-import { BURN_IN_GENERATIONS, BurnInReport, burnIn } from "./burnin";
+import { BURN_IN_GENERATIONS, BURN_IN_SIM_BUDGET, BurnInReport, burnIn } from "./burnin";
 import { FitnessLandscape, landscapeFor } from "./fitness";
 import { Flora } from "./flora";
 import { MineralField, mineralFieldFor } from "./minerals";
@@ -1576,6 +1576,13 @@ function attempt(seed: number, onProgress?: (d: number, t: number) => void): Hol
   const minerals = mineralFieldFor(map, seed);
   const landscape = landscapeFor(seed);
   const flora = new Flora(map, generatePlantSpecies(seed), seed, {
+    // Burn-in examines every living plant each tick. The default simBudget of
+    // 480 against a population near 8000 reaches 6% of the island per tick,
+    // which turns 400 ticks into about 1.4 reproductions per plant instead of
+    // about 24 — measured, 62.7% of the population born during burn-in at 480
+    // against 100% at full coverage. burnIn throws if this is left at the
+    // default, because the resulting island looks correct and is not.
+    simBudget: BURN_IN_SIM_BUDGET,
     selection: {
       fitness(g, tx, ty) {
         const supply = minerals.sample(tx, ty);
