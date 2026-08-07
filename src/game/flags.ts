@@ -1,3 +1,5 @@
+import { IslandStyle } from "../world/config";
+
 // The A/B toggle for byproduct chains. One key, one resolver — the only new
 // "settings" surface. The menu (a separate plan) will later flip the same
 // localStorage key. Default ON, so a fresh island grows chains; an explicit
@@ -38,6 +40,20 @@ export function parseLastSeed(stored: string | null): number | null {
   if (stored === null || !CANONICAL_INT.test(stored)) return null;
   const n = Number(stored);
   return n >= 0 ? n : null;
+}
+
+/**
+ * Which STYLE the last island entered was, stored beside LAST_SEED_KEY rather
+ * than inside it. Separate because LAST_SEED_KEY holds a bare decimal seed
+ * written by every build before the Hollow existed: widening its format would
+ * make those stored values unreadable, and "continue" would lose the island a
+ * returning wanderer was actually in. Absent (or anything but "hollow") reads
+ * as classic — the only style those writes could have meant.
+ */
+export const LAST_STYLE_KEY = "wander.lastStyle";
+
+export function parseLastStyle(stored: string | null): IslandStyle {
+  return stored === "hollow" ? "hollow" : "classic";
 }
 
 // Which bench a ?sim URL asks for. Today's ?sim=1 is the swarm/identity-map

@@ -1,3 +1,5 @@
+import { Tile } from "./types";
+
 export const TILE_SIZE = 16; // pixels per tile (art + collision + camera all use this)
 
 export interface WorldConfig {
@@ -25,6 +27,9 @@ export interface WorldConfig {
   minLandFraction: number; // reroll islands with less land than this
   minWalkableRegion: number; // reroll if the largest walkable region is smaller (tiles)
   maxGenerationAttempts: number; // deterministic rerolls (seed+1, seed+2, ...)
+  /** Tiles the wanderer may start on. Omitted ⇒ [Tile.Grass], which is what
+   *  every island generated before the Hollow used. */
+  spawnTiles?: readonly Tile[];
 }
 
 export const DEFAULT_CONFIG: WorldConfig = {
@@ -53,3 +58,39 @@ export const DEFAULT_CONFIG: WorldConfig = {
   minWalkableRegion: 3000,
   maxGenerationAttempts: 16,
 };
+
+/** Which island the forge builds. "classic" is every island shipped before the Hollow. */
+export type IslandStyle = "classic" | "hollow";
+
+// The Hollow: small, dense, enclosed. Enclosure comes from not being able to
+// see far, which is a zoom and occlusion question rather than a camera one —
+// the config's part is a smaller island with most of its land under forest.
+export const HOLLOW_CONFIG: WorldConfig = {
+  ...DEFAULT_CONFIG,
+  width: 140,
+  height: 140,
+  elevationScale: 44, // broader landforms would flatten a map this size
+  falloffSharpness: 2.0, // a softer rim: more interior, less beach
+  forestMoisture: 0.34, // most of the land is forest, not meadow
+  marshMoisture: 0.58,
+  riverCount: 3,
+  fallMaxCount: 1,
+  craterChance: 0, // the Hollow's shape is a bowl of trees, not a caldera
+  // scaled from 3000 by the ~4.6x drop in tile count: 700/19600 (3.6%) tracks
+  // classic's 3000/90000 (3.3%). Measured across 25 seeds (1-25): accepted
+  // islands' largest walkable region was min 3853 / median 6538 / max 9142 —
+  // this gate never fired. That is expected of a fragmentation floor on
+  // healthy islands; do not raise it toward the observed minimum, or it
+  // starts rejecting good islands for no reason.
+  minWalkableRegion: 700,
+  // Forest first: it is the Hollow's primary spawn ground. Grass is kept
+  // because it costs nothing and matters on the grassier seeds, but it is the
+  // fallback, not the default — counted over seeds 1-12 the Hollow carries 0
+  // to 109 grass tiles out of 19,600 (0 on five of those twelve seeds), so
+  // without Forest here the wanderer would have nowhere to stand.
+  spawnTiles: [Tile.Forest, Tile.Grass],
+};
+
+export function configForStyle(style: IslandStyle): WorldConfig {
+  return style === "hollow" ? HOLLOW_CONFIG : DEFAULT_CONFIG;
+}

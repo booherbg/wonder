@@ -1690,3 +1690,120 @@ described both at length.
 ---
 
 *— Fable*
+
+---
+
+## 12 · Stage 1 findings — the Hollow, built and measured
+
+*Written 2026-08-04, after building stage 1 of the Hollow (`docs/superpowers/specs/2026-08-03-hollow-design.md`). Every number here was measured during the build, not carried over from a bench. Where a claim from the spec failed, it is recorded as failed.*
+
+### 12.1 What shipped
+
+A second island style, selectable in the forge or via `?hollow`. 140×140 against the classic 300×300, mostly forest, with a mineral field, an NK fitness landscape, a canopy that casts shade from the plants standing under it, and 400 generations of selection run before the player's first frame.
+
+### 12.2 The measurements the spec asked for
+
+**Ruggedness is real and K = 3 earns its place.** Counting true local optima by exhaustive enumeration over a 512-genotype binary subspace (each of the 9 numeric traits at its bound minimum or maximum), at a fixed niche on seed 21: **K = 0 gives 1 local optimum, K = 3 gives 14.** K = 0 collapsing to a single global answer is bench 2's "one answer, always, on every island", reproduced in the shipped code.
+
+Enumeration matters here. The first two attempts to measure this sampled hill climbs and could not discriminate: keyed on score values, K = 0 scored 22 "peaks" against K = 3's 18; keyed on genotype, both saturated at 40 of 40 walks, because 9 traits at 8 quantisation levels is about 1.3 × 10⁸ genotypes and 40 walks never collide. Bench 2 enumerated 65,536 genotypes to find its 58 optima; sampling was never going to work.
+
+**Selection beats drift.** A burned-in population scored against a pristine mineral field, seed 9: **0.4309 selected (n = 8,275) against 0.4057 for a drift control (n = 8,398).** Measured against a paired twin on an identical seed rather than against a before/after on one run — mean height rises +0.0006 under drift alone, so a before/after comparison passes with selection switched off.
+
+**Burn-in cost, and a correction to it.** `burnIn` alone over 400 generations: **964 ms**. The whole `makeHollow` path including worldgen and reroll attempts: **6.2–7.0 s across five seeds.** The spec's 300–600 generation band was a target, not a measurement; 400 generations is right, but the cost figure that matters is the second one.
+
+**Burn-in reaches complete generational turnover** — 100% of the final population born during burn-in, against 62.7% before the simBudget fix (below).
+
+**Resume costs 25 ms against 4,816 ms for a fresh generation** — 193×, by storing the accepted reroll offset so the map rebuilds deterministically instead of re-running burn-in.
+
+**Motion separability: 100.0% against a 12.5% chance level** (8 species × 24 simulated flights, n = 192), classified on raw trajectory statistics. Gait amplitude at default zoom is **5.7–15.4 screen px peak-to-peak** against a 3 px rounding quantum, so the motion is visible rather than sub-pixel.
+
+**Glow now fires at dusk.** At 12% into dusk (tint 0.152, darkness 0.0311), the pre-fix build draws zero halos and the fixed build draws nine.
+
+**The classic island is unchanged.** sha256 of `map.tiles` plus spawn coordinates, ten seeds, master against this branch: identical on all ten.
+
+### 12.3 The claim that failed, and why
+
+> **The Hollow does not produce a within-species light gradient. Two plants of the same kind, one in a gap and one under canopy, are not visibly different.**
+
+This was the spec's central legibility promise — the correlation a player notices on foot and confirms by leaning in. It is not there. Three rounds of work, each fixing a real defect, did not produce it:
+
+| what was tried | result |
+|---|---|
+| light from tile type | mean within-species r ≈ 0 |
+| canopy-derived light, shade cast by real plants | island-wide composition moves; within-species r still ≈ 0 |
+| widen `lightFit` from [0.75, 1] to [0, 1], raise its coefficient | no stable effect |
+| select on `spread` rather than `height`, breaking the circularity | within-species r moves +0.0246, +0.0420, +0.0293 against a constant-light control and +0.0219, +0.0727, **−0.0386** against a `LIGHT_WEIGHT` 0 control (seeds 2026, 11, 5) — every value under 0.073, none player-legible |
+| disperse seeds further (`reseedRadius` 3 → 8 → 16 → 24) | refuted the hypothesis: within-species light **sd falls**, 0.087 → 0.053 |
+
+Two genuine defects were found and fixed along the way, and neither was the binding constraint:
+
+**The circularity.** `score()` selected on `height` while `CanopyField` cast shade from `height`. The trait light selected on was the trait that created the light, so a tall plant darkened its own ground, the darkness penalised tallness, and the target chased itself. Now light selects on `spread`, which casts no shade.
+
+**Reverse causation in the island-wide measure.** The dark-versus-bright height gap is large and negative because tall plants *are* the shade. What the light term actually earns is the 0.089 it closes against that, not the gap itself.
+
+**The shape of the `spread`-selection result, stated exactly.** The row above compares the shipped island against two controls, and they do not agree. Measured within-species r(shade, `spread`) at 400 generations, ~8,000 plants and 12–17 species per seed:
+
+| seed | derived light | constant-0.5 control | `LIGHT_WEIGHT` 0 control | Δ vs constant | Δ vs `LIGHT_WEIGHT` 0 |
+|---|---|---|---|---|---|
+| 2026 | 0.0342 | 0.0096 | 0.0123 | +0.0246 | +0.0219 |
+| 11 | 0.0665 | 0.0245 | −0.0062 | +0.0420 | +0.0727 |
+| 5 | −0.0190 | −0.0483 | 0.0196 | +0.0293 | −0.0386 |
+
+Those nine values were measured before insects took part in burn-in. Re-measured on the shipped build (seed 2026, `tests/hollow.test.ts`): derived 0.0294 against 0.0157 on the constant-light control, Δ +0.0137 — smaller still, same null.
+
+So the light term moves within-species r in the same direction on all three seeds against the constant-light control, and flips sign on one seed (5) against the `LIGHT_WEIGHT` 0 control. "Sign flips across seeds" is true of one control, not both. **The null conclusion is unchanged:** the largest of the six deltas is +0.0727, every value is far below the 0.09 band the claim needed, and none of it is legible to a player standing in front of a plant. What was wrong was the failure's shape, not its verdict. (An earlier version of this row printed "+0.022, +0.073, −0.089"; −0.089 is a seed-5 *separation* delta — a different quantity, see below — and does not belong in a within-species row.)
+
+**The root cause, measured, and the distinction that matters.** Two different variances have been quoted as one number, so both are given here:
+
+- **Island-wide**, the canopy light field is *not* flat: sd **0.253** over 8,407 land tiles (mean 0.685, p05 0.283, p95 0.999; Forest tiles only, sd 0.182). There is real canopy structure — dark stands and bright gaps.
+- **Within the tiles one species occupies**, light sd is only **0.05–0.12**, because `PlantSpecies.habitat` pins a species to one tile type and canopy shade is smoothed over `CANOPY_RADIUS = 2` into a gentle gradient at that scale.
+
+Selection can only act on variation a species' own population is exposed to, and that is the small figure. The island has structure; a single species' patch does not. Widening dispersal makes the small figure *worse*, not better (sd 0.087 → 0.053), which is why the dispersal hypothesis is refuted rather than merely unconfirmed — and it is the island-wide/within-patch gap that points at the fix: shorter-range shadows, not more mixing.
+
+**What the next attempt should do:** make light vary at *short* range — a smaller canopy radius, individual deep shadows, or gaps that open and close — or let species span light regimes instead of being pinned to a habitat tile. Tuning the light term is exhausted; `LIGHT_WEIGHT` was reduced from 0.85 to 0.25 because 85% of a fitness axis with no stable population-level effect misdescribes the model.
+
+**What is true instead:** the Hollow's *composition* was earned. These species outcompeted others here, and the island-wide separation of `spread` between dark and bright quartiles is real (shipped build, seed 2026, quartiles of 2,064 plants each: mean `spread` 0.676 dark against 0.375 bright, separation **0.301**) — though it is mostly the island's composition rather than the light term, because the constant-light control separates by **0.267** on the same seed (0.675 against 0.408). The separation was 0.279 before insects took part in burn-in; quote it with its control or not at all. What cannot yet be claimed is that an individual plant is legible.
+
+### 12.4 Defects found that would have shipped looking correct
+
+Recorded because each one passed every signal available — green tests, plausible output, sensible cost — and was caught only by deliberately disabling the feature and checking whether anything noticed.
+
+**Burn-in accomplished about one generation, not four hundred.** `simTick` examines `simBudget: 480` plants of ~8,764 — 6% of the island per tick — and `reproChance` is 0.06, so 400 ticks gave roughly 1.4 reproductions per plant. Measured: 62.7% of the population born during burn-in, 37.3% still originals. `burnIn` now throws when `simBudget < population`, because the failure returns a plausible report for an island that quietly did not happen.
+
+**A save-key collision put one island's plants on another's map.** `worldKey(seed)` ignored island style, so a Hollow and a classic island at the same seed shared a slot — 43 of 8,337 plants survived the transplant. Keys are now namespaced by style, with classic keys byte-identical so existing saves keep loading.
+
+**Eight tests would have passed with the feature switched off.** Among them: a `deposit` test whose function returned early on its first line; a "byte-identical" guard that compared `generate(seed)` to `generate(seed)`, which is self-determinism and would pass if every island had changed; a species-floor test asserting `typeof floorHit === "boolean"`. The practice that caught them — stub the function, re-run, report what still passes — is worth more than any single fix in this document.
+
+### 12.5 Known limitations at the end of stage 1
+
+- Mineral depletion is not saved; a resumed island's soil returns at full strength.
+- Forest fraction across seeds 1–12 runs **7.1%–62.5%** (mean 55.3%). The low tail means some Hollows are not forests.
+- Plant form variety is low — the 14 local optima in genotype space do not yet cash out as visibly different plants. That is stage 2's attractor bodies.
+- The palette key leaves **30.8%** of the hue wheel reachable, not the 78% the spec claimed; reachability under a linear pull is exactly `1 − bias`.
+- Critter motion rhythms are verified by measurement and code inspection, not by watching them. A static frame cannot show rhythm.
+- Legibility has still never been tested with a person. Every claim about what a player would notice remains a hypothesis.
+
+### 12.6 · The island does not settle when burn-in ends
+
+*Measured 2026-08-04, while building the species timelapse (`src/life/timelapse.ts`). The question was whether a burned-in Hollow is static — whether a timelapse of the island's life would have anything to show past generation 400.*
+
+**Definitions.** *Count churn* is Σ|count(s, t) − count(s, 400)| over species, as a percentage of the plant total at tick 400 — how many individuals' worth of population moved between kinds. *Composition shift* is half the sum of absolute differences in each species' SHARE of the population, so it is not inflated by the population total changing. *Cells changed* is the fraction of occupied 4×4-tile squares (35×35 grid over the 140×140 map) whose dominant species differs from its dominant at tick 400.
+
+A burned-in Hollow, insects included, stepped on at the play budget (`simBudget` 480, which is what the game runs after landing):
+
+| seed | ticks past burn-in | plants | count churn | composition shift | arose | lost | kinds | cells changed |
+|---|---|---|---|---|---|---|---|---|
+| 9 | +2,000 | 8,199 | 23.3% | 11.4% | 2 | 0 | 27 → 29 | 47.1% |
+| 9 | +5,000 | 8,179 | 36.0% | 18.1% | 2 | 1 | 27 → 28 | 51.3% |
+| 9 | +10,000 | 8,140 | 55.8% | 28.2% | 6 | 3 | 27 → 30 | 55.4% |
+| 2026 | +2,000 | 8,022 | 29.2% | 14.8% | 0 | 0 | 18 → 18 | 38.4% |
+| 2026 | +5,000 | 8,067 | 38.4% | 19.6% | 0 | 1 | 18 → 17 | 41.7% |
+| 2026 | +10,000 | 8,045 | 51.4% | 26.2% | 0 | 3 | 18 → 15 | 51.0% |
+
+A third run on seed 11 (26 kinds at tick 400) reached 42.9% count churn by +17,000 ticks, with richness rising 26 → 37 and the leading lineage changing hands — species 5 at 3,283 plants leading at tick 400, species 7 at 3,107 against its 2,334 by +17,000.
+
+**The finding.** Composition keeps moving and does not level off within 17,000 ticks. The plant total stays within 2.5% of 8,200 throughout, so this is turnover between kinds rather than growth or collapse. Speciation is live during play: 6 kinds arose on seed 9 and 11 on seed 11 after burn-in ended. Roughly half the map's 4×4-tile squares are held by a different kind by +10,000 ticks.
+
+**What it changed.** The species timelapse was scoped to record burn-in AND play, rather than burn-in only, and its UI says "over the island's life" instead of naming the first 400 generations. The arithmetic behind it: burn-in runs at `simBudget` 10,000 against ~8,200 plants, so 400 ticks are 400 generations; play runs at 480, about 6% of the island per tick, so 10,000 play ticks are about 36 reproductions per plant — MORE generational turnover than the whole burn-in, spread thinner.
+
+**What it does not say.** All of the above is composition. It is not evidence that any individual plant fits its own spot; §12.3's null on the within-species light gradient stands.

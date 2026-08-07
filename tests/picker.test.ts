@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { agoPhrase, featurePhrase, isleRows } from "../src/render/picker";
+import { IsleRef, agoPhrase, featurePhrase, isleKey, isleRows } from "../src/render/picker";
 import { islandName } from "../src/world/name";
 
 const MIN = 60_000;
@@ -35,11 +35,11 @@ test("featurePhrase names one standout, rarest first", () => {
 test("isleRows keeps the index order, marks here, dates the rest", () => {
   const now = 1000 + 3 * HOUR;
   const rows = isleRows(
-    [7, 42, 99],
-    7,
+    [7, 42, 99].map((seed) => ({ seed, style: "classic" as const })),
+    { seed: 7, style: "classic" },
     now,
-    (s) => (s === 42 ? 1000 : null),
-    (s) => ({ shape: `shape of ${s}`, feature: s === 42 ? "a crater lake" : null }),
+    (r) => (r.seed === 42 ? 1000 : null),
+    (r) => ({ shape: `shape of ${r.seed}`, feature: r.seed === 42 ? "a crater lake" : null }),
   );
   expect(rows.map((r) => r.seed)).toEqual([7, 42, 99]);
   // the island underfoot: named, marked, never dated
@@ -56,5 +56,29 @@ test("isleRows keeps the index order, marks here, dates the rest", () => {
 });
 
 test("an empty index makes an empty ledger, quietly", () => {
-  expect(isleRows([], 7, 0, () => null, () => ({ shape: "s", feature: null }))).toEqual([]);
+  expect(
+    isleRows([], { seed: 7, style: "classic" }, 0, () => null, () => ({
+      shape: "s",
+      feature: null,
+    })),
+  ).toEqual([]);
+});
+
+test("a Hollow and a classic island at one seed are two rows, never one", () => {
+  const index: IsleRef[] = [
+    { seed: 11, style: "classic" },
+    { seed: 11, style: "hollow" },
+  ];
+  const rows = isleRows(
+    index,
+    { seed: 11, style: "hollow" },
+    0,
+    () => 0,
+    (r) => ({ shape: r.style === "hollow" ? "small and wooded" : "a highland isle", feature: null }),
+  );
+  expect(rows.length).toBe(2);
+  // only the island actually underfoot is marked — same seed, other style, is not
+  expect(rows.map((r) => r.current)).toEqual([false, true]);
+  expect(rows.map((r) => r.style)).toEqual(["classic", "hollow"]);
+  expect(isleKey(rows[0])).not.toBe(isleKey(rows[1]));
 });

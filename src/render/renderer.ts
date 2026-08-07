@@ -5,7 +5,8 @@ import { Critter, CritterSpecies } from "../life/fauna";
 import { Flora } from "../life/flora";
 import { PlantForm, hsl } from "../life/genome";
 import { PlantSpecies } from "../life/species";
-import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade } from "../game/daynight";
+import { CYCLE_MS, DAY_MS, isBiolumeNight, skyGrade, tintStrength } from "../game/daynight";
+import { Gait, gaitFor, motionOffset } from "../life/motion";
 import { TidePool, exposureAt } from "../game/tide";
 import { resemblance } from "../life/idmap";
 import { conspicuousness } from "../life/swarm";
@@ -18,6 +19,8 @@ import { drawCrownLight, drawEntityShadows, drawVignette, drawWaterDepth } from 
 import { TILE_SIZE } from "../world/config";
 import { Tile, WorldMap } from "../world/types";
 import { getCritterSprites } from "./critterSprites";
+import { growthScale } from "./growth";
+import { washColor } from "./fields";
 import { PALETTE } from "./palette";
 import {
   GLOW_R,
@@ -55,10 +58,28 @@ export interface Scene {
   pools?: TidePool[]; // small gardens the low tide bares along the sand
   sows?: { x: number; y: number; hue: number; at: number }[]; // far-carried seeds the beast just set down
   overlay?: boolean; // the ecology overlay (V): critter drives + chain hotspots, drawn spatially
+  /** a per-tile field wash (V's light and mineral modes); null ⇒ no wash */
+  field?: FieldWash | null;
   swarms?: SwarmLayer | null; // the insect swarms homing on the island's flowering plants
   /** the working view (W, bench-only): the pollination economy drawn into
    *  the world — hunger, pollen aboard, readiness to spread, host nectar */
   working?: WorkingReading[] | null;
+  floraTick?: number; // the flora clock, for growth animation; absent ⇒ no growth easing
+  matureAge?: number; // ticks to full size; absent ⇒ 20
+}
+
+/**
+ * One tile of a field wash, already reduced to what the renderer needs.
+ * `rungAt` is the tile's place on the island's own value ladder, 0 at the
+ * island's smallest value and 1 at its largest (see render/fields.ts).
+ * `hueAt` returns a colour-wheel degree naming a CATEGORY — which mineral is
+ * largest here — or null for the single-hue value ramp the light field uses.
+ */
+export interface FieldWash {
+  rungAt(tx: number, ty: number): number;
+  hueAt?(tx: number, ty: number): number | null;
+  /** opacity of the wash, 0 (invisible) to 1 (the scene fully covered) */
+  alpha: number;
 }
 
 const GLOW_THRESHOLD = 0.6; // genomes above this shine after dark
@@ -98,6 +119,9 @@ export class Renderer {
   private prints: { x: number; y: number; at: number }[] = [];
   private lastPrintX = -999;
   private lastPrintY = -999;
+  // One Gait per critter species id, built once. gaitFor hashes six times, so
+  // it must not run per critter per frame.
+  private gaits = new Map<number, Gait>();
   private zoomLevel = 1; // the focus lens: 1 = the wide world, 2 = leaned in close, <1 = pulled back (the World-Lab's fit-to-window)
 
   constructor(
@@ -669,6 +693,8 @@ export class Renderer {
     const playerRow = scene.player ? Math.floor(scene.player.y / TILE_SIZE) : -1;
     const yPad = 2; // rows below the view whose tall plants still reach into it
     const darkness = scene.darkness ?? 0;
+    // Glow keys off the sky's colour cast, not its darkness — see tintStrength.
+    const tintNow = tintStrength(timeMs);
     const glowers: { x: number; y: number; hue: number; genome: Parameters<typeof getPlantSprite>[0] }[] = [];
     for (let ty = y0; ty <= Math.min(map.height - 1, y1 + yPad); ty++) {
       if (scene.critterSpecies) {
@@ -699,6 +725,17 @@ export class Renderer {
             const jx = Math.round((hash2d(gx, gy, 0x31f7) - 0.5) * 3);
             const dx = Math.round(p.x - PLANT_ANCHOR_X - camX) + sway + jx;
             const dy = Math.round(p.y - PLANT_ANCHOR_Y - camY);
+            const grow = scene.floraTick === undefined
+              ? 1
+              : growthScale(scene.floraTick - p.born, scene.matureAge ?? 20);
+            if (grow < 1) {
+              ctx.save();
+              // Scale about the plant's base so it rises out of the ground
+              // rather than swelling out of its own centre.
+              ctx.translate(dx + sprite.width / 2, dy + sprite.height);
+              ctx.scale(grow, grow);
+              ctx.translate(-(dx + sprite.width / 2), -(dy + sprite.height));
+            }
             if (hash2d(gx, gy, 0x5eed1) < 0.42) {
               ctx.save();
               ctx.translate(dx + sprite.width, dy);
@@ -708,7 +745,8 @@ export class Renderer {
             } else {
               ctx.drawImage(sprite, dx, dy);
             }
-            if (darkness > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
+            if (grow < 1) ctx.restore();
+            if (tintNow > 0.05 && p.genome.glow > GLOW_THRESHOLD) {
               glowers.push({ x: p.x, y: p.y, hue: p.genome.hue, genome: p.genome });
             }
           }
@@ -720,7 +758,29 @@ export class Renderer {
           if (Math.floor(c.y / TILE_SIZE) !== ty) continue;
           const cx = c.x - camX;
           if (cx < -16 || cx > this.viewWidth + 16) continue;
-          const set = getCritterSprites(scene.critterSpecies[c.species]);
+          const sp = scene.critterSpecies[c.species];
+          const set = getCritterSprites(sp);
+          // The species' motion signature, in art px. Purely a drawing offset:
+          // it never touches c.x/c.y, so pathing, collision and the ecology
+          // read the same numbers they would with this line deleted.
+          let gait = this.gaits.get(sp.id);
+          if (!gait) {
+            gait = gaitFor(sp.id);
+            this.gaits.set(sp.id, gait);
+          }
+          // Per-individual phase in [0,1), keyed to the critter's index in the
+          // scene array (fixed at spawn — nothing is added or removed), so a
+          // group of one kind does not sway as one block.
+          //
+          // DEPENDENCY, for whoever unfreezes fauna: `ci` is a position in
+          // scene.critters, not an identity. That array is stable today only
+          // because critters can neither be born nor die, so nothing is ever
+          // spliced out of it. The moment one can die, every critter after the
+          // gap shifts index and its gait phase jumps — a whole herd visibly
+          // re-syncing because one animal elsewhere was removed. Key this off
+          // a per-critter id assigned at birth when that day comes.
+          const phase = hash2d(ci, c.species, 0x6a17);
+          const gm = motionOffset(gait, timeMs, phase);
           const hopping = Math.sin(c.hopPhase) > 0;
           const blinking = !hopping && (Math.floor(timeMs / 130) + ci * 7) % 41 === 0;
           const sprite =
@@ -728,7 +788,11 @@ export class Renderer {
               ? blinking ? set.blink : hopping ? set.hop : set.rest
               : blinking ? set.blinkFlip : hopping ? set.hopFlip : set.restFlip;
           const bounce = Math.round(Math.abs(Math.sin(c.hopPhase)) * 2);
-          ctx.drawImage(sprite, Math.round(cx - 8), Math.round(c.y - 14 - camY - bounce));
+          ctx.drawImage(
+            sprite,
+            Math.round(cx - 8 + gm.dx),
+            Math.round(c.y - 14 - camY - bounce + gm.dy),
+          );
         }
       }
       if (scene.beast && Math.floor(scene.beast.y / TILE_SIZE) === ty) {
@@ -833,7 +897,10 @@ export class Renderer {
       timeMs,
     );
 
-    if (darkness > 0.01) this.nightPass(camX, camY, scene, darkness, glowers, timeMs);
+    // Driven by the tint so glow rises with the dusk cast rather than lagging
+    // it — the lag is what cost dusk two-thirds of its pigment separation.
+    const glowDrive = Math.max(darkness, tintNow);
+    if (glowDrive > 0.01) this.nightPass(camX, camY, scene, glowDrive, glowers, timeMs);
 
     // rain: the world darkens a shade, then silver streaks lean with the wind
     const rain = scene.rain ?? 0;
@@ -868,6 +935,13 @@ export class Renderer {
     if (scene.working && scene.working.length > 0) {
       drawWorking(ctx, scene.working, camX, camY, this.viewWidth, this.viewHeight, SCALE * this.zoomLevel);
     }
+
+    // a field wash, if one of the field overlay modes is up: the canopy light
+    // field or the mineral field, drawn per tile OVER the scene. Above the
+    // sprites deliberately — the light field's darkest tiles are exactly the
+    // ones a dense stand of trees would otherwise hide — and below the motes
+    // and the lens, which are atmosphere rather than readout.
+    if (scene.field) this.drawFieldWash(scene.field, camX, camY);
 
     // depth pass: the nearest air — drifting fluff with true parallax — and
     // then the lens itself, its edges easing dark
@@ -960,6 +1034,33 @@ export class Renderer {
           ctx.restore();
         }
         blitInsect(ctx, sprites, ix, iy, pose.frame, pose.heading);
+      }
+    }
+  }
+
+  /**
+   * Paint one filled rectangle per visible tile from a FieldWash. Only the
+   * tiles inside the camera are sampled, so the cost is the on-screen tile
+   * count (about 40 x 24 at default zoom) rather than the island's 19,600.
+   */
+  private drawFieldWash(field: FieldWash, camX: number, camY: number): void {
+    const { ctx, map } = this;
+    const x0 = Math.max(0, Math.floor(camX / TILE_SIZE));
+    const y0 = Math.max(0, Math.floor(camY / TILE_SIZE));
+    const x1 = Math.min(map.width - 1, Math.ceil((camX + this.viewWidth) / TILE_SIZE));
+    const y1 = Math.min(map.height - 1, Math.ceil((camY + this.viewHeight) / TILE_SIZE));
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const hue = field.hueAt ? field.hueAt(tx, ty) : null;
+        ctx.fillStyle = washColor(field.rungAt(tx, ty), hue, field.alpha);
+        // +1 on the size so neighbouring tiles never leave a seam when the
+        // camera sits on a fractional pixel
+        ctx.fillRect(
+          Math.round(tx * TILE_SIZE - camX),
+          Math.round(ty * TILE_SIZE - camY),
+          TILE_SIZE + 1,
+          TILE_SIZE + 1,
+        );
       }
     }
   }

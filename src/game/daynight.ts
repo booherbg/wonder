@@ -76,6 +76,24 @@ export function skyGrade(nowMs: number): SkyGrade {
   return { r, g, b, a: Math.max(dk * 0.62, rosy) };
 }
 
+/**
+ * How strongly the sky is casting colour over the scene, 0..1 — the alpha of
+ * `skyGrade`'s overlay, read on its own.
+ *
+ * This is the term glow must key off, not `darknessAt`. Bench 10 measured
+ * pigment separation retention against the unlit palette at 93% in daylight,
+ * 35% at the twilight peak, 24% in deep twilight and 27% at night — below half
+ * for about 54% of the cycle, with mean hue rotation of 60-62 degrees at the
+ * worst point. The damage is the tint, not the darkness: at the peak the model
+ * mixes 49% toward a single warm colour. Night-with-glow restored 108% of
+ * separation but dusk-with-glow only 74%, because glow was fading on luminance
+ * while the worst damage happened where the tint peaked. Mid-dusk the tint is
+ * 0.42 while darkness has only reached 0.375 of its 0.75 maximum.
+ */
+export function tintStrength(nowMs: number): number {
+  return skyGrade(nowMs).a;
+}
+
 // How long until the next daybreak — the top of the cycle, darkness zero.
 export function msUntilDawn(nowMs: number): number {
   const t = ((nowMs % CYCLE_MS) + CYCLE_MS) % CYCLE_MS;

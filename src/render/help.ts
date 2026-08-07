@@ -32,7 +32,7 @@ export function helpSections(): HelpSection[] {
         { key: "C", text: "web · chains" },
         { key: "G", text: "ledger · census + web" },
         { key: "O", text: "map" },
-        { key: "V", text: "ecology overlay · drives + chain hotspots" },
+        { key: "V", text: "overlay · drives + chains, then light and minerals on a Hollow" },
         { key: "K", text: "minimap on/off" },
         { key: "E", text: "inspect nearby" },
         { key: "Z", text: "zoom 2×" },

@@ -50,7 +50,7 @@ function stubSim(name: string): SavedSim {
 
 test("the sim-slot namespace never collides with the real-world namespace", () => {
   expect(simSlotKey("abc")).toBe("wander.sim.abc");
-  expect(simSlotKey("abc")).not.toBe(worldKey(7 as unknown as number));
+  expect(simSlotKey("abc")).not.toBe(worldKey(7 as unknown as number, "classic"));
   expect(SIM_INDEX_KEY).toBe("wander.sims");
   expect(SIM_INDEX_KEY).not.toBe(WORLD_INDEX_KEY);
 });
@@ -62,7 +62,7 @@ test("save/load/forget round-trips a slot; the index is most-recent-first", () =
   saveSimSlot(store, { id: "b2", name: "meadow", savedAt: 200 }, stubSim("meadow"));
   expect(readSimIndex(store).map((m) => m.id)).toEqual(["b2", "a1"]); // newest first
   expect(loadSimSlot(store, "a1")?.name).toBe("reef");
-  expect(store.getItem(worldKey(7))).toBeNull(); // no real-world key was ever written
+  expect(store.getItem(worldKey(7, "classic"))).toBeNull(); // no real-world key was ever written
 
   forgetSimSlot(store, "a1");
   expect(loadSimSlot(store, "a1")).toBeNull(); // blob gone

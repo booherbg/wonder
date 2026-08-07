@@ -6,9 +6,26 @@
 // the wanderer crosses into a new tile; the book is opened only on the
 // slow save beat, and only when fresh ground was seen.
 
+import { IslandStyle } from "../world/config";
 import { KV } from "./murmurs";
 
 export const EXPLORED_KEY = "wander.explored";
+/**
+ * The Hollow's own fog book, parallel to EXPLORED_KEY.
+ *
+ * Separate because a book keyed by seed alone is wrong once two styles exist:
+ * the two maps are different sizes — 140x140 for HOLLOW_CONFIG against
+ * 300x300 for DEFAULT_CONFIG — so a Hollow writing `${seed}:map` would evict
+ * the classic island of the same seed from its own book. Classic keeps
+ * EXPLORED_KEY byte-for-byte, so every map already inked keeps loading.
+ */
+export const HOLLOW_EXPLORED_KEY = "wander.explored.hollow";
+
+/** Which book an island's fog map is filed in, per island style. */
+export function exploredKey(style: IslandStyle): string {
+  return style === "hollow" ? HOLLOW_EXPLORED_KEY : EXPLORED_KEY;
+}
+
 export const SIGHT = 2; // tiles — how far a passing glance soaks in
 export const EXPLORED_BOOK_CAP = 24; // islands remembered; the longest-untouched let go first
 
@@ -113,15 +130,22 @@ export function decodeExplored(text: string, width: number, height: number): Uin
   return i === n ? seen : null;
 }
 
-// The ink this island holds, read from the one book — or a fresh sheet.
+// The ink this island holds, read from its style's book — or a fresh sheet.
+// `style` is required rather than defaulted, so no caller can forget it and
+// silently read a Hollow's fog out of the classic book (the mirror of the rule
+// worldKey follows). A page drawn for another size of island is rejected by
+// decodeExplored — it returns null unless the runs it reads cover exactly
+// width*height tiles — so a stale entry can never be applied to a map of a
+// different size, whichever book it came from.
 export function loadExplored(
   seed: number,
+  style: IslandStyle,
   width: number,
   height: number,
   kv: KV | null = defaultKV(),
 ): Uint8Array {
   try {
-    const raw = kv?.getItem(EXPLORED_KEY);
+    const raw = kv?.getItem(exploredKey(style));
     const book = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
     const page = book[`${seed}:map`];
     if (typeof page !== "string") return emptyExplored(width, height);
@@ -131,9 +155,11 @@ export function loadExplored(
   }
 }
 
-// Write this island's map back without disturbing any other island's.
+// Write this island's map back without disturbing any other island's — or the
+// other style's book.
 export function saveExplored(
   seed: number,
+  style: IslandStyle,
   seen: Uint8Array,
   width: number,
   height: number,
@@ -141,7 +167,8 @@ export function saveExplored(
 ): void {
   if (!kv) return;
   try {
-    const raw = kv.getItem(EXPLORED_KEY);
+    const key0 = exploredKey(style);
+    const raw = kv.getItem(key0);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
     const book: Record<string, string> =
       parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -151,7 +178,7 @@ export function saveExplored(
     delete book[key]; // re-set below, so this island moves to the freshest end
     book[key] = encodeExplored(seen, width, height);
     const entries = Object.entries(book).slice(-EXPLORED_BOOK_CAP);
-    kv.setItem(EXPLORED_KEY, JSON.stringify(Object.fromEntries(entries)));
+    kv.setItem(key0, JSON.stringify(Object.fromEntries(entries)));
   } catch {
     // storage full or unavailable: the walked map still holds this sitting
   }

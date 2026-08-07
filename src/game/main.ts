@@ -18,10 +18,25 @@ import {
   updateCritter,
 } from "../life/fauna";
 import { CensusLog, SpeciesTrace, sparkline, trend } from "../life/census";
-import { Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
+import { DEFAULT_TUNING, Flora, Plant, SUBSTRATE_HUE_MATCH, hueGap, nearestPlant } from "../life/flora";
+import { Hollow, HollowEcology, hollowEcology, makeHollowAsync, terrainLight } from "../life/hollow";
+import { CanopyField } from "../life/canopy";
+import { FitnessLandscape } from "../life/fitness";
+import { MINERAL_COUNT, MineralField } from "../life/minerals";
+import { BURN_IN_GENERATIONS } from "../life/burnin";
+import { MINERAL_HUES, MINERAL_LABELS, dominantMineral, ladderCaption, ladderOf, rung } from "../render/fields";
+import type { FieldWash } from "../render/renderer";
+import type { GroundReading } from "../render/inspect";
 import { DIVERSITY_FLOOR, SEED_CANDIDATES, chainLinks, chainStats, pickNewSeed, richnessWord } from "../life/foodweb";
 import { PlantForm, driftDistance, hsl } from "../life/genome";
-import { CHAINS_KEY, LAST_SEED_KEY, parseLastSeed, resolveChains } from "./flags";
+import {
+  CHAINS_KEY,
+  LAST_SEED_KEY,
+  LAST_STYLE_KEY,
+  parseLastSeed,
+  parseLastStyle,
+  resolveChains,
+} from "./flags";
 import {
   loadCritterJournal,
   loadJournal,
@@ -34,6 +49,7 @@ import {
   swarmCueDue,
 } from "./journal";
 import { PlantSpecies, generateCraterEndemics, generatePlantSpecies } from "../life/species";
+import { applyHueKey } from "../life/huekey";
 import { closeAnthology, isAnthologyOpen, openAnthology } from "../render/anthology";
 import { closeJournal, isJournalOpen, openJournal } from "../render/journal";
 import { clearCritterSpriteCache, critterSpriteCacheStats } from "../render/critterSprites";
@@ -44,14 +60,26 @@ import { pruneMapKeys } from "../core/lru";
 import { closeHelp, isHelpOpen, openHelp } from "../render/help";
 import { TitleRowId, TitleState, hideTitle, isTitleOpen, showTitle } from "../render/title";
 import { CampView, Gatherable, campLines, closeInspect, gatherableLine, hourLine, isInspectOpen, openInspect, openSwarmCard } from "../render/inspect";
-import { MOTES_MAX, SwarmLayer, buildPollen, courtingSwarm, eventInView, sowKey, swarmPalette } from "./swarms";
+import {
+  MOTES_MAX,
+  SwarmLayer,
+  buildPollen,
+  courtingSwarm,
+  eventInView,
+  hollowSwarmFactory,
+  sowKey,
+  swarmPalette,
+} from "./swarms";
 import { MenuHandlers, MenuModel, SIMULATOR_KEY, campActionRows, closeMenu, isMenuOpen, openMenu } from "../render/menu";
 import { WebLink, WebView, closeWeb, isWebOpen, openWeb } from "../render/web";
 import { ChartSeries, ChartsView, closeCharts, isChartsOpen, openCharts } from "../render/charts";
+import { SpeciesTimelapse } from "../life/timelapse";
+import { TimelapseSpecies, TimelapseView } from "../render/timelapse";
 import { BackpackView, backpackMove, backpackSpecies, closeBackpack, isBackpackOpen, openBackpack } from "../render/backpack";
 import {
   closePicker,
   featurePhrase,
+  IsleRef,
   isPickerOpen,
   isleRows,
   openPicker,
@@ -79,13 +107,13 @@ import { MurmurEngine, loadAnthology, markSwarmMet, swarmMetOn } from "./murmurs
 import {
   MAX_SAVED_WORLDS,
   SavedWorld,
-  WORLD_INDEX_KEY,
   packCrittersV2,
   packWorld,
   restoreCrittersV2,
   restoreDaughters,
   restoreInventory,
   restorePlants,
+  worldIndexKey,
   worldKey,
 } from "./save";
 
@@ -95,7 +123,12 @@ const FORCE_RAIN = new URL(location.href).searchParams.has("rain"); // dev aid
 const FORCE_LOWTIDE = new URL(location.href).searchParams.has("lowtide"); // dev aid
 const FORCE_FOCUS = new URL(location.href).searchParams.has("focus"); // dev aid: start leaned in
 const FOLLOW_BEAST = new URL(location.href).searchParams.has("beast"); // dev aid: the camera rides with the far-goer
-import { DEFAULT_CONFIG, TILE_SIZE } from "../world/config";
+const FORCE_HOLLOW = new URL(location.href).searchParams.has("hollow"); // dev aid: boot straight into a Hollow, bypassing the forge
+// Written into the URL by loadWorld for every Hollow, so a reload knows which
+// of the two islands on this seed it was showing — not a dev aid, the resume
+// route. See loadWorld's history.replaceState.
+const URL_STYLE_HOLLOW = new URL(location.href).searchParams.get("style") === "hollow";
+import { DEFAULT_CONFIG, HOLLOW_CONFIG, IslandStyle, TILE_SIZE } from "../world/config";
 import { IslandShape, SHAPES, SHAPE_PHRASE, generate, generateAsync, rollShape } from "../world/generate";
 import { ForgeState, GenArgs, defaultForgeState, forgeArgs } from "../render/forgeArgs";
 import { closeForge, forgeNotice, forgeProgress, isForgeOpen, openForge, setForgeBusy } from "../render/forge";
@@ -137,16 +170,27 @@ let titleActive = false; // true only while the front door is up over its backdr
 // true again from outside, only right after the boot path's own backdrop load.
 let backdropLoaded = false;
 
-function readLastSeed(): number | null {
+/**
+ * The island last entered — its seed AND its style, which together name one
+ * place. Seed alone does not: the Hollow of seed 11 and the classic island of
+ * seed 11 are two islands. null when nothing has been entered yet.
+ */
+function readLastIsle(): IsleRef | null {
   try {
-    return parseLastSeed(localStorage.getItem(LAST_SEED_KEY));
+    const seed = parseLastSeed(localStorage.getItem(LAST_SEED_KEY));
+    if (seed === null) return null;
+    return { seed, style: parseLastStyle(localStorage.getItem(LAST_STYLE_KEY)) };
   } catch {
     return null;
   }
 }
-function writeLastSeed(seed: number): void {
+function writeLastIsle(seed: number, style: IslandStyle): void {
   try {
     localStorage.setItem(LAST_SEED_KEY, String(seed));
+    // removed rather than set to "classic", so a classic session leaves
+    // storage exactly as builds before the Hollow left it
+    if (style === "hollow") localStorage.setItem(LAST_STYLE_KEY, "hollow");
+    else localStorage.removeItem(LAST_STYLE_KEY);
   } catch {
     // storage off
   }
@@ -562,6 +606,47 @@ function padLeft(counts: number[], len: number): number[] {
     : [...new Array(len - counts.length).fill(0), ...counts];
 }
 
+// The island's history, sampled: the census counts and, when this island is
+// recording one, a species-timelapse frame. One function so a tick the census
+// logged is a tick the timelapse saw — the six call sites below cannot drift
+// apart. Neither call draws from an Rng or mutates the flora.
+function sampleHistory(): void {
+  census.sample(flora.tick, flora.speciesCounts);
+  timelapse?.capturePlay(flora, flora.tick);
+}
+
+/**
+ * The timelapse view the ledger draws, or null when this island has no
+ * recording — every classic island, and any Hollow loaded from a save (the
+ * frames are not serialised). Null renders no timelapse section at all rather
+ * than an empty player.
+ */
+function buildTimelapseView(): TimelapseView | null {
+  if (!timelapse || timelapse.frames.length === 0) return null;
+  const byId = new Map<number, TimelapseSpecies>();
+  for (const id of timelapse.speciesSeen()) {
+    const sp = species[id];
+    if (!sp) continue;
+    byId.set(id, {
+      id,
+      name: sp.name,
+      hue: sp.archetype.hue,
+      sat: sp.archetype.sat,
+      daughter: sp.parent !== undefined,
+    });
+  }
+  return {
+    frames: timelapse.frames,
+    cells: timelapse.cells,
+    tiles: map.tiles,
+    mapWidth: map.width,
+    mapHeight: map.height,
+    species: byId,
+    playInterval: timelapse.playInterval,
+    burnInCount: timelapse.burnInCount,
+  };
+}
+
 function buildChartsView(): ChartsView {
   const traces = census.list();
   const maxLen = Math.max(2, ...traces.map((t) => t.counts.length));
@@ -576,6 +661,7 @@ function buildChartsView(): ChartsView {
       sat: species[tr.id].archetype.sat,
       counts: padLeft(tr.counts, maxLen),
       peak: tr.peak,
+      daughter: species[tr.id].parent !== undefined,
     }));
   const sum = census.summary();
   const { plants: livePlants, critters: liveCritters } = liveSpeciesForWeb();
@@ -615,6 +701,7 @@ function buildChartsView(): ChartsView {
     germinations: flora.germinations,
     pollinators: { swarms: pol.cloudsTotal, population: pol.population, species: pol.species },
     swarmSeries,
+    timelapse: buildTimelapseView(),
   };
 }
 
@@ -668,7 +755,7 @@ async function runMidWarm(raw: number): Promise<void> {
     },
     step: () => {
       flora.simTick();
-      census.sample(flora.tick, flora.speciesCounts);
+      sampleHistory();
       swarmLayer.tick(flora);
       sampleSwarms();
     },
@@ -771,6 +858,14 @@ let map!: WorldMap;
 let player!: Player;
 let species!: PlantSpecies[];
 let flora!: Flora;
+/**
+ * This island's species-timelapse recorder, or null when it has none. Set from
+ * `PrebuiltLife` on a freshly grown Hollow and cleared on every other load: a
+ * classic island never records one, and a Hollow restored from a save cannot —
+ * the frames are not serialised, and the burn-in that produced them is not
+ * re-run on resume (25 ms restore against 4,816 ms regrowth, §12.2).
+ */
+let timelapse: SpeciesTimelapse | null = null;
 let critterSpecies!: CritterSpecies[];
 let critters!: Critter[];
 let critterRng!: Rng;
@@ -792,6 +887,28 @@ let flocks: Flock[] = [];
 let birdRng!: Rng;
 let simAcc = 0;
 let currentSeed = 0;
+// Which style built the island now loaded. It selects the save namespace:
+// worldKey(seed, style), so seed N as a Classic and seed N as a Hollow are two
+// separate slots that cannot overwrite or restore into each other.
+let currentStyle: IslandStyle = "classic";
+// Hollow only: the reroll offset the loaded island was accepted at, 0-7. The
+// map came from generate(currentSeed + currentAttemptOffset, HOLLOW_CONFIG).
+// Always 0 for a classic world, whose map comes from the seed alone.
+let currentAttemptOffset = 0;
+/**
+ * The three fields a Hollow's plants are scored against — the mineral field,
+ * the NK fitness landscape and the canopy — or null on a classic island, which
+ * has none of them. Set by loadWorld for both Hollow paths (freshly burned in,
+ * and restored from a save). Read by the V overlay's light and mineral modes
+ * and by the lean-in panel's ground reading; nothing here feeds the simulation,
+ * which holds its own references through the Flora tuning.
+ */
+let currentEco: { minerals: MineralField; landscape: FitnessLandscape; canopy: CanopyField } | null =
+  null;
+type OverlayMode = "off" | "ecology" | "light" | "minerals";
+let overlayMode: OverlayMode = "off";
+/** The island-wide {lo, hi} of whichever field is drawn, rebuilt on entry. */
+let fieldLadder = { lo: 0, hi: 1 };
 let baseSpeciesCount = 0; // species beyond this index arose during play
 let memories: string[] = []; // weather memory: what this island has witnessed
 let rainMurmurArmed = false; // true while a shower is really coming down
@@ -828,6 +945,11 @@ const MAX_CATCHUP_TICKS = 7200; // ~4 hours of island time while you were away
 
 function persist(): void {
   if (titleActive) return; // never autosave the title backdrop
+  // The Hollow IS persisted now, in its own namespace. Two things made that
+  // possible: worldKey takes the style, so a Hollow can never be restored onto
+  // a classic map (the 43-of-8,337-plants corruption); and attemptOffset says
+  // which reroll was accepted, so the map is rebuilt with one generate() call
+  // instead of a 6.2-7.0 s burn-in.
   try {
     const s = packWorld(
       currentSeed,
@@ -860,36 +982,113 @@ function persist(): void {
         soil: flora.soilTileKeys(),
         crittersV2: packCrittersV2(critters, flora),
         critterRngState: critterRng.state?.(),
+        style: currentStyle,
+        attemptOffset: currentAttemptOffset,
+        // The Hollow's pollinators are a burn-in RESULT, like its plant
+        // genomes — the seed cannot regrow them. packWorld drops this on a
+        // classic island, whose swarms do regenerate from the seed.
+        swarms: currentStyle === "hollow" ? swarmLayer.snapshot() : undefined,
       },
     );
-    localStorage.setItem(worldKey(currentSeed), JSON.stringify(s));
-    const index: number[] = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
+    localStorage.setItem(worldKey(currentSeed, currentStyle), JSON.stringify(s));
+    const indexKey = worldIndexKey(currentStyle);
+    const index: number[] = JSON.parse(localStorage.getItem(indexKey) ?? "[]");
     const next = [currentSeed, ...index.filter((x) => x !== currentSeed)];
     for (const evicted of next.slice(MAX_SAVED_WORLDS)) {
-      localStorage.removeItem(worldKey(evicted));
+      localStorage.removeItem(worldKey(evicted, currentStyle));
     }
-    localStorage.setItem(WORLD_INDEX_KEY, JSON.stringify(next.slice(0, MAX_SAVED_WORLDS)));
+    localStorage.setItem(indexKey, JSON.stringify(next.slice(0, MAX_SAVED_WORLDS)));
   } catch {
     // storage full or unavailable: the world still lives, just unsaved
   }
 }
 
-function loadSave(seed: number): SavedWorld | null {
+// Read the save filed under this seed AND style. `style` is explicit at every
+// call site: reading the classic slot for a Hollow (or the reverse) is the
+// exact bug the namespace split exists to prevent, so it is never defaulted.
+// A save that names a different style than the namespace it was found in is
+// refused — storage that was hand-edited or written by a future build.
+function loadSave(seed: number, style: IslandStyle): SavedWorld | null {
   try {
-    const raw = localStorage.getItem(worldKey(seed));
+    const raw = localStorage.getItem(worldKey(seed, style));
     if (!raw) return null;
     const s = JSON.parse(raw) as SavedWorld;
-    return s.v === 1 && s.seed === seed ? s : null;
+    if (s.v !== 1 || s.seed !== seed) return null;
+    return (s.style ?? "classic") === style ? s : null; // absent style ⇒ classic (pre-Hollow saves)
   } catch {
     return null;
   }
 }
 
-function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
+/**
+ * A population built before loadWorld was called, handed in whole rather than
+ * generated here. The Hollow's flora is the only producer: it is the SURVIVOR
+ * set of a 400-generation burn-in, so regenerating it from the seed inside
+ * loadWorld would throw away the entire point of the style. `species` is the
+ * list that Flora was built on, daughters founded during burn-in included.
+ */
+interface PrebuiltLife {
+  flora: Flora;
+  species: PlantSpecies[];
+  /**
+   * The colonisation record made during this island's burn-in — 101 frames of
+   * "which species holds each 4×4-tile square", one per 4 generations. Null on
+   * any island that did not record one. Play keeps adding to it (see
+   * `sampleHistory`), because composition does not settle when burn-in ends:
+   * measured on seeds 9 and 2026, per-species population churn against the
+   * tick-400 composition reaches 55.8% and 51.4% by +10,000 ticks, with 6
+   * species arising and 3 lost on seed 9.
+   */
+  timelapse: SpeciesTimelapse | null;
+  /** Hollow.attemptOffset — the reroll this island was accepted at, 0-7. */
+  attemptOffset: number;
+  /**
+   * The mineral field, fitness landscape and canopy this population was
+   * selected against — the same object graph, not a rebuild, so the mineral
+   * depletion burn-in caused is still in it. Kept for the V overlay's light
+   * and mineral modes and the lean-in ground reading.
+   */
+  minerals: MineralField;
+  landscape: FitnessLandscape;
+  canopy: CanopyField;
+  /**
+   * The insect layer that lived through the same 400 generations as `flora`,
+   * handed over whole. loadWorld ADOPTS it instead of constructing a fresh one:
+   * a rebuilt layer would be seeded against these flowers with an unselected
+   * sensor map, which is the entire co-evolution thrown away and invisible from
+   * the outside. Null only if burn-in produced no layer at all.
+   */
+  swarms: SwarmLayer | null;
+}
+
+/**
+ * A Hollow being rebuilt from its save rather than burned in again.
+ * `acceptedSeed` is `seed + SavedWorld.attemptOffset`: the seed the map,
+ * species list, mineral field and fitness landscape were all generated from.
+ * Passing this puts loadWorld on the ordinary saved-world restore path (the
+ * same RestoredFlora path a classic world uses) with the Hollow's ecology.
+ */
+interface HollowResume {
+  acceptedSeed: number;
+}
+
+function loadWorld(
+  seed: number,
+  gen?: GenArgs,
+  prebuilt?: WorldMap,
+  prebuiltLife?: PrebuiltLife,
+  hollowResume?: HollowResume,
+): void {
   // the map you drew of the island you're leaving keeps its ink — unless the
   // island you're leaving was the ephemeral title backdrop (backdropLoaded),
   // which nobody played and shouldn't leave a wander.explored entry behind
-  if (explored && !backdropLoaded) saveExplored(currentSeed, explored, map.width, map.height);
+  // currentStyle is still the OUTGOING island's here, and it selects the book
+  // the ink is written into: a Hollow's map goes to wander.explored.hollow,
+  // a classic island's to wander.explored, so neither style can evict the
+  // other's page for the same seed. Both styles are saved now.
+  if (explored && !backdropLoaded) {
+    saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
+  }
   backdropLoaded = false; // consumed: this load's own world is real, so a LATER load leaving it saves normally
   // a seed with no viable island is nearly impossible, but the sea is
   // large: quietly sail on to another seed rather than white-screen
@@ -914,20 +1113,91 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     }
   }
   currentSeed = seed;
-  if (!titleActive) writeLastSeed(seed); // the backdrop is not a played session
+  currentStyle = prebuiltLife || hollowResume ? "hollow" : (gen?.style ?? "classic");
+  currentAttemptOffset = prebuiltLife
+    ? prebuiltLife.attemptOffset
+    : hollowResume
+      ? hollowResume.acceptedSeed - seed
+      : 0;
+  // The backdrop is not a played session; both styles of real island are.
+  // The seed goes to LAST_SEED_KEY exactly as before and the style beside it
+  // to LAST_STYLE_KEY, so the front door's "continue" reopens the island that
+  // was actually last walked rather than the classic one of the same number.
+  if (!titleActive) writeLastIsle(seed, currentStyle);
   census.reset(); // a new island begins its own history
-  species = generatePlantSpecies(seed);
-  if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
-  baseSpeciesCount = species.length;
+  // Adopted from the burn-in that made this island, or cleared. Set before the
+  // warm-up and catch-up loops below, which sample through `sampleHistory`.
+  timelapse = prebuiltLife?.timelapse ?? null;
+  if (prebuiltLife) {
+    species = prebuiltLife.species;
+    // Burn-in may found daughter species, and they arose before the wanderer
+    // landed rather than during play, so they belong below the base line —
+    // baseSpeciesCount indexes "arose during play" (main.ts:840). Count the
+    // founders (no parent) instead of the whole list.
+    baseSpeciesCount = species.filter((s) => s.parent === undefined).length;
+  } else if (hollowResume) {
+    // The Hollow's founder species, rebuilt exactly as hollow.ts's setUp built
+    // them: from the ACCEPTED seed, hue-keyed. Daughters founded during
+    // burn-in are appended below by restoreDaughters, in saved order, so plant
+    // rows resolve to the same species indices they were packed with.
+    species = applyHueKey(
+      generatePlantSpecies(hollowResume.acceptedSeed),
+      hollowResume.acceptedSeed,
+    );
+    baseSpeciesCount = species.length; // the founders; matches the prebuilt branch's count
+  } else {
+    species = generatePlantSpecies(seed);
+    if (map.crater) species.push(...generateCraterEndemics(seed, map.crater, species.length));
+    baseSpeciesCount = species.length;
+  }
+  // A resumed Hollow is scored by the same mineral/light selection context
+  // that built it — without it the island's genomes would DRIFT rather than be
+  // scored against the mineral field and the canopy, so the composition the
+  // 400-generation burn-in produced would start coming apart on resume.
+  //
+  // KNOWN LOSS, deliberate: MineralField holds its depletion (every draw() the
+  // burn-in and the played session made) in memory only, and nothing in
+  // SavedWorld records it. mineralFieldFor rebuilds the field at FULL strength
+  // here, so a resumed Hollow starts with its minerals unspent. Acceptable for
+  // stage 1 — the island is already burned in and its species composition is
+  // set, which is what the player came back to — but it is a loss, not a bug,
+  // and depletion does NOT persist. Serializing the field is a later task.
+  const eco: HollowEcology | null = hollowResume
+    ? hollowEcology(map, hollowResume.acceptedSeed, () => flora)
+    : null;
+  // The three fields the overlay and the lean-in read. A fresh Hollow hands
+  // over the very objects burn-in used; a resumed one gets the rebuilt set
+  // above; a classic island has none.
+  // An island with no mineral field cannot show the light or mineral mode; if
+  // V was left on one of them, step back to the plain ecology overlay rather
+  // than leaving a legend up for a field that is not there.
+  currentEco = prebuiltLife
+    ? { minerals: prebuiltLife.minerals, landscape: prebuiltLife.landscape, canopy: prebuiltLife.canopy }
+    : eco
+      ? { minerals: eco.minerals, landscape: eco.landscape, canopy: eco.canopy }
+      : null;
+  if (!currentEco && (overlayMode === "light" || overlayMode === "minerals")) {
+    overlayMode = "ecology";
+    renderOverlayLegend();
+  }
   // dev aid: ?split=1 makes lineages eager to speciate (witness one in minutes)
   const floraTuning = {
-    chains: CHAINS, // the A/B toggle threads into both new Flora sites below
+    // The A/B toggle threads into both new Flora sites below — except on a
+    // resumed Hollow, where eco.tuning is spread after this line and carries
+    // `chains: false`, matching the fresh Hollow that hollowEcology built.
+    chains: CHAINS,
+    ...(eco ? eco.tuning : {}),
     ...(gen ? { scatterLife: gen.life } : {}),
     ...(new URL(location.href).searchParams.has("split")
       ? { splitCooldownTicks: 30, splitDistance: 0.18, splitClusterMin: 4 }
       : {}),
   };
-  const saved = loadSave(seed);
+  // A prebuilt population is a freshly forged island, so any save filed under
+  // this seed describes a different world's plants and must not be restored
+  // over it. Ignoring the save wholesale (not just its flora) keeps the camp,
+  // inventory and player position from being reattached to an island they were
+  // never set down on.
+  const saved = prebuiltLife ? null : loadSave(seed, currentStyle);
   worldName = saved?.name ?? null;
   worldPlayMs = saved?.playMs ?? 0;
   memories = saved?.memories ? [...saved.memories] : [];
@@ -950,6 +1220,15 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
       plants: restorePlants(saved, species),
       soil: saved.soil,
     });
+    // A Hollow was CONSTRUCTED at simBudget BURN_IN_SIM_BUDGET (10000, from
+    // eco.tuning above) so burn-in examined every plant every tick, then handed
+    // back to the play budget of 480 the moment the wanderer landed — see the
+    // prebuiltLife branch below. A resume repeats both steps in that order, so
+    // the tuning matches what the island was built with and the budget matches
+    // what it was played at. Done BEFORE the catch-up ticks: at 10000 against
+    // the Hollow's ~8,300 plants, catch-up would run the selection callback
+    // about 17x more per tick than play ever does.
+    if (eco) flora.tuning.simBudget = DEFAULT_TUNING.simBudget;
     // the island lived while you were away
     catchUp = Math.min(
       MAX_CATCHUP_TICKS,
@@ -957,7 +1236,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     );
     for (let i = 0; i < catchUp; i++) {
       flora.simTick();
-      census.sample(flora.tick, flora.speciesCounts);
+      sampleHistory();
     }
     const awayEvents = flora.takeEvents();
     if (awayEvents.length > 0) awayBorn = awayEvents[awayEvents.length - 1].name;
@@ -966,10 +1245,28 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     }
     home = saved.home ? { x: saved.home[0], y: saved.home[1] } : null;
     if (home) flora.setHome(home.x, home.y);
+  } else if (prebuiltLife) {
+    flora = prebuiltLife.flora;
+    // Burn-in ran at simBudget BURN_IN_SIM_BUDGET (10000) so every plant was
+    // examined every tick — correct with no frame to fit in, and far too
+    // expensive with one: the burned-in Hollow carries about 8,300 plants
+    // (measured, seeds 2026 and 11: 8255 and 8311), each examination running
+    // the selection callback. Hand it back to the play budget of 480.
+    flora.tuning.simBudget = DEFAULT_TUNING.simBudget;
+    home = null;
   } else {
     flora = new Flora(map, species, seed, floraTuning);
     home = null;
   }
+  // A RESUMED Hollow's CanopyField is constructed empty — hollowEcology builds
+  // a new one, and nothing has stood in it yet — so before this line every
+  // tile on a resumed island read as open sun: shade 0, light 1. That is wrong
+  // twice over: the selection callback scored plants against light the island
+  // does not have, and the V light overlay would have drawn a flat field.
+  // Filling it from the restored population is one pass over the plants,
+  // measured at 0.6 ms for 8,234 plants over 19,600 tiles (canopy.ts).
+  if (eco) eco.canopy.refresh(flora);
+
   // dev aid + a seed of the "run N generations first" control: ?warm=3000
   // fast-forwards the island's life before you arrive (bounded, so a typo
   // can't hang the load)
@@ -978,7 +1275,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
     : Math.min(50000, Number(new URL(location.href).searchParams.get("warm") ?? 0) || 0);
   for (let i = 0; i < warm; i++) {
     flora.simTick();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   critterSpecies = generateCritterSpecies(seed, map, flora, species);
   // the animals, restored where you left them if this world was saved;
@@ -986,7 +1283,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   const savedCritters = saved ? restoreCrittersV2(saved, critterSpecies, flora) : [];
   critters = savedCritters.length > 0 ? savedCritters : spawnCritters(critterSpecies, map, seed);
   critterRng = makeRng(saved?.critterRngState ?? (seed ^ 0xcafe)); // resume the stream when the save carries it, else fresh
-  trust = loadTrust(seed); // friendships made here, remembered here
+  trust = loadTrust(seed, currentStyle); // friendships made here, remembered here
   companionKind = null; // each island keeps its own friend; this one's is re-called below
   beast = generateBeast(seed, map, species);
   beastSows = [];
@@ -995,11 +1292,43 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   // the insect swarms: a bounded set scattered near the island's blooms, each
   // homing on its nearest flowering plant and adapting its colour toward it.
   // Purely additive — its own salted Rng, so the world/flora/critters above are
-  // byte-identical with or without it; regenerated from seed each load.
-  swarmLayer = new SwarmLayer(currentSeed, species, flora, {
-    x: (map.spawn.x + 0.5) * TILE_SIZE,
-    y: (map.spawn.y + 0.5) * TILE_SIZE,
-  });
+  // byte-identical with or without it.
+  //
+  // Three sources, in the order they are checked:
+  //   1. A freshly burned-in Hollow hands over the layer that lived its 400
+  //      generations. It is ADOPTED, never rebuilt: a rebuild would seed fresh
+  //      swarms with unselected sensor maps against flowers they had no part in
+  //      shaping, discarding the co-evolution with no visible symptom.
+  //   2. A RESUMED Hollow restores that layer from its save (SavedSwarmLayer),
+  //      for the same reason. If the save has no swarm block it is named in the
+  //      HUD and the console rather than silently reseeded — the island would
+  //      look right and its pollinators would be strangers to it.
+  //   3. Every classic island, and a Hollow whose save predates this field,
+  //      constructs the layer from the seed exactly as before.
+  if (prebuiltLife?.swarms) {
+    swarmLayer = prebuiltLife.swarms;
+  } else if (hollowResume && saved?.swarms) {
+    // The burned-in layer was built at the ACCEPTED seed (hollow.ts's setUp
+    // passes the attempt's seed), so restoring it under any other number would
+    // rebuild the per-species flower maps off the wrong salt.
+    swarmLayer = new SwarmLayer(hollowResume.acceptedSeed, species, flora, undefined, {
+      autoSpawn: false,
+    });
+    swarmLayer.restore(saved.swarms);
+  } else {
+    if (hollowResume) {
+      // Never silent: this Hollow's pollinators are NOT the ones that burned in.
+      console.warn(
+        "wonder: this Hollow's save carries no swarm layer — its insects are being " +
+          "reseeded fresh, so their match to the island's flowers is unearned.",
+      );
+      flashHud("the Hollow's insects did not come back with it — a new swarm has settled");
+    }
+    swarmLayer = new SwarmLayer(currentSeed, species, flora, {
+      x: (map.spawn.x + 0.5) * TILE_SIZE,
+      y: (map.spawn.y + 0.5) * TILE_SIZE,
+    });
+  }
   // let the swarms live the tail of a ?warm fast-forward too (the flora warm
   // above ran before they existed), so a well-matched cloud's pollination has
   // had time to thicken the flowers it works before the wanderer arrives —
@@ -1010,7 +1339,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   for (let i = 0; i < Math.min(warm, SWARM_WARM_MAX); i++) {
     swarmLayer.tick(flora);
     sampleSwarms();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   swarmLayer.takeEvents(); // moments from before the wanderer arrived went unwitnessed
   // has this island already pointed at its clouds? remembered across sittings
@@ -1047,7 +1376,7 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   }
   // the fog-of-war map: pick up where the ink left off, and see the ground
   // underfoot before the first step is taken
-  explored = loadExplored(seed, map.width, map.height);
+  explored = loadExplored(seed, currentStyle, map.width, map.height);
   walkTx = Math.floor(player.x / TILE_SIZE);
   walkTy = Math.floor(player.y / TILE_SIZE);
   exploredDirty = markSeen(explored, map.width, map.height, walkTx, walkTy);
@@ -1055,6 +1384,12 @@ function loadWorld(seed: number, gen?: GenArgs, prebuilt?: WorldMap): void {
   closeInspect();
   const url = new URL(location.href);
   url.searchParams.set("seed", String(seed));
+  // ?style=hollow is how a reload finds its way back into a Hollow: the front
+  // door's "continue" reads a bare seed and cannot tell the two islands apart
+  // (see writeLastSeed above), so the URL carries the style instead. Deleted
+  // for a classic world, so a classic URL is exactly what it was before.
+  if (currentStyle === "hollow") url.searchParams.set("style", "hollow");
+  else url.searchParams.delete("style");
   history.replaceState(null, "", url);
   renderSeedLabel();
   murmurs.setPlace(islandName(seed));
@@ -1096,7 +1431,7 @@ function sleepToDawn(sky: number): void {
   const ticks = Math.min(MAX_CATCHUP_TICKS, Math.floor(skipped / SIM_MS));
   for (let i = 0; i < ticks; i++) {
     flora.simTick();
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
   }
   simAcc = 0;
   const born = flora.takeEvents();
@@ -1141,43 +1476,66 @@ function openAlmanac(): void {
 const isleFeatureCache = new Map<number, string | null>();
 let isleFillToken = 0;
 
-function isleLook(seed: number): { shape: string; feature: string | null } {
-  if (seed === currentSeed) {
+// What a Hollow's rows say in place of a terrain shape. Every Hollow is
+// 140x140 and mostly forest (HOLLOW_CONFIG), so a rolled shape phrase would
+// say nothing that distinguishes one from another; the style itself is the
+// description. The picker prints "a Hollow" ahead of it (placeText).
+const HOLLOW_SHAPE_PHRASE = "small and wooded";
+
+function isHere(ref: IsleRef): boolean {
+  return ref.seed === currentSeed && ref.style === currentStyle;
+}
+
+function isleLook(ref: IsleRef): { shape: string; feature: string | null } {
+  if (isHere(ref)) {
     return {
-      shape: SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"],
+      shape: ref.style === "hollow" ? HOLLOW_SHAPE_PHRASE : SHAPE_PHRASE[(map.shape as IslandShape) ?? "highland"],
       feature: featurePhrase(map),
     };
   }
+  // A far Hollow's terrain is not regenerated for the ledger: its map comes
+  // from seed + attemptOffset against HOLLOW_CONFIG, which the row would have
+  // to read out of the save to reproduce. The row stays plain instead.
+  if (ref.style === "hollow") return { shape: HOLLOW_SHAPE_PHRASE, feature: null };
   return {
-    shape: SHAPE_PHRASE[rollShape(seed)],
-    feature: isleFeatureCache.get(seed) ?? null,
+    shape: SHAPE_PHRASE[rollShape(ref.seed)],
+    feature: isleFeatureCache.get(ref.seed) ?? null,
   };
 }
 
-function savedIndex(): number[] {
+// One style's saved-worlds list, as refs. Each style keeps its own list
+// (worldIndexKey), and the two are never merged into one seed list: seed 11
+// can name a Hollow and a classic island at once, and both are offerable.
+function savedRefs(style: IslandStyle): IsleRef[] {
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
-    const index = Array.isArray(raw)
-      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0)
+    const raw: unknown = JSON.parse(localStorage.getItem(worldIndexKey(style)) ?? "[]");
+    return Array.isArray(raw)
+      ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0).map((seed) => ({ seed, style }))
       : [];
-    // storage may be unavailable: the island underfoot is still a place
-    return index.includes(currentSeed) ? index : [currentSeed, ...index];
-  } catch {
-    return [currentSeed];
-  }
-}
-
-// The raw saved-worlds list — unlike savedIndex(), this never injects
-// currentSeed. savedIndex()'s "the island underfoot counts too" rule is right
-// during ordinary play but wrong for the front door: while titling,
-// currentSeed is the backdrop, which is never a played session.
-function savedSeeds(): number[] {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(WORLD_INDEX_KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.filter((s): s is number => Number.isInteger(s) && s >= 0) : [];
   } catch {
     return [];
   }
+}
+
+// Every saved island of either style, classic first (its list is the older
+// and usually the longer one), each style in its own last-walked order.
+function savedIsles(): IsleRef[] {
+  return [...savedRefs("classic"), ...savedRefs("hollow")];
+}
+
+function savedIndex(): IsleRef[] {
+  const index = savedIsles();
+  // storage may be unavailable: the island underfoot is still a place
+  const here = { seed: currentSeed, style: currentStyle };
+  return index.some(isHere) ? index : [here, ...index];
+}
+
+// The raw saved-worlds list — unlike savedIndex(), this never injects the
+// island underfoot. savedIndex()'s "the island underfoot counts too" rule is
+// right during ordinary play but wrong for the front door: while titling,
+// currentSeed is the backdrop, which is never a played session.
+function savedSeeds(): IsleRef[] {
+  return savedIsles();
 }
 function savedWorldCount(): number {
   return savedSeeds().length;
@@ -1189,48 +1547,72 @@ function openIslePicker(fromTitle = false): void {
   const index = fromTitle ? savedSeeds() : savedIndex();
   const rows = isleRows(
     index,
-    currentSeed,
+    { seed: currentSeed, style: currentStyle },
     Date.now(),
-    (s) => loadSave(s)?.savedAt ?? null,
+    (ref) => loadSave(ref.seed, ref.style)?.savedAt ?? null,
     isleLook,
-    (s) => {
-      const sv = loadSave(s);
+    (ref) => {
+      const sv = loadSave(ref.seed, ref.style);
       return { name: sv?.name, playMs: sv?.playMs };
     },
   );
   openPicker(
     rows,
-    (seed) => {
-      if (!fromTitle) persist(); // from the title: don't save the backdrop (titleActive is already false, so loadWorld still records lastSeed)
-      loadWorld(seed);
-      renderer.setMap(map);
+    (ref) => {
+      if (!fromTitle) persist(); // from the title: don't save the backdrop (titleActive is already false, so loadWorld still records the last isle)
+      sailTo(ref);
     },
-    (seed) => {
-      // forget a world: drop its save and its ledger row, then re-open the panel
-      localStorage.removeItem(worldKey(seed));
+    (ref) => {
+      // forget a world: drop its save and its style's ledger row, then re-open
+      localStorage.removeItem(worldKey(ref.seed, ref.style));
       localStorage.setItem(
-        WORLD_INDEX_KEY,
-        JSON.stringify((fromTitle ? savedSeeds() : savedIndex()).filter((s) => s !== seed)),
+        worldIndexKey(ref.style),
+        JSON.stringify(
+          savedRefs(ref.style)
+            .filter((r) => r.seed !== ref.seed)
+            .map((r) => r.seed),
+        ),
       );
       openIslePicker(fromTitle);
     },
   );
   // far islands learn their standout feature one per beat, never all at once
   const token = ++isleFillToken;
-  const missing = index.filter((s) => s !== currentSeed && !isleFeatureCache.has(s));
+  const missing = index.filter(
+    (ref) => ref.style === "classic" && !isHere(ref) && !isleFeatureCache.has(ref.seed),
+  );
   const fill = (): void => {
     if (token !== isleFillToken || !isPickerOpen()) return;
-    const s = missing.shift();
-    if (s === undefined) return;
+    const ref = missing.shift();
+    if (ref === undefined) return;
     try {
-      isleFeatureCache.set(s, featurePhrase(generate(s, DEFAULT_CONFIG)));
+      isleFeatureCache.set(ref.seed, featurePhrase(generate(ref.seed, DEFAULT_CONFIG)));
     } catch {
-      isleFeatureCache.set(s, null); // a seed the sea reclaimed — its row stays plain
+      isleFeatureCache.set(ref.seed, null); // a seed the sea reclaimed — its row stays plain
     }
-    setIsleFeature(s, isleFeatureCache.get(s) ?? null);
+    setIsleFeature(ref, isleFeatureCache.get(ref.seed) ?? null);
     setTimeout(fill, 30);
   };
   if (missing.length > 0) setTimeout(fill, 30);
+}
+
+/**
+ * Sail to a saved island of either style.
+ *
+ * Classic loads in place. A Hollow goes through generateHollow, which finds
+ * its save and rebuilds the map from seed + attemptOffset in one generate()
+ * call (25 ms measured, task 14) rather than re-running the 400-generation
+ * burn-in — and which grows a fresh Hollow if the save has since been
+ * evicted, so the row is never a dead end.
+ */
+function sailTo(ref: IsleRef): void {
+  if (ref.style === "hollow") {
+    const { seed, gen } = forgeArgs({ ...defaultForgeState(ref.seed), style: "hollow" });
+    void generateHollow(seed, gen);
+    return;
+  }
+  loadWorld(ref.seed);
+  renderer.setMap(map);
 }
 
 // the panel follows the wanderer while it's open — re-rendered as they move,
@@ -1413,6 +1795,55 @@ function openInspectAtPlayer(record = true): void {
   // menu all agree (campViewAtHome is shared with the Tab menu)
   const camp: CampView | undefined = campViewAtHome() ?? undefined;
 
+  // The Hollow only: what this ground gives the plant on the card. Four
+  // numbers, each read from the same objects burn-in selected against —
+  // FitnessLandscape.score for the fit, terrain times canopy for the light,
+  // FitnessLandscape.demandOf against MineralField.sample for the shortfall,
+  // and PlantSpecies.bornTick for how old the kind is. Null on a classic
+  // island, where none of those fields exist, and the card then reads exactly
+  // as it always has.
+  const readGround = currentEco
+    ? (group: { plant: Plant }): GroundReading | null => {
+        const eco = currentEco;
+        if (!eco) return null;
+        const p = group.plant;
+        const tx = Math.floor(p.x / TILE_SIZE);
+        const ty = Math.floor(p.y / TILE_SIZE);
+        const supply = eco.minerals.sample(tx, ty);
+        // its own shade left out, as the selection callback leaves it out: a
+        // plant does not stand in its own shadow
+        const light =
+          terrainLight(map, tx, ty) *
+          eco.canopy.lightExcluding(tx, ty, CanopyField.shadeOfGenome(p.genome));
+        const demand = eco.landscape.demandOf(p.genome);
+        // the largest single demand, and what this tile actually holds of it:
+        // the gap between the two is the pressure the plant is under here
+        let worst = 0;
+        for (let m = 1; m < MINERAL_COUNT; m++) if (demand[m] > demand[worst]) worst = m;
+        const sp = species[p.species];
+        return {
+          fitness: eco.landscape.score(p.genome, { minerals: supply, light }),
+          light,
+          demand: demand[worst],
+          supply: supply[worst],
+          mineral: MINERAL_LABELS[worst],
+          // bornTick keeps counting once the wanderer lands, so a species
+          // that split during play can carry a tick far past BURN_IN_GENERATIONS.
+          // Gate on the tick itself (not the species index against
+          // baseSpeciesCount): baseSpeciesCount only marks the FOUNDERS
+          // (main.ts:1071, 1081, 1085), so a daughter species budded during
+          // burn-in sits above that line too and would be misread as
+          // "arose during play" by an index check.
+          generation: sp.bornTick !== undefined && sp.bornTick <= BURN_IN_GENERATIONS ? sp.bornTick : undefined,
+          generationsTotal:
+            sp.bornTick !== undefined && sp.bornTick <= BURN_IN_GENERATIONS
+              ? BURN_IN_GENERATIONS
+              : undefined,
+          bornDuringPlay: sp.bornTick !== undefined && sp.bornTick > BURN_IN_GENERATIONS,
+        };
+      }
+    : undefined;
+
   // each plant card carries a small gather button — the same quiet take
   // as F, for the plant you are already looking at
   openInspect(
@@ -1440,7 +1871,7 @@ function openInspectAtPlayer(record = true): void {
       if (!took) return "nothing it favors";
       bar = took[0];
       trust.set(sp.id, raiseTrust(trust.get(sp.id) ?? 0));
-      saveTrust(currentSeed, trust);
+      saveTrust(currentSeed, currentStyle, trust);
       let friend: Critter | null = null;
       let best = Infinity;
       for (const c of critters) {
@@ -1487,6 +1918,7 @@ function openInspectAtPlayer(record = true): void {
     },
     companionKind,
     swarmViews,
+    readGround,
   );
   lastInspectX = player.x;
   lastInspectY = player.y;
@@ -1522,6 +1954,25 @@ if (NOMENU) {
   if (new URL(location.href).searchParams.has("journal")) openAlmanac();
   // dev aid: ?isles=1 opens the isle picker on load (screenshot tours)
   if (new URL(location.href).searchParams.has("isles")) openIslePicker();
+  // dev aid: ?hollow (with optional &seed=N) generates a Hollow directly on
+  // load, bypassing the forge. ?style=hollow is the same route by a different
+  // door: loadWorld writes it into the URL of every Hollow, so a RELOAD lands
+  // back in the Hollow it was showing — and generateHollow resumes it from its
+  // save rather than growing it again.
+  if (FORCE_HOLLOW || URL_STYLE_HOLLOW) {
+    const hollowSeed = seedFromUrl() ?? newIslandSeed();
+    const { seed: hSeed, gen: hGen } = forgeArgs({ ...defaultForgeState(hollowSeed), style: "hollow" });
+    void generateHollow(hSeed, hGen);
+  }
+} else if (URL_STYLE_HOLLOW) {
+  // A reload of a Hollow's own URL goes straight back to that island rather
+  // than to the front door — the same deep-link behavior ?nomenu has, for the
+  // one style the front door cannot offer (writeLastSeed stores a bare seed).
+  // generateHollow resumes from the save; the backdrop loaded above is
+  // discarded unplayed, exactly as it is when the forge builds a world.
+  const hollowSeed = seedFromUrl() ?? newIslandSeed();
+  const { seed: hSeed, gen: hGen } = forgeArgs({ ...defaultForgeState(hollowSeed), style: "hollow" });
+  void generateHollow(hSeed, hGen);
 } else {
   for (let i = 0; i < BACKDROP_WARM; i++) flora.simTick(); // greet the wanderer already alive
   showTitle(currentTitleState(), { choose: onChoose });
@@ -1574,10 +2025,11 @@ async function previewForge(state: ForgeState): Promise<void> {
 // and how many isles are saved (the picker's size). Read fresh at mount and
 // at every re-mount, so a world entered mid-session shows up next time.
 function currentTitleState(): TitleState {
-  const last = readLastSeed();
+  const last = readLastIsle();
   return {
-    lastSeed: last,
-    lastName: last === null ? null : islandName(last),
+    lastSeed: last === null ? null : last.seed,
+    lastName: last === null ? null : islandName(last.seed),
+    lastStyle: last?.style,
     savedCount: savedWorldCount(),
   };
 }
@@ -1613,13 +2065,12 @@ function onChoose(id: TitleRowId): void {
     return;
   }
   if (id === "new") { openForgeFromTitle(); return; }
-  leaveTitle(); // continue: a real session now — loadWorld records lastSeed, the camera follows the player
+  leaveTitle(); // continue: a real session now — loadWorld records the last isle, the camera follows the player
   if (id === "continue") {
-    const s = readLastSeed();
-    if (s !== null) {
-      loadWorld(s);
-      renderer.setMap(map);
-    }
+    // the island last walked, of either style — sailTo routes a Hollow back
+    // through its save rather than to the classic island of the same seed
+    const last = readLastIsle();
+    if (last !== null) sailTo(last);
   }
 }
 
@@ -1631,6 +2082,105 @@ function openForgeFromTitle(): void {
     rerollSeed: newIslandSeed,
   });
 }
+/**
+ * The saved Hollow for this seed, rebuilt to the point of a map — or null if
+ * there is none, or if its map no longer generates.
+ *
+ * `SavedWorld.attemptOffset` is what makes this possible: makeHollow rerolls
+ * on the BURN-IN OUTCOME, so `seed` alone does not say which island was
+ * accepted, but `seed + attemptOffset` does, and `generate` is deterministic.
+ * A missing offset reads as 0 — the first attempt, which is the only offset a
+ * save written before this field existed could have described.
+ */
+function resumeHollow(seed: number): { acceptedSeed: number; map: WorldMap } | null {
+  const saved = loadSave(seed, "hollow");
+  if (!saved) return null;
+  const acceptedSeed = seed + (saved.attemptOffset ?? 0);
+  try {
+    return { acceptedSeed, map: generate(acceptedSeed, HOLLOW_CONFIG) };
+  } catch {
+    // This seed produced an island once, and generate is deterministic, so
+    // reaching here means the save is foreign or the generator's rules moved.
+    // Fall through to growing a fresh Hollow rather than failing to load.
+    return null;
+  }
+}
+
+/**
+ * Build a Hollow behind the forge's progress readout and enter it.
+ *
+ * The whole makeHollow call costs 6.2-7.0 s (measured, five seeds; 6.4 s on
+ * seed 2026 and 6.8 s on seed 11 in this repo's test run). Run synchronously
+ * from the generate click that is 6-7 s with the tab painting nothing, so the
+ * async form is not a nicety — it is what makes the progress line visible at
+ * all. burnInAsync yields to a paint every 20 generations, giving 20 readout
+ * steps over the 400.
+ *
+ * Assumes the caller has already set the forge busy and cleared its notice;
+ * clears both on every exit path, as the classic branch does.
+ */
+async function generateHollow(seed: number, gen: GenArgs): Promise<void> {
+  // A Hollow already played on this seed comes back from its save instead of
+  // being grown again: one generate() call against HOLLOW_CONFIG at the
+  // ACCEPTED seed, then the ordinary RestoredFlora path. No burn-in, so this
+  // returns in map-generation time rather than the 6.2-7.0 s a fresh Hollow
+  // costs. `warm: 0` because a resumed island has already lived — re-running
+  // the forge's warm-up ticks on every reload would fast-forward it each time.
+  const resume = resumeHollow(seed);
+  if (resume) {
+    forgeProgress(null);
+    setForgeBusy(false);
+    closeForge();
+    leaveTitle();
+    loadWorld(seed, { ...gen, warm: 0 }, resume.map, undefined, {
+      acceptedSeed: resume.acceptedSeed,
+    });
+    renderer.setMap(map);
+    return;
+  }
+  let hollow: Hollow<SwarmLayer>;
+  try {
+    forgeProgress(0, "growing the Hollow…");
+    // The third argument is what puts insects INTO the burn-in: the layer it
+    // builds is ticked once per generation alongside the flora, so the swarms
+    // handed back below were selected against these flowers over the same 400
+    // generations, and the flowers they pollinated spread.
+    hollow = await makeHollowAsync(
+      seed,
+      (done, total) => {
+        forgeProgress(done / total, `growing the Hollow — ${done} of ${total} generations`);
+      },
+      hollowSwarmFactory(),
+      true, // record the species timelapse through burn-in
+    );
+  } catch {
+    forgeProgress(null);
+    setForgeBusy(false);
+    forgeNotice("the Hollow would not take here — try another seed");
+    return; // stay in the forge; the title/backdrop are untouched
+  }
+  forgeProgress(null);
+  setForgeBusy(false);
+  closeForge();
+  leaveTitle();
+  loadWorld(seed, gen, hollow.map, {
+    flora: hollow.flora,
+    species: hollow.species,
+    attemptOffset: hollow.attemptOffset,
+    minerals: hollow.minerals,
+    landscape: hollow.landscape,
+    canopy: hollow.canopy,
+    swarms: hollow.swarms,
+    timelapse: hollow.timelapse,
+  });
+  renderer.setMap(map);
+  if (hollow.report.floorHit) {
+    // Never silent: pickAttempt returns the last attempt even after it has run
+    // out of rerolls, so a thin island reaches the player rather than throwing.
+    flashHud(`the Hollow came up thin — ${hollow.report.species} species took`);
+  }
+}
+
 async function onForgeGenerate(state: ForgeState): Promise<void> {
   const { seed, gen } = forgeArgs(state);
   // Drop any in-flight / queued preview so it can't paint over sail progress.
@@ -1639,6 +2189,10 @@ async function onForgeGenerate(state: ForgeState): Promise<void> {
   setForgeBusy(true);
   forgeNotice("");
   forgeProgress(0);
+  if (gen.style === "hollow") {
+    await generateHollow(seed, gen);
+    return;
+  }
   let m: WorldMap;
   try {
     // Pre-validate BEFORE tearing down the title: a throw here must leave the
@@ -2078,10 +2632,8 @@ window.addEventListener("keydown", (e) => {
       openIslandMap();
     }
   } else if (k === "v") {
-    // the ecology overlay: each critter ringed in its drive, the chains glowing
-    overlayOn = !overlayOn;
-    renderOverlayLegend();
-    flashHud(overlayOn ? "ecology overlay on — drives ringed, chain hotspots aglow" : "ecology overlay off");
+    // the overlay cycle: drives + chains, then the Hollow's two hidden fields
+    cycleOverlay();
   } else if (k === "k") {
     // the corner map, shown or hidden — it remembers your choice
     minimapOn = !minimapOn;
@@ -2199,7 +2751,7 @@ canvas.addEventListener("click", (e) => {
 });
 window.addEventListener("beforeunload", persist);
 window.addEventListener("beforeunload", () => {
-  if (!titleActive && explored) saveExplored(currentSeed, explored, map.width, map.height);
+  if (!titleActive && explored) saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
 });
 
 function input(): InputState {
@@ -2242,27 +2794,114 @@ function drawOverview(): void {
   ctx.fillRect(map.spawn.x * s - 2, map.spawn.y * s - 2, 5, 5);
 }
 
-let overlayOn = false; // the ecology overlay (V): critter drives + chain hotspots
+// ── the V overlay: one key, several readings ────────────────────────────
+//
+// V cycles rather than toggles, because the key alphabet stays small. The
+// modes, in cycle order:
+//
+//   "off"      the world as it plays
+//   "ecology"  critter drives ringed + chain hotspots (what V always did)
+//   "light"    the canopy light field, per tile
+//   "minerals" the mineral field, per tile
+//
+// "light" and "minerals" read fields only a Hollow has (currentEco), so on a
+// classic island they are left OUT of the cycle entirely: V there runs
+// off → ecology → off, exactly as it did before. A mode that draws nothing
+// and says "not here" would be two dead steps on every press.
+function overlayCycle(): OverlayMode[] {
+  return currentEco ? ["off", "ecology", "light", "minerals"] : ["off", "ecology"];
+}
 
-// show or hide the ecology overlay's legend (a small DOM card, top-left)
+/** Light reaching a tile: terrain shade times canopy shade, 0 to 1. */
+function lightOnTile(tx: number, ty: number): number {
+  if (!currentEco) return 1;
+  return terrainLight(map, tx, ty) * currentEco.canopy.lightAt(tx, ty);
+}
+
+/** Total mineral held by a tile: the six quantities summed, 0 to 6. */
+function mineralTotalOnTile(tx: number, ty: number): number {
+  return currentEco ? currentEco.minerals.totalAt(tx, ty) : 0;
+}
+
+/** Step V on, rebuilding the value ladder whenever a field mode is entered. */
+function cycleOverlay(): void {
+  const cycle = overlayCycle();
+  const at = cycle.indexOf(overlayMode);
+  overlayMode = cycle[(at + 1) % cycle.length] ?? "off";
+  if (overlayMode === "light") {
+    fieldLadder = ladderOf(map.width, map.height, lightOnTile);
+  } else if (overlayMode === "minerals") {
+    fieldLadder = ladderOf(map.width, map.height, mineralTotalOnTile);
+  }
+  renderOverlayLegend();
+  flashHud(OVERLAY_HUD[overlayMode]);
+}
+
+const OVERLAY_HUD: Record<OverlayMode, string> = {
+  off: "overlay off",
+  ecology: "ecology overlay — drives ringed, chain hotspots aglow",
+  light: "light overlay — the canopy light field, dark under a dense stand",
+  minerals: "mineral overlay — total held per tile, tinted by the largest of the six",
+};
+
+/**
+ * The per-tile wash the renderer paints for the light and mineral modes, or
+ * null in the other two. Value carries the quantity and hue only names which
+ * mineral is largest — see render/fields.ts for why round that way.
+ */
+function fieldWash(): FieldWash | null {
+  if (!currentEco) return null;
+  if (overlayMode === "light") {
+    return { rungAt: (tx, ty) => rung(lightOnTile(tx, ty), fieldLadder), alpha: 0.82 };
+  }
+  if (overlayMode === "minerals") {
+    const eco = currentEco;
+    return {
+      rungAt: (tx, ty) => rung(mineralTotalOnTile(tx, ty), fieldLadder),
+      hueAt: (tx, ty) => MINERAL_HUES[dominantMineral(eco.minerals.sample(tx, ty)).index],
+      alpha: 0.82,
+    };
+  }
+  return null;
+}
+
+// show or hide the V overlay's legend (a small DOM card, top-left)
 function renderOverlayLegend(): void {
   const el = document.getElementById("ovlegend")!;
-  if (!overlayOn) {
+  if (overlayMode === "off") {
     el.style.display = "none";
     return;
   }
-  const rows: [string, string][] = [
-    ["#7fe0c4", "content"],
-    ["#f4a94c", "hungry"],
-    ["#8a9fe0", "drowsy"],
-    ["#b092c4", "weary"],
-    ["#f4c979", "curious"],
-    ["#e79aa2", "wary"],
-    ["#b4dcff", "chain hotspot"],
-  ];
-  el.innerHTML =
-    `<div class="ovl-title">ecology overlay</div>` +
-    rows.map(([c, l]) => `<div class="ovl-row"><i style="color:${c};background:${c}"></i>${l}</div>`).join("");
+  const swatch = (c: string, l: string): string =>
+    `<div class="ovl-row"><i style="color:${c};background:${c}"></i>${l}</div>`;
+  const note = (t: string): string => `<div class="ovl-note">${t}</div>`;
+  if (overlayMode === "ecology") {
+    const rows: [string, string][] = [
+      ["#7fe0c4", "content"],
+      ["#f4a94c", "hungry"],
+      ["#8a9fe0", "drowsy"],
+      ["#b092c4", "weary"],
+      ["#f4c979", "curious"],
+      ["#e79aa2", "wary"],
+      ["#b4dcff", "chain hotspot"],
+    ];
+    el.innerHTML =
+      `<div class="ovl-title">ecology overlay</div>` + rows.map(([c, l]) => swatch(c, l)).join("");
+  } else if (overlayMode === "light") {
+    el.innerHTML =
+      `<div class="ovl-title">canopy light</div>` +
+      swatch("hsl(48,26%,86%)", "most light on this island") +
+      swatch("hsl(48,26%,16%)", "least light on this island") +
+      note(`${ladderCaption(fieldLadder)} · share of open sun`) +
+      note("the ramp is stretched to this island's own range, so two islands' washes are not comparable") +
+      note("light shapes WHICH KINDS hold which ground; it does not sort individuals within a kind");
+  } else {
+    el.innerHTML =
+      `<div class="ovl-title">minerals</div>` +
+      note(`brightness: total of six, ${ladderCaption(fieldLadder)} of 6`) +
+      note("tint: the largest of the six here") +
+      MINERAL_LABELS.map((l, m) => swatch(`hsl(${MINERAL_HUES[m]},62%,58%)`, l)).join("");
+  }
   el.style.display = "block";
 }
 
@@ -2573,7 +3212,7 @@ function frame(now: number): void {
     });
     swarmLayer.tick(flora); // each heartbeat, every swarm feeds + adapts on its nearest bloom
     sampleSwarms(); // and the pollinators' history keeps pace with the census
-    census.sample(flora.tick, flora.speciesCounts);
+    sampleHistory();
     simAcc -= SIM_MS;
     heartbeat = true;
   }
@@ -2634,7 +3273,7 @@ function frame(now: number): void {
     // the walked map is written only when fresh ground was seen
     if (explored && exploredDirty) {
       exploredDirty = false;
-      if (!titleActive) saveExplored(currentSeed, explored, map.width, map.height);
+      if (!titleActive) saveExplored(currentSeed, currentStyle, explored, map.width, map.height);
     }
   }
   const darknessNow = FORCE_NIGHT ? 0.75 : darknessAt(sky);
@@ -2740,7 +3379,8 @@ function frame(now: number): void {
       darkness, aurora: auroraTonight, rain: rainNow,
       materials: materials.filter((m) => !taken.has(m.idx)), fire, bedroll,
       tide: FORCE_LOWTIDE ? 1 : tideAt(sky), pools, sows: beastSows,
-      overlay: overlayOn, swarms: swarmLayer,
+      overlay: overlayMode === "ecology", field: fieldWash(), swarms: swarmLayer,
+      floraTick: flora.tick, matureAge: flora.tuning.matureAge,
     },
     sky,
   );

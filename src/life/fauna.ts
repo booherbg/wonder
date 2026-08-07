@@ -1,5 +1,5 @@
 import { Rng, makeRng } from "../core/rng";
-import { TILE_SIZE } from "../world/config";
+import { IslandStyle, TILE_SIZE } from "../world/config";
 import { Tile, WALKABLE, WorldMap, isWalkable, tileAt } from "../world/types";
 import { DEFAULT_POLLINATE_ASSIST, PollinateAssist } from "./pollinateAssist";
 import { Flora, Plant } from "./flora";
@@ -229,6 +229,20 @@ export function bestOffering(palate: Palate, seeds: ReadonlyArray<{ genome: Geno
 // beside your fire (homePoint). Always a lean, never a leash.
 
 export const TRUST_KEY = "wander.trust";
+/**
+ * The Hollow's own trust book, parallel to TRUST_KEY. Separate for the same
+ * reason worldKey is: a book keyed by seed alone cannot tell the classic
+ * island of seed N from the Hollow of seed N, and they hold different kinds —
+ * critterSpecies is generated per island, so species id 2 names one animal on
+ * one and another animal on the other. Classic keeps TRUST_KEY byte-for-byte,
+ * so every bond already made keeps loading.
+ */
+export const HOLLOW_TRUST_KEY = "wander.trust.hollow";
+
+/** Which book an island's bonds are filed in, per island style. */
+export function trustKey(style: IslandStyle): string {
+  return style === "hollow" ? HOLLOW_TRUST_KEY : TRUST_KEY;
+}
 export const TRUST_STEP = 0.15; // one shared seed; six make a bond
 const TRUST_CLOSE = 0.3; // from here on, a kind starts keeping your company
 export const TRUST_LINGER_RADIUS_PX = 8 * TILE_SIZE; // how far "with you" (and "at your camp") reaches
@@ -266,11 +280,16 @@ function defaultKV(): KV | null {
   }
 }
 
-// The bonds this island holds: species id -> trust, read from the one book.
-export function loadTrust(seed: number, kv: KV | null = defaultKV()): Map<number, number> {
+// The bonds this island holds: species id -> trust, read from its style's
+// book. `style` is required rather than defaulted, so no caller can forget it.
+export function loadTrust(
+  seed: number,
+  style: IslandStyle,
+  kv: KV | null = defaultKV(),
+): Map<number, number> {
   const out = new Map<number, number>();
   try {
-    const raw = kv?.getItem(TRUST_KEY);
+    const raw = kv?.getItem(trustKey(style));
     const book = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
     const prefix = `${seed}:`;
     for (const [key, v] of Object.entries(book)) {
@@ -287,12 +306,14 @@ export function loadTrust(seed: number, kv: KV | null = defaultKV()): Map<number
 // Write this island's bonds back without disturbing any other island's.
 export function saveTrust(
   seed: number,
+  style: IslandStyle,
   trust: ReadonlyMap<number, number>,
   kv: KV | null = defaultKV(),
 ): void {
   if (!kv) return;
   try {
-    const raw = kv.getItem(TRUST_KEY);
+    const key0 = trustKey(style);
+    const raw = kv.getItem(key0);
     const parsed: unknown = raw ? JSON.parse(raw) : {};
     const book: Record<string, number> =
       parsed && typeof parsed === "object" && !Array.isArray(parsed)
@@ -301,7 +322,7 @@ export function saveTrust(
     for (const [id, v] of trust) book[`${seed}:${id}`] = clamp01(v);
     // the book stays small: the longest-untouched islands let go first
     const entries = Object.entries(book).slice(-TRUST_BOOK_CAP);
-    kv.setItem(TRUST_KEY, JSON.stringify(Object.fromEntries(entries)));
+    kv.setItem(key0, JSON.stringify(Object.fromEntries(entries)));
   } catch {
     // storage full or unavailable: the friendship still holds this sitting
   }

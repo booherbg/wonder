@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CHAINS_KEY, resolveChains, LAST_SEED_KEY, parseLastSeed, parseSimMode } from "../src/game/flags";
+import { CHAINS_KEY, resolveChains, LAST_SEED_KEY, LAST_STYLE_KEY, parseLastSeed, parseLastStyle, parseSimMode } from "../src/game/flags";
 
 test("chains default on when nothing is set", () => {
   expect(resolveChains(null, null)).toBe(true);
@@ -54,4 +54,15 @@ test("parseSimMode: ?sim / ?sim=1 / any other value → the World-Lab", () => {
 });
 test("parseSimMode: ?sim=swarm preserves the swarm bench", () => {
   expect(parseSimMode("?sim=swarm")).toBe("swarm");
+});
+
+test("the last island's style is stored beside its seed, not inside it", () => {
+  // the two keys are separate, so LAST_SEED_KEY keeps the bare-decimal format
+  // every build before the Hollow wrote
+  expect(LAST_STYLE_KEY).not.toBe(LAST_SEED_KEY);
+  expect(parseLastStyle("hollow")).toBe("hollow");
+  // absent, or anything else, is classic — what those earlier writes meant
+  expect(parseLastStyle(null)).toBe("classic");
+  expect(parseLastStyle("classic")).toBe("classic");
+  expect(parseLastStyle("Hollow")).toBe("classic");
 });

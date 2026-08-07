@@ -69,6 +69,15 @@ export function nearestPlant(plants: readonly Plant[], x: number, y: number): Pl
   return best;
 }
 
+/**
+ * What decides whether a plant standing here breeds or dies. Supplied only by
+ * the Hollow; every other island passes null and behaves exactly as before.
+ * `fitness` returns [0, 1] for this genome at this tile.
+ */
+export interface SelectionContext {
+  fitness(g: Genome, tx: number, ty: number): number;
+}
+
 export interface FloraTuning {
   maxPlants: number;
   maxPerTile: number;
@@ -89,6 +98,8 @@ export interface FloraTuning {
   splitCooldownTicks: number; // island-wide pause between splits (~2s per tick)
   maxDaughterSpecies: number; // per island; keeps the field guide finite
   chains: boolean; // byproduct chains: substrates emitted + germinated. Off ⇒ byte-identical to today.
+  /** Selection, or null for pure drift. Null ⇒ zero extra rng, byte-identical. */
+  selection: SelectionContext | null;
 }
 
 export const DEFAULT_TUNING: FloraTuning = {
@@ -109,6 +120,7 @@ export const DEFAULT_TUNING: FloraTuning = {
   splitCooldownTicks: 500,
   maxDaughterSpecies: 12,
   chains: false, // default OFF so every existing test/caller is unchanged; main.ts turns it on
+  selection: null, // pure drift, exactly as every island behaved before the Hollow
 };
 
 // The carpeting forms spread in broad soft sweeps rather than tight clumps —
@@ -541,11 +553,23 @@ export class Flora {
         this.removePlant(p);
         continue;
       }
-      if (age > t.lifespan && this.rng() < 0.15) {
+      // Selection, when the island has any: a plant suited to where it stands
+      // holds on longer and breeds harder. Computed once and reused for both
+      // gates so a tick costs at most one fitness call per examined plant.
+      const fit = t.selection
+        ? t.selection.fitness(
+            p.genome,
+            Math.floor(p.x / TILE_SIZE),
+            Math.floor(p.y / TILE_SIZE),
+          )
+        : 0;
+      const deathScale = t.selection ? 1.6 - 1.2 * fit : 1;
+      if (age > t.lifespan && this.rng() < 0.15 * deathScale) {
         this.removePlant(p);
         continue;
       }
       let repro = t.reproChance * (this.tended(p.x, p.y) ? 2 : 1); // tended ground breeds eagerly
+      if (t.selection) repro *= 0.35 + 1.3 * fit; // suited plants breed; unsuited ones fade
       if (weather.rain) repro *= 1.6;
       if (weather.bloom && p.genome.form === PlantForm.Fungus) repro *= 3;
       if (age >= t.matureAge && this.rng() < repro) {
